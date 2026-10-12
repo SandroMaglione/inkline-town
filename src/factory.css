@@ -3,9 +3,22 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 #app { position: fixed; inset: 0; }
 #app canvas { display: block; }
 
-.hud { position: fixed; top: 14px; left: 16px; pointer-events: none; font-size: 12px; line-height: 1.6; }
-.hud h1 { margin: 0 0 2px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
-.hud .stats { color: #6c766f; }
+.hud { position: fixed; top: 12px; left: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-size: 12px; cursor: pointer; max-width: calc(100vw - 32px); }
+.card {
+  display: flex; align-items: stretch; background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 6px;
+  box-shadow: 0 2px 0 #dfe2db; overflow: hidden;
+}
+.card .cell { display: flex; align-items: center; gap: 12px; padding: 6px 12px; white-space: nowrap; }
+.card .cell + .cell { border-left: 1px solid #d5d9d0; }
+.hud .bar { font-size: 13px; }
+.hud .coins b { font-size: 15px; font-weight: 700; }
+.hud .coins.debt b { color: #b04a39; }
+.hud .up { color: #4f8a3e; }
+.hud .down { color: #b04a39; }
+.hud .stock { color: #3d4943; flex-wrap: wrap; }
+.hud .good { display: inline-flex; align-items: center; gap: 5px; }
+.hud .good .label { width: 8px; height: 8px; display: inline-block; }
+.hud .good .count { min-width: 2ch; font-weight: 600; }
 
 .toolbar {
   position: fixed; left: 16px; bottom: calc(14px + env(safe-area-inset-bottom));
@@ -27,14 +40,10 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   padding: 5px 10px; border-radius: 2px; white-space: pre; transform: translate(14px, 10px); display: none;
 }
 .toast {
-  position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: #3d4943; color: #f7f8f4;
+  position: fixed; bottom: calc(68px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); background: #3d4943; color: #f7f8f4;
   font-size: 12px; padding: 6px 12px; border-radius: 3px; opacity: 0; transition: opacity 160ms ease; pointer-events: none;
 }
 .toast.show { opacity: 1; }
-.hint { position: fixed; right: 16px; transition: opacity 200ms ease; top: 14px; font-size: 11px; color: #8a938c; text-align: right; line-height: 1.6; pointer-events: none; }
-@media (max-width: 900px), (pointer: coarse) { .hint { display: none; } }
-
-body:has(.panel.open) .hint { opacity: 0; }
 
 .panel {
   position: fixed; top: 0; right: 0; bottom: 0; width: 360px; max-width: 46vw; box-sizing: border-box;
@@ -49,7 +58,7 @@ body:has(.panel.open) .hint { opacity: 0; }
 .panel .sub.warn { color: #b04a39; }
 .panel section { margin-top: 24px; }
 .panel h3 {
-  margin: 0 0 8px; padding-bottom: 8px; border-bottom: 1px solid #d3d7ce; font-size: 11px; font-weight: 400;
+  margin: 0 0 8px; padding-bottom: 8px; border-bottom: 2px solid #d3d7ce; font-size: 11px; font-weight: 400;
   letter-spacing: 0.12em; text-transform: uppercase; color: #77817a;
 }
 .panel .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 4px 0; }
@@ -71,6 +80,8 @@ body:has(.panel.open) .hint { opacity: 0; }
 }
 .panel .option:hover:not(:disabled) { background: #e6e9e2; }
 .panel .option:disabled { opacity: 0.4; cursor: default; }
+.panel .option.short .blurb { color: #b04a39; }
+.panel .option .count { white-space: normal; text-align: right; }
 .panel .option .row { padding: 0; }
 .panel .option .name { text-decoration: underline; text-decoration-color: #b5bbb2; text-underline-offset: 4px; }
 .panel .option .blurb { display: block; margin-top: 4px; color: #77817a; }
@@ -80,3 +91,15 @@ body:has(.panel.open) .hint { opacity: 0; }
   .panel section { margin-top: 14px; }
   .panel .option { padding: 5px 8px; }
 }
+
+.panel .spark { margin-top: 8px; height: 36px; border-bottom: 1px solid #e0e3db; }
+.panel .spark svg { width: 100%; height: 36px; display: block; }
+.panel .lever .controls { display: inline-flex; align-items: center; gap: 8px; }
+.panel .lever .rate { min-width: 4.5ch; text-align: center; font-weight: 600; }
+.panel .frame.step { padding: 2px 10px; }
+.panel .need { display: grid; grid-template-columns: 5ch 1fr 8ch; align-items: center; gap: 10px; padding: 4px 0; }
+.panel .need .track { height: 6px; border: 1px solid #c9cec4; border-radius: 1px; }
+.panel .need .fill { display: block; height: 100%; background: #3d4943; }
+.panel .need .count { text-align: right; }
+.panel .good-row { cursor: pointer; }
+.panel .good-row input { margin: 0 8px 0 0; accent-color: #3d4943; vertical-align: -2px; }

@@ -11,6 +11,12 @@ importers:
       '@typeonce/bevy-ts':
         specifier: link:../../bevy-ts/packages/core
         version: link:../../bevy-ts/packages/core
+      '@typeonce/bevy-ts-browser':
+        specifier: link:../../bevy-ts/packages/browser
+        version: link:../../bevy-ts/packages/browser
+      '@typeonce/bevy-ts-math':
+        specifier: link:../../bevy-ts/packages/math
+        version: link:../../bevy-ts/packages/math
       '@typeonce/bevy-ts-pixi':
         specifier: link:../../bevy-ts/packages/pixi
         version: link:../../bevy-ts/packages/pixi

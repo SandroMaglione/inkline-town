@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc -p tsconfig.json --pretty false"
+    "typecheck": "tsc -p tsconfig.json --pretty false",
+    "balance": "node scripts/balance.ts"
   },
   "dependencies": {
     "@typeonce/bevy-ts": "link:../../bevy-ts/packages/core",
+    "@typeonce/bevy-ts-browser": "link:../../bevy-ts/packages/browser",
+    "@typeonce/bevy-ts-math": "link:../../bevy-ts/packages/math",
     "@typeonce/bevy-ts-pixi": "link:../../bevy-ts/packages/pixi",
     "@typeonce/bevy-ts-render": "link:../../bevy-ts/packages/render",
     "pixi.js": "^8.22.0"

@@ -1,173 +1,202 @@
-/** The factory yard's world: what is placed, what it is doing, and what moves. */
-import { Descriptor, Schema } from "@typeonce/bevy-ts"
+/**
+ * The town's world. Every entity is assembled from small components (see
+ * `archetypes.ts`): a `Tile` on the grid, then whichever roles it has. The
+ * land is `Tree`s, `Rock`s, `Water`, and a farm's `Field`s; the town is
+ * `Road`s, `House`s, and `Building`s that may hold an `Inventory`, follow a
+ * `Recipe`, gather from the land (`Gatherer`), plant (`Planter`), send
+ * `Carriers`, or offer a `Service`. A building still owed materials is a
+ * `Site`; one going up is `Rising`. Walkers follow a `Route` on an `Errand`
+ * or a `Roam`, as children of the building that sent them.
+ *
+ * Saved components and resources are constructed with a validator, so the
+ * whole world snapshots to plain data and loads back checked.
+ */
+import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
+import type { OptionalReadCell } from "@typeonce/bevy-ts/Query"
 import type { NodeRegistry } from "@typeonce/bevy-ts-render"
 
-import type { Point } from "./iso.ts"
-import type { KindId } from "./kinds.ts"
-import type { BeltView, CrateView, FactoryView, Stage } from "./art.ts"
+import type { BuildingView, FieldView, HouseView, RockView, Stage, TreeView, WalkerView } from "./art.ts"
+import { goodIds, kindIds, type Amounts } from "./content.ts"
+import type { UiValue } from "./ui.ts"
 
-export type Status = "building" | "idle" | "working" | "starved" | "blocked"
+export const Root = Schema.defineRoot("Town")
 
-/** A placed factory: its own id (belts refer to it), kind, and 2×2 footprint by its top cell. */
-export interface FactoryValue {
-  readonly id: number
-  readonly kind: KindId
-  readonly name: string
-  readonly color: number
-  readonly x: number
-  readonly y: number
+/** An optional query slot's value, or `undefined` when the entity lacks it. */
+export const maybe = <T>(cell: OptionalReadCell<T>) => (cell.present ? cell.get() : undefined)
+
+const integer = Decode.integer
+const cell = Decode.struct({ x: integer, y: integer })
+const good = Decode.literal(...goodIds)
+const service = Decode.literal("goods", "faith")
+/** A count of every good. */
+const amounts = Decode.struct({
+  wood: integer, planks: integer, stone: integer, ore: integer, tools: integer, fish: integer,
+  wheat: integer, flour: integer, bread: integer, wool: integer, cloth: integer
+})
+
+export const statuses = ["building", "idle", "working", "starved", "blocked", "unstaffed", "unconnected"] as const
+export type Status = (typeof statuses)[number]
+
+// ── On the grid ───────────────────────────────────────────────────────────
+
+/** A square of cells on the grid, by its top cell, `size` cells a side. */
+export const Tile = Descriptor.ConstructedComponent(Decode.struct({ x: integer, y: integer, size: integer }))("Town/Tile")
+export const Road = Descriptor.Tag("Town/Road")
+/** Materials still owed before it can go up, out of `total`. */
+export const Site = Descriptor.ConstructedComponent(Decode.struct({ owed: amounts, total: integer }))("Town/Site")
+/** Going up: steps since its materials were all in (see `BUILD_TICKS`). Removed once it stands. */
+export const Rising = Descriptor.ConstructedComponent(Decode.struct({ ticks: integer }))("Town/Rising")
+
+// ── The land ──────────────────────────────────────────────────────────────
+
+export const Tree = Descriptor.ConstructedComponent(Decode.struct({ growth: integer }))("Town/Tree")
+export const Rock = Descriptor.ConstructedComponent(Decode.struct({ ore: Decode.boolean, amount: integer }))("Town/Rock")
+export const Water = Descriptor.Tag("Town/Water")
+export const Field = Descriptor.ConstructedComponent(Decode.struct({ growth: integer }))("Town/Field")
+
+// ── Homes ─────────────────────────────────────────────────────────────────
+
+/** A home: its tier, residents, and steps left of each need a walker last met. */
+export const House = Descriptor.ConstructedComponent(Decode.struct({
+  tier: Decode.literal(1, 2),
+  residents: integer,
+  food: integer,
+  bread: integer,
+  cloth: integer,
+  faith: integer,
+  clock: integer
+}))("Town/House")
+
+// ── Buildings and their roles ─────────────────────────────────────────────
+
+export const Building = Descriptor.ConstructedComponent(Decode.struct({ kind: Decode.literal(...kindIds) }))("Town/Building")
+export const TownHall = Descriptor.Tag("Town/TownHall")
+export const Status = Descriptor.ConstructedComponent(Decode.literal(...statuses))("Town/Status")
+
+/** Workers it needs, and how many the town could spare it this step. */
+export const Staff = Descriptor.ConstructedComponent(Decode.struct({ needed: integer, assigned: integer }))("Town/Staff")
+
+/** Goods on hand: only the ones it `accepts`, up to `cap` of each. */
+export const Inventory = Descriptor.ConstructedComponent(Decode.struct({ stock: amounts, accepts: Decode.array(good), cap: integer }))("Town/Inventory")
+/** Takes any good in, and sends goods out to whoever needs them. */
+export const Storage = Descriptor.Tag("Town/Storage")
+
+/** Turns inputs (or nothing) into outputs: a job takes `period` steps of a full crew. */
+export const Recipe = Descriptor.ConstructedComponent(Decode.struct({
+  input: Decode.nullable(good),
+  inputs: integer,
+  output: good,
+  batch: integer,
+  period: integer,
+  /** Worker-steps put into the current job (0: none started). */
+  progress: integer,
+  made: integer
+}))("Town/Recipe")
+
+/** Its recipe needs this within `radius` cells of its footprint. */
+export const Gatherer = Descriptor.ConstructedComponent(Decode.struct({
+  source: Decode.literal("tree", "stone", "ore", "field", "water"),
+  radius: integer
+}))("Town/Gatherer")
+
+/** Plants trees or fields within `radius`, one every `interval` steps, up to `max`. */
+export const Planter = Descriptor.ConstructedComponent(Decode.struct({
+  what: Decode.literal("tree", "field"),
+  radius: integer,
+  interval: integer,
+  cooldown: integer,
+  max: integer
+}))("Town/Planter")
+
+/** Carriers it may have out at once. */
+export const Carriers = Descriptor.ConstructedComponent(Decode.struct({ count: integer }))("Town/Carriers")
+
+/** Sends a walker out every `interval` steps. */
+export const Service = Descriptor.ConstructedComponent(Decode.struct({ service, interval: integer, cooldown: integer, range: integer }))("Town/Service")
+
+// ── Walkers ───────────────────────────────────────────────────────────────
+
+/** How a walker looks: a carrier, or a walker in its building's colour. */
+export const Figure = Descriptor.ConstructedComponent(Decode.struct({ role: Decode.literal("carrier", "walker"), color: integer }))("Town/Figure")
+
+/**
+ * Where a walker is going: road cells in order, the one it last reached, and
+ * how far on to the next (in steps of `CELL_STEPS`). At the last cell it has
+ * arrived, and waits for its errand or roam to give it somewhere new.
+ */
+export const Route = Descriptor.ConstructedComponent(Decode.struct({ cells: Decode.array(cell), index: integer, step: integer }))("Town/Route")
+
+/** Carrying `count` of a good to a building, then walking back (still carrying it, if it could not be handed over). */
+export const Errand = Descriptor.ConstructedComponent(Decode.struct({
+  target: Decode.handle(Root, Tile),
+  good,
+  count: integer,
+  back: Decode.boolean
+}))("Town/Errand")
+
+/** Wandering the roads serving homes, `left` cells more, then walking back with what is left in its basket. */
+export const Roam = Descriptor.ConstructedComponent(Decode.struct({ service, left: integer, basket: amounts, back: Decode.boolean }))("Town/Roam")
+
+/** A walker belongs to the building that sent it, and goes when it goes. */
+export const { relation: WalkerOf } = Descriptor.Hierarchy("Town/WalkerOf", "Town/Walkers")
+/** A field belongs to the farm that sowed it. */
+export const { relation: FieldOf } = Descriptor.Hierarchy("Town/FieldOf", "Town/Fields")
+
+// ── Resources ─────────────────────────────────────────────────────────────
+
+export const Time = Descriptor.ConstructedResource(Decode.struct({ tick: integer }))("Town/Time")
+/** The deterministic random state (see `@typeonce/bevy-ts-math/Random`). */
+export const Rng = Descriptor.ConstructedResource(integer)("Town/Rng")
+export const Treasury = Descriptor.ConstructedResource(Decode.struct({ coins: integer }))("Town/Treasury")
+/** The last collection's taxes, trade, and upkeep, per minute. */
+export const Ledger = Descriptor.ConstructedResource(Decode.struct({ taxes: integer, trade: integer, upkeep: integer }))("Town/Ledger")
+export const Census = Descriptor.ConstructedResource(Decode.struct({
+  homes: integer,
+  settlers: integer,
+  citizens: integer,
+  jobs: integer,
+  employed: integer,
+  /** Homes with each need met right now. */
+  food: integer,
+  bread: integer,
+  cloth: integer,
+  faith: integer
+}))("Town/Census")
+/** The town's tax rates (in percent of the usual, for each tier), and what it sells to traders beyond the reserve it keeps. */
+export const Policy = Descriptor.ConstructedResource(Decode.struct({ settlers: integer, citizens: integer, sells: Decode.array(good), reserve: integer }))("Town/Policy")
+
+/** What stands on each cell, rebuilt every step from the tiles (see `grid.ts`). */
+export type Use = "empty" | "road" | "house" | "building" | "tree" | "rock" | "water" | "field"
+export interface GridValue {
+  /** Entity id on each cell (by `key`), or 0. */
+  readonly owner: ReadonlyArray<number>
+  readonly use: ReadonlyArray<Use>
 }
+export const Grid = Descriptor.TransientResource<GridValue>()("Town/Grid")
+/** Goods in the town's storage, summed every step. */
+export const Stock = Descriptor.TransientResource<Amounts>()("Town/Stock")
 
-/** What a factory is doing, and the numbers its animation follows. */
-export interface WorkValue {
-  readonly status: Status
-  /** 0 → 1 while it rises from its plate. */
-  readonly built: number
-  /** 0 → 1 through the current job (0: no job). */
-  readonly progress: number
-  readonly inputs: number
-  readonly outputs: number
-  /** Crates a depot has shipped out of the yard. */
-  readonly shipped: number
-  /** Jobs finished. */
-  readonly made: number
-  /** Next outgoing belt to try. */
-  readonly turn: number
-  /** 1 when a job finishes, fading to 0: the building's bounce. */
-  readonly pulse: number
-}
+// ── Host services ─────────────────────────────────────────────────────────
 
-/** A conveyor between two factories. */
-export interface BeltValue {
-  readonly id: number
-  readonly from: number
-  readonly to: number
-  readonly cells: ReadonlyArray<Point>
-  readonly uses: ReadonlyArray<"h" | "v" | "turn">
-  readonly points: ReadonlyArray<Point>
-  readonly length: number
-}
-
-/** A crate riding a belt: how far along it, and where that is on the grid. */
-export interface CrateValue {
-  readonly belt: number
-  readonly distance: number
-  readonly color: number
-  readonly x: number
-  readonly y: number
-}
-
-export type Mode = "select" | "bulldoze"
-
-/** What the player did since the last tick, in world pixels. */
-export type Intent =
-  | { readonly type: "press"; readonly at: Point }
-  | { readonly type: "release"; readonly at: Point; readonly panned: boolean }
-  | { readonly type: "place"; readonly kind: KindId; readonly cell: Point }
-  /** Builds on the picked plot (see `UiValue.plot`), and opens the new factory. */
-  | { readonly type: "build"; readonly kind: KindId }
-  | { readonly type: "remove"; readonly factory: number }
-  /** Connects the factories standing on two cells. */
-  | { readonly type: "link"; readonly from: Point; readonly to: Point }
-  | { readonly type: "clear" }
-
-/** What the yard shows besides its entities: the ghost, the belt being dragged, and what is in focus. */
-export interface Preview {
-  ghost: { readonly kind: KindId; readonly cell: Point; readonly valid: boolean } | null
-  /** Plots outlined on the floor: under the pointer, or picked. */
-  plots: Array<{ readonly x: number; readonly y: number; readonly look: "hover" | "picked" | "blocked" }>
-  path: { readonly points: ReadonlyArray<Point>; readonly valid: boolean } | null
-  hoverFactory: number | null
-  hoverBelt: number | null
-  /** Factories and belts in focus (the rest fade), or `null` for all. */
-  focus: { readonly factories: ReadonlySet<number>; readonly belts: ReadonlySet<number> } | null
-  danger: boolean
-  tooltip: string | null
-}
-
-/** A factory a panel lists, with where it stands (world pixels) to look at it. */
-export interface PanelLink {
-  readonly id: number
-  readonly name: string
-  readonly kind: KindId
-  readonly crates: number
-}
-
-/** The side panel: a picked plot and what can be built on it, or a factory and its belts. */
-export type Panel =
-  | {
-    readonly type: "plot"
-    readonly x: number
-    readonly y: number
-    readonly free: boolean
-    readonly reason: string
-  }
-  | {
-    readonly type: "factory"
-    readonly id: number
-    readonly name: string
-    readonly kind: KindId
-    readonly status: Status
-    readonly inputs: number
-    readonly outputs: number
-    readonly made: number
-    readonly takes: ReadonlyArray<PanelLink>
-    readonly feeds: ReadonlyArray<PanelLink>
-    readonly linking: boolean
-  }
-
-/** A factory's hit area for the pointer, written by the yard each tick. */
-export interface HitBox {
-  readonly id: number
-  readonly depth: number
-  readonly contains: (at: Point) => boolean
-}
-
-/** The bridge between the page and the yard: the host writes input, the yard writes the preview. */
-export interface UiValue {
-  mode: Mode
-  /** The plot picked for building (its top cell), and the kind the panel is pointing at. */
-  plot: Point | null
-  plotKind: KindId | null
-  /** A factory whose next belt the player is placing by tapping its target. */
-  linkFrom: number | null
-  /** The pointer in world pixels, or `null` off the canvas. */
-  pointer: Point | null
-  dragFrom: number | null
-  selected: number | null
-  intents: Array<Intent>
-  preview: Preview
-  hits: ReadonlyArray<HitBox>
-  panel: Panel | null
-  /** Where each factory stands (world pixels), for the camera to look at. */
-  centres: ReadonlyMap<number, Point>
-  stats: { readonly factories: number; readonly belts: number; readonly crates: number; readonly shipped: number }
-  toast: (message: string) => void
-}
-
-export const Factory = Descriptor.Component<FactoryValue>()("Factory/Factory")
-export const Work = Descriptor.Component<WorkValue>()("Factory/Work")
-export const Belt = Descriptor.Component<BeltValue>()("Factory/Belt")
-export const Crate = Descriptor.Component<CrateValue>()("Factory/Crate")
-
-export const DeltaTime = Descriptor.Resource<number>()("Factory/DeltaTime")
-export const Elapsed = Descriptor.Resource<number>()("Factory/Elapsed")
-/** Ids for factories and belts, and how many factories were ever placed (for names and colours). */
-export const Counters = Descriptor.Resource<{ readonly nextId: number; readonly placed: number }>()("Factory/Counters")
-export const Totals = Descriptor.Resource<{ readonly shipped: number }>()("Factory/Totals")
-/** Crates each belt has delivered, by belt id. */
-export const Flow = Descriptor.Resource<Readonly<Record<number, number>>>()("Factory/Flow")
-
-export const Ui = Descriptor.Service<UiValue>()("Factory/Ui")
-export const Clock = Descriptor.Service<{ deltaSeconds: number }>()("Factory/Clock")
-export const StageService = Descriptor.Service<Stage>()("Factory/Stage")
-export const FactoryNodes = Descriptor.Service<NodeRegistry.NodeRegistry<FactoryView>>()("Factory/FactoryNodes")
-export const BeltNodes = Descriptor.Service<NodeRegistry.NodeRegistry<BeltView>>()("Factory/BeltNodes")
-export const CrateNodes = Descriptor.Service<NodeRegistry.NodeRegistry<CrateView>>()("Factory/CrateNodes")
+export const Ui = Descriptor.Service<UiValue>()("Town/Ui")
+/** The frame's length, for animation only: the simulation runs on `Time`. */
+export const Clock = Descriptor.Service<{ deltaSeconds: number; elapsed: number }>()("Town/Clock")
+export const StageService = Descriptor.Service<Stage>()("Town/Stage")
+export const BuildingNodes = Descriptor.Service<NodeRegistry.NodeRegistry<BuildingView>>()("Town/BuildingNodes")
+export const HouseNodes = Descriptor.Service<NodeRegistry.NodeRegistry<HouseView>>()("Town/HouseNodes")
+export const WalkerNodes = Descriptor.Service<NodeRegistry.NodeRegistry<WalkerView>>()("Town/WalkerNodes")
+export const TreeNodes = Descriptor.Service<NodeRegistry.NodeRegistry<TreeView>>()("Town/TreeNodes")
+export const RockNodes = Descriptor.Service<NodeRegistry.NodeRegistry<RockView>>()("Town/RockNodes")
+export const FieldNodes = Descriptor.Service<NodeRegistry.NodeRegistry<FieldView>>()("Town/FieldNodes")
 
 export const Game = Schema.bind(
   Schema.fragment({
-    components: { Factory, Work, Belt, Crate },
-    resources: { DeltaTime, Elapsed, Counters, Totals, Flow }
-  })
+    components: {
+      Tile, Road, Site, Rising, Tree, Rock, Water, Field, House, Building, TownHall, Status, Staff, Inventory, Storage,
+      Recipe, Gatherer, Planter, Carriers, Service, Figure, Route, Errand, Roam
+    },
+    resources: { Time, Rng, Treasury, Ledger, Census, Policy, Grid, Stock },
+    relations: { WalkerOf, FieldOf }
+  }),
+  Root
 )

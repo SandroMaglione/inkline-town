@@ -12,7 +12,7 @@ export const TILE_H = 32
 /** A sixteenth of a cell: the smallest length anything on the floor is measured in. */
 export const U = 1 / 16
 /** Cells along each side of the yard. */
-export const GRID = 24
+export const GRID = 32
 /** A factory stands on 3×3 cells; belts meet it at the middle cell of a side. */
 export const FOOTPRINT = 3
 

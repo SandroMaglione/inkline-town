@@ -1,34 +1,18 @@
 /**
- * The page around the yard: the Pixi stage and its layers, the camera (drag
- * to pan, wheel or pinch to zoom), the pointer turned into intents, and the
- * toolbar, stats, tooltip, and toasts.
+ * The page around the town: the Pixi stage and its layers, the camera (drag
+ * to pan, wheel or pinch to zoom), the pointer turned into gestures, and the
+ * top bar, toolbar, build menu, panel, tooltip, and toasts.
  */
 import { Application, Container, Graphics } from "pixi.js"
 
 import { drawFloor, type Stage } from "./art.ts"
+import {
+  appealOf, categoryColor, categoryOrder, costText, goodIds, goods, home, kindOrder, kinds, needTitle, RESERVES, ROAD_COST, TAX_STEPS,
+  type GoodId, type Kind, type KindId
+} from "./content.ts"
 import { GRID, toScreen, type Point } from "./iso.ts"
-import { kindOrder, kinds } from "./kinds.ts"
-import type { Intent, Mode, PanelLink, UiValue } from "./schema.ts"
-
-/** A small yard to start from, like a repository's packages feeding each other. */
-const demo: ReadonlyArray<Intent> = [
-  { type: "place", kind: "source", cell: { x: 2, y: 12 } },
-  { type: "place", kind: "source", cell: { x: 3, y: 4 } },
-  { type: "place", kind: "plant", cell: { x: 9, y: 9 } },
-  { type: "place", kind: "workshop", cell: { x: 10, y: 2 } },
-  { type: "place", kind: "workshop", cell: { x: 16, y: 7 } },
-  { type: "place", kind: "workshop", cell: { x: 9, y: 16 } },
-  { type: "place", kind: "depot", cell: { x: 20, y: 13 } },
-  { type: "place", kind: "depot", cell: { x: 16, y: 19 } },
-  { type: "link", from: { x: 2, y: 12 }, to: { x: 9, y: 9 } },
-  { type: "link", from: { x: 3, y: 4 }, to: { x: 9, y: 9 } },
-  { type: "link", from: { x: 3, y: 4 }, to: { x: 10, y: 2 } },
-  { type: "link", from: { x: 10, y: 2 }, to: { x: 16, y: 7 } },
-  { type: "link", from: { x: 9, y: 9 }, to: { x: 16, y: 7 } },
-  { type: "link", from: { x: 9, y: 9 }, to: { x: 9, y: 16 } },
-  { type: "link", from: { x: 16, y: 7 }, to: { x: 20, y: 13 } },
-  { type: "link", from: { x: 9, y: 16 }, to: { x: 16, y: 19 } }
-]
+import type { Tool, UiValue } from "./ui.ts"
+import { emptyPreview } from "./ui.ts"
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
   const node = document.createElement(tag)
@@ -37,7 +21,14 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   return node
 }
 
-export const createHost = async (mount: HTMLElement) => {
+const hex = (color: number) => `#${color.toString(16).padStart(6, "0")}`
+
+export interface Persistence {
+  readonly save: () => string | null
+  readonly load: () => string | null
+}
+
+export const createHost = async (mount: HTMLElement, persistence: () => Persistence) => {
   const app = new Application()
   await app.init({
     resizeTo: window,
@@ -52,18 +43,20 @@ export const createHost = async (mount: HTMLElement) => {
   const world = new Container()
   const floor = new Graphics()
   drawFloor(floor)
+  const ground = new Graphics()
   const plates = new Container()
-  const belts = new Container()
+  const roads = new Graphics()
   const preview = new Container()
   const overlay = new Graphics()
   preview.addChild(overlay)
   const objects = new Container({ sortableChildren: true })
   const ghost = new Graphics()
+  ghost.zIndex = 1e6
   objects.addChild(ghost)
   const labels = new Container()
-  world.addChild(floor, plates, belts, preview, objects, labels)
+  world.addChild(floor, ground, plates, roads, preview, objects, labels)
   app.stage.addChild(world)
-  const stage: Stage = { world, plates, belts, preview, objects, labels, overlay, ghost }
+  const stage: Stage = { world, ground, plates, roads, preview, objects, labels, overlay, ghost }
 
   // ── Camera ──
   const centre = toScreen(GRID / 2, GRID / 2)
@@ -74,7 +67,6 @@ export const createHost = async (mount: HTMLElement) => {
   const look = { x: centre.x, y: centre.y }
   const placeCamera = () => {
     world.scale.set(zoom)
-    // Whole device pixels, so lines land where the lattice puts them.
     const dpr = app.renderer.resolution
     world.position.set(
       Math.round((app.screen.width / 2 - look.x * zoom) * dpr) / dpr,
@@ -92,97 +84,169 @@ export const createHost = async (mount: HTMLElement) => {
     placeCamera()
   }
 
-  /** Glides the camera to a world point, leaving room for the panel on the right. */
-  let glide: Point | null = null
-  const lookAt = (at: Point) => {
-    glide = { x: at.x + panelWidth() / 2 / zoom, y: at.y - 30 }
-  }
-
   // ── DOM ──
+  // The top bar: treasury, people, and jobs in one strip; the goods in stock below, grouped.
   const hud = el("div", "hud")
-  const title = el("h1", "", "factory yard")
-  const stats = el("div", "stats")
-  hud.append(title, stats)
-  const hint = el("div", "hint")
-  hint.innerHTML = "tap the ground: build there<br>tap a factory: what it takes and feeds<br>drag factory → factory: belt<br>drag empty ground: pan · wheel: zoom<br>X bulldoze · Esc close"
+  const bar = el("div", "card bar")
+  const coins = el("div", "cell coins")
+  const people = el("div", "cell")
+  const jobs = el("div", "cell")
+  bar.append(coins, people, jobs)
+  const stock = el("div", "card stock")
+  const groups: ReadonlyArray<ReadonlyArray<GoodId>> = [["wood", "planks", "stone", "tools"], ["fish", "bread"], ["wool", "cloth"]]
+  const goodCells = new Map<GoodId, HTMLElement>()
+  for (const group of groups) {
+    const cell = el("div", "cell")
+    for (const g of group) {
+      const item = el("span", "good")
+      const swatch = el("span", "label")
+      swatch.style.background = hex(goods[g].color)
+      const count = el("span", "count", "0")
+      item.append(swatch, document.createTextNode(goods[g].title), count)
+      cell.append(item)
+      goodCells.set(g, count)
+    }
+    stock.append(cell)
+  }
+  hud.append(bar, stock)
+  hud.title = "Open the town's numbers and taxes"
+  hud.onclick = () => toggleMenu("town")
   const tooltip = el("div", "tooltip")
   const toastBox = el("div", "toast")
   const toolbar = el("div", "toolbar")
   const panel = el("aside", "panel")
-  document.body.append(hud, hint, tooltip, toastBox, toolbar, panel)
-  const panelWidth = () => (panel.classList.contains("open") ? panel.offsetWidth : 0)
+  document.body.append(hud, tooltip, toastBox, toolbar, panel)
 
   let toastTimer = 0
   const ui: UiValue = {
-    mode: "select",
-    plot: null,
-    plotKind: null,
-    linkFrom: null,
+    tool: "select",
+    placing: null,
+    menu: null,
     pointer: null,
     dragFrom: null,
     selected: null,
-    intents: [...demo],
-    preview: { ghost: null, plots: [], path: null, hoverFactory: null, hoverBelt: null, focus: null, danger: false, tooltip: null },
+    gestures: [],
+    edits: [{ type: "newTown", seed: (Date.now() & 0x7fffffff) >>> 0 }],
+    preview: emptyPreview(),
     hits: [],
     panel: null,
     centres: new Map(),
-    stats: { factories: 0, belts: 0, crates: 0, shipped: 0 },
+    stats: null,
     toast: (message) => {
       toastBox.textContent = message
       toastBox.classList.add("show")
       window.clearTimeout(toastTimer)
-      toastTimer = window.setTimeout(() => toastBox.classList.remove("show"), 1600)
+      toastTimer = window.setTimeout(() => toastBox.classList.remove("show"), 1800)
     }
   }
 
-  const tools: ReadonlyArray<{ readonly mode: Mode; readonly label: string; readonly key: string }> = [
-    { mode: "select", label: "select", key: "S" },
-    { mode: "bulldoze", label: "bulldoze", key: "X" }
+  const tools: ReadonlyArray<{ readonly tool: Tool | "build" | "town"; readonly label: string; readonly key: string; readonly swatch: string; readonly tip: string }> = [
+    { tool: "select", label: "select", key: "S", swatch: "round", tip: "Click a building or home to see what it does · drag to pan · wheel to zoom" },
+    { tool: "road", label: "road", key: "R", swatch: "#e6e8e2", tip: `Drag to lay a road · ${ROAD_COST} coins a cell` },
+    { tool: "home", label: "homes", key: "H", swatch: "#c4523f", tip: `Drag to lay a row of homes along a road · ${costText(home.cost)} each` },
+    { tool: "build", label: "build", key: "B", swatch: "#3d6db5", tip: "Choose a building, then click to place it · Esc to stop" },
+    { tool: "bulldoze", label: "bulldoze", key: "X", swatch: "#8f9891", tip: "Click a building, home, road, tree, or field to remove it" },
+    { tool: "town", label: "town", key: "T", swatch: "#8a58a8", tip: "The town's numbers, history, and taxes" }
   ]
   const buttons = tools.map((tool) => {
     const button = el("button", "")
+    button.title = tool.tip
     const swatch = el("span", "swatch")
-    if (tool.mode === "select") swatch.style.borderRadius = "50%"
-    if (tool.mode === "bulldoze") swatch.style.background = "#c4523f"
+    if (tool.swatch === "round") swatch.style.borderRadius = "50%"
+    else swatch.style.background = tool.swatch
     button.append(swatch, document.createTextNode(tool.label), el("kbd", "", tool.key))
-    button.onclick = () => choose(tool.mode)
+    button.onclick = () => (tool.tool === "build" || tool.tool === "town" ? toggleMenu(tool.tool) : choose(tool.tool))
     toolbar.append(button)
     return { tool, button }
   })
   toolbar.append(el("span", "sep"))
-  const demoButton = el("button", "", "demo")
-  demoButton.onclick = () => ui.intents.push({ type: "clear" }, ...demo)
-  const clearButton = el("button", "", "clear")
-  clearButton.onclick = () => ui.intents.push({ type: "clear" })
-  toolbar.append(demoButton, clearButton)
-
-  const close = () => {
-    ui.selected = null
-    ui.plot = null
-    ui.plotKind = null
-    ui.linkFrom = null
+  const action = (label: string, tip: string, run: () => void) => {
+    const button = el("button", "", label)
+    button.title = tip
+    button.onclick = run
+    toolbar.append(button)
   }
+  action("new town", "Found a new town on new land", () => {
+    ui.edits.push({ type: "newTown", seed: (Date.now() & 0x7fffffff) >>> 0 })
+    history.length = 0
+    choose("select")
+  })
+  action("save", "Save the town in this browser", () => ui.toast(persistence().save() ?? "Saved"))
+  action("load", "Load the saved town", () => ui.toast(persistence().load() ?? "Loaded"))
 
-  const choose = (mode: Mode) => {
-    ui.mode = mode
+  const refreshTools = () => {
+    for (const { tool, button } of buttons) {
+      const on = tool.tool === "build" ? ui.menu === "build" || ui.tool === "place" : tool.tool === "town" ? ui.menu === "town" : tool.tool === ui.tool
+      button.classList.toggle("on", on)
+    }
+  }
+  const choose = (tool: Tool) => {
+    ui.tool = tool
     ui.dragFrom = null
-    if (mode === "bulldoze") close()
-    for (const { tool, button } of buttons) button.classList.toggle("on", tool.mode === mode)
+    if (tool !== "place") ui.placing = null
+    if (tool !== "select") ui.selected = null
+    refreshTools()
+  }
+  const toggleMenu = (menu: "build" | "town") => {
+    ui.menu = ui.menu === menu ? null : menu
+    if (ui.menu) ui.selected = null
+    refreshTools()
+  }
+  const place = (kind: KindId) => {
+    ui.placing = kind
+    ui.menu = null
+    choose("place")
+    ui.toast(`Click to place a ${kinds[kind].title.toLowerCase()} · Esc to stop`)
   }
   choose("select")
 
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      if (ui.linkFrom !== null) ui.linkFrom = null
-      else if (ui.mode !== "select") choose("select")
-      else close()
+      if (ui.tool !== "select") choose("select")
+      else if (ui.menu) ui.menu = null
+      else ui.selected = null
+      refreshTools()
     }
-    if (event.key === "s" || event.key === "S") choose("select")
-    if (event.key === "x" || event.key === "X") choose("bulldoze")
+    const key = event.key.toLowerCase()
+    if (key === "s") choose("select")
+    if (key === "r") choose("road")
+    if (key === "h") choose("home")
+    if (key === "x") choose("bulldoze")
+    if (key === "b") toggleMenu("build")
+    if (key === "t") toggleMenu("town")
   })
 
+  // ── History, for the town panel's lines ──
+  interface Sample {
+    readonly coins: number
+    readonly residents: number
+    readonly stock: Readonly<Record<GoodId, number>>
+  }
+  /** One sample every `SAMPLE_SECONDS`, the last ten minutes of them. */
+  const history: Array<Sample> = []
+  const SAMPLE_SECONDS = 4
+  const HISTORY = 150
+  window.setInterval(() => {
+    const s = ui.stats
+    if (!s) return
+    history.push({ coins: s.coins, residents: s.settlers + s.citizens, stock: s.stock })
+    if (history.length > HISTORY) history.shift()
+  }, SAMPLE_SECONDS * 1000)
+
+  /** A thin ink line of `values`, scaled to its own range. */
+  const sparkline = (values: ReadonlyArray<number>): string => {
+    if (values.length < 2) return ""
+    const w = 300
+    const h = 36
+    const lo = Math.min(...values)
+    const hi = Math.max(...values)
+    const span = hi - lo || 1
+    const points = values.map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - 2 - ((v - lo) / span) * (h - 4)).toFixed(1)}`).join(" ")
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="#3d4943" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`
+  }
+
   // ── Panel ──
-  /** Volatile numbers the panel shows, updated in place without rebuilding it. */
+  /** Volatile parts of the panel, updated in place without rebuilding it. */
   let live: Array<() => void> = []
   let shape = ""
 
@@ -191,28 +255,208 @@ export const createHost = async (mount: HTMLElement) => {
     box.append(el("h3", "", heading))
     return box
   }
-
-  const openFactory = (id: number) => {
-    ui.selected = id
-    ui.plot = null
-    ui.linkFrom = null
-    const at = ui.centres.get(id)
-    if (at) lookAt(at)
+  const header = (title: string) => {
+    const head = el("header", "")
+    const closeButton = el("button", "frame", "Close")
+    closeButton.onclick = () => {
+      ui.selected = null
+      ui.menu = null
+      refreshTools()
+    }
+    head.append(el("h2", "", title), closeButton)
+    return head
   }
 
-  const factoryRows = (box: HTMLElement, links: ReadonlyArray<PanelLink>, which: "takes" | "feeds") => {
-    links.forEach((link, index) => {
-      const row = el("div", "row")
-      const name = el("button", "link", `${kinds[link.kind].title.toLowerCase()}/${link.name}`)
-      name.onclick = () => openFactory(link.id)
-      const count = el("span", "count")
-      row.append(name, count)
-      box.append(row)
+  const lockText = (kind: Kind): string | null => {
+    const s = ui.stats
+    if (!s) return null
+    const residents = s.settlers + s.citizens
+    if (residents < kind.unlock.residents) return `needs ${kind.unlock.residents} residents`
+    if (s.citizens < kind.unlock.citizens) return `needs ${kind.unlock.citizens} citizens`
+    return null
+  }
+  const shortText = (cost: Kind["cost"]): string | null => {
+    const s = ui.stats
+    if (!s) return null
+    if (s.coins < cost.coins) return "not enough coins"
+    for (const [g, n] of Object.entries(cost.materials)) if (s.stock[g as keyof typeof s.stock] < (n ?? 0)) return `not enough ${g}`
+    return null
+  }
+
+  const buildMenu = () => {
+    panel.append(header("build"))
+    panel.append(el("p", "sub", `Choose, then click on the map to place · Esc to stop. Roads ${ROAD_COST} coins a cell (R), homes ${costText(home.cost)} (H).`))
+    for (const category of categoryOrder) {
+      const options = kindOrder.filter((id) => kinds[id].category === category && kinds[id].buildable)
+      if (options.length === 0) continue
+      const box = section(category)
+      box.querySelector("h3")!.style.borderBottomColor = hex(categoryColor[category])
+      for (const id of options) {
+        const kind = kinds[id]
+        const option = el("button", "option")
+        const top = el("span", "row")
+        top.append(el("span", "name", kind.title.toLowerCase()), el("span", "count", costText(kind.cost)))
+        const blurb = el("span", "blurb", "")
+        option.append(top, blurb)
+        option.onclick = () => place(id)
+        live.push(() => {
+          const lock = lockText(kind)
+          const short = lock ? null : shortText(kind.cost)
+          option.disabled = lock !== null
+          option.classList.toggle("short", short !== null)
+          blurb.textContent = lock ?? `${kind.blurb} · ${kind.workers} workers · ${kind.upkeep}/min${short ? ` · ${short}` : ""}`
+        })
+        box.append(option)
+      }
+      panel.append(box)
+    }
+  }
+
+  const row = (box: HTMLElement, label: string) => {
+    const line = el("div", "row")
+    const value = el("span", "count")
+    line.append(el("span", "", label), value)
+    box.append(line)
+    return value
+  }
+
+  const townPanel = () => {
+    panel.append(header("town"))
+    const sub = el("p", "sub")
+    panel.append(sub)
+
+    const treasury = section("treasury")
+    const taxes = row(treasury, "taxes")
+    const traded = row(treasury, "trade")
+    const upkeep = row(treasury, "upkeep")
+    const net = row(treasury, "a minute")
+    const coinLine = el("div", "spark")
+    treasury.append(coinLine)
+    panel.append(treasury)
+
+    const levers = section("taxes")
+    for (const tier of ["settlers", "citizens"] as const) {
+      const line = el("div", "row lever")
+      const minus = el("button", "frame step", "−")
+      const value = el("span", "rate")
+      const plus = el("button", "frame step", "+")
+      const controls = el("span", "controls")
+      controls.append(minus, value, plus)
+      line.append(el("span", "", tier), controls)
+      const effect = el("p", "empty")
+      levers.append(line, effect)
+      const move = (by: number) => {
+        const now = ui.stats?.policy[tier] ?? 100
+        const i = TAX_STEPS.indexOf(now as (typeof TAX_STEPS)[number])
+        const next = TAX_STEPS[Math.min(TAX_STEPS.length - 1, Math.max(0, (i < 0 ? 2 : i) + by))]!
+        ui.edits.push({ type: "tax", tier, rate: next })
+      }
+      minus.onclick = () => move(-1)
+      plus.onclick = () => move(1)
       live.push(() => {
-        const p = ui.panel
-        const now = p?.type === "factory" ? p[which][index] : undefined
-        count.textContent = now ? `${now.crates} crate${now.crates === 1 ? "" : "s"}` : ""
+        const rate = ui.stats?.policy[tier] ?? 100
+        value.textContent = `${rate}%`
+        const appeal = Math.round((appealOf(rate) - 1) * 100)
+        effect.textContent = appeal === 0
+          ? "the usual rate"
+          : appeal > 0
+          ? `homes keep up to ${appeal}% more residents when short of needs`
+          : `homes hold ${-appeal}% fewer residents`
       })
+    }
+    panel.append(levers)
+
+    const town = section("people")
+    const settlers = row(town, "settlers")
+    const citizens = row(town, "citizens")
+    const homes = row(town, "homes")
+    const work = row(town, "jobs filled")
+    const peopleLine = el("div", "spark")
+    town.append(peopleLine)
+    panel.append(town)
+
+    const needs = section("homes supplied")
+    const bars = (["food", "bread", "cloth", "faith"] as const).map((n) => {
+      const line = el("div", "need")
+      const label = el("span", "", needTitle[n])
+      const track = el("span", "track")
+      const fill = el("span", "fill")
+      track.append(fill)
+      const value = el("span", "count")
+      line.append(label, track, value)
+      needs.append(line)
+      return { n, fill, value }
+    })
+    panel.append(needs)
+
+    const store = section("goods and trade")
+    const reserveLine = el("div", "row lever")
+    const reserveControls = el("span", "controls")
+    const fewer = el("button", "frame step", "−")
+    const reserveValue = el("span", "rate")
+    const more = el("button", "frame step", "+")
+    reserveControls.append(fewer, reserveValue, more)
+    reserveLine.append(el("span", "", "keep before selling"), reserveControls)
+    store.append(reserveLine)
+    const stepReserve = (by: number) => {
+      const now = ui.stats?.policy.reserve ?? 25
+      const i = RESERVES.indexOf(now as (typeof RESERVES)[number])
+      ui.edits.push({ type: "reserve", amount: RESERVES[Math.min(RESERVES.length - 1, Math.max(0, (i < 0 ? 1 : i) + by))]! })
+    }
+    fewer.onclick = () => stepReserve(-1)
+    more.onclick = () => stepReserve(1)
+    store.append(el("p", "empty", "Ticked goods are sold to traders beyond what the town keeps, for the price shown."))
+    const goodRows = goodIds.map((g) => {
+      const line = el("label", "row good-row")
+      const box = el("input", "")
+      box.type = "checkbox"
+      box.onchange = () => ui.edits.push({ type: "sell", good: g, on: box.checked })
+      const name = el("span", "", `${goods[g].title} · ${goods[g].price}c`)
+      const left = el("span", "")
+      left.append(box, name)
+      const value = el("span", "count")
+      line.append(left, value)
+      store.append(line)
+      return { g, value, box }
+    })
+    panel.append(store)
+
+    live.push(() => {
+      const s = ui.stats
+      if (!s) return
+      sub.textContent = `${s.settlers + s.citizens} residents · ${s.coins} coins`
+      taxes.textContent = `+${s.taxes}`
+      traded.textContent = `+${s.trade}`
+      upkeep.textContent = `−${s.upkeep}`
+      net.textContent = `${s.net >= 0 ? "+" : ""}${s.net} coins`
+      settlers.textContent = String(s.settlers)
+      citizens.textContent = String(s.citizens)
+      homes.textContent = String(s.homes)
+      work.textContent = `${s.employed} of ${s.jobs}`
+      for (const b of bars) {
+        const share = s.homes > 0 ? s.needs[b.n] / s.homes : 0
+        b.fill.style.width = `${Math.round(share * 100)}%`
+        b.value.textContent = `${s.needs[b.n]} of ${s.homes}`
+      }
+      // Goods' change over the last minute of samples.
+      const ago = history[Math.max(0, history.length - 1 - Math.round(60 / SAMPLE_SECONDS))]
+      reserveValue.textContent = String(s.policy.reserve)
+      for (const r of goodRows) {
+        const change = ago ? s.stock[r.g] - ago.stock[r.g] : 0
+        r.value.textContent = `${s.stock[r.g]}${change !== 0 ? `  ${change > 0 ? "+" : ""}${change}/min` : ""}`
+        const selling = s.policy.sells.includes(r.g)
+        if (r.box.checked !== selling) r.box.checked = selling
+      }
+      const coinsSvg = sparkline(history.map((h) => h.coins))
+      if (coinLine.dataset.svg !== coinsSvg) {
+        coinLine.dataset.svg = coinsSvg
+        coinLine.innerHTML = coinsSvg
+      }
+      const peopleSvg = sparkline(history.map((h) => h.residents))
+      if (peopleLine.dataset.svg !== peopleSvg) {
+        peopleLine.dataset.svg = peopleSvg
+        peopleLine.innerHTML = peopleSvg
+      }
     })
   }
 
@@ -221,85 +465,48 @@ export const createHost = async (mount: HTMLElement) => {
     live = []
     panel.replaceChildren()
     if (!p) return
-    const head = el("header", "")
-    const closeButton = el("button", "frame", "Close")
-    closeButton.onclick = close
-    if (p.type === "plot") {
-      head.append(el("h2", "", `plot ${p.x},${p.y}`), closeButton)
-      panel.append(head, el("p", p.free ? "sub" : "sub warn", p.reason))
-      const box = section("build here")
-      for (const id of kindOrder) {
-        const kind = kinds[id]
-        const row = el("button", "option")
-        row.disabled = !p.free
-        const top = el("span", "row")
-        top.append(el("span", "name", kind.title.toLowerCase()), el("span", "count", kind.needs === 0 ? `makes ${kind.makes}` : kind.makes === 0 ? `ships ${kind.needs}` : `takes ${kind.needs}, makes ${kind.makes}`))
-        row.append(top, el("span", "blurb", `${kind.blurb} · ${kind.period}s a job`))
-        row.onmouseenter = () => (ui.plotKind = id)
-        row.onmouseleave = () => {
-          if (ui.plotKind === id) ui.plotKind = null
-        }
-        row.onclick = () => ui.intents.push({ type: "build", kind: id })
-        box.append(row)
-      }
-      panel.append(box)
-      return
-    }
+    if (p.type === "build") return buildMenu()
+    if (p.type === "town") return townPanel()
 
-    const kind = kinds[p.kind]
-    head.append(el("h2", "", `${kind.title.toLowerCase()}/${p.name}`), closeButton)
+    const title = p.type === "building" ? kinds[p.kind].title.toLowerCase() : `${home.tiers[p.tier].title}' home`
     const status = el("p", "sub")
-    const numbers = el("p", "sub")
-    panel.append(head, status, numbers)
+    panel.append(header(title), status)
+    const box = section(p.type === "building" ? "at work" : "household")
+    const rows: Array<HTMLElement> = []
+    panel.append(box)
     live.push(() => {
       const now = ui.panel
-      if (now?.type !== "factory") return
-      status.textContent = `${now.status} · ${kind.blurb}`
-      numbers.textContent = now.kind === "depot"
-        ? `${now.inputs} waiting · ${now.made} shipped`
-        : now.kind === "source"
-        ? `${now.outputs} ready · ${now.made} made`
-        : `${now.inputs} in · ${now.outputs} out · ${now.made} jobs done`
-    })
-
-    const takes = section("takes from")
-    if (kind.needs === 0) takes.append(el("p", "empty", "nothing: it makes crates from nothing"))
-    else if (p.takes.length === 0) takes.append(el("p", "empty", "no belts in yet: drag one here from another factory"))
-    factoryRows(takes, p.takes, "takes")
-    const feeds = section("feeds")
-    if (kind.makes === 0) feeds.append(el("p", "empty", "nothing: it ships crates out of the yard"))
-    else if (p.feeds.length === 0) feeds.append(el("p", "empty", "no belts out yet: connect it to send its crates on"))
-    factoryRows(feeds, p.feeds, "feeds")
-    panel.append(takes, feeds)
-
-    const actions = el("div", "actions")
-    if (kind.makes > 0) {
-      const connect = el("button", "frame", p.linking ? "Tap a factory… (cancel)" : "Connect to…")
-      connect.onclick = () => {
-        ui.linkFrom = p.linking ? null : p.id
-        if (!p.linking) ui.toast("Tap the factory to send crates to")
+      if (!now || now.type === "build" || now.type === "town" || now.type !== p.type) return
+      if (now.type === "building") {
+        status.textContent = now.problem ?? `${now.status} · ${kinds[now.kind].blurb}`
+        status.classList.toggle("warn", now.problem !== null)
+      } else status.textContent = now.tier === 1 ? "settlers: fish or bread from a market keeps them" : "citizens: they need bread, cloth, and faith"
+      while (rows.length < now.lines.length) {
+        const line = el("div", "row")
+        rows.push(line)
+        box.append(line)
       }
-      actions.append(connect)
+      rows.forEach((row, i) => (row.textContent = now.lines[i] ?? ""))
+    })
+    if (!(p.type === "building" && p.kind === "townhall")) {
+      const actions = el("div", "actions")
+      const remove = el("button", "frame danger", "Remove")
+      remove.onclick = () => ui.edits.push({ type: "remove", cell: p.cell })
+      actions.append(remove)
+      panel.append(actions)
     }
-    const remove = el("button", "frame danger", "Remove")
-    remove.onclick = () => ui.intents.push({ type: "remove", factory: p.id })
-    actions.append(remove)
-    panel.append(actions)
   }
 
-  /** Rebuilds the panel when what it lists changes, and refreshes its numbers every frame. */
+  /** Rebuilds the panel when what it shows changes, and refreshes its numbers every frame. */
   const syncPanel = () => {
     const p = ui.panel
-    const next = p === null
-      ? ""
-      : p.type === "plot"
-      ? `plot|${p.x},${p.y}|${p.free}|${p.reason}`
-      : `factory|${p.id}|${p.linking}|${p.takes.map((l) => l.id).join(",")}|${p.feeds.map((l) => l.id).join(",")}`
+    const next = p === null ? "" : p.type === "build" || p.type === "town" ? p.type : `${p.type}|${p.id}|${p.type === "house" ? p.tier : ""}`
     if (next !== shape) {
       shape = next
       // Keep the old contents while the closed panel slides away.
       if (p !== null) buildPanel()
       panel.classList.toggle("open", p !== null)
+      refreshTools()
     }
     for (const update of live) update()
   }
@@ -324,19 +531,15 @@ export const createHost = async (mount: HTMLElement) => {
     screenPointer = at
     ui.pointer = toWorld(at.x, at.y)
     if (pointers.size === 2) {
-      // A second finger: pinch, and forget what the first one was doing.
       pinch = { distance: spread()!.distance }
       press = null
       ui.dragFrom = null
       return
     }
-    const world = toWorld(at.x, at.y)
-    const onFactory = ui.hits.some((h) => h.contains(world))
-    // Dragging from a factory draws a belt; dragging anywhere else pans.
-    const pan = event.button === 1 || event.button === 2 || !(ui.mode === "select" && onFactory && ui.linkFrom === null)
-    glide = null
+    // Roads and homes are laid by dragging; with any other tool a drag pans.
+    const pan = event.button !== 0 || (ui.tool !== "road" && ui.tool !== "home")
     press = { id: event.pointerId, start: at, last: at, pan, panned: false }
-    if (event.button === 0) ui.intents.push({ type: "press", at: world })
+    if (event.button === 0) ui.gestures.push({ type: "press", at: toWorld(at.x, at.y) })
   })
 
   canvas.addEventListener("pointermove", (event) => {
@@ -364,17 +567,15 @@ export const createHost = async (mount: HTMLElement) => {
   const release = (event: PointerEvent, cancelled: boolean) => {
     pointers.delete(event.pointerId)
     if (pinch && pointers.size < 2) {
-      // A pinch settles on the nearest zoom step.
       pinch = null
       const nearest = zooms.reduce((best, z) => (Math.abs(z - zoom) < Math.abs(best - zoom) ? z : best), zooms[0])
       zoomTo(event.clientX, event.clientY, nearest)
     }
     if (press && press.id === event.pointerId) {
       const at = toWorld(event.clientX, event.clientY)
-      ui.intents.push({ type: "release", at, panned: press.panned || cancelled || event.button !== 0 })
+      ui.gestures.push({ type: "release", at, panned: press.panned || cancelled || event.button !== 0 })
       press = null
     }
-    // Touch has no hover: clear it when the finger lifts.
     if (event.pointerType !== "mouse") {
       ui.pointer = null
       screenPointer = null
@@ -391,7 +592,6 @@ export const createHost = async (mount: HTMLElement) => {
   canvas.addEventListener("contextmenu", (event) => event.preventDefault())
   canvas.addEventListener("wheel", (event) => {
     event.preventDefault()
-    // One wheel notch (or a trackpad's worth of scrolling) is one zoom step.
     wheel += event.deltaY
     if (Math.abs(wheel) < 40) return
     const index = zooms.findIndex((z) => z >= zoom - 1e-6)
@@ -400,17 +600,17 @@ export const createHost = async (mount: HTMLElement) => {
     zoomTo(event.clientX, event.clientY, next)
   }, { passive: false })
 
-  /** Copies the yard's preview and numbers into the page, once a frame. */
+  /** Copies the town's numbers and preview into the page, once a frame. */
   const syncPage = () => {
     syncPanel()
-    if (glide) {
-      look.x += (glide.x - look.x) * 0.14
-      look.y += (glide.y - look.y) * 0.14
-      if (Math.hypot(glide.x - look.x, glide.y - look.y) < 0.5) glide = null
-      placeCamera()
-    }
     const s = ui.stats
-    stats.textContent = `${s.factories} factories · ${s.belts} belts · ${s.crates} in transit · ${s.shipped} shipped`
+    if (s) {
+      coins.innerHTML = `<b>${s.coins}</b> coins <span class="${s.net >= 0 ? "up" : "down"}">${s.net >= 0 ? "+" : ""}${s.net}/min</span>`
+      coins.classList.toggle("debt", s.coins < 0)
+      people.textContent = `${s.settlers} settlers · ${s.citizens} citizens`
+      jobs.textContent = `${s.employed}/${s.jobs} jobs`
+      for (const [g, count] of goodCells) count.textContent = String(s.stock[g])
+    }
     const text = ui.preview.tooltip
     if (text && screenPointer) {
       tooltip.textContent = text
@@ -418,7 +618,7 @@ export const createHost = async (mount: HTMLElement) => {
       tooltip.style.left = `${Math.min(screenPointer.x, window.innerWidth - tooltip.offsetWidth - 20)}px`
       tooltip.style.top = `${screenPointer.y}px`
     } else tooltip.style.display = "none"
-    canvas.style.cursor = press?.panned ? "grabbing" : ui.preview.hoverFactory !== null || ui.mode !== "select" ? "pointer" : "default"
+    canvas.style.cursor = press?.panned ? "grabbing" : ui.preview.hover !== null || ui.tool !== "select" ? "pointer" : "default"
   }
 
   return { app, stage, ui, syncPage }
