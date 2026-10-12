@@ -6,10 +6,10 @@
 import { RenderSync } from "@typeonce/bevy-ts-render"
 
 import {
-  BuildingView, drawFloor, drawGhost, drawPlot, drawRoads, drawWater, FieldView, homeHeight, HouseView, RockView, topOf, TreeView, WalkerView,
+  BuildingView, drawFloor, drawGhost, drawPlot, drawRoads, drawWater, FieldView, homeHeight, HouseView, RockView, topOf, TreeView, WalkerView, type Load,
   type Doors, type Emphasis
 } from "./art.ts"
-import { BUILD_TICKS, crown as crownRules, fate, goods, home, kinds, needTitle, total, type Kind } from "./content.ts"
+import { BUILD_TICKS, crown as crownRules, fate, goodIds, goods, home, kinds, needTitle, total, type Kind } from "./content.ts"
 import { around, canPlace, entrances, isRoad, key, lPath, useAt, type TileLike } from "./grid.ts"
 import { inside, TILE_H, TILE_W, toGrid, toScreen, U, type Point } from "./iso.ts"
 import {
@@ -19,6 +19,7 @@ import {
   type GridValue, type Status as StatusValue
 } from "./schema.ts"
 import { capacity, CELL_STEPS, elapsed, goalsOf, larder, met, seasonAt, SITE_SHARE, taxOf, termTicks } from "./sim/index.ts"
+import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type HitBox } from "./ui.ts"
 
 const cellAt = (at: Point): Point => {
@@ -411,7 +412,7 @@ export const RenderWalkers = RenderSync.system(Game, {
   name: "Town/RenderWalkers",
   renderable: Figure,
   registry: WalkerNodes,
-  create: ({ renderable }) => new WalkerView(renderable.role, renderable.color),
+  create: ({ renderable }) => WalkerView.forFigure(renderable.role, renderable.color),
   apply: () => {}
 })
 
@@ -556,8 +557,14 @@ export const Animate = Game.System(
       const p = walkerAt(data.route.get())
       const errand = maybe(data.errand)
       const roam = maybe(data.roam)
-      const cargo = errand ? !errand.back || errand.count > 0 : roam ? total(roam.basket) > 0 : false
-      services.walkerNodes.get(entity.id)?.update(p.x, p.y, p.dir, p.phase, cargo)
+      const load: Load = errand
+        ? { kind: "cart", good: errand.good, count: !errand.back || errand.count > 0 ? errand.count : 0 }
+        : roam?.service === "faith"
+        ? { kind: "bell" }
+        : roam && total(roam.basket) > 0
+        ? { kind: "basket", goods: goodIds.filter((g) => roam.basket[g] > 0) }
+        : { kind: "none" }
+      services.walkerNodes.get(entity.id)?.update(p.x, p.y, p.dir, p.phase, load)
     }
     for (const { entity, data } of queries.trees.each()) services.treeNodes.get(entity.id)?.update(data.tree.get().growth, emphasis(entity.id))
     for (const { entity, data } of queries.rocks.each()) {
@@ -584,6 +591,31 @@ export const DrawPreview = Game.System(
   }
 )
 
+/** Residents out walking (see `townsfolk.ts`), on the town's time: still while it waits. */
+let townsfolk: { readonly folk: Townsfolk; land: string } | null = null
+export const Stroll = Game.System(
+  "Town/Stroll",
+  {
+    queries: { houses: HouseRead },
+    resources: { grid: Game.System.readResource(Grid), land: Game.System.readResource(Land) },
+    services: { ui: Game.System.service(Ui), clock: Game.System.service(Clock), stage: Game.System.service(StageService) }
+  },
+  ({ queries, resources, services }) => {
+    const ui = services.ui
+    townsfolk ??= { folk: new Townsfolk(services.stage.objects), land: "" }
+    const mask = resources.land.get().mask
+    if (mask !== townsfolk.land) {
+      townsfolk.land = mask
+      townsfolk.folk.clear()
+    }
+    const waiting = ui.founding || (ui.stats !== null && ui.stats.fate.state !== "playing")
+    const homes = queries.houses.each()
+      .filter(({ data }) => !maybe(data.site) && !maybe(data.rising))
+      .map(({ data }) => ({ ...data.tile.get(), tier: data.house.get().tier, residents: data.house.get().residents }))
+    townsfolk.folk.step(waiting ? 0 : services.clock.deltaSeconds * ui.speed, homes, resources.grid.get())
+  }
+)
+
 export const present = Game.Schedule(
   Interact,
   DrawLand,
@@ -595,5 +627,6 @@ export const present = Game.Schedule(
   RenderFields,
   DrawGround,
   Animate,
+  Stroll,
   DrawPreview
 )

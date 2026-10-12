@@ -8,7 +8,7 @@ that ends with the town complete, lost, or run out. Game logic runs on the
 
 ```sh
 pnpm install
-pnpm dev --host --port 5232
+pnpm dev --host --port 5232   # /gallery.html shows every drawing side by side
 pnpm typecheck
 pnpm test       # model-based tests: random mayors, rules that must always hold; and saving
 pnpm check      # every way a term can end, ends it
