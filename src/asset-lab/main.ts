@@ -1,17 +1,34 @@
 import { Application, Graphics } from "pixi.js"
 import * as THREE from "three"
-import { drawBuilding, drawCrate, drawHouse, drawTree, homeVariant, plate, plateHalf } from "../art.ts"
-import { kinds } from "../content.ts"
+import {
+  drawBuilding,
+  drawCrate,
+  drawCargo,
+  drawHouse,
+  drawTree,
+  drawRock,
+  drawField,
+  drawWalker,
+  drawSite,
+  drawRoads,
+  drawWater,
+  homeVariant,
+  plate,
+  plateHalf
+} from "../art.ts"
+import { kinds, goods } from "../content.ts"
+import { key } from "../grid.ts"
+import { drawPlot } from "../art.ts"
 import { U, toScreen } from "../iso.ts"
-import { inkAssets, type InkAsset } from "./assets.ts"
+import { inkAssets, assetCategoryTitles, type InkAsset } from "./assets.ts"
 import { buildAsset, exportAsset, reloadExportedAsset } from "./renderer.ts"
 import "./style.css"
 
 const root = document.querySelector<HTMLDivElement>("#lab")!
 root.innerHTML = `
-  <header><a href="/">Inkline Town</a><span>ART STUDY / 01</span></header>
+  <header><a href="/">Inkline Town</a><span>COMPLETE ASSET STUDY</span></header>
   <div class="intro"><div><h1>The same ink.<br>A different angle.</h1><p>Original game drawings and complete 3D assets, side by side.</p></div><span class="tag">Procedural · Orthographic · Rotatable</span></div>
-  <nav class="assets" aria-label="Choose an asset"></nav>
+  <div class="filters"><label>Collection <select id="category"></select></label><label>Find <input id="search" type="search" placeholder="Name or material"></label><a href="/map-lab.html">See everything on the map ↗</a></div><nav class="assets" aria-label="Choose an asset"></nav>
   <section class="comparison" aria-label="Compare the original drawing with the 3D model">
     <div class="view"><div class="view-label"><span>01 / CURRENT GAME</span><span>Fixed isometric drawing</span></div><canvas id="reference" aria-label="Original 2D asset"></canvas><span class="view-foot">Original art.ts drawing</span></div>
     <div class="view"><div class="view-label"><span>02 / 3D STUDY</span><span id="angle-label">Original angle</span></div><div id="viewer" role="img" aria-label="Rotatable 3D asset. Drag horizontally to rotate."></div><span class="view-foot">Drag to rotate · wheel to zoom</span></div>
@@ -37,7 +54,69 @@ await pixi.init({ width: 32, height: 32, antialias: true, resolution: 3, backgro
 
 function original(asset: InkAsset) {
   const g = new Graphics()
-  if (asset.id === "cottage" || asset.id === "citizen") {
+  const r = asset.reference
+  if (r) {
+    switch (r.type) {
+      case "building":
+        plate(g, plateHalf(kinds[r.kind].size))
+        drawBuilding(g, kinds[r.kind], r.build ?? 1, 0, 1.2, { right: true, left: true })
+        break
+      case "house":
+        plate(g, plateHalf(1))
+        drawHouse(g, r.tier, r.build ?? 1, { right: true, left: false }, homeVariant(r.variant))
+        break
+      case "tree":
+        drawTree(g, r.x, r.y, r.grown)
+        break
+      case "rock":
+        drawRock(g, r.x, r.y, r.ore, r.amount)
+        break
+      case "field":
+        drawField(g, r.grown)
+        break
+      case "walker":
+        drawWalker(g, r.dress, r.load, r.cart, { x: 1, y: 0 }, r.phase)
+        break
+      case "crate":
+        drawCrate(g, goods[r.good].color, 3 * U, 12)
+        break
+      case "cargo":
+        drawCargo(g, 0, 0, { x: 1, y: 0 }, r.good, r.count, 0)
+        break
+      case "site":
+        plate(g, plateHalf(2))
+        drawSite(g, plateHalf(2), r.share)
+        break
+      case "plot":
+        drawPlot(g, -1, -1, 2, r.look, 0)
+        break
+      case "roads": {
+        const cells = new Set([key(8, 8), key(7, 8), key(9, 8), key(8, 7), key(8, 9)])
+        const p = toScreen(8.5, 8.5)
+        g.translateTransform(-p.x, -p.y)
+        drawRoads(g, cells)
+        g.resetTransform()
+        break
+      }
+      case "water": {
+        const cells = new Set<number>()
+        for (let x = 7; x <= 9; x++) for (let y = 7; y <= 9; y++) cells.add(key(x, y))
+        const p = toScreen(8.5, 8.5)
+        g.translateTransform(-p.x, -p.y)
+        drawWater(g, cells)
+        g.resetTransform()
+        break
+      }
+      case "none":
+        if (asset.id === "problem-marker") {
+          g.roundRect(-7.5, -15, 15, 15, 2).fill(0xf6f7f3).stroke({ color: 0xc4523f, width: 1 })
+          g.rect(-1, -12, 2, 6).rect(-1, -5, 2, 2).fill(0xc4523f)
+        } else
+          for (const t of [0.1, 0.4, 0.7])
+            g.circle(Math.sin(t * 5) * 1.5, -t * 34, 4 + t * 7).stroke({ color: 0x3d4943, width: 1, alpha: (1 - t) * 0.55 })
+        break
+    }
+  } else if (asset.id === "cottage" || asset.id === "citizen") {
     const tier = asset.id === "cottage" ? 1 : 2
     plate(g, plateHalf(1))
     drawHouse(g, tier, 1, { right: true, left: false }, homeVariant(tier === 1 ? 0.03 : 0.28))
@@ -102,20 +181,35 @@ for (const asset of inkAssets) {
   const g = original(asset),
     b = g.getLocalBounds(),
     image = new Image()
-  image.src = await pixi.renderer.extract.base64({ target: g, resolution: 4 })
+  image.src = await pixi.renderer.extract.base64({ target: g, resolution: Math.max(b.width, b.height) < 60 ? 12 : 4 })
   await image.decode()
   references.set(asset.id, { image, x: b.minX, y: b.minY, width: b.width, height: b.height })
   g.destroy()
 }
 pixi.destroy(true)
 
-const models = new Map(inkAssets.map((asset) => [asset.id, buildAsset(asset)]))
+const models = new Map<string, ReturnType<typeof buildAsset>>()
 let selected = inkAssets[2]!,
   yaw = 0,
   pitch = 30,
   zoom = 1,
   drawCount = 0
 const nav = root.querySelector<HTMLElement>("nav")!
+const category = root.querySelector<HTMLSelectElement>("#category")!
+const search = root.querySelector<HTMLInputElement>("#search")!
+for (const [id, title] of Object.entries(assetCategoryTitles)) {
+  const option = document.createElement("option")
+  option.value = id
+  option.textContent = `${title} (${inkAssets.filter((a) => a.category === id).length})`
+  category.append(option)
+}
+const filter = () =>
+  nav.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
+    const a = inkAssets.find((a) => a.id === b.dataset.asset)!
+    b.hidden = a.category !== category.value || !a.title.toLowerCase().includes(search.value.toLowerCase())
+  })
+category.onchange = filter
+search.oninput = filter
 for (const asset of inkAssets) {
   const button = document.createElement("button")
   button.dataset.asset = asset.id
@@ -129,7 +223,7 @@ function render() {
     height = viewer.clientHeight
   if (!width || !height) return
   const ref = references.get(selected.id)!
-  const vertical = Math.max(110, ref.height * 1.45, ((ref.width * height) / width) * 1.3) / zoom
+  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3) / zoom
   renderer.setSize(width, height, false)
   camera.left = (-vertical * width) / height / 2
   camera.right = -camera.left
@@ -170,9 +264,19 @@ function render() {
   drawCount++
 }
 function select(id: string) {
-  selected = inkAssets.find((asset) => asset.id === id)!
+  selected = inkAssets.find((asset) => asset.id === id) ?? inkAssets[2]!
+  id = selected.id
+  if (!models.has(id) && models.size >= 3) {
+    const oldest = models.keys().next().value!
+    models.get(oldest)!.dispose()
+    models.delete(oldest)
+  }
+  if (!models.has(id)) models.set(id, buildAsset(selected, { batchFaces: true }))
   scene.clear()
   scene.add(models.get(id)!.group)
+  category.value = selected.category ?? "buildings"
+  search.value = ""
+  filter()
   yaw = 0
   pitch = 30
   zoom = 1
@@ -263,17 +367,19 @@ const capture = (side: "reference" | "model", width = 480) => {
   output.width = width
   output.height = Math.round((width * input.height) / input.width)
   const crop = 0.8
-  output.getContext("2d")!.drawImage(
-    input,
-    (input.width * (1 - crop)) / 2,
-    (input.height * (1 - crop)) / 2,
-    input.width * crop,
-    input.height * crop,
-    0,
-    0,
-    output.width,
-    output.height
-  )
+  output
+    .getContext("2d")!
+    .drawImage(
+      input,
+      (input.width * (1 - crop)) / 2,
+      (input.height * (1 - crop)) / 2,
+      input.width * crop,
+      input.height * crop,
+      0,
+      0,
+      output.width,
+      output.height
+    )
   return output.toDataURL()
 }
 Object.assign(window, {
@@ -297,4 +403,10 @@ Object.assign(window, {
     capture
   }
 })
-select(selected.id)
+select(new URLSearchParams(location.search).get("asset") ?? selected.id)
+if (import.meta.hot)
+  import.meta.hot.dispose(() => {
+    resize.disconnect()
+    models.forEach((model) => model.dispose())
+    renderer.dispose()
+  })

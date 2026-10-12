@@ -76,8 +76,8 @@ h1 {
   white-space: nowrap;
 }
 .assets {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  display: flex;
+  overflow-x: auto;
   gap: 8px;
   margin: 0 0 18px;
 }
@@ -87,7 +87,7 @@ h1 {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  min-width: 0;
+  min-width: 108px;
   min-height: 104px;
   border: 1px solid #d6dbd1;
   background: #f7f8f3;
@@ -100,6 +100,35 @@ h1 {
   width: 74px;
   height: 56px;
   object-fit: contain;
+}
+.assets button[hidden] {
+  display: none;
+}
+.filters {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.filters label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.filters select,
+.filters input {
+  padding: 8px;
+  border: 1px solid #cbd1c6;
+  background: #f7f8f3;
+  color: inherit;
+  border-radius: 4px;
+  max-width: 200px;
+}
+.filters a {
+  color: #657360;
+  margin-left: auto;
 }
 .assets button.active {
   border-color: #3d4943;

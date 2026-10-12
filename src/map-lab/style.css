@@ -79,6 +79,42 @@ header a {
   font-family: "DM Mono", monospace;
   font-size: 10px;
 }
+.review {
+  top: 110px;
+  left: 24px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 280px;
+}
+.review label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+}
+.review select {
+  max-width: 185px;
+  color: inherit;
+  background: #f7f8f3;
+  border: 1px solid #cbd1c6;
+  border-radius: 4px;
+  padding: 6px;
+  font: inherit;
+}
+.review a {
+  color: #657360;
+  text-decoration: none;
+  font-size: 10px;
+}
+.review button {
+  font-size: 10px;
+  padding: 5px;
+  min-height: 28px;
+  margin-right: 6px;
+}
 #north {
   display: block;
   font-size: 28px;
@@ -181,6 +217,19 @@ output {
   }
 }
 @media (max-width: 760px) {
+  .review {
+    top: 91px;
+    left: 14px;
+    max-width: calc(100% - 28px);
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .review label {
+    font-size: 10px;
+  }
+  .review select {
+    padding: 4px;
+  }
   header {
     left: 14px;
     top: 14px;

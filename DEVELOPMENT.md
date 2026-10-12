@@ -30,41 +30,68 @@ part of the build.
 
 ## The 3D art study
 
-With `pnpm dev` running, `/asset-lab.html` compares seven complete procedural
-3D assets with the actual drawings from `art.ts`. Drag the model to rotate;
-the rotation and elevation controls also work with a keyboard. The original
-view uses a 30-degree orthographic camera with the game's 64×32 projection.
+With `pnpm dev` running, [`/asset-lab.html`](http://localhost:5232/asset-lab.html)
+compares the complete world catalogue with the actual drawings from
+`art.ts`. Choose a collection or search by name. Drag to rotate; the rotation
+and elevation controls also work with a keyboard. The original view uses a
+30-degree orthographic camera with the game's 64×32 projection.
 
-![Original drawings, matching 3D views, and 90-degree rotations of the cottage, town hall, and mill](screenshots/3d-art-study.webp)
+| Collection | Models | Coverage |
+| --- | ---: | --- |
+| Buildings | 16 | Every building kind, with its roof, topper and yard |
+| Homes | 8 | Both tiers in all four roof palettes |
+| Land | 19 | Three tree shapes at three growth stages, stone and ore in both resource states, four crop stages, roads and water |
+| People | 27 | Carriers, settlers, citizens, market and chapel walkers, all six hats and the sixteen reference-gallery residents |
+| Cargo and vehicles | 69 | Eleven distinct goods and labelled crates; empty handcart/barrow and small/full loads of each good; the approved mixed goods plate |
+| Construction and effects | 10 | Empty/supplied sites, frame/walls, problem sign, smoke and four placement/reach outlines |
 
-`pnpm assets:build` writes a standalone interactive viewer, seven GLB files,
-and their editable geometry descriptions to `output/inkline-3d/`. The game
-build remains separate. The standalone viewer works without a dev server;
-its optional web fonts use the network.
+The 149 entries cover object families and representative seeded variants.
+Continuous growth, construction progress, walk poses and colours can be
+generated; this is not a list of every possible random seed. Page icons
+remain the game's original 2D UI art.
 
-- `src/asset-lab/assets.ts`: renderer-independent polygons and ink strokes,
-  authored in the same cell coordinates and pixel heights as the game.
-- `src/asset-lab/renderer.ts`: Three.js adapter, depth-tested ink, silhouettes,
-  and GLB export. GLB ink uses mesh tubes and silhouette shells, so another
-  renderer can import it. Edge antialiasing can differ from the live viewer.
-- `src/asset-lab/main.ts`: comparison UI and reference drawings.
+![Complete 3D world catalogue at a rotated angle](screenshots/3d-catalogue.webp)
+
+`pnpm assets:build` exports 149 GLBs and editable geometry descriptions,
+a manifest, and two standalone viewers to `output/inkline-3d/`:
+`inkline-3d-study.html` and `inkline-3d-map.html`. It reimports every GLB and
+checks geometry and unlit materials. The viewers work without a dev server;
+their optional web fonts use the network. The game build remains separate.
+
+- `src/asset-lab/primitives.ts`: renderer-independent polygon/stroke schema
+  and reusable modelling operations in the game's cell units and pixel heights.
+- `buildings.ts`, `land.ts`, `people.ts`, `construction.ts`: procedural
+  models; `assets.ts` collects them and retains the approved house/prop models.
+- `renderer.ts`: Three.js adapter, material batching, depth-tested ink,
+  continuous curved outlines and silhouette hulls. GLB uses ordinary meshes
+  and unlit materials so the ink survives import into another renderer.
+- `main.ts`: original drawing comparisons, collection/search UI and downloads.
 
 This is an art prototype. It does not migrate the simulation or establish
 compatibility with the private PixiJS 3D beta. Flags and sails use a fixed
-pose. Rear facades and the tree's volume are interpretations of surfaces
-the current drawing does not show.
+pose. Rear facades and rounded volumes interpret surfaces the current
+drawing does not show. GLB edge antialiasing can differ from the live viewer.
 
-### The 3D map test
+### The complete 3D review map
 
-Open `/map-lab.html` with the dev server running to try the assets together
-on a small island. Drag to pan, right-drag or choose Rotate to orbit, and
+Open [`/map-lab.html`](http://localhost:5232/map-lab.html) to see every catalogue
+model on one island. Drag to pan, right-drag or choose Rotate to orbit, and
 scroll or pinch to zoom. The toolbar also controls zoom, rotation and tilt.
 WASD or arrow keys pan; Q/E rotate; Home restores the original view.
 Double-click the ground to focus the camera there.
 
-The static map includes roads, homes, a market, mills, fields, trees and a
-jetty. Map faces and strokes are batched by material to reduce draw calls.
-This tests the map presentation and camera; it runs no town simulation.
+![Every model together on the review island](screenshots/3d-map-complete.webp)
+
+District shortcuts focus the town, workshops, homes, people, cargo yard or
+forest. Inspect selects any of the 149 models and links to its original
+drawing comparison. Eight additional people walk along the street using two
+procedural poses; pause them for review. Smoke and the problem sign face
+the camera so they stay readable when the map turns.
+
+Map faces and strokes are batched by material. Tests check catalogue
+coverage, valid geometry and the presence of every model on the map.
+This tests presentation and camera controls; it runs no town simulation.
+The walking preview does not export skeletal animation.
 
 ## Opening a bot's town in the browser
 

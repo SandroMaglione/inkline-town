@@ -8,8 +8,9 @@ export interface MapBuilding {
   y: number
   size: number
 }
-const town: InkAsset = { id: "map", title: "Little harbour", note: "", faces: [], strokes: [] }
+const town: InkAsset = { id: "map", title: "Inkline harbour", note: "", faces: [], strokes: [] }
 const buildings: Array<MapBuilding> = []
+const effects: Array<{ asset: string; x: number; y: number; height: number }> = []
 let contour = 1
 const edge = (points: ReadonlyArray<Vertex>, width = 1, color = palette.ink, opacity = 1) =>
   town.strokes.push({ points, width, color, opacity })
@@ -26,32 +27,29 @@ const square = (x: number, y: number, half: number, z: number): Array<Vertex> =>
 
 // A slightly irregular coast, with all coordinates in the game's cell units.
 const coast: Array<Vertex> = [
-  [-10, -6, -0.5],
-  [-8, -9, -0.5],
-  [-3, -10, -0.5],
-  [1, -9.8, -0.5],
-  [6, -8.5, -0.5],
-  [9, -5, -0.5],
-  [10.4, -1, -0.5],
-  [9.6, 4, -0.5],
-  [7, 7.5, -0.5],
-  [2, 9, -0.5],
-  [-3, 9.2, -0.5],
-  [-7, 7.5, -0.5],
-  [-10, 3, -0.5],
-  [-10.8, -1, -0.5]
+  [-19, -10, -0.5],
+  [-17, -14, -0.5],
+  [-10, -16, -0.5],
+  [-2, -16.5, -0.5],
+  [8, -15, -0.5],
+  [16, -12, -0.5],
+  [19, -6, -0.5],
+  [19.5, 2, -0.5],
+  [17, 10, -0.5],
+  [13, 14, -0.5],
+  [5, 16, -0.5],
+  [-5, 16, -0.5],
+  [-14, 13, -0.5],
+  [-18, 7, -0.5],
+  [-20, 0, -0.5]
 ]
 face(coast, 0xf0f2ec, true)
 // Pale foreshore and a second restrained shoreline outside the land.
-edge([...coast.map(([x, y, z]): Vertex => [x * 1.016, y * 1.016, z - 0.1]), [-10 * 1.016, -6 * 1.016, -0.6]], 1, 0x9fb3b0, 0.45)
+edge([...coast.map(([x, y, z]): Vertex => [x * 1.016, y * 1.016, z - 0.1]), [-19 * 1.016, -10 * 1.016, -0.6]], 1, 0x9fb3b0, 0.45)
 
 const roads = new Set<string>()
-for (let x = -7; x <= 7; x++) {
-  roads.add(`${x},-1`)
-  roads.add(`${x},5`)
-}
-for (let y = -7; y <= 7; y++) roads.add(`1,${y}`)
-for (let y = -6; y <= 5; y++) roads.add(`-6,${y}`)
+for (let x = -15; x <= 15; x++) for (const y of [-8, -2, 4, 10]) roads.add(`${x},${y}`)
+for (let y = -12; y <= 13; y++) for (const x of [-10, 0, 10]) roads.add(`${x},${y}`)
 for (const cell of roads) {
   const [x, y] = cell.split(",").map(Number) as [number, number]
   const half = 0.375,
@@ -76,11 +74,14 @@ for (const cell of roads) {
   }
 }
 
-function place(id: string, x: number, y: number, scale = 1, record = true) {
+function place(id: string, x: number, y: number, scale = 1, record = true, height = 0) {
   const asset = inkAssets.find((asset) => asset.id === id)!
-  const transform = ([u, v, z]: Vertex): Vertex => [x + u * scale, y + v * scale, z * scale]
+  const transform = ([u, v, z]: Vertex): Vertex => [x + u * scale, y + v * scale, z * scale + height]
   const groups = new Map<number, number>()
+  const effect = id === "smoke" || id === "problem-marker"
+  if (effect) effects.push({ asset: id, x, y, height })
   for (const polygon of asset.faces) {
+    if (effect) continue
     const result = { ...polygon, points: polygon.points.map(transform) }
     if (polygon.contour) {
       if (!groups.has(polygon.contour)) groups.set(polygon.contour, contour++)
@@ -88,7 +89,7 @@ function place(id: string, x: number, y: number, scale = 1, record = true) {
     }
     town.faces.push(result)
   }
-  for (const stroke of asset.strokes) town.strokes.push({ ...stroke, points: stroke.points.map(transform) })
+  if (!effect) for (const stroke of asset.strokes) town.strokes.push({ ...stroke, points: stroke.points.map(transform) })
   if (record)
     buildings.push({
       id: buildings.length,
@@ -96,57 +97,72 @@ function place(id: string, x: number, y: number, scale = 1, record = true) {
       title: asset.title,
       x,
       y,
-      size: id === "townhall" ? 3 : id === "cottage" || id === "citizen" ? 1 : 2
+      size: asset.footprint ?? 1
     })
 }
 
-place("townhall", -1, -3)
-place("market", 3, -2.5)
-place("mill", 4.5, 2)
-place("mill", -8, 1)
-place("market", -3.5, 3.5)
-for (const x of [-4.5, -3.5, -2.5, -1.5, -0.5]) place(x === -2.5 ? "citizen" : "cottage", x, 0)
-for (const x of [-4.5, -3.5, -2.5, -1.5, -0.5]) place(x === -1.5 ? "citizen" : "cottage", x, 6)
-for (const x of [2, 3, 4, 5, 6]) place(x === 4 ? "citizen" : "cottage", x, 6)
-for (const y of [-5, -4, -3, -2]) place(y === -4 ? "citizen" : "cottage", -7, y)
-for (const y of [-6, -5, -4]) place("cottage", 2, y)
+// The main streets contain every building type; each workshop keeps its yard.
+const layout: Array<[string, number, number]> = [
+  ["townhall", -3, -5],
+  ["market", 2.5, -5],
+  ["chapel", 6.5, -5],
+  ["warehouse", 13, -5],
+  ["lumberjack", -13, -5],
+  ["forester", -13, -11],
+  ["farm", -6, -11],
+  ["mill", -2, -11],
+  ["sheep", 4, -11],
+  ["quarry", -13, 1],
+  ["mine", -13, 7],
+  ["sawmill", -6, 1],
+  ["smithy", -2, 1],
+  ["bakery", 3, 1],
+  ["weaver", 7, 1],
+  ["fishery", 13, 1]
+]
+for (const [id, x, y] of layout) place(id, x, y)
+const homes = inkAssets.filter((a) => a.category === "homes")
+homes.forEach((a, i) => place(a.id, -7 + (i % 4) * 1.8, 6 + Math.floor(i / 4) * 2))
+const trees = inkAssets.filter((a) => a.reference?.type === "tree")
+trees.forEach((a, i) => place(a.id, -17 + (i % 3) * 1.3, -11 + Math.floor(i / 3) * 1.4))
+for (let i = 0; i < 18; i++) place(trees[i % trees.length]!.id, -8 + (i % 9) * 2.4, -14 + Math.floor(i / 9) * 1.2, 1, false)
+inkAssets.filter((a) => a.reference?.type === "rock").forEach((a, i) => place(a.id, -16 + (i % 2) * 1.5, 4 + Math.floor(i / 2) * 1.5))
+inkAssets.filter((a) => a.reference?.type === "field").forEach((a, i) => place(a.id, -8 + (i % 2) * 1.2, -10 + Math.floor(i / 2) * 1.2))
+place("roads", 15, 8)
+place("water", 7, 14)
 
-// Cultivated strips beside the mill, with individual ink-drawn stalks.
-for (const x of [6, 7])
-  for (const y of [1, 2, 3]) {
-    face(square(x, y, 0.44, -0.18), 0xece8dc)
-    for (let row = -3; row <= 3; row++)
-      for (let col = -3; col <= 3; col++) {
-        const u = x + row * 0.1,
-          v = y + col * 0.1,
-          h = 3 + ((row + col + 6) % 3)
-        edge(
-          [
-            [u, v, 0],
-            [u, v, h]
-          ],
-          0.65,
-          0xcdb46a
-        )
-      }
-  }
+// A cargo yard at the quay. Every product has a handcart and a barrow,
+// with both one-item and full loads. People stay at their original scale.
+const carts = inkAssets.filter((a) => a.reference?.type === "walker" && a.reference.cart)
+carts.forEach((a, i) => place(a.id, 2 + (i % 8) * 1.5, 5 + Math.floor(i / 8) * 1.05))
+const cargo = inkAssets.filter((a) => a.reference?.type === "cargo" || a.reference?.type === "crate")
+cargo.forEach((a, i) => place(a.id, -8 + (i % 11) * 0.8, 12 + Math.floor(i / 11) * 1.1))
+place("goods", -5, 14)
+const people = inkAssets.filter((a) => a.category === "people")
+people.forEach((a, i) => place(a.id, i < 11 ? -8 + i * 1.4 : -8 + (i - 11), i < 11 ? -2 : 4))
+inkAssets
+  .filter((a) => a.category === "construction" && a.reference?.type !== "plot" && a.id !== "smoke" && a.id !== "problem-marker")
+  .forEach((a, i) => place(a.id, 12 + (i % 2) * 3, -11 + Math.floor(i / 2) * 2.1))
+place("smoke", -2.5, 0.5, 1, true, 56)
+place("problem-marker", 12, -8.9, 1, true, 35)
+inkAssets.filter((a) => a.reference?.type === "plot").forEach((a, i) => place(a.id, -12 + (i % 2) * 3, 9.5 + Math.floor(i / 2) * 2.6))
 
-// A timber jetty at the southern coast, with goods waiting on the quay.
+// A timber jetty and drawn sea ripples use the same restrained palette.
 for (let i = 0; i < 16; i++) {
-  const y = 8.2 + i * 0.2
+  const y = 15 + i * 0.2
   face(
     [
-      [-0.45, y, 0],
-      [1.45, y, 0],
-      [1.45, y + 0.2, 0],
-      [-0.45, y + 0.2, 0]
+      [-1, y, 0],
+      [1, y, 0],
+      [1, y + 0.2, 0],
+      [-1, y + 0.2, 0]
     ],
     0xe9d2a8
   )
   edge(
     [
-      [-0.45, y, 0.04],
-      [1.45, y, 0.04]
+      [-1, y, 0.04],
+      [1, y, 0.04]
     ],
     0.8,
     0x8a6a45
@@ -154,29 +170,17 @@ for (let i = 0; i < 16; i++) {
 }
 edge(
   [
-    [-0.45, 8.2, 0],
-    [-0.45, 11.4, 0],
-    [1.45, 11.4, 0],
-    [1.45, 8.2, 0]
+    [-1, 15, 0],
+    [-1, 18.2, 0],
+    [1, 18.2, 0],
+    [1, 15, 0]
   ],
   1.5
 )
-place("goods", 0.5, 8.5)
-
-let trees = 0
-for (let x = -9; x <= 8; x++)
-  for (let y = -8; y <= 7; y++) {
-    const n = ((x * 31 + y * 17 + 211) * 7919) % 97
-    if ((x < -7 || y < -6 || (x > 6 && y > 4) || (x < -4 && y > 6)) && (x * x) / 100 + (y * y) / 81 < 0.83 && n % 3 === 0) {
-      place("fir", x + (n % 5) * 0.06, y + (n % 7) * 0.05, 0.85 + (n % 4) * 0.1, false)
-      trees++
-    }
-  }
-// Sparse drawn waves and glints, rather than reflective water.
-for (let i = 0; i < 56; i++) {
-  const x = ((i * 17) % 31) - 15,
-    y = ((i * 11) % 29) - 14
-  if ((x * x) / 130 + (y * y) / 115 < 1.12) continue
+for (let i = 0; i < 120; i++) {
+  const x = ((i * 17) % 51) - 25,
+    y = ((i * 11) % 45) - 22
+  if ((x * x) / 420 + (y * y) / 300 < 1.14) continue
   edge(
     [
       [x - 0.14, y, -0.8],
@@ -189,5 +193,16 @@ for (let i = 0; i < 56; i++) {
     0.7
   )
 }
-
-export const testMap = { asset: town, buildings, trees, roads: roads.size }
+const represented = new Set(buildings.map((p) => p.asset))
+const missing = inkAssets.filter((a) => !represented.has(a.id)).map((a) => a.id)
+if (missing.length) throw new Error(`Review map is missing: ${missing.join(", ")}`)
+export const districts = {
+  all: { title: "Whole island", x: 0, y: 0, zoom: 1 },
+  town: { title: "Town centre", x: 2, y: -5, zoom: 2.8 },
+  industry: { title: "Workshops", x: -7, y: 1, zoom: 3.2 },
+  homes: { title: "Homes", x: -4, y: 7, zoom: 5 },
+  people: { title: "People", x: 0, y: -2, zoom: 7 },
+  cargo: { title: "Cargo yard", x: 7, y: 7, zoom: 4 },
+  forest: { title: "Forest & farms", x: -10, y: -11, zoom: 3.2 }
+} as const
+export const testMap = { asset: town, buildings, effects, trees: trees.length + 18, roads: roads.size, coverage: represented.size }

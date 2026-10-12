@@ -1437,7 +1437,7 @@ const cartLog = (g: Graphics, u: number, v: number, d: Point, c: number, half: n
 const wicker = { top: 0xc9a46a, left: 0xe3c592, right: 0xd2b07a }
 
 /** What is on a cart, `z` px up: each good its own way, more of it for a bigger load. */
-const drawCargo = (g: Graphics, u: number, v: number, d: Point, good: GoodId, count: number, z: number) => {
+export const drawCargo = (g: Graphics, u: number, v: number, d: Point, good: GoodId, count: number, z: number) => {
   const n = count >= 4 ? 3 : count >= 2 ? 2 : 1
   const p = cartPoint(u, v, d)
   switch (good) {
