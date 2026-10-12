@@ -1,176 +1,120 @@
-# Town
+# Inkline Town
 
-A town simulation in the spirit of Anno, drawn in pale isometric line art:
-lay roads, house settlers, gather and craft goods, keep homes supplied, and
-grow settlers into citizens, over one term in office of 45 to 90 minutes
-that ends with the town complete, lost, or run out. Game logic runs on the
-[bevy-ts](https://github.com/SandroMaglione/bevy-ts) ECS; Pixi draws it.
+**A town-builder drawn in ink, played in one sitting.** You are the mayor for
+a single term: 45, 60, or 90 minutes. Lay the roads, house the settlers, build
+the chains that feed and clothe them, and grow a busy town of citizens before
+your time runs out. Or watch it go bankrupt, revolt, or empty out.
+
+![A complete town at the end of its fifth year: hundreds of homes, farms, mills, and workshops on a pale island](docs/screenshots/town-complete.webp)
+
+Inkline Town plays like a small Anno in a small box. Every building, cart, and
+person is drawn live in thin isometric line art, every map is new, and every
+term ends with a verdict and the story of how you got there.
+
+## A new charter, a new land
+
+Each town starts with a charter. You choose the size of the land, how rich it
+is in forest, stone, ore, and lakes, and how long your term runs. Every seed
+makes a different island, with a wandering coast and capes reaching out.
+
+![The charter: choosing a large, rich land and a 60-minute term, with a preview of the island](docs/screenshots/charter.webp)
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/map-small-rich.webp" alt="A small, rich town 25 minutes in: farms, a windmill, and homes around the town hall"></td>
+    <td><img src="docs/screenshots/map-large-harsh.webp" alt="A large, harsh island 50 minutes into a 90-minute term, the town clustered in the middle while the crown asks for tools"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>small land, rich: farms and mills by year three</sub></td>
+    <td align="center"><sub>large land, harsh: thin woods, little stone, and the crown wants tools</sub></td>
+  </tr>
+</table>
+
+## Build the chains, watch them work
+
+Lumberjacks fell trees and sawmills cut planks. Quarries and mines dig stone
+and ore for the smithy's tools. Farms grow wheat for the mill and the
+bakery, sheep give wool for the weaver, and fisheries feed the first
+settlers. You never move a crate yourself: carriers push their carts along
+the roads, each loaded with what it carries, and markets send walkers
+through the streets with baskets of fish, bread, and cloth.
+
+![A close look at a busy street: carts of planks and logs, a market walker, residents out walking, the town hall and the chapel](docs/screenshots/street.webp)
+
+Settlers need food. Give them bread, cloth, and a chapel's faith, and their
+cottages grow into two-story citizens' homes that hold and pay twice as
+much. Then they come out in long coats and top hats, each household dressed
+in the colour of its roof.
+
+## Govern under pressure
+
+The bigger the town, the harder it pulls. Winters stop the fields and thin
+the catch. Running the town costs more for every home. Traders pay less the
+more you sell. The crown asks for goods on a deadline, and it remembers when
+you don't deliver. Approval decides how many people each home holds.
+
+You hold the levers: taxes for settlers and citizens, what to sell or buy and
+how much to keep, which buildings to pause, and when to answer the crown.
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/ui-town-panel.webp" alt="The town panel: goals, approval and what drives it, the treasury, and tax rates"></td>
+    <td><img src="docs/screenshots/ui-build-menu.webp" alt="The build menu: each building pictured with its cost, workers, and upkeep"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>the town panel: goals, approval, treasury, taxes, trade</sub></td>
+    <td align="center"><sub>the build menu, unlocking as the town grows</sub></td>
+  </tr>
+</table>
+
+![A mill selected: working, two workers, 261 batches of flour made](docs/screenshots/ui-building.webp)
+
+## Every term ends
+
+Hold every goal for two minutes (enough people and coins, three in ten of
+them citizens, a town that approves of you) and the town is **complete**.
+Retire, or keep governing to the end. Three minutes in debt, two minutes of
+uproar, a town that empties out, or three of the crown's requests ignored,
+and the term is **lost**. Otherwise time runs out and the town is judged:
+flourishing, holding on, or declining.
+
+The reckoning shows how it went: residents, coins, and approval across the
+whole term, with the winters shaded, and the chronicle of everything that
+happened.
+
+<p align="center"><img src="docs/screenshots/reckoning.webp" width="640" alt="The reckoning of a complete town: 581 residents, 352 citizens, 9000 coins, a chart of the term, and its chronicle"></p>
+
+## Drawn in ink
+
+There are no sprites or image files: every picture in the game is drawn in
+code with two weights of line on a pale ground. Each building wears the
+colour of what it makes and keeps its work in its yard: a log pile, a silo,
+a pen of sheep, a striped market stall. Trees, rocks, water, and roads are
+different on every cell.
+
+![Every building: town hall, warehouse, lumberjack, forester, quarry, mine, fishery, sawmill, smithy, farm, mill, bakery, sheep farm, weaver, market, chapel](docs/screenshots/sheet-buildings.webp)
+
+![Carriers pushing handcarts and barrows, each loaded with its good: logs, planks, stone, ore, tools, fish, wheat, flour, bread, wool, cloth](docs/screenshots/sheet-walkers.webp)
+
+![A market walker with a basket, a chapel walker with a bell, settlers, and citizens in top hats](docs/screenshots/sheet-people.webp)
+
+![Homes for settlers and citizens](docs/screenshots/sheet-homes.webp)
+
+![Trees, rocks and ore, and fields as they ripen](docs/screenshots/sheet-land.webp)
+
+## Play
+
+Inkline Town runs in the browser. Saves stay in your browser, and the town
+autosaves every two minutes of play.
 
 ```sh
 pnpm install
-pnpm dev --host --port 5232   # /gallery.html shows every drawing side by side
-pnpm typecheck
-pnpm test       # model-based tests: random mayors, rules that must always hold; and saving
-pnpm check      # every way a term can end, ends it
-pnpm balance    # a bot plays terms headless and reports the pressure
+pnpm dev
 ```
 
-## Cloudflare release
+Then open the address it prints. New to the game? [How to play](docs/how-to-play.md)
+covers the controls, the rules of a term, and how the town works underneath.
 
-The game is deployed with [Alchemy](https://alchemy.run/) as a Cloudflare
-Worker serving the Vite build. The separate `deploy/` package keeps its
-dependencies out of the game, and Cloudflare stores the deployment state.
-Saves stay in the player's browser.
+---
 
-```sh
-pnpm install --frozen-lockfile
-pnpm --dir deploy install --frozen-lockfile
-pnpm --dir deploy exec alchemy plan --stage prod --profile admin --no-input
-pnpm release --profile admin --yes --no-input
-```
-
-Release from an up-to-date `main`. The release command checks the game's
-types and simulation and the deployment config, then Alchemy builds and
-deploys the game. It prints the live URL; check that the game opens and
-save/load works there after each release.
-
-`admin` is the existing local Alchemy Cloudflare profile. On another
-machine, use your own logged-in profile or set `CLOUDFLARE_ACCOUNT_ID` and
-`CLOUDFLARE_API_TOKEN`, then omit `--profile admin`. Keep credentials outside
-the repository. Releases run locally; pushing to GitHub does not deploy.
-
-For a temporary preview, run:
-
-```sh
-pnpm --dir deploy exec alchemy deploy --stage preview --profile admin
-pnpm --dir deploy exec alchemy destroy --stage preview --profile admin
-```
-
-The second command removes the preview. Each stage has its own Worker.
-
-## A term in office
-
-- **The charter**: a new town is founded on land you choose: its size
-  (small, medium, large), its richness (rich, fair, harsh: forests, stone,
-  ore, lakes, and the starting treasury), and the length of the term (45,
-  60, or 90 minutes at 1×). The land is an island-like stretch with a
-  wandering coast and capes reaching out; the same seed always makes the
-  same land.
-- **Pressure** builds as the town grows:
-  - *winters*: a term is six years, and every year but the first ends in a
-    winter when fields do not grow, fisheries catch half as much, and homes
-    eat faster;
-  - *administration*: the town hall costs more per home the more homes
-    there are, so a big town of poor homes cannot pay its way;
-  - *the crown* asks for goods the town makes, more as the term goes on;
-    sending them pays, and an unanswered request is a fine and a snub the
-    town remembers;
-  - *the market*: prices fall the more the town sells and rise the more
-    it buys; stone and ore run out;
-  - *approval*, from -100 to 100, follows needs met, taxes, unpaid wages,
-    snubs from the crown, and hungry winters, and decides how many people
-    each home holds.
-- **The levers**: taxes per tier; for each good, sell beyond the reserve,
-  buy up to it (at half again the price), or neither; the reserve itself;
-  pausing a building (no workers, a quarter of its upkeep); answering the
-  crown; and the speed of time (space pauses, 1, 2, 3 for 1×, 2×, 4×).
-- **The end**: the town is *complete* once it holds every goal for two
-  minutes (enough residents and coins for its size, three in ten of them
-  citizens, approval 15 or more, not losing coins); you may retire or keep
-  governing. It is *lost* to bankruptcy (three minutes in debt), revolt
-  (approval at -50 or below for two minutes), abandonment (people fall
-  below 15% of their peak), or dismissal (three of the crown's requests
-  missed in a row). Otherwise the term runs out, and the town
-  is judged flourishing, holding on, or declining. The reckoning shows the
-  term's history and its chronicle.
-
-## How the town works
-
-- **A new town** has a town hall in a clearing, ringed by road, plus
-  starting coins and goods.
-- **Coins**: homes the town hall can reach by road pay taxes; traders buy
-  what the town sells and sell it what it buys; every building costs upkeep
-  and the town hall costs administration. Building costs coins up front.
-  The **town** panel (T, or click the top bar) shows the goals, approval,
-  treasury, people, supplies, the crown, goods and trade, and the
-  chronicle, and holds the levers.
-- **Materials** (planks, stone, tools) come from storage: a new building is a
-  site until carriers have brought what it costs, then it goes up.
-- **Homes** fill with settlers once a road touches them. Settlers need food
-  (fish or bread); with bread, cloth, and faith a home becomes a two-story
-  citizens' home that holds and pays twice as much.
-- **Buildings** need a road at the middle of a side and workers from the
-  homes. Gatherers work the land within their reach (trees, rocks, water,
-  fields); workshops turn one good into another.
-- **Carriers** walk every good along the roads: producers send to whoever
-  wants it (a site, a workshop, a market) or else to storage; storage sends
-  to whoever wants what it holds.
-- **Walkers** from the town hall and markets hand out food and cloth to the
-  homes they pass; the chapel's brings faith.
-- Larger buildings unlock as the town grows (by residents, then citizens).
-
-## Code
-
-- `src/iso.ts`: the grid and the unit everything is measured in (1/16 cell = 2×1 px).
-- `src/content.ts`: goods, building kinds, home tiers, costs, upkeep, taxes: plain data.
-- `src/archetypes.ts`: content to components.
-- `src/mapgen.ts`: the land of a new town, from its charter.
-- `src/schema.ts`: the ECS world: components, relations, resources, services.
-- `src/grid.ts`: occupancy, entrances, reach, and road paths.
-- `src/sim/`: the fixed-step simulation (no renderer access): edits, work, logistics, walkers, town, and the term
-  (seasons, the crown, approval, the end of the term, history).
-- `src/present.ts`: per-frame interaction, panel, and view sync.
-- `src/art.ts`: all drawing.
-- `src/sim/headless.ts`: a town with no page, stepped from code: what the tests, `check`, and `balance` play.
-- `src/save.ts`: saving and loading as [Effect](https://effect.website) programs: a versioned file in a slot
-  (the mayor's own, or the autosave), typed errors for each way a load can fail.
-- `src/ui.ts`, `src/host.ts`, `src/main.ts`: the page bridge, camera, input, panels, and start-up.
-
-The simulation runs on bevy-ts-browser's `FixedLoop` at 60 steps a second
-(times the chosen speed), with integer state and a seeded random resource.
-Every saved component and resource is validated, so **save** / **load**
-snapshot the whole world, history and chronicle included, to localStorage;
-the page also autosaves every two minutes of game time, and **load** takes
-whichever is newer.
-
-In development the console has `town.ui`, `town.runtime`, and
-`town.advance(seconds)` to fast-forward the simulation.
-
-## Balancing
-
-`pnpm balance` runs a bot that plays the real simulation headless, the way a
-kind of mayor would, on several seeds, and reports how each term ended and
-how the pressure on the town built up: residents, coins, costs against
-income, administration, approval, food, the crown, and which goals were met,
-averaged over the seeds still in office every few minutes.
-
-```sh
-pnpm balance -- --size large --term 90 --land harsh
-pnpm balance -- --bot greedy          # sensible (default), greedy (taxes at 200%, sells everything, ignores the crown), idle
-pnpm balance -- --seeds 4 --from 4    # seeds 4 to 7, to split a sweep across processes
-pnpm balance -- --set crown.fine=2 --set kinds.fishery.recipe.seconds=3
-pnpm balance -- --seeds 1 --verbose --every 1   # minute by minute
-```
-
-## Testing
-
-The simulation has no renderer in it: it runs headless (`src/sim/headless.ts`),
-about 60 to 80 times faster than real time, so the tests play real towns.
-
-`pnpm test` runs model-based tests built on Effect's `Schema` and
-`Arbitrary`. They generate sequences of what a mayor can do (roads, homes,
-buildings where they fit, bulldozing, taxes, trade, pausing, answering the
-crown, saving and loading, waiting through seasons, and fortune good and
-bad), play them on the real simulation, and after every command check what
-must always be true: goods within their shelves, tiles on the land and
-apart, residents and workers within bounds, the census matching the homes,
-walkers belonging to standing buildings, approval and prices within their
-bounds, the clock and the record only going forward, and a term ending only
-in the allowed ways. A failure shrinks to the shortest sequence that still
-breaks a rule. A second property checks that the same charter and commands
-always make the same town. `RUNS=200 pnpm test` searches harder;
-`SEED=…` replays.
-
-`pnpm check` puts the real simulation into each way a term can end
-(complete, bankrupt, revolt, abandoned, dismissed, run out), checks an unanswered
-crown request, and checks that a town saved mid-term loads back the same.
+[How to play](docs/how-to-play.md) · [Developing](DEVELOPMENT.md) · [The design behind the term](docs/mayor-plan.md)

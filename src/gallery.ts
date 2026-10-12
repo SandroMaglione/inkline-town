@@ -153,3 +153,88 @@ const stop = () => {
 app.canvas.addEventListener("pointerup", stop)
 app.canvas.addEventListener("pointercancel", stop)
 app.canvas.style.cursor = "grab"
+
+// `?sheet`: the same drawings as a tidy, labelled sheet of pictures, for the README.
+if (params.has("sheet")) {
+  app.canvas.style.display = "none"
+  drawer.remove()
+  document.body.style.cssText = "margin:0;background:#f0f2ec;font:13px ui-monospace,'SF Mono',Menlo,monospace;color:#3d4943;overflow:auto;height:auto"
+  document.documentElement.style.overflow = "auto"
+  const sheet = document.createElement("div")
+  sheet.style.cssText = "padding:28px 32px;display:flex;flex-direction:column;gap:22px;width:fit-content"
+  document.body.append(sheet)
+  const row = (title: string) => {
+    const box = document.createElement("section")
+    box.innerHTML = `<h3 style="margin:0 0 10px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#77817a">${title}</h3>`
+    const items = document.createElement("div")
+    items.style.cssText = "display:flex;flex-wrap:wrap;gap:6px 14px;align-items:flex-end"
+    box.append(items)
+    sheet.append(box)
+    return items
+  }
+  const add = async (items: HTMLElement, g: Graphics, label: string, scale = 1) => {
+    const src = await app.renderer.extract.base64({ target: g, resolution: 3 })
+    const cell = document.createElement("figure")
+    cell.style.cssText = "margin:0;display:flex;flex-direction:column;align-items:center;gap:4px"
+    const img = new Image()
+    img.src = src
+    img.onload = () => (img.style.width = `${(img.naturalWidth / 3) * scale}px`)
+    cell.append(img)
+    if (label) cell.insertAdjacentHTML("beforeend", `<figcaption style="font-size:11px;color:#6c766f">${label}</figcaption>`)
+    items.append(cell)
+  }
+  const buildings = row("buildings")
+  for (const id of kindIds) {
+    const g = new Graphics()
+    plate(g, plateHalf(kinds[id].size))
+    drawBuilding(g, kinds[id], 1, 0.5, 1.2, { right: true, left: true })
+    await add(buildings, g, kinds[id].title.toLowerCase(), 1.6)
+  }
+  const homes = row("homes: settlers and citizens")
+  for (const tier of [1, 2] as const) {
+    for (let i = 0; i < 4; i++) {
+      const g = new Graphics()
+      plate(g, plateHalf(1))
+      drawHouse(g, tier, 1, { right: true, left: i % 2 === 0 }, homeVariant(i / 4 + 0.03))
+      await add(homes, g, "", 1.8)
+    }
+  }
+  const landRow = row("the land: trees, rocks and ore, fields")
+  for (let i = 0; i < 14; i++) {
+    const g = new Graphics()
+    drawTree(g, i * 3, i * 7, 1)
+    await add(landRow, g, "", 1.8)
+  }
+  for (let i = 0; i < 6; i++) {
+    const g = new Graphics()
+    drawRock(g, i * 5, i * 3, i % 2 === 1, 40)
+    await add(landRow, g, "", 1.8)
+  }
+  for (let i = 1; i < 4; i++) {
+    const g = new Graphics()
+    drawField(g, i / 3)
+    await add(landRow, g, "", 1.4)
+  }
+  const carts = row("carriers and their loads")
+  for (const [i, good] of goodIds.entries()) {
+    const g = new Graphics()
+    drawWalker(g, carrierDress(i / 11), { kind: "cart", good, count: 4 }, cartLook((i * 0.37) % 1), i % 2 === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 }, i % 2)
+    await add(carts, g, good, 2.6)
+  }
+  const people = row("market and chapel walkers, and residents out walking")
+  const market = new Graphics()
+  drawWalker(market, serviceDress(categoryColor.services, 0.3, false), { kind: "basket", goods: ["fish", "bread", "cloth"] }, null, { x: 1, y: 0 }, 0)
+  await add(people, market, "market", 3)
+  const chapel = new Graphics()
+  drawWalker(chapel, serviceDress(categoryColor.services, 0.6, true), { kind: "bell" }, null, { x: 0, y: 1 }, 1)
+  await add(people, chapel, "chapel", 3)
+  for (let i = 0; i < 12; i++) {
+    const g = new Graphics()
+    const tier = i < 6 ? 1 : 2
+    drawWalker(g, residentDress(homeVariant((i % 4) / 4 + 0.03).cloth, tier, (i * 0.37) % 1), { kind: "none" }, null, i % 2 === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 }, i % 2)
+    await add(people, g, i === 0 ? "settlers" : i === 6 ? "citizens" : "", 3)
+  }
+  const glyphs = row("icons")
+  glyphs.innerHTML = iconNames.slice(0, 32).map((name) => icon(name, 28)).join("")
+  document.body.dataset.ready = "1"
+}

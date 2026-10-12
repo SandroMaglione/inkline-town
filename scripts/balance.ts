@@ -9,6 +9,7 @@
  *   node scripts/balance.ts --seeds 10 --from 10     seeds 10 to 19 (to split a sweep across processes)
  *   node scripts/balance.ts --set crown.fine=2 --set kinds.fishery.recipe.seconds=3
  *   node scripts/balance.ts --verbose                every seed's table, every `--every` minutes (default 5)
+ *   node scripts/balance.ts --snapshot 30            also saves each seed's town at minute 30, as a file the page can load
  *
  * The mayors:
  * - sensible: builds out the chains as the town grows, keeps food in store,
@@ -29,6 +30,8 @@ import type { GridValue } from "../src/schema.ts"
 import { headless, type Snapshot } from "../src/sim/headless.ts"
 import { goalsOf, larder, seasonAt } from "../src/sim/index.ts"
 import type { Edit } from "../src/ui.ts"
+import { SAVE_FORMAT, SAVE_VERSION } from "../src/save.ts"
+import { mkdirSync, writeFileSync } from "node:fs"
 
 // ── Options ───────────────────────────────────────────────────────────────
 
@@ -45,6 +48,9 @@ const term = Number(option("term", "60"))
 const bot = option("bot", "sensible") as "sensible" | "greedy" | "idle"
 const every = Number(option("every", "5"))
 const verbose = args.includes("--verbose")
+/** `--snapshot <minute>`: write each seed's town at that minute to `--out` (default `snapshots/`), as a save file. */
+const snapshotAt = Number(option("snapshot", "0"))
+const out = option("out", "snapshots")
 if (!sizeIds.includes(size) || !landIds.includes(land) || !["sensible", "greedy", "idle"].includes(bot)) throw new Error("Unknown --size, --land, or --bot")
 
 /** `--set path=value`: change a number in the content before running. */
@@ -402,6 +408,13 @@ const run = (seed: number) => {
     w = read(town.snapshot())
     if ((t + DECIDE) % 60 !== 0) continue
     const minute = (t + DECIDE) / 60
+    if (minute === snapshotAt) {
+      mkdirSync(out, { recursive: true })
+      const file = `${out}/${size}-${land}-${seed}-${minute}min.json`
+      const title = `${size}, ${land} land · ${minute} min in · ${bot} bot, seed ${seed}`
+      writeFileSync(file, JSON.stringify({ format: SAVE_FORMAT, version: SAVE_VERSION, slot: "manual", savedAt: Date.now(), title, world: town.snapshot() }))
+      console.log(`saved ${file}`)
+    }
     const problemsNow: Record<string, number> = {}
     for (const b of w.buildings) {
       if (["unconnected", "unstaffed", "starved", "blocked"].includes(b.status) && !b.site) {
