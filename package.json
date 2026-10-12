@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "assets:build": "node scripts/ink-assets.ts",
     "typecheck": "tsc -p tsconfig.json --pretty false",
     "balance": "node scripts/balance.ts",
     "check": "node scripts/check.ts",
@@ -23,6 +24,8 @@
   },
   "devDependencies": {
     "@types/node": "25.5.0",
+    "@types/three": "^0.186.0",
+    "three": "^0.186.1",
     "typescript": "7.0.2",
     "vite": "8.3.1"
   }

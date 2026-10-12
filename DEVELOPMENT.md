@@ -28,6 +28,32 @@ around, ctrl + wheel (or pinch) to zoom. `?sheet` lays the same drawings out
 as the labelled sheet the README's pictures come from. The gallery is not
 part of the build.
 
+## The 3D art study
+
+With `pnpm dev` running, `/asset-lab.html` compares seven complete procedural
+3D assets with the actual drawings from `art.ts`. Drag the model to rotate;
+the rotation and elevation controls also work with a keyboard. The original
+view uses a 30-degree orthographic camera with the game's 64×32 projection.
+
+![Original drawings, matching 3D views, and 90-degree rotations of the cottage, town hall, and mill](screenshots/3d-art-study.webp)
+
+`pnpm assets:build` writes a standalone interactive viewer, seven GLB files,
+and their editable geometry descriptions to `output/inkline-3d/`. The game
+build remains separate. The standalone viewer works without a dev server;
+its optional web fonts use the network.
+
+- `src/asset-lab/assets.ts`: renderer-independent polygons and ink strokes,
+  authored in the same cell coordinates and pixel heights as the game.
+- `src/asset-lab/renderer.ts`: Three.js adapter, depth-tested ink, silhouettes,
+  and GLB export. GLB ink uses mesh tubes and silhouette shells, so another
+  renderer can import it. Edge antialiasing can differ from the live viewer.
+- `src/asset-lab/main.ts`: comparison UI and reference drawings.
+
+This is an art prototype. It does not migrate the simulation or establish
+compatibility with the private PixiJS 3D beta. Flags and sails use a fixed
+pose. Rear facades and the tree's volume are interpretations of surfaces
+the current drawing does not show.
+
 ## Opening a bot's town in the browser
 
 `pnpm balance -- --snapshot <minute>` writes each seed's town at that minute
