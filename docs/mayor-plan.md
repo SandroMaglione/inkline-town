@@ -7,7 +7,8 @@ either flourished or fell apart, and lets you see why.
 It starts with what the code does today and where it will not hold up over a
 long run (§1). Then it covers what similar games do and what they leave out
 (§2), how a session should be set up and paced (§3–4), the levers (§5), the
-pressures that make decline possible (§6), new content (§7), the ending (§8),
+pressures that make decline possible (§6), new content (§7), how you win or
+lose (§8),
 what the engine needs (§9), and the order to build it in (§10).
 
 ---
@@ -29,11 +30,43 @@ what the engine needs (§9), and the order to build it in (§10).
 - **Status reasons are clear:** `unconnected`, `unstaffed`, `starved`,
   `blocked`. Players can see why a building has stopped.
 
+### Measured: 90-minute bot runs
+
+`pnpm balance -- --seeds 3 --minutes 90` with today's content, at 100% tax:
+
+| | Result |
+|---|---|
+| Residents at the end | 114 on average, of whom 2 are citizens |
+| First citizens | Never, never, minute 12 |
+| Coins at the end | 10,240 on average, still rising at +109 a minute |
+| Lowest coins / minutes in debt | 46 / 0 |
+| Homes supplied | Food 64%, cloth 38%, faith 63% |
+| Most common problems | Quarry starved for 93 of 90 min/seed (the problem minutes are summed over every quarry, so they can exceed 90), sawmill blocked 73, fishery blocked 68 |
+
+Seed 1000, minute by minute:
+
+- By minute 5 the town has 19 homes, 60 settlers, and 16 buildings.
+- By minute 90 it has 21 homes, 72 settlers, and the same 16 buildings.
+- Coins rise in a straight line, from 98 to 5,675.
+- From minute 20 on, the quarry is starved: the rocks within its reach are
+  gone.
+
+**The town is finished at minute 5, and the next 85 minutes change nothing.**
+
+Part of this is the bot itself. It only builds homes when it is short of
+workers or food reaches 70% of homes, and it never builds the mill, so its
+bakery stays starved. Even so, nothing in the game pushes back. Coins pile
+up, and there is no reason to do anything else.
+
+Headless, the simulation runs at about 34× real time on a 32 × 32 map. A
+90-minute seed takes about 2.6 minutes, so a 10-seed sweep of 90-minute games
+takes about half an hour.
+
 ### What breaks or flattens past about 30 minutes
 
-I read this from the code (`content.ts`, `sim/*.ts`, `mapgen.ts`). The
-numbers are back-of-envelope estimates. They should be confirmed with
-`pnpm balance -- --minutes 90 --verbose` once that run is possible.
+I read this from the code (`content.ts`, `sim/*.ts`, `mapgen.ts`). The bot
+runs above back up findings 1–5. The other numbers are back-of-envelope
+estimates.
 
 | # | Finding | Where | Effect on a 90-minute game |
 |---|---------|-------|----------------------------|
@@ -351,16 +384,81 @@ project is built now.
 
 ---
 
-## 8. The ending: final reckoning and the town chronicle
+## 8. End states: winning, losing, and the town chronicle
 
-At the end of the term (or earlier, on bankruptcy or with no one left in the
-town):
+A session ends in one of three ways:
+
+- **Victory:** you finish the town and retire.
+- **Defeat:** you are removed or the town is abandoned.
+- **The term runs out:** a final reckoning gives a verdict.
+
+Victory and defeat are checked continuously by a `Fate` system at the end of
+`simulate`. Its state, `{ status, warnings, since }`, is a saved resource, so
+a reload never resets a crisis.
+
+### 8.1 Victory: "the town is complete"
+
+All of the following must hold **at once, for 3 minutes in a row**. The
+3 minutes stop a lucky moment from counting. Targets scale with the
+charter's map size, and the 64² values are shown.
+
+| Condition | Target (64²) | Why |
+|-----------|--------------|-----|
+| **Rank** | City: 600 or more residents, weighted by tier | You grew the town as far as it goes. |
+| **Housing** | At least 85% of possible home lots built and occupied, and at least 60% of homes at the top tier unlocked by the charter | "You got all the houses": the land is used, and the homes are good ones. |
+| **Wealth** | Treasury of 5,000 or more, no loans outstanding, and net income of 0 or more a minute | You can afford the town you built. |
+| **Supplies** | At least 100 of every food good and 50 of every need good in storage, or a granary rated full | The town would survive a bad winter without you. |
+| **Approval** | Town average +40 or more, with no home below 0 | People are happy, not just numerous. |
+| **Great work** (Steady and Hard only) | Completed | It is the capstone. |
+
+When all of them hold, the top bar shows a **"The town is complete"**
+countdown. When it finishes, there are two choices:
+
+- **Retire as mayor:** the session ends as a **Victory**, with the score
+  from §8.3 plus a bonus for minutes left on the term. Finishing early scores
+  higher.
+- **Keep governing:** the game carries on as a sandbox. The victory stays
+  recorded, and the final score still counts at the end of the term.
+
+The town panel shows a **checklist** of the conditions, each with its current
+value against the target, so the player always knows how far from done they
+are.
+
+### 8.2 Defeat: "the mayor is removed"
+
+There are four ways to lose. Each one escalates in steps, shown in a crisis
+meter on the top bar and in toasts, so **defeat is never a surprise**. Each
+can be recovered from until the last step.
+
+| Way to lose | Warning | Danger | Removed when |
+|-------------|---------|--------|--------------|
+| **Bankruptcy** | Treasury below 0: wages unpaid and approval −5 a minute | Below −500 (scaled to income), or 2 minutes in debt: buildings strike at random and no new building is allowed | **3 minutes below the debt limit**, or a loan payment missed twice |
+| **Revolt** | Town average approval below −20 | Below −40: riots in the unhappiest homes damage nearby buildings, and walkers stay home | **Average approval below −50 for 3 minutes**, or riots in 25% of homes at once |
+| **Abandonment** | Residents below 50% of the peak | Below 25% of the peak: traders and the crown stop visiting | **Residents below 10% of the peak** (once the peak was 40 or more), or zero residents for 2 minutes after minute 10 |
+| **Crown's displeasure** (with requests, §6.4) | Favor below 0 | Favor below −50: taxes are seized each minute | **Favor at −100** |
+
+Each step sends a line to the chronicle. The danger step names the fastest
+way out. For example: "Bankrupt in 1:40. Cut wages, pause the smithy (−12 a
+minute), or take a loan."
+
+On removal, the session ends as a **Defeat**, with the reason, the minute it
+happened, and the timeline leading up to it.
+
+**On the debt limit:** a flat −500 would be too harsh for a large town and
+too soft for a small one. Scaling it to about 5 minutes of gross income gives
+the player room to borrow against the future without a death spiral being
+free.
+
+### 8.3 Final reckoning (the term runs out)
+
+At the end of the term (or at victory or defeat):
 
 1. **Town rank:** Hamlet, Village, Town, Market Town, or City, by population
    weighted by tier.
-2. **Verdict:** Flourishing, Prosperous, Holding, Declining, or Abandoned. It
-   compares the final 10 minutes with the peak and the trend, so a town that
-   was large but is collapsing reads as **Declining**.
+2. **Verdict:** **Victory** or **Defeat** when §8.1 or §8.2 ended the game.
+   When the term ran out instead, it is Flourishing, Prosperous, Holding, or
+   Declining. That verdict compares the final 10 minutes with the peak and the
+   trend, so a town that was large but is collapsing reads as **Declining**.
 3. **Legacy score:** residents × tier weight, plus great works, favor,
    treasury, mandate met, and approval, minus debt and ruins.
 4. **Timeline:** coins, residents by tier, approval, and favor over the whole
@@ -401,12 +499,17 @@ town):
      sells everything), **neglectful** (no services, ignores requests), and
      **ambitious** (heavy loans, a great work)
    - Pass bands per charter. For example, on Town 64² with a 90-minute term:
-     - The sensible bot should finish **Prosperous** or better, on at least
-       8 of 10 seeds.
-     - The greedy bot should finish **Declining** or worse.
-     - The neglectful bot should finish **Abandoned** before minute 70.
+     - The sensible bot should reach **Victory** between minutes 60 and 90
+       on at least 6 of 10 seeds, and finish **Prosperous** or better on the
+       rest.
+     - The greedy bot should lose, to **Revolt** or **Bankruptcy**.
+     - The neglectful bot should lose to **Abandonment** before minute 70.
 
-     If the greedy bot thrives, a pressure is missing.
+     If victory comes before minute 45, it is too easy. If the greedy bot
+     thrives, a pressure is missing.
+   - The bot reports how each run ended (victory, defeat and its reason, or
+     the verdict) and at what minute, in place of today's flat "residents at
+     the end".
    - Pacing checks: first citizens by minute ~12, first burghers by minute
      ~45, first patricians by minute ~70. These targets scale with the term.
 
@@ -418,6 +521,10 @@ Each phase can be played on its own and is checked with the bot before the
 next phase starts.
 
 **Phase 1: long sessions work at all** (engine and the clearest fixes)
+- **End states (§8):** the `Fate` system, the victory checklist, and the
+  bankruptcy and abandonment defeats with their warning steps. Revolt and the
+  crown's displeasure wait for approval and favor in Phases 2–3. Until then,
+  the victory conditions use only rank, housing, wealth, and supplies.
 - Speed controls and autosave.
 - The `Charter` resource and new-game screen (size + term). Runtime `GRID`.
 - Cached reach and Dispatch throttling.
@@ -453,7 +560,8 @@ next phase starts.
 
 ### First step
 
-Phase 1's **speed controls, the charter, debt consequences, building priority,
-and the 90-minute bot run** are small changes that unblock everything else.
-They also turn finding #1–5's estimates into measured data before any new
-content is added.
+Phase 1's **end states, speed controls, the charter, debt consequences, and
+building priority** come first. With an end state, the 90-minute bot run
+gives a measurable target ("victory around minute 60–90; greedy play loses")
+to tune every later phase against. The bot already runs on the npm bevy-ts
+0.5.0 packages.

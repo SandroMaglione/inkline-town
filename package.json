@@ -10,11 +10,11 @@
     "balance": "node scripts/balance.ts"
   },
   "dependencies": {
-    "@typeonce/bevy-ts": "link:../../bevy-ts/packages/core",
-    "@typeonce/bevy-ts-browser": "link:../../bevy-ts/packages/browser",
-    "@typeonce/bevy-ts-math": "link:../../bevy-ts/packages/math",
-    "@typeonce/bevy-ts-pixi": "link:../../bevy-ts/packages/pixi",
-    "@typeonce/bevy-ts-render": "link:../../bevy-ts/packages/render",
+    "@typeonce/bevy-ts": "^0.5.0",
+    "@typeonce/bevy-ts-browser": "^0.5.0",
+    "@typeonce/bevy-ts-math": "^0.5.0",
+    "@typeonce/bevy-ts-pixi": "^0.5.0",
+    "@typeonce/bevy-ts-render": "^0.5.0",
     "pixi.js": "^8.22.0"
   },
   "devDependencies": {

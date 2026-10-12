@@ -2,7 +2,7 @@
 
 A town simulation in the spirit of Anno, drawn in pale isometric line art:
 lay roads, house settlers, gather and craft goods, keep homes supplied, and
-grow settlers into citizens. Game logic runs on the [bevy-ts](../../bevy-ts)
+grow settlers into citizens. Game logic runs on the [bevy-ts](https://github.com/SandroMaglione/bevy-ts)
 ECS; Pixi draws it.
 
 ```sh
@@ -10,10 +10,6 @@ pnpm install
 pnpm dev --host --port 5232
 pnpm typecheck
 ```
-
-The bevy-ts packages are linked from `../../bevy-ts` and consumed as source,
-so clone [bevy-ts](https://github.com/SandroMaglione/bevy-ts) two levels up
-first (for example `gamedev/bevy-ts` next to `gamedev/games/inkline-town`).
 
 ## How the town works
 
