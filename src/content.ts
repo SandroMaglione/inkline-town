@@ -294,7 +294,7 @@ export const sizes: Readonly<Record<SizeId, {
 }>> = {
   small: { title: "small", radius: 14, goal: { residents: 180, coins: 2500 } },
   medium: { title: "medium", radius: 19, goal: { residents: 320, coins: 4000 } },
-  large: { title: "large", radius: 25, goal: { residents: 520, coins: 6000 } }
+  large: { title: "large", radius: 25, goal: { residents: 520, coins: 5000 } }
 }
 
 /**
@@ -366,7 +366,7 @@ export const mood = {
   /** At no needs met to every need met. */
   needs: [-35, 30] as const,
   /** Points for each percent the average tax rate is below (or above) 100%. */
-  perTaxPoint: 0.4,
+  perTaxPoint: 0.6,
   debt: -20,
   /** Per unanswered crown request, while the crown remembers it. */
   snub: -20,
@@ -396,7 +396,9 @@ export const crown = {
   fine: 1,
   bonus: 50,
   /** How long the crown remembers a missed request, in minutes. */
-  memory: 4
+  memory: 4,
+  /** Requests missed in a row before the crown dismisses the mayor. */
+  patience: 3
 }
 
 /**
@@ -422,8 +424,8 @@ export const fate = {
   abandon: 0.15,
   peak: 40,
   /** The goals besides residents and coins: a share of them citizens, and approval. */
-  citizens: 0.4,
-  approval: 20
+  citizens: 0.3,
+  approval: 15
 }
 
 /** The town's history: a sample this often. */

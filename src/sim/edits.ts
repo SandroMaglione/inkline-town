@@ -206,7 +206,7 @@ export const ApplyEdits = Game.System(
           }
           left[c.good] = (left[c.good] ?? 0) - c.amount
           coins += c.reward
-          resources.crown.set({ ...c, open: false, met: c.met + 1 })
+          resources.crown.set({ ...c, open: false, met: c.met + 1, streak: 0 })
           resources.chronicle.update((ch) => ({ lines: [...ch.lines, { tick: t, text: `Sent the crown ${c.amount} ${goods[c.good].title}, for ${c.reward} coins.` }].slice(-200) }))
           ui.toast(`Sent · +${c.reward} coins`)
           break
@@ -244,7 +244,7 @@ export const ApplyEdits = Game.System(
           resources.policy.set({ settlers: 100, citizens: 100, sells: trade.sells, buys: [], reserve: trade.reserve })
           resources.market.set({ prices: amounts(Object.fromEntries(goodIds.map((g) => [g, 100]))) })
           resources.mood.set({ approval: 10, target: 10, base: 0, needs: 0, taxes: 0, debt: 0, crown: 0, winter: 0 })
-          resources.crown.set({ open: false, good: "wood", amount: 0, issued: 0, due: 0, reward: 0, next: crownGap(charter), met: 0, missed: 0, snubs: [] })
+          resources.crown.set({ open: false, good: "wood", amount: 0, issued: 0, due: 0, reward: 0, next: crownGap(charter), met: 0, missed: 0, streak: 0, snubs: [] })
           resources.fate.set(foundedFate())
           resources.history.set({ samples: [] })
           resources.chronicle.set({

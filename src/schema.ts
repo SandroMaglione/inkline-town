@@ -207,8 +207,8 @@ export const Mood = Descriptor.ConstructedResource(Decode.struct({
 
 /**
  * The crown's requests: the one open now (if `open`), when the next comes,
- * how many were met and missed, and when the misses the crown still
- * remembers were.
+ * how many were met and missed (and missed in a row), and when the misses
+ * the crown still remembers were.
  */
 export const Crown = Descriptor.ConstructedResource(Decode.struct({
   open: Decode.boolean,
@@ -220,13 +220,15 @@ export const Crown = Descriptor.ConstructedResource(Decode.struct({
   next: integer,
   met: integer,
   missed: integer,
+  /** Requests missed since one was last met. */
+  streak: integer,
   snubs: Decode.array(integer)
 }))("Town/Crown")
 
 export const fateStates = ["playing", "won", "lost", "over"] as const
 /**
  * How the term is going: still `playing`; `won` (every goal held), `lost`
- * (bankrupt, in revolt, or abandoned), or `over` (the term ran out), with
+ * (bankrupt, in revolt, abandoned, or dismissed by the crown), or `over` (the term ran out), with
  * why and when. `governing`: won, and carried on anyway. The `since`
  * fields are when each danger (or the goals) began, or -1.
  */

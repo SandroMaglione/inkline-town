@@ -41,11 +41,12 @@ pnpm balance    # a bot plays terms headless and reports the pressure
   pausing a building (no workers, a quarter of its upkeep); answering the
   crown; and the speed of time (space pauses, 1, 2, 3 for 1×, 2×, 4×).
 - **The end**: the town is *complete* once it holds every goal for two
-  minutes (enough residents and coins for its size, two in five of them
-  citizens, approval 20 or more, not losing coins); you may retire or keep
+  minutes (enough residents and coins for its size, three in ten of them
+  citizens, approval 15 or more, not losing coins); you may retire or keep
   governing. It is *lost* to bankruptcy (three minutes in debt), revolt
-  (approval at -50 or below for two minutes), or abandonment (people fall
-  below 15% of their peak). Otherwise the term runs out, and the town
+  (approval at -50 or below for two minutes), abandonment (people fall
+  below 15% of their peak), or dismissal (three of the crown's requests
+  missed in a row). Otherwise the term runs out, and the town
   is judged flourishing, holding on, or declining. The reckoning shows the
   term's history and its chronicle.
 
@@ -113,5 +114,5 @@ pnpm balance -- --seeds 1 --verbose --every 1   # minute by minute
 ```
 
 `pnpm check` puts the real simulation into each way a term can end
-(complete, bankrupt, revolt, abandoned, run out), checks an unanswered
+(complete, bankrupt, revolt, abandoned, dismissed, run out), checks an unanswered
 crown request, and checks that a town saved mid-term loads back the same.

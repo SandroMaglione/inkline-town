@@ -79,7 +79,7 @@ export const Requests = Game.System(
     if (c.open && t >= c.due) {
       const fine = Math.round(((c.reward - crown.bonus) / crown.reward) * crown.fine) + crown.bonus
       resources.treasury.update((tr) => ({ coins: tr.coins - fine }))
-      resources.crown.set({ ...c, open: false, missed: c.missed + 1, snubs: [...remembered, t] })
+      resources.crown.set({ ...c, open: false, missed: c.missed + 1, streak: c.streak + 1, snubs: [...remembered, t] })
       write(resources.chronicle, t, `The crown's request for ${c.amount} ${goods[c.good].title} went unanswered: a fine of ${fine} coins.`)
       return
     }
@@ -203,8 +203,9 @@ export const scoreOf = (s: { readonly settlers: number; readonly citizens: numbe
 
 /**
  * Once a second: does the term end? It is lost to bankruptcy (in debt too
- * long), revolt (approval too low too long), or abandonment (the town
- * emptied); won once every goal has held long enough; and over when the
+ * long), revolt (approval too low too long), abandonment (the town
+ * emptied), or dismissal (the crown's requests missed too many times in a
+ * row); won once every goal has held long enough; and over when the
  * term runs out. Dangers write to the chronicle as they begin.
  */
 export const Judge = Game.System(
@@ -260,6 +261,7 @@ export const Judge = Game.System(
     if (next.debtSince >= 0 && t - next.debtSince >= minutes(fate.debt)) return end("lost", "Bankrupt: the crown has taken the treasury out of the mayor's hands.")
     if (next.revoltSince >= 0 && t - next.revoltSince >= minutes(fate.revolt)) return end("lost", "Revolt: the town has turned the mayor out.")
     if (next.peak >= fate.peak && residents < next.peak * fate.abandon) return end("lost", "Abandoned: the people have left the town.")
+    if (crownNow.streak >= crown.patience) return end("lost", `Dismissed: the crown has replaced a mayor who left ${crown.patience} of its requests unanswered.`)
     if (t >= termTicks(charter)) {
       return end("over", f.governing ? "The term is over: the town stood complete to the end." : "The term is over.")
     }

@@ -61,7 +61,7 @@ export const blankResources = () => ({
   Land: { mask: "", cells: 0 },
   Market: { prices: amounts({}) },
   Mood: { approval: 0, target: 0, base: 0, needs: 0, taxes: 0, debt: 0, crown: 0, winter: 0 },
-  Crown: { open: false, good: "wood" as const, amount: 0, issued: 0, due: 0, reward: 0, next: 0, met: 0, missed: 0, snubs: [] },
+  Crown: { open: false, good: "wood" as const, amount: 0, issued: 0, due: 0, reward: 0, next: 0, met: 0, missed: 0, streak: 0, snubs: [] },
   Fate: foundedFate(),
   History: { samples: [] },
   Chronicle: { lines: [] },

@@ -9,7 +9,7 @@ import {
   BuildingView, drawFloor, drawGhost, drawPlot, drawRoads, drawWater, FieldView, homeHeight, HouseView, RockView, topOf, TreeView, WalkerView,
   type Doors, type Emphasis
 } from "./art.ts"
-import { BUILD_TICKS, fate, goods, home, kinds, needTitle, total, type Kind } from "./content.ts"
+import { BUILD_TICKS, crown as crownRules, fate, goods, home, kinds, needTitle, total, type Kind } from "./content.ts"
 import { around, canPlace, entrances, isRoad, key, lPath, useAt, type TileLike } from "./grid.ts"
 import { inside, TILE_H, TILE_W, toGrid, toScreen, U, type Point } from "./iso.ts"
 import {
@@ -364,7 +364,7 @@ export const Interact = Game.System(
       },
       crown: {
         open: crown.open, good: crown.good, amount: crown.amount, left: seconds(crown.due - t), reward: crown.reward, met: crown.met,
-        missed: crown.missed, next: seconds(crown.next - t)
+        missed: crown.missed, streak: crown.streak, patience: crownRules.patience, next: seconds(crown.next - t)
       },
       fate: {
         state: f.state,

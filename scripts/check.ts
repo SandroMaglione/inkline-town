@@ -11,7 +11,8 @@
  * - revolt: approval at -50 or below for two minutes;
  * - abandoned: residents fall below 15% of their peak;
  * - over: a term run out;
- * - the crown: a request left unanswered is a fine and a snub;
+ * - the crown: a request left unanswered is a fine and a snub, and three in
+ *   a row and the mayor is dismissed;
  * - and a town saved mid-term loads back the same.
  */
 import { STEP_SECONDS, type CharterValue } from "../src/content.ts"
@@ -166,6 +167,9 @@ const check = (name: string, ok: boolean, detail: string) => {
   const c = t.snapshot().resources["Town/Crown"]
   const lines = t.snapshot().resources["Town/Chronicle"].lines as Array<{ text: string }>
   check("crown", c.missed >= 1 && lines.some((l) => l.text.includes("unanswered")), `met ${c.met}, missed ${c.missed}, snubs ${c.snubs.length}`)
+  t.run(6 * 60)
+  const f = t.fate()
+  check("dismissed", f.state === "lost" && f.reason.startsWith("Dismissed"), `${f.state} at ${(f.at / 3600).toFixed(1)} min: ${f.reason}`)
 }
 
 // Save and load: a town mid-term loads back to the same state, and runs on the same.

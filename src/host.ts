@@ -557,7 +557,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       crownLine.textContent = `${s.crown.met} · ${s.crown.missed}`
       crownNext.textContent = s.crown.open
         ? `Asking for ${s.crown.amount} ${goods[s.crown.good].title}: ${clockText(s.crown.left)} left, ${s.crown.reward} coins when sent.`
-        : `The next request in ${clockText(s.crown.next)}. A missed one is a fine, and the town remembers the snub for a while.`
+        : `The next request in ${clockText(s.crown.next)}. A missed one is a fine, and the town remembers the snub for a while; ${s.crown.patience} missed in a row and the crown dismisses the mayor.`
       // Goods' change over the last minute of samples.
       const ago = history[Math.max(0, history.length - 1 - Math.round(60 / SAMPLE_SECONDS))]
       reserveValue.textContent = String(s.policy.reserve)
@@ -975,6 +975,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         if (s.fate.revolt !== null) warnings.push(`<b>Uproar:</b> the town turns the mayor out in ${clockText(s.fate.revolt)}`)
         else if (s.mood.approval < -30) warnings.push("<b>Restless:</b> approval is falling towards revolt")
         if (s.fate.peak >= 40 && s.settlers + s.citizens < s.fate.peak * 0.4) warnings.push("<b>Emptying:</b> people are leaving the town")
+        if (s.crown.streak > 0 && s.crown.streak >= s.crown.patience - 1) {
+          warnings.push(`<b>The crown's patience:</b> ${s.crown.streak} requests missed in a row; one more and the mayor is dismissed`)
+        }
         if (s.fate.complete !== null) warnings.push(`<b>Every goal met:</b> the town is complete in ${clockText(s.fate.complete)}`)
       }
       const html = warnings.map((w) => `<div class="cell">${w}</div>`).join("")

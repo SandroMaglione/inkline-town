@@ -135,6 +135,9 @@ export interface Stats {
     readonly reward: number
     readonly met: number
     readonly missed: number
+    /** Missed in a row, and how many in a row the crown puts up with. */
+    readonly streak: number
+    readonly patience: number
     /** Seconds until the next request. */
     readonly next: number
   }

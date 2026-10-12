@@ -31,7 +31,7 @@ to maintain.
 | **Pressure** | Administration grows with the number of homes; prices fall as the town sells and rise as it buys; stone and ore run out; crown requests grow through the term, with fines and snubs for missed ones | §5.4, §6.3, §6.4 |
 | **Approval** | One town-wide figure from needs, taxes, unpaid wages, the crown's snubs, and hungry winters, with its parts shown. It sets how many people each home holds | §6.1, simplified |
 | **Levers** | Taxes per tier; sell, buy, or neither for each good; the reserve; pausing a building; answering the crown; game speed (pause, 1×, 2×, 4×) | §5.1, §5.3, §5.4, §9 |
-| **Ends** | Complete (every goal held two minutes; retire or keep governing); bankrupt; revolt; abandoned; or the term runs out with a verdict. The reckoning shows the term's chart and chronicle | §8 |
+| **Ends** | Complete (every goal held two minutes; retire or keep governing); bankrupt; revolt; abandoned; dismissed by the crown (three requests missed in a row); or the term runs out with a verdict. The reckoning shows the term's chart and chronicle | §8 |
 | **Engine** | Road paths cached against a fingerprint of the road network; history and chronicle saved with the town; `pnpm check` drives every end state | §9 |
 
 ### What is left for later
@@ -62,11 +62,56 @@ the calls it forced:
 - **Bread, cloth, and faith last longer** (90, 180, and 150 seconds), so a
   home can have all three at once and become citizens.
 - **Four goals, not five.** "Food in store" fought the markets for the same
-  fish; approval already measures whether homes are fed.
+  fish; approval already measures whether homes are fed. Goals are a share
+  of citizens (30%) and approval (15) on top of residents and coins for the
+  land's size.
+- **Greed and neglect must lose.** Taxing at 200% still grew towns to 40,000
+  coins, so taxes now weigh more on approval (0.6 a point) and low approval
+  empties homes faster. A town left to itself sat safe until its term ran
+  out, so the crown now dismisses a mayor who misses three requests in a
+  row.
 
 ### Measured outcomes
 
-MEASURED
+Fair land throughout. The sensible bot is a mediocre player: it lays out a
+rough street grid, builds chains in fixed ratios, answers the crown when it
+can (buying what it lacks), and cuts taxes once only approval stands
+between it and a complete town. The greedy bot taxes at 200%, sells
+everything, and ignores the crown. The idle bot founds the basics and stops.
+
+| Charter | Mayor | Seeds | Complete | Lost | Ran out |
+|---------|-------|-------|----------|------|---------|
+| small, 45 min | sensible | 8 | 2 (minutes 30, 43) | 1 dismissed (39) | 5 |
+| medium, 60 min | sensible | 8 | 1 (minute 58) | — | 7 |
+| large, 90 min | sensible | 4 | — | 2 bankrupt (61, 89) | 2 |
+| medium, 60 min | greedy | 4 | — | 4 in revolt (19–21) | — |
+| medium, 60 min | idle | 4 | — | 4 dismissed (22) | — |
+
+So a careless mayor loses, a decent one wins small towns and comes close
+on larger ones, and a player who lays out tighter chains than the bot
+should complete medium and large towns. Most "ran out" terms ended within
+one or two goals, nearly always the share of citizens or the coins.
+
+**How the pressure builds** (sensible mayor, medium land, 60 minutes,
+averaged over the 8 seeds every 10 minutes):
+
+| Minute | Residents | Citizens | Coins | Costs ÷ income | Administration a minute | Approval | Homes fed |
+|--------|-----------|----------|-------|----------------|-------------------------|----------|-----------|
+| 10 | 163 | 0 | 224 | 0.73 | 39 | 25 | 58% |
+| 20 | 230 | 5 | 237 | 0.95 | 70 | 18 | 48% |
+| 30 | 284 | 45 | 401 | 0.72 | 89 | 17 | 45% |
+| 40 | 321 | 39 | 847 | 1.22 | 106 | 15 | 44% |
+| 50 | 355 | 61 | 1545 | 1.03 | 114 | 20 | 48% |
+| 60 | 335 | 49 | 1802 | 1.34 | 118 | 15 | 38% |
+
+Costs climb from about three quarters of income to more than all of it,
+administration triples, and fewer homes are fed as the town spreads. Each
+new year's winter pulls the curve down before spring lets it recover. On
+large land over 90 minutes the same shape stretches out: administration
+grows from 27 to 226 coins a minute.
+
+Reproduce with `pnpm balance -- --size medium --term 60 --seeds 8` (a few
+minutes a seed headless; split seeds across processes with `--from`).
 
 ## 1. What we have, and how it holds up over a long run
 

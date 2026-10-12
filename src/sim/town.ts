@@ -33,8 +33,8 @@ export interface Rates {
 }
 const rateOf = (rates: Rates, tier: Tier) => (tier === 1 ? rates.settlers : rates.citizens)
 
-/** How approval (-100 → 100) sits with a home: half as many residents at its worst, half again at its best. */
-export const appealOf = (approval: number): number => 1 + approval / 200
+/** How approval (-100 → 100) sits with a home: a third as many residents at its worst, half again at its best. */
+export const appealOf = (approval: number): number => (approval < 0 ? 1 + approval / 150 : 1 + approval / 200)
 
 /**
  * Residents a home holds at its tier and satisfaction: half when nothing is
