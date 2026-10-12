@@ -64,10 +64,25 @@ export interface BuiltAsset {
   lineMaterials: Array<{ material: LineMaterial; width: number }>
   updateContours: (camera: THREE.Camera) => void
 }
-export function buildAsset(asset: InkAsset): BuiltAsset {
+export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean } = {}): BuiltAsset {
   const group = new THREE.Group()
   group.name = asset.id
-  for (const face of asset.faces) group.add(faceMesh(face.points, face.color))
+  if (options.batchFaces) {
+    const batches = new Map<number, Array<THREE.BufferGeometry>>()
+    for (const face of asset.faces) {
+      const geometries = batches.get(face.color) ?? []
+      geometries.push(faceMesh(face.points, face.color).geometry)
+      batches.set(face.color, geometries)
+    }
+    for (const [color, geometries] of batches) {
+      const geometry = mergeGeometries(geometries)
+      if (!geometry) throw new Error("Could not batch map faces")
+      geometries.forEach((g) => g.dispose())
+      group.add(new THREE.Mesh(geometry, fillMaterial(color)))
+    }
+  } else {
+    for (const face of asset.faces) group.add(faceMesh(face.points, face.color))
+  }
   const lineMaterials: Array<{ material: LineMaterial; width: number }> = []
   const batches = new Map<string, { positions: Array<number>; width: number; color: number; opacity: number }>()
   for (const stroke of asset.strokes) {

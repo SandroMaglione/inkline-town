@@ -54,6 +54,18 @@ compatibility with the private PixiJS 3D beta. Flags and sails use a fixed
 pose. Rear facades and the tree's volume are interpretations of surfaces
 the current drawing does not show.
 
+### The 3D map test
+
+Open `/map-lab.html` with the dev server running to try the assets together
+on a small island. Drag to pan, right-drag or choose Rotate to orbit, and
+scroll or pinch to zoom. The toolbar also controls zoom, rotation and tilt.
+WASD or arrow keys pan; Q/E rotate; Home restores the original view.
+Double-click the ground to focus the camera there.
+
+The static map includes roads, homes, a market, mills, fields, trees and a
+jetty. Map faces and strokes are batched by material to reduce draw calls.
+This tests the map presentation and camera; it runs no town simulation.
+
 ## Opening a bot's town in the browser
 
 `pnpm balance -- --snapshot <minute>` writes each seed's town at that minute
