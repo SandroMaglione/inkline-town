@@ -8,7 +8,8 @@
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --pretty false",
     "balance": "node scripts/balance.ts",
-    "check": "node scripts/check.ts"
+    "check": "node scripts/check.ts",
+    "test": "node --test test/"
   },
   "dependencies": {
     "@typeonce/bevy-ts": "^0.5.0",
@@ -16,6 +17,7 @@
     "@typeonce/bevy-ts-math": "^0.5.0",
     "@typeonce/bevy-ts-pixi": "^0.5.0",
     "@typeonce/bevy-ts-render": "^0.5.0",
+    "effect": "4.0.3",
     "pixi.js": "^8.22.0"
   },
   "devDependencies": {

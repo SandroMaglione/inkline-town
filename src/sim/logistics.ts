@@ -10,12 +10,14 @@ import { goods, goodIds, provisions, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, type Reach } from "../grid.ts"
 import type { Point } from "../iso.ts"
 import {
-  Carriers, Errand, Figure, Game, Grid, Inventory, Recipe, Rising, Route, Service, Site, Storage, Tile, WalkerOf, maybe
+  Carriers, Errand, Figure, Game, Grid, Inventory, Recipe, Rising, Route, Service, Site, Storage, Tile, Time, WalkerOf, maybe
 } from "../schema.ts"
 import { CELL_STEPS } from "./shared.ts"
 
 /** The most a carrier takes at once. */
 const LOAD = 4
+/** Carriers are sent out this often: ten times a second, a delay no one sees, at a sixth of the work. */
+const DISPATCH_TICKS = 6
 
 export const Dispatch = Game.System(
   "Town/Dispatch",
@@ -44,9 +46,10 @@ export const Dispatch = Game.System(
       sites: Game.Query({ selection: { tile: Game.Query.read(Tile), site: Game.Query.read(Site) } }),
       errands: Game.Query({ selection: { errand: Game.Query.read(Errand), home: Game.Query.readRelation(WalkerOf) } })
     },
-    resources: { grid: Game.System.readResource(Grid) }
+    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) }
   },
   ({ queries, resources, commands }) => {
+    if (resources.time.get().tick % DISPATCH_TICKS !== 0) return
     const grid = resources.grid.get()
     const out = new Map<number, number>()
     const incoming = new Map<string, number>()

@@ -1,0 +1,373 @@
+/**
+ * Model-based tests: generate sequences of what a mayor can do (lay roads
+ * and homes, build, bulldoze, set taxes and trade, pause, answer the crown,
+ * save and load, wait), run them on the real simulation, and after every
+ * command check what must always be true of a town. A failure is shrunk to
+ * the shortest sequence that still breaks the rule, and printed with its
+ * replay so it can be run again.
+ *
+ *   node --test test/
+ *   RUNS=200 node --test test/model.test.ts     more runs
+ */
+import assert from "node:assert/strict"
+import { test } from "node:test"
+
+import { Arbitrary, Data, Effect, Schema } from "effect"
+
+import {
+  crown, goodIds, home, kindOrder, kinds, landIds, market, RESERVES, TAX_STEPS, type CharterValue
+} from "../src/content.ts"
+import { canPlace, cellsOf, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/grid.ts"
+import { GRID, inside, type Point } from "../src/iso.ts"
+import { headless, type Headless, type Snapshot } from "../src/sim/headless.ts"
+import type { Edit } from "../src/ui.ts"
+
+const RUNS = Number(process.env.RUNS ?? 25)
+/** How large generated scenarios grow: at this size, sequences run to their full length. */
+const SIZE = 50
+
+// ── What a mayor can do ───────────────────────────────────────────────────
+
+const between = (minimum: number, maximum: number) => Schema.Int.pipe(Schema.check(Schema.isBetween({ minimum, maximum })))
+/** Cells around the town hall (which stands at 30–32), where most of the town goes. */
+const Cell = between(18, 44)
+
+/**
+ * Which of the places a command could go it picks: the town's own choices
+ * (free cells beside a road, spots with a road at a door, what stands) are
+ * found when the command runs, so most commands do something.
+ */
+const Pick = between(0, 999)
+const Direction = Schema.Literals(["+x", "+y", "-x", "-y"])
+
+const Command = Schema.Union([
+  Schema.TaggedStruct("Wait", { seconds: between(1, 60) }),
+  // Long stretches too, so towns live through winters and the crown's requests.
+  Schema.TaggedStruct("Season", { minutes: between(1, 6) }),
+  // A road out from one of the town's road cells.
+  Schema.TaggedStruct("Road", { pick: Pick, toward: Direction, length: between(1, 10) }),
+  // A row of homes from a free cell beside a road.
+  Schema.TaggedStruct("Homes", { pick: Pick, toward: Direction, length: between(1, 6) }),
+  // A building on a spot with room and a road at one of its doors.
+  Schema.TaggedStruct("Build", { kind: Schema.Literals(kindOrder), pick: Pick }),
+  // Anywhere at all, valid or not.
+  Schema.TaggedStruct("BuildAnywhere", { kind: Schema.Literals(kindOrder), x: Cell, y: Cell }),
+  // One of the buildings, homes, or roads that stand.
+  Schema.TaggedStruct("Remove", { pick: Pick, what: Schema.Literals(["building", "house", "road"]) }),
+  Schema.TaggedStruct("Tax", { tier: Schema.Literals(["settlers", "citizens"]), rate: Schema.Literals(TAX_STEPS) }),
+  Schema.TaggedStruct("Trade", { good: Schema.Literals(goodIds), mode: Schema.Literals(["sell", "buy", "none"]) }),
+  Schema.TaggedStruct("Reserve", { amount: Schema.Literals(RESERVES) }),
+  Schema.TaggedStruct("Pause", { pick: Pick, on: Schema.Boolean }),
+  Schema.TaggedStruct("Deliver", {}),
+  Schema.TaggedStruct("Govern", {}),
+  Schema.TaggedStruct("SaveAndLoad", {}),
+  // Not a lever the page has: fortune, good or bad, so runs reach debt and plenty.
+  Schema.TaggedStruct("Windfall", { coins: between(-4000, 6000) }),
+  // The rest of the term, at once.
+  Schema.TaggedStruct("ToTheEnd", {})
+])
+type Command = typeof Command.Type
+
+/**
+ * How often a mayor does each thing: mostly building, then waiting; the
+ * policy levers now and then; running the term out rarely.
+ */
+const weights: Readonly<Record<Command["_tag"], number>> = {
+  Build: 20, Homes: 15, Road: 12, Season: 10, Wait: 8, Trade: 5, Tax: 4, Remove: 4, Pause: 4, Deliver: 4, SaveAndLoad: 3,
+  Windfall: 3, Reserve: 2, BuildAnywhere: 2, Govern: 2, ToTheEnd: 1
+}
+const table = Object.entries(weights).flatMap(([tag, n]) => Array.from({ length: n }, () => tag as Command["_tag"]))
+const command = Arbitrary.flatMap(Arbitrary.schema(between(0, table.length - 1)), (i) =>
+  Arbitrary.schema(Command.members.find((m) => m.fields._tag.schema.literal === table[i])!))
+
+const Charter = Schema.Struct({
+  size: Schema.Literals(["small", "medium"]),
+  term: Schema.Literals([45, 60]),
+  land: Schema.Literals(landIds),
+  seed: between(0, 100_000)
+})
+
+const Scenario = Schema.Struct({ charter: Charter, commands: Schema.Array(Command) })
+const scenarios = Arbitrary.all({
+  charter: Arbitrary.schema(Charter),
+  commands: Arbitrary.array(command as Arbitrary.Arbitrary<Command>, { maxLength: 60 })
+})
+
+const steps = { "+x": { x: 1, y: 0 }, "+y": { x: 0, y: 1 }, "-x": { x: -1, y: 0 }, "-y": { x: 0, y: -1 } } as const
+const line = (from: Point, length: number, toward: keyof typeof steps) =>
+  Array.from({ length }, (_, i) => ({ x: from.x + steps[toward].x * i, y: from.y + steps[toward].y * i }))
+
+/** The town as the commands see it: what stands where, and the places each could go. */
+const look = (s: Snapshot) => {
+  const builder = new GridBuilder(s.resources["Town/Land"].mask)
+  const standing: Array<{ id: number; what: "building" | "house" | "road"; tile: Point & { size: number } }> = []
+  for (const e of s.entities) {
+    const tile = e.components["Town/Tile"]
+    if (!tile) continue
+    const c = e.components
+    const use: Use = c["Town/Road"] ? "road" : c["Town/House"] ? "house" : c["Town/Tree"] ? "tree" : c["Town/Rock"] ? "rock" : c["Town/Water"] ? "water" : c["Town/Field"] ? "field" : "building"
+    builder.claim(tile, e.id, use)
+    if (use === "building" || use === "house" || use === "road") standing.push({ id: e.id, what: use, tile })
+  }
+  const grid = builder.value()
+  const cells = (f: (x: number, y: number) => boolean) => {
+    const out: Array<Point> = []
+    for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) if (f(x, y)) out.push({ x, y })
+    return out
+  }
+  const besideRoad = (x: number, y: number) => DIRS.some((d) => isRoad(grid, x + d.x, y + d.y))
+  return {
+    standing,
+    roads: () => cells((x, y) => isRoad(grid, x, y)),
+    free: () => cells((x, y) => canPlace(grid, { x, y, size: 1 }) && besideRoad(x, y)),
+    spots: (size: number) => cells((x, y) => canPlace(grid, { x, y, size }) && entrances({ x, y, size }).some((c) => isRoad(grid, c.x, c.y)))
+  }
+}
+const pick = <A>(options: ReadonlyArray<A>, n: number): A | undefined => (options.length === 0 ? undefined : options[n % options.length])
+
+/** A command as the edits the page would push (or, for the rest, what it does to the town). */
+const apply = (town: Headless, command: Command): string | null => {
+  const edit = (...edits: ReadonlyArray<Edit>) => town.edit(...edits)
+  switch (command._tag) {
+    case "Wait":
+      town.run(command.seconds)
+      return null
+    case "Season":
+      town.run(command.minutes * 60)
+      return null
+    case "ToTheEnd": {
+      const s = town.snapshot()
+      const charter = s.resources["Town/Charter"]
+      town.run(Math.max(0, charter.founded + charter.term * 3600 - s.resources["Town/Time"].tick) / 60 + 2)
+      return null
+    }
+    case "Road": {
+      const from = pick(look(town.snapshot()).roads(), command.pick)
+      if (from) edit({ type: "roads", cells: line(from, command.length + 1, command.toward).slice(1) })
+      break
+    }
+    case "Homes": {
+      const from = pick(look(town.snapshot()).free(), command.pick)
+      if (from) edit({ type: "homes", cells: line(from, command.length, command.toward) })
+      break
+    }
+    case "Build": {
+      const spot = pick(look(town.snapshot()).spots(kinds[command.kind].size), command.pick)
+      if (spot) edit({ type: "building", kind: command.kind, cell: spot, open: false })
+      break
+    }
+    case "BuildAnywhere":
+      edit({ type: "building", kind: command.kind, cell: { x: command.x, y: command.y }, open: false })
+      break
+    case "Remove": {
+      const target = pick(look(town.snapshot()).standing.filter((t) => t.what === command.what), command.pick)
+      if (target) edit({ type: "remove", cell: { x: target.tile.x, y: target.tile.y } })
+      break
+    }
+    case "Tax":
+      edit({ type: "tax", tier: command.tier, rate: command.rate })
+      break
+    case "Trade":
+      edit({ type: "trade", good: command.good, mode: command.mode })
+      break
+    case "Reserve":
+      edit({ type: "reserve", amount: command.amount })
+      break
+    case "Pause": {
+      const target = pick(look(town.snapshot()).standing.filter((t) => t.what === "building"), command.pick)
+      if (target) edit({ type: "pause", cell: { x: target.tile.x, y: target.tile.y }, on: command.on })
+      break
+    }
+    case "Deliver":
+      edit({ type: "deliver" })
+      break
+    case "Govern":
+      edit({ type: "govern" })
+      break
+    case "SaveAndLoad": {
+      // A save loads back to exactly what was saved.
+      const saved = town.snapshot()
+      town.restore(JSON.parse(JSON.stringify(saved)))
+      const loaded = town.snapshot()
+      return JSON.stringify(saved) === JSON.stringify(loaded) ? null : "a saved town did not load back the same"
+    }
+    case "Windfall":
+      town.change((s) => {
+        s.resources["Town/Treasury"].coins += command.coins
+      })
+      break
+  }
+  // Edits apply on the next step; give the town a second.
+  town.run(1)
+  return null
+}
+
+// ── What must always be true ──────────────────────────────────────────────
+
+/** What the checks remember from one command to the next. */
+interface Memory {
+  readonly tick: number
+  readonly state: string
+  readonly met: number
+  readonly missed: number
+  readonly peak: number
+  readonly samples: number
+}
+
+const remember = (s: Snapshot): Memory => ({
+  tick: s.resources["Town/Time"].tick,
+  state: s.resources["Town/Fate"].state,
+  met: s.resources["Town/Crown"].met,
+  missed: s.resources["Town/Crown"].missed,
+  peak: s.resources["Town/Fate"].peak,
+  samples: s.resources["Town/History"].samples.length
+})
+
+/** Every rule a town breaks, as a line each. */
+const broken = (s: Snapshot, before: Memory | null, last: Command): Array<string> => {
+  const out: Array<string> = []
+  const fail = (rule: string) => out.push(rule)
+  const r = s.resources
+  const mask: string = r["Town/Land"].mask
+  const ids = new Set(s.entities.map((e) => e.id))
+
+  // The land: every tile on it, none overlapping.
+  const taken = new Map<number, number>()
+  for (const e of s.entities) {
+    const tile = e.components["Town/Tile"]
+    if (!tile) continue
+    for (const c of cellsOf(tile)) {
+      if (!inside(c.x, c.y) || mask[key(c.x, c.y)] !== "1") fail(`entity ${e.id} stands off the land at ${c.x},${c.y}`)
+      const k = key(c.x, c.y)
+      if (taken.has(k)) fail(`entities ${taken.get(k)} and ${e.id} overlap at ${c.x},${c.y}`)
+      taken.set(k, e.id)
+    }
+  }
+
+  // Goods: never negative, never more than a shelf holds.
+  for (const e of s.entities) {
+    const inv = e.components["Town/Inventory"]
+    if (!inv) continue
+    for (const g of goodIds) {
+      const n = inv.stock[g]
+      if (n < 0) fail(`entity ${e.id} holds ${n} ${g}`)
+      if (n > inv.cap) fail(`entity ${e.id} holds ${n} ${g}, more than its ${inv.cap}`)
+      if (n > 0 && !inv.accepts.includes(g)) fail(`entity ${e.id} holds ${g}, which it does not take`)
+    }
+  }
+
+  // Homes and work: residents within what a home holds, workers within who lives here.
+  let residents = 0
+  let settlers = 0
+  let citizens = 0
+  for (const e of s.entities) {
+    const h = e.components["Town/House"]
+    if (!h) continue
+    if (h.residents < 0 || h.residents > home.tiers[h.tier as 1 | 2].residents) fail(`home ${e.id} has ${h.residents} residents at tier ${h.tier}`)
+    residents += h.residents
+    if (h.tier === 1) settlers += h.residents
+    else citizens += h.residents
+  }
+  let assigned = 0
+  for (const e of s.entities) {
+    const staff = e.components["Town/Staff"]
+    if (!staff) continue
+    if (staff.assigned < 0 || staff.assigned > staff.needed) fail(`building ${e.id} has ${staff.assigned} of ${staff.needed} workers`)
+    assigned += staff.assigned
+  }
+  if (assigned > residents) fail(`${assigned} at work but only ${residents} residents`)
+  const census = r["Town/Census"]
+  if (census.settlers !== settlers || census.citizens !== citizens) fail(`census says ${census.settlers}/${census.citizens}, homes ${settlers}/${citizens}`)
+
+  // Walkers belong to a building that still stands.
+  for (const [target, sources] of s.relations["Town/WalkerOf"] ?? []) {
+    if (!ids.has(target)) fail(`walkers ${sources.join(", ")} belong to a building that is gone`)
+  }
+  for (const e of s.entities) {
+    const tile = s.entities.find((b) => b.id === e.components["Town/Errand"]?.target)
+    if (e.components["Town/Errand"] && !e.components["Town/Errand"].back && !tile) fail(`carrier ${e.id} is carrying to a building that is gone`)
+  }
+
+  // The town's figures stay within their bounds.
+  const mood = r["Town/Mood"]
+  if (mood.approval < -100 || mood.approval > 100) fail(`approval ${mood.approval}`)
+  for (const g of goodIds) {
+    const p = r["Town/Market"].prices[g]
+    if (p < market.floor || p > market.ceiling) fail(`${g} at ${p}%`)
+  }
+  if (!Number.isInteger(r["Town/Treasury"].coins)) fail(`coins ${r["Town/Treasury"].coins}`)
+  const c = r["Town/Crown"]
+  if (c.streak > crown.patience) fail(`the crown has been snubbed ${c.streak} times in a row`)
+  if (c.open && c.amount <= 0) fail(`the crown asks for ${c.amount}`)
+
+  // Over time: the clock, the record, and the crown's tally only go forward.
+  const now = remember(s)
+  if (before) {
+    if (now.tick < before.tick) fail(`time went back from ${before.tick} to ${now.tick}`)
+    if (now.met < before.met || now.missed < before.missed) fail("the crown's tally went down")
+    if (now.peak < before.peak) fail("the peak went down")
+    if (now.samples < before.samples) fail("the history lost samples")
+    // A term ends once: lost and over stay; won goes on only by choosing to govern.
+    const moved = `${before.state}→${now.state}`
+    const allowed = ["playing→playing", "playing→won", "playing→lost", "playing→over", "won→won", "lost→lost", "over→over"]
+    if (!allowed.includes(moved) && !(moved === "won→playing" && last._tag === "Govern")) fail(`the term went ${moved}`)
+  }
+  const samples = r["Town/History"].samples as Array<{ tick: number }>
+  if (samples.some((p, i) => i > 0 && p.tick <= samples[i - 1]!.tick)) fail("history out of order")
+  return out
+}
+
+class Broken extends Data.TaggedError("Broken")<{ readonly step: number; readonly command: Command; readonly rules: ReadonlyArray<string> }> {}
+
+/** Plays a scenario, failing at the first command after which the town breaks a rule. */
+const play = (scenario: typeof Scenario.Type) =>
+  Effect.gen(function* () {
+    const town = headless(scenario.charter as CharterValue)
+    let memory: Memory | null = null
+    let index = 0
+    if (process.env.VERBOSE) console.log(`${scenario.charter.size} ${scenario.charter.land} ${scenario.commands.length} commands, ${scenario.commands.reduce((t, c) => t + (c._tag === "Wait" ? c.seconds : c._tag === "Season" ? c.minutes * 60 : 1), 0)} s${scenario.commands.some((c) => c._tag === "ToTheEnd") ? " and to the end" : ""}`)
+    for (const command of scenario.commands) {
+      const problem = apply(town, command)
+      const s = town.snapshot()
+      const rules = [...(problem ? [problem] : []), ...broken(s, memory, command)]
+      if (rules.length > 0) return yield* Effect.fail(new Broken({ step: index, command, rules }))
+      memory = remember(s)
+      index += 1
+    }
+    if (process.env.VERBOSE) {
+      const s = town.snapshot()
+      const count = (c: string) => s.entities.filter((e) => e.components[c]).length
+      console.log(`  → ${count("Town/Building")} buildings, ${count("Town/House")} homes, ${s.resources["Town/Census"].settlers + s.resources["Town/Census"].citizens} residents, ${s.resources["Town/Treasury"].coins} coins, ${s.resources["Town/Fate"].state}`)
+    }
+    return true
+  })
+
+const report = <A, E>(result: Arbitrary.CheckResult<A, E>) => Arbitrary.formatCheckFailure(result) ?? ""
+
+test("a town keeps its rules whatever its mayor does", { timeout: 30 * 60_000 }, async () => {
+  const result = await Effect.runPromise(Arbitrary.checkEffect(scenarios, play, { runs: RUNS, size: SIZE, seed: process.env.SEED ?? 1 }))
+  const rules = result._tag === "Falsified" && result.failure._tag === "PropertyError"
+    ? `\nAfter command ${result.failure.error.step} (${JSON.stringify(result.failure.error.command)}):\n  ${result.failure.error.rules.join("\n  ")}`
+    : ""
+  assert.equal(result._tag, "Passed", report(result) + rules)
+})
+
+test("the same charter and the same commands make the same town", { timeout: 30 * 60_000 }, async () => {
+  const result = await Effect.runPromise(
+    Arbitrary.checkEffect(
+      scenarios,
+      (scenario) => {
+        const once = headless(scenario.charter as CharterValue)
+        const twice = headless(scenario.charter as CharterValue)
+        for (const command of scenario.commands) {
+          apply(once, command)
+          apply(twice, command)
+        }
+        return JSON.stringify(once.snapshot()) === JSON.stringify(twice.snapshot())
+      },
+      { runs: Math.max(3, Math.round(RUNS / 5)), size: SIZE, seed: process.env.SEED ?? 2 }
+    )
+  )
+  assert.equal(result._tag, "Passed", report(result))
+})
+

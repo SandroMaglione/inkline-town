@@ -110,7 +110,7 @@ export const SendWalkers = Game.System(
         const color = categoryColor[kinds[data.building.get().kind].category]
         const draft = Game.Command.spawn(
           [Figure, { role: "walker", color }],
-          [Route, { cells: [starts[0]!], index: 0, step: 0 }],
+          [Route, { cells: [{ x: starts[0]!.x, y: starts[0]!.y }], index: 0, step: 0 }],
           [Roam, { service: service.service, left: service.range, basket, back: false }]
         )
         commands.spawn(Game.Command.relate(draft, WalkerOf, entity.id))

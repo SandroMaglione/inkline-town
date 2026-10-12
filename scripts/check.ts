@@ -15,46 +15,15 @@
  *   a row and the mayor is dismissed;
  * - and a town saved mid-term loads back the same.
  */
-import { STEP_SECONDS, type CharterValue } from "../src/content.ts"
+import type { CharterValue } from "../src/content.ts"
 import { DIRS, GridBuilder, key } from "../src/grid.ts"
 import { inside } from "../src/iso.ts"
-import { Game, Ui } from "../src/schema.ts"
-import { blankResources, simulate } from "../src/sim/index.ts"
-import { emptyPreview, type Edit, type UiValue } from "../src/ui.ts"
-
-interface Snapshot {
-  nextEntity: number
-  entities: Array<{ id: number; components: Record<string, any> }>
-  resources: Record<string, any>
-}
+import { headless, type Snapshot } from "../src/sim/headless.ts"
 
 const town = (charter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }) => {
-  const ui: UiValue = {
-    tool: "select", placing: null, menu: null, pointer: null, dragFrom: null, selected: null, gestures: [],
-    edits: [{ type: "newTown", charter }],
-    preview: emptyPreview(), hits: [], panel: null, centres: new Map(), stats: null, speed: 1, founding: false, toast: () => {}
-  }
-  const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Ui, ui)), resources: blankResources() })
-  if (!made.ok) throw new Error(JSON.stringify(made.error))
-  const runtime = made.value
-  const run = (seconds: number) => {
-    for (let i = 0; i < Math.round(seconds / STEP_SECONDS); i++) runtime.tick(simulate)
-  }
-  const snapshot = () => JSON.parse(JSON.stringify(runtime.snapshot())) as Snapshot
-  const restore = (s: Snapshot) => {
-    const restored = runtime.restore(s as never)
-    if (!restored.ok) throw new Error(`restore failed: ${JSON.stringify(restored.error)}`)
-  }
-  /** Changes the world through a snapshot, as a load would. */
-  const change = (f: (s: Snapshot) => void) => {
-    const s = snapshot()
-    f(s)
-    restore(s)
-  }
-  const fate = () => snapshot().resources["Town/Fate"] as { state: string; reason: string; at: number; governing: boolean }
-  const edit = (...edits: ReadonlyArray<Edit>) => ui.edits.push(...edits)
-  run(0.1)
-  return { run, snapshot, restore, change, fate, edit }
+  const t = headless(charter)
+  const fate = () => t.snapshot().resources["Town/Fate"] as { state: string; reason: string; at: number; governing: boolean }
+  return { ...t, fate }
 }
 
 /** Citizens' homes, every need met for good, on free cells beside the roads. */

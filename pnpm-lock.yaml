@@ -23,6 +23,9 @@ importers:
       '@typeonce/bevy-ts-render':
         specifier: ^0.5.0
         version: 0.5.0(typescript@7.0.2)
+      effect:
+        specifier: 4.0.3
+        version: 4.0.3
       pixi.js:
         specifier: ^8.22.0
         version: 8.22.0
@@ -302,6 +305,9 @@ packages:
 
   earcut@3.2.3:
     resolution: {integrity: sha512-vnS4AVwp1KHAF13i1vp1/2D5evWy3k5u/iW/B81QVsUZtV8cv2tU0b2VNFlqvh4kYwrFMDdjPCfAmfyJW9y14Q==}
+
+  effect@4.0.3:
+    resolution: {integrity: sha512-LoWn/Uwwx0JjHSDmBAAahx8sB+klzM6vsZovnbYowBNw6B4QScJLRLBByO61plvNiycx7HPN8FnsWUCu0eXW5w==}
 
   eventemitter3@5.0.4:
     resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
@@ -643,6 +649,8 @@ snapshots:
   detect-libc@2.1.2: {}
 
   earcut@3.2.3: {}
+
+  effect@4.0.3: {}
 
   eventemitter3@5.0.4: {}
 

@@ -261,6 +261,8 @@ export interface GridValue {
   readonly use: ReadonlyArray<Use>
   /** A fingerprint of where the roads are, when known: paths are cached against it. */
   readonly roads?: number
+  /** The entities standing on it, when known: the grid only changes when one of them goes. */
+  readonly tiles?: ReadonlySet<number>
 }
 export const Grid = Descriptor.TransientResource<GridValue>()("Town/Grid")
 /** Goods in the town's storage, summed every step. */

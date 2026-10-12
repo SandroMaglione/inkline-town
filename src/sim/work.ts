@@ -15,15 +15,31 @@ import {
 } from "../schema.ts"
 import { connected, elapsed, seasonAt, TileRead, useOf } from "./shared.ts"
 
-/** What stands where on the land, for every system after it this step. */
+/**
+ * What stands where on the land, for every system after it this step.
+ * Tiles never move, so the grid is only rebuilt when one is laid or one of
+ * those standing on it goes (a load spawns the whole world again, so it is
+ * rebuilt then too).
+ */
 export const IndexGrid = Game.System(
   "Town/IndexGrid",
-  { queries: { tiles: TileRead }, resources: { land: Game.System.readResource(Land), grid: Game.System.writeResource(Grid) } },
-  ({ queries, resources }) => {
+  {
+    queries: { tiles: TileRead, laid: Game.Query({ selection: { tile: Game.Query.read(Tile) }, filters: [Game.Query.added(Tile)] }) },
+    despawned: { entities: Game.System.readDespawned() },
+    resources: { land: Game.System.readResource(Land), grid: Game.System.writeResource(Grid) }
+  },
+  ({ queries, despawned, resources }) => {
+    const known = resources.grid.get().tiles
+    const changed = known === undefined || queries.laid.each().length > 0 || despawned.entities.all().some((id) => known.has(id))
+    if (!changed) return
     const grid = new GridBuilder(resources.land.get().mask)
-    for (const { entity, data } of queries.tiles.each()) grid.claim(data.tile.get(), entity.id, useOf(data))
+    const tiles = new Set<number>()
+    for (const { entity, data } of queries.tiles.each()) {
+      grid.claim(data.tile.get(), entity.id, useOf(data))
+      tiles.add(entity.id)
+    }
     const value = grid.value()
-    resources.grid.set({ ...value, roads: roadPrint(value) })
+    resources.grid.set({ ...value, roads: roadPrint(value), tiles })
   }
 )
 
@@ -76,6 +92,9 @@ export const Raise = Game.System(
 
 // ── Workers ───────────────────────────────────────────────────────────────
 
+/** Workers are reassigned this often: residents move in and out every few seconds, no faster. */
+const STAFF_TICKS = ticks(0.5)
+
 /**
  * Residents go to work in the order buildings were placed, as many as each
  * needs while any are left; a paused building gets nobody.
@@ -87,9 +106,10 @@ export const AssignStaff = Game.System(
       homes: Game.Query({ selection: { house: Game.Query.read(House) }, without: [Site, Rising] }),
       workplaces: Game.Query({ selection: { tile: Game.Query.read(Tile), staff: Game.Query.write(Staff), paused: Game.Query.optional(Paused) }, without: [Site, Rising] })
     },
-    resources: { grid: Game.System.readResource(Grid) }
+    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) }
   },
   ({ queries, resources }) => {
+    if (resources.time.get().tick % STAFF_TICKS !== 0) return
     const grid = resources.grid.get()
     let pool = 0
     for (const { data } of queries.homes.each()) pool += data.house.get().residents
@@ -137,9 +157,14 @@ export const Work = Game.System(
     const grid = resources.grid.get()
     const t = elapsed(resources.time.get(), resources.charter.get())
     const slowFishing = seasonAt(t, resources.charter.get()).winter && t % 2 === 1
-    const trees = new Map(queries.trees.each().map((row) => [row.entity.id as number, row]))
-    const rocks = new Map(queries.rocks.each().map((row) => [row.entity.id as number, row]))
-    const fields = new Map(queries.fields.each().map((row) => [row.entity.id as number, row]))
+    // The land by entity, looked up only once some gatherer starts a job this step.
+    const lazy = <T>(make: () => T) => {
+      let value: T | undefined
+      return () => (value ??= make())
+    }
+    const trees = lazy(() => new Map(queries.trees.each().map((row) => [row.entity.id as number, row])))
+    const rocks = lazy(() => new Map(queries.rocks.each().map((row) => [row.entity.id as number, row])))
+    const fields = lazy(() => new Map(queries.fields.each().map((row) => [row.entity.id as number, row])))
     const used = new Set<number>()
 
     /** Takes what a gatherer needs from the land within reach, or says there is none. */
@@ -150,14 +175,14 @@ export const Work = Game.System(
         if (used.has(id)) continue
         if (source === "water" && use === "water") return true
         if (source === "tree" && use === "tree") {
-          const tree = trees.get(id)
+          const tree = trees().get(id)
           if (!tree || tree.data.tree.get().growth < GROWN.tree) continue
           commands.despawn(tree.entity.id)
           used.add(id)
           return true
         }
         if ((source === "stone" || source === "ore") && use === "rock") {
-          const rock = rocks.get(id)
+          const rock = rocks().get(id)
           if (!rock) continue
           const r = rock.data.rock.get()
           if (r.ore !== (source === "ore") || r.amount <= 0) continue
@@ -168,7 +193,7 @@ export const Work = Game.System(
           return true
         }
         if (source === "field" && use === "field") {
-          const field = fields.get(id)
+          const field = fields().get(id)
           if (!field || field.data.field.get().growth < GROWN.field) continue
           field.data.field.set({ growth: 0 })
           used.add(id)
@@ -243,16 +268,22 @@ export const Plant = Game.System(
         without: [Site, Rising]
       })
     },
-    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng) }
+    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) }
   },
   ({ queries, resources, commands }) => {
     const grid = resources.grid.get()
     const random = Random.make(resources.rng.get())
     const sown = new Set<number>()
+    const tick = resources.time.get().tick
     for (const { entity, data } of queries.planters.each()) {
       const tile = data.tile.get()
       const staff = data.staff.get()
       const planter = data.planter.get()
+      // While it waits to plant again, it only counts down (and looks around twice a second for its status).
+      if (planter.cooldown > 1 && tick % STAFF_TICKS !== 0) {
+        data.planter.set({ ...planter, cooldown: planter.cooldown - 1 })
+        continue
+      }
       const open = connected(grid, tile)
       const reach = around(tile, planter.radius)
       const grown = reach.filter((c) => useAt(grid, c.x, c.y) === planter.what).length
@@ -307,6 +338,9 @@ export const Spread = Game.System(
   }
 )
 
+/** Trees and fields grow this many steps at a time. */
+const GROW_TICKS = 10
+
 /** Trees and fields grow until they are ready; fields not in winter. */
 export const Grow = Game.System(
   "Town/Grow",
@@ -318,14 +352,15 @@ export const Grow = Game.System(
     resources: { time: Game.System.readResource(Time), charter: Game.System.readResource(Charter) }
   },
   ({ queries, resources }) => {
+    if (resources.time.get().tick % GROW_TICKS !== 0) return
     for (const { data } of queries.trees.each()) {
       const growth = data.tree.get().growth
-      if (growth < GROWN.tree) data.tree.set({ growth: growth + 1 })
+      if (growth < GROWN.tree) data.tree.set({ growth: Math.min(GROWN.tree, growth + GROW_TICKS) })
     }
     if (seasonAt(elapsed(resources.time.get(), resources.charter.get()), resources.charter.get()).winter) return
     for (const { data } of queries.fields.each()) {
       const growth = data.field.get().growth
-      if (growth < GROWN.field) data.field.set({ growth: growth + 1 })
+      if (growth < GROWN.field) data.field.set({ growth: Math.min(GROWN.field, growth + GROW_TICKS) })
     }
   }
 )

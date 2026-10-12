@@ -21,13 +21,14 @@
  * `--set` changes content before the run. The bot only does what a player
  * could: it reads the world, then pushes the same edits the page does.
  */
-import { goodIds, home, kinds, landIds, ROAD_COST, sizeIds, STEP_SECONDS, total, type Amounts, type CharterValue, type GoodId, type Kind, type KindId } from "../src/content.ts"
+import { goodIds, home, kinds, landIds, ROAD_COST, sizeIds, type Amounts, type CharterValue, type GoodId, type Kind, type KindId } from "../src/content.ts"
 import * as content from "../src/content.ts"
 import { around, canPlace, DIRS, entrances, GridBuilder, isRoad, key, useAt, type Use } from "../src/grid.ts"
 import { GRID, inside, type Point } from "../src/iso.ts"
-import { Game, Ui, type GridValue } from "../src/schema.ts"
-import { blankResources, goalsOf, larder, seasonAt, simulate, termTicks } from "../src/sim/index.ts"
-import { emptyPreview, type Edit, type UiValue } from "../src/ui.ts"
+import type { GridValue } from "../src/schema.ts"
+import { headless, type Snapshot } from "../src/sim/headless.ts"
+import { goalsOf, larder, seasonAt } from "../src/sim/index.ts"
+import type { Edit } from "../src/ui.ts"
 
 // ── Options ───────────────────────────────────────────────────────────────
 
@@ -57,11 +58,6 @@ for (let i = 0; i < args.length; i++) {
 }
 
 // ── Reading the world ─────────────────────────────────────────────────────
-
-interface Snapshot {
-  readonly entities: ReadonlyArray<{ readonly id: number; readonly components: Record<string, any> }>
-  readonly resources: Record<string, any>
-}
 
 interface Tile {
   readonly x: number
@@ -390,30 +386,20 @@ interface Row {
 const run = (seed: number) => {
   roading.clear()
   resting.clear()
-  const charter: CharterValue = { size, term, land, seed }
-  const ui: UiValue = {
-    tool: "select", placing: null, menu: null, pointer: null, dragFrom: null, selected: null, gestures: [],
-    edits: [{ type: "newTown", charter }],
-    preview: emptyPreview(), hits: [], panel: null, centres: new Map(), stats: null, speed: 1, founding: false, toast: (m) => { if (process.env.DEBUG) console.log("toast:", m) }
-  }
-  const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Ui, ui)), resources: blankResources() })
-  if (!made.ok) throw new Error(JSON.stringify(made.error))
-  const runtime = made.value
-  const step = (seconds: number) => {
-    for (let i = 0; i < Math.round(seconds / STEP_SECONDS); i++) runtime.tick(simulate)
-  }
-  step(0.1)
+  const town = headless({ size, term, land, seed }, { toast: (m) => { if (process.env.DEBUG) console.log("toast:", m) } })
+  const ui = town.ui
+  const step = town.run
 
   const rows: Array<Row> = []
   const problems: Record<string, number> = {}
-  let w = read(runtime.snapshot() as unknown as Snapshot)
+  let w = read(town.snapshot())
   const DECIDE = 5
   for (let t = 0; t < term * 60 + DECIDE && w.fate.state === "playing"; t += DECIDE) {
     const chosen = decide(w)
     if (process.env.DEBUG) console.log(t, JSON.stringify(chosen).slice(0, 200))
     ui.edits.push(...chosen)
     step(DECIDE)
-    w = read(runtime.snapshot() as unknown as Snapshot)
+    w = read(town.snapshot())
     if ((t + DECIDE) % 60 !== 0) continue
     const minute = (t + DECIDE) / 60
     const problemsNow: Record<string, number> = {}
@@ -509,5 +495,3 @@ const allProblems: Record<string, number> = {}
 for (const r of results) for (const [k, n] of Object.entries(r.problems)) allProblems[k] = (allProblems[k] ?? 0) + n
 const top = Object.entries(allProblems).sort((a, b) => b[1] - a[1]).slice(0, 6)
 console.log(`\n  most common problems   ${top.map(([k, n]) => `${k} (${(n / seeds).toFixed(1)} min/seed)`).join(", ") || "none"}`)
-void total
-void termTicks
