@@ -1,0 +1,22 @@
+{
+  "name": "factory-yard",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --pretty false"
+  },
+  "dependencies": {
+    "@typeonce/bevy-ts": "link:../../bevy-ts/packages/core",
+    "@typeonce/bevy-ts-pixi": "link:../../bevy-ts/packages/pixi",
+    "@typeonce/bevy-ts-render": "link:../../bevy-ts/packages/render",
+    "pixi.js": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "25.5.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.1"
+  }
+}
