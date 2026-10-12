@@ -211,8 +211,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     toolbar.append(button)
   }
   action("new town", "Found a new town on new land", () => openCharter(true))
-  action("save", "Save the town in this browser", () => ui.toast(persistence().save() ?? "Saved"))
-  action("load", "Load the saved town", () => ui.toast(persistence().load() ?? "Loaded"))
+  action("save", "Save the town in this browser (it also autosaves every two minutes)", () => ui.toast(persistence().save() ?? "Saved"))
+  action("load", "Load the latest save: yours or the autosave, whichever is newer", () => ui.toast(persistence().load() ?? "Loaded"))
 
   const refreshTools = () => {
     for (const { tool, button } of buttons) {

@@ -81,11 +81,14 @@ everything, and ignores the crown. The idle bot founds the basics and stops.
 
 | Charter | Mayor | Seeds | Complete | Lost | Ran out |
 |---------|-------|-------|----------|------|---------|
-| small, 45 min | sensible | 8 | 2 (minutes 30, 43) | 1 dismissed (39) | 5 |
-| medium, 60 min | sensible | 8 | 1 (minute 58) | — | 7 |
+| small, 45 min | sensible | 8 | 1 (minute 40) | — | 7 |
+| medium, 60 min | sensible | 8 | 1 (minute 45) | — | 7 |
 | large, 90 min | sensible | 4 | — | 2 bankrupt (61, 89) | 2 |
-| medium, 60 min | greedy | 4 | — | 4 in revolt (19–21) | — |
+| medium, 60 min | greedy | 4 | — | 3 in revolt, 1 dismissed (19–22) | — |
 | medium, 60 min | idle | 4 | — | 4 dismissed (22) | — |
+
+(Measured again after the simulation was made faster, which changed how
+often carriers are sent out; the large row is from before that change.)
 
 So a careless mayor loses, a decent one wins small towns and comes close
 on larger ones, and a player who lays out tighter chains than the bot

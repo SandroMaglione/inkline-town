@@ -10,6 +10,7 @@ that ends with the town complete, lost, or run out. Game logic runs on the
 pnpm install
 pnpm dev --host --port 5232
 pnpm typecheck
+pnpm test       # model-based tests: random mayors, rules that must always hold; and saving
 pnpm check      # every way a term can end, ends it
 pnpm balance    # a bot plays terms headless and reports the pressure
 ```
@@ -87,12 +88,17 @@ pnpm balance    # a bot plays terms headless and reports the pressure
   (seasons, the crown, approval, the end of the term, history).
 - `src/present.ts`: per-frame interaction, panel, and view sync.
 - `src/art.ts`: all drawing.
+- `src/sim/headless.ts`: a town with no page, stepped from code: what the tests, `check`, and `balance` play.
+- `src/save.ts`: saving and loading as [Effect](https://effect.website) programs: a versioned file in a slot
+  (the mayor's own, or the autosave), typed errors for each way a load can fail.
 - `src/ui.ts`, `src/host.ts`, `src/main.ts`: the page bridge, camera, input, panels, and start-up.
 
 The simulation runs on bevy-ts-browser's `FixedLoop` at 60 steps a second
 (times the chosen speed), with integer state and a seeded random resource.
 Every saved component and resource is validated, so **save** / **load**
-snapshot the whole world, history and chronicle included, to localStorage.
+snapshot the whole world, history and chronicle included, to localStorage;
+the page also autosaves every two minutes of game time, and **load** takes
+whichever is newer.
 
 In development the console has `town.ui`, `town.runtime`, and
 `town.advance(seconds)` to fast-forward the simulation.
@@ -112,6 +118,25 @@ pnpm balance -- --seeds 4 --from 4    # seeds 4 to 7, to split a sweep across pr
 pnpm balance -- --set crown.fine=2 --set kinds.fishery.recipe.seconds=3
 pnpm balance -- --seeds 1 --verbose --every 1   # minute by minute
 ```
+
+## Testing
+
+The simulation has no renderer in it: it runs headless (`src/sim/headless.ts`),
+about 60 to 80 times faster than real time, so the tests play real towns.
+
+`pnpm test` runs model-based tests built on Effect's `Schema` and
+`Arbitrary`. They generate sequences of what a mayor can do (roads, homes,
+buildings where they fit, bulldozing, taxes, trade, pausing, answering the
+crown, saving and loading, waiting through seasons, and fortune good and
+bad), play them on the real simulation, and after every command check what
+must always be true: goods within their shelves, tiles on the land and
+apart, residents and workers within bounds, the census matching the homes,
+walkers belonging to standing buildings, approval and prices within their
+bounds, the clock and the record only going forward, and a term ending only
+in the allowed ways. A failure shrinks to the shortest sequence that still
+breaks a rule. A second property checks that the same charter and commands
+always make the same town. `RUNS=200 pnpm test` searches harder;
+`SEED=…` replays.
 
 `pnpm check` puts the real simulation into each way a term can end
 (complete, bankrupt, revolt, abandoned, dismissed, run out), checks an unanswered

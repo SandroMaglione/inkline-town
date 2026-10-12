@@ -4,18 +4,20 @@
  * the views follow once a frame.
  */
 import { Result } from "@typeonce/bevy-ts"
+import { Effect } from "effect"
 import { FixedLoop } from "@typeonce/bevy-ts-browser"
 import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
 
 import type { BuildingView, FieldView, HouseView, RockView, TreeView, WalkerView } from "./art.ts"
-import { STEP_SECONDS } from "./content.ts"
+import { lands, sizes, STEP_SECONDS } from "./content.ts"
 import { createHost, type Persistence } from "./host.ts"
 import { present } from "./present.ts"
+import { browserStorage, describe, loadLatest, save, Storage, World } from "./save.ts"
 import { BuildingNodes, Clock, FieldNodes, Game, HouseNodes, RockNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
 import { blankResources, simulate } from "./sim/index.ts"
 
-/** Saves of the charter's towns: older ones (a square map, no term) do not load into it. */
-const SAVE_KEY = "town/save/charter"
+/** Minutes of game time between autosaves. */
+const AUTOSAVE_MINUTES = 2
 
 const start = async () => {
   const mount = document.getElementById("app")!
@@ -51,18 +53,42 @@ const start = async () => {
     Object.assign(window, { town: { ui, runtime, advance } })
   }
 
-  // Saves are plain data; loading validates every component before touching the world.
+  // Saves are Effect programs over the browser's storage and this town (see `save.ts`);
+  // loading validates every component before touching the world.
+  const world: World["Service"] = {
+    snapshot: () => runtime.snapshot(),
+    restore: (data) => {
+      const restored = runtime.restore(data as never)
+      return restored.ok ? null : restored.error._tag
+    },
+    title: () => {
+      const s = ui.stats
+      return s ? `${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · year ${s.season.year} · ${Math.floor(s.minute)} min in` : "a town"
+    }
+  }
+  const run = <A, E>(program: Effect.Effect<A, E, Storage | World>) =>
+    Effect.runSync(Effect.result(program.pipe(Effect.provideService(Storage, browserStorage(localStorage)), Effect.provideService(World, world))))
   persistence = {
     save: () => {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(runtime.snapshot()))
-      return null
+      const saved = run(save("manual"))
+      return saved._tag === "Success" ? null : describe(saved.failure)
     },
     load: () => {
-      const raw = localStorage.getItem(SAVE_KEY)
-      if (raw === null) return "Nothing saved yet"
-      const restored = runtime.restore(JSON.parse(raw))
-      return restored.ok ? null : `Could not load: ${restored.error._tag}`
+      const loaded = run(loadLatest)
+      if (loaded._tag === "Failure") return describe(loaded.failure)
+      return loaded.success.slot === "auto" ? `Loaded the autosave: ${loaded.success.title}` : `Loaded ${loaded.success.title}`
     }
+  }
+  /** The page autosaves every `AUTOSAVE_MINUTES` of game time while a term runs. */
+  let autosaved = 0
+  const autosave = () => {
+    const s = ui.stats
+    if (!s || s.fate.state !== "playing" || ui.founding) return
+    if (s.minute < autosaved) autosaved = 0
+    if (s.minute < autosaved + AUTOSAVE_MINUTES) return
+    autosaved = Math.floor(s.minute / AUTOSAVE_MINUTES) * AUTOSAVE_MINUTES
+    const saved = run(save("auto"))
+    if (saved._tag === "Failure") ui.toast(describe(saved.failure))
   }
 
   const loop = FixedLoop.start({
@@ -91,6 +117,7 @@ const start = async () => {
       clock.elapsed += elapsedSeconds
       runtime.tick(present)
       syncPage()
+      autosave()
     },
     onFailure: (failure) => {
       mount.textContent = failure.kind === "InvalidTickDelta" ? `Invalid frame delta: ${failure.deltaMS}` : "The town stopped after a system failure."

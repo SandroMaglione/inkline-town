@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --pretty false",
     "balance": "node scripts/balance.ts",
     "check": "node scripts/check.ts",
-    "test": "node --test test/"
+    "test": "node --test \"test/*.test.ts\""
   },
   "dependencies": {
     "@typeonce/bevy-ts": "^0.5.0",

@@ -6,7 +6,7 @@
  * the shortest sequence that still breaks the rule, and printed with its
  * replay so it can be run again.
  *
- *   node --test test/
+ *   pnpm test
  *   RUNS=200 node --test test/model.test.ts     more runs
  */
 import assert from "node:assert/strict"
@@ -19,6 +19,7 @@ import {
 } from "../src/content.ts"
 import { canPlace, cellsOf, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/grid.ts"
 import { GRID, inside, type Point } from "../src/iso.ts"
+import { load, memoryStorage, save, Storage, World } from "../src/save.ts"
 import { headless, type Headless, type Snapshot } from "../src/sim/headless.ts"
 import type { Edit } from "../src/ui.ts"
 
@@ -185,11 +186,22 @@ const apply = (town: Headless, command: Command): string | null => {
       edit({ type: "govern" })
       break
     case "SaveAndLoad": {
-      // A save loads back to exactly what was saved.
+      // Through the page's own saving and loading: a save loads back to exactly what was saved.
+      const world: World["Service"] = {
+        snapshot: () => town.snapshot(),
+        restore: (data) => {
+          town.restore(data as Snapshot)
+          return null
+        },
+        title: () => "a town under test"
+      }
       const saved = town.snapshot()
-      town.restore(JSON.parse(JSON.stringify(saved)))
-      const loaded = town.snapshot()
-      return JSON.stringify(saved) === JSON.stringify(loaded) ? null : "a saved town did not load back the same"
+      const result = Effect.runSync(Effect.result(Effect.andThen(save("manual"), load("manual")).pipe(
+        Effect.provideService(Storage, memoryStorage()),
+        Effect.provideService(World, world)
+      )))
+      if (result._tag === "Failure") return `saving and loading failed: ${result.failure._tag}`
+      return JSON.stringify(saved) === JSON.stringify(town.snapshot()) ? null : "a saved town did not load back the same"
     }
     case "Windfall":
       town.change((s) => {
