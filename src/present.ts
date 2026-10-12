@@ -6,18 +6,19 @@
 import { RenderSync } from "@typeonce/bevy-ts-render"
 
 import {
-  BuildingView, drawGhost, drawPlot, drawRoads, drawWater, FieldView, homeHeight, HouseView, RockView, topOf, TreeView, WalkerView,
+  BuildingView, drawFloor, drawGhost, drawPlot, drawRoads, drawWater, FieldView, homeHeight, HouseView, RockView, topOf, TreeView, WalkerView,
   type Doors, type Emphasis
 } from "./art.ts"
-import { BUILD_TICKS, goods, home, kinds, needTitle, total, type Kind } from "./content.ts"
+import { BUILD_TICKS, fate, goods, home, kinds, needTitle, total, type Kind } from "./content.ts"
 import { around, canPlace, entrances, isRoad, key, lPath, useAt, type TileLike } from "./grid.ts"
 import { inside, TILE_H, TILE_W, toGrid, toScreen, U, type Point } from "./iso.ts"
 import {
-  Building, BuildingNodes, Census, Clock, Errand, Field, FieldNodes, Figure, Game, Grid, House, HouseNodes, Inventory,
-  Ledger, Policy, Recipe, Rising, Road, Roam, Rock, RockNodes, Route, Service, Site, Staff, StageService, Status, Stock, Tile,
-  TownHall, Treasury, Tree, TreeNodes, Ui, WalkerNodes, WalkerOf, Water, maybe, type GridValue, type Status as StatusValue
+  Building, BuildingNodes, Census, Charter, Chronicle, Clock, Crown, Errand, Fate, Field, FieldNodes, Figure, Game, Grid, History, House,
+  HouseNodes, Inventory, Land, Ledger, Market, Mood, Paused, Policy, Recipe, Rising, Road, Roam, Rock, RockNodes, Route, Service, Site,
+  Staff, StageService, Status, Stock, Tile, Time, TownHall, Treasury, Tree, TreeNodes, Ui, WalkerNodes, WalkerOf, Water, maybe,
+  type GridValue, type Status as StatusValue
 } from "./schema.ts"
-import { capacity, CELL_STEPS, met, SITE_SHARE, taxOf } from "./sim/index.ts"
+import { capacity, CELL_STEPS, elapsed, goalsOf, larder, met, seasonAt, SITE_SHARE, taxOf, termTicks } from "./sim/index.ts"
 import { emptyPreview, type HitBox } from "./ui.ts"
 
 const cellAt = (at: Point): Point => {
@@ -69,6 +70,8 @@ const problemOf = (kind: Kind, status: StatusValue, growing = false): string | n
       return "no workers: the town needs more residents"
     case "blocked":
       return "full: nowhere to take what it makes"
+    case "paused":
+      return "paused: no workers, a quarter of its upkeep"
     case "starved":
       if (kind.gathers && growing) return `the ${kind.gathers.source === "tree" ? "trees" : "fields"} in reach are still growing`
       if (kind.gathers) return `no ${sourceTitle[kind.gathers.source]} within ${kind.gathers.radius} cells${kind.gathers.source === "tree" ? ": a forester nearby replants" : ""}`
@@ -99,7 +102,8 @@ const BuildingRead = Game.Query({
     inventory: Game.Query.optional(Inventory),
     service: Game.Query.optional(Service),
     walkers: Game.Query.optionalRelated(WalkerOf),
-    hall: Game.Query.optional(TownHall)
+    hall: Game.Query.optional(TownHall),
+    paused: Game.Query.optional(Paused)
   }
 })
 const HouseRead = Game.Query({
@@ -127,7 +131,15 @@ export const Interact = Game.System(
       treasury: Game.System.readResource(Treasury),
       ledger: Game.System.readResource(Ledger),
       stock: Game.System.readResource(Stock),
-      policy: Game.System.readResource(Policy)
+      policy: Game.System.readResource(Policy),
+      time: Game.System.readResource(Time),
+      charter: Game.System.readResource(Charter),
+      market: Game.System.readResource(Market),
+      mood: Game.System.readResource(Mood),
+      crown: Game.System.readResource(Crown),
+      fate: Game.System.readResource(Fate),
+      history: Game.System.readResource(History),
+      chronicle: Game.System.readResource(Chronicle)
     },
     services: { ui: Game.System.service(Ui) }
   },
@@ -135,6 +147,7 @@ export const Interact = Game.System(
     const ui = services.ui
     const grid = resources.grid.get()
     const rates = resources.policy.get()
+    const approval = resources.mood.get().approval
     const buildings = queries.buildings.each()
     const houses = queries.houses.each()
 
@@ -260,7 +273,7 @@ export const Interact = Game.System(
       return {
         h,
         lines: [
-          `${h.residents} of ${capacity(h, rates)} residents (${tier.residents} at most)`,
+          `${h.residents} of ${capacity(h, approval)} residents (${tier.residents} at most)`,
           `needs: ${tier.needs.map(mark).join(" · ")}`,
           ...(next ? [`to become citizens: ${next.needs.map(mark).join(" · ")}`] : []),
           `pays ${Math.round(taxOf(h, rates))} coins a minute`
@@ -288,7 +301,11 @@ export const Interact = Game.System(
     const pickedHouse = ui.selected !== null ? houses.find((row) => row.entity.id === ui.selected) : undefined
     if (pickedBuilding) {
       const { kind, status, problem, lines } = describeBuilding(pickedBuilding)
-      ui.panel = { type: "building", id: pickedBuilding.entity.id, cell: pickedBuilding.data.tile.get(), kind: kind.id, status, problem, lines }
+      const pausable = kind.id !== "townhall" && !pickedBuilding.data.site.present && !pickedBuilding.data.rising.present
+      ui.panel = {
+        type: "building", id: pickedBuilding.entity.id, cell: pickedBuilding.data.tile.get(), kind: kind.id, status, problem, lines,
+        pausable, paused: pickedBuilding.data.paused.present
+      }
     } else if (pickedHouse) {
       const { h, lines } = describeHouse(pickedHouse)
       ui.panel = { type: "house", id: pickedHouse.entity.id, cell: pickedHouse.data.tile.get(), tier: h.tier, lines }
@@ -303,20 +320,67 @@ export const Interact = Game.System(
 
     const census = resources.census.get()
     const ledger = resources.ledger.get()
+    const charter = resources.charter.get()
+    const t = elapsed(resources.time.get(), charter)
+    const coins = resources.treasury.get().coins
+    const net = ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin
+    const mood = resources.mood.get()
+    const crown = resources.crown.get()
+    const f = resources.fate.get()
+    const stock = resources.stock.get()
+    const season = seasonAt(Math.min(Math.max(0, t), termTicks(charter) - 1), charter)
+    const seconds = (steps: number) => Math.max(0, Math.ceil(steps / 60))
+    const danger = (since: number, minutes: number) => (since < 0 ? null : seconds(since + minutes * 3600 - t))
     ui.stats = {
-      coins: resources.treasury.get().coins,
+      coins,
       taxes: ledger.taxes,
       trade: ledger.trade,
       upkeep: ledger.upkeep,
-      net: ledger.taxes + ledger.trade - ledger.upkeep,
+      admin: ledger.admin,
+      net,
       homes: census.homes,
       needs: { food: census.food, bread: census.bread, cloth: census.cloth, faith: census.faith },
       policy: rates,
-      stock: resources.stock.get(),
+      stock,
+      prices: resources.market.get().prices,
       settlers: census.settlers,
       citizens: census.citizens,
       jobs: census.jobs,
-      employed: census.employed
+      employed: census.employed,
+      charter: { size: charter.size, term: charter.term, land: charter.land, seed: charter.seed },
+      minute: t / 3600,
+      season: { year: season.year, winter: season.winter, left: seconds(season.left) },
+      mood: {
+        approval: mood.approval,
+        target: mood.target,
+        parts: [
+          { label: "mood of the town", value: mood.base },
+          { label: "needs met", value: mood.needs },
+          { label: "taxes", value: mood.taxes },
+          { label: "unpaid wages", value: mood.debt },
+          { label: "the crown's displeasure", value: mood.crown },
+          { label: "a hungry winter", value: mood.winter }
+        ].filter((p) => p.value !== 0)
+      },
+      crown: {
+        open: crown.open, good: crown.good, amount: crown.amount, left: seconds(crown.due - t), reward: crown.reward, met: crown.met,
+        missed: crown.missed, next: seconds(crown.next - t)
+      },
+      fate: {
+        state: f.state,
+        reason: f.reason,
+        at: f.at / 3600,
+        governing: f.governing,
+        score: f.score,
+        bankrupt: danger(f.debtSince, fate.debt),
+        revolt: danger(f.revoltSince, fate.revolt),
+        complete: danger(f.goalSince, fate.hold),
+        peak: f.peak
+      },
+      goals: goalsOf(charter, { settlers: census.settlers, citizens: census.citizens, coins, net, approval: mood.approval }),
+      larder: larder(stock),
+      history: resources.history.get().samples,
+      chronicle: resources.chronicle.get().lines
     }
   }
 )
@@ -377,6 +441,20 @@ export const RenderFields = RenderSync.system(Game, {
   create: () => new FieldView(),
   apply: (node, { transform }) => node.place(transform.x, transform.y)
 })
+
+/** The land, redrawn when a new town is founded (or one loaded). */
+let floorFor = ""
+export const DrawLand = Game.System(
+  "Town/DrawLand",
+  { resources: { land: Game.System.readResource(Land) }, services: { stage: Game.System.service(StageService) } },
+  ({ resources, services }) => {
+    const mask = resources.land.get().mask
+    if (mask === floorFor) return
+    floorFor = mask
+    services.stage.floor.clear()
+    drawFloor(services.stage.floor, mask)
+  }
+)
 
 /** Roads and water, each redrawn as one layer whenever one is laid or anything is removed. */
 export const DrawGround = Game.System(
@@ -508,6 +586,7 @@ export const DrawPreview = Game.System(
 
 export const present = Game.Schedule(
   Interact,
+  DrawLand,
   RenderBuildings,
   RenderHouses,
   RenderWalkers,

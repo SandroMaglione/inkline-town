@@ -65,6 +65,7 @@ export type Emphasis = "normal" | "danger"
 /** The layers of the town, back to front. */
 export interface Stage {
   readonly world: Container
+  readonly floor: Graphics
   readonly ground: Graphics
   readonly plates: Container
   readonly roads: Graphics
@@ -881,17 +882,57 @@ export class WalkerView extends Graphics {
 
 // ── The floor ─────────────────────────────────────────────────────────────
 
-/** The grid: a faint line between every two cells, and the map's edge. */
-export const drawFloor = (g: Graphics) => {
-  for (let i = 1; i < GRID; i++) {
-    const a = toScreen(i, 0)
-    const b = toScreen(i, GRID)
-    const c = toScreen(0, i)
-    const d = toScreen(GRID, i)
-    g.moveTo(a.x, a.y).lineTo(b.x, b.y).moveTo(c.x, c.y).lineTo(d.x, d.y)
+/** The open water the land stands in: the page's background. */
+export const seaFill = 0xe2e9e6
+const landFill = 0xf0f2ec
+
+/**
+ * The land (`mask`: "1" for land, by `key`): pale ground, a faint line
+ * between every two cells of it, and an ink coastline.
+ */
+export const drawFloor = (g: Graphics, mask: string) => {
+  const land = (x: number, y: number) => x >= 0 && y >= 0 && x < GRID && y < GRID && mask[key(x, y)] === "1"
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      if (!land(x, y)) continue
+      g.poly(flat([toScreen(x, y), toScreen(x + 1, y), toScreen(x + 1, y + 1), toScreen(x, y + 1)])).fill({ color: landFill })
+    }
+  }
+  // Grid lines: each cell's far edges, where its neighbour is land too.
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      if (!land(x, y)) continue
+      if (land(x + 1, y)) {
+        const a = toScreen(x + 1, y)
+        const b = toScreen(x + 1, y + 1)
+        g.moveTo(a.x, a.y).lineTo(b.x, b.y)
+      }
+      if (land(x, y + 1)) {
+        const a = toScreen(x, y + 1)
+        const b = toScreen(x + 1, y + 1)
+        g.moveTo(a.x, a.y).lineTo(b.x, b.y)
+      }
+    }
   }
   g.stroke({ color: 0xe0e3db, width: DETAIL })
-  outline(g, [toScreen(0, 0), toScreen(GRID, 0), toScreen(GRID, GRID), toScreen(0, GRID)], LINE, 0xb9bfb4)
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      if (!land(x, y)) continue
+      const edges: ReadonlyArray<readonly [Point, Point, Point]> = [
+        [DIRS[0]!, { x: x + 1, y }, { x: x + 1, y: y + 1 }],
+        [DIRS[1]!, { x, y: y + 1 }, { x: x + 1, y: y + 1 }],
+        [DIRS[2]!, { x, y }, { x, y: y + 1 }],
+        [DIRS[3]!, { x, y }, { x: x + 1, y }]
+      ]
+      for (const [d, p, q] of edges) {
+        if (land(x + d.x, y + d.y)) continue
+        const a = toScreen(p.x, p.y)
+        const b = toScreen(q.x, q.y)
+        g.moveTo(a.x, a.y).lineTo(b.x, b.y)
+      }
+    }
+  }
+  g.stroke({ color: ink, width: LINE, alpha: 0.75, cap: "square" })
 }
 
 /**

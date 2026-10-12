@@ -8,21 +8,22 @@ import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { fieldDraft, treeDraft } from "../archetypes.ts"
 import { amounts, BUILD_TICKS, goodIds, GROWN, ticks, total, type Amounts } from "../content.ts"
-import { around, DIRS, GridBuilder, key, ownerAt, useAt } from "../grid.ts"
+import { around, DIRS, GridBuilder, key, ownerAt, roadPrint, useAt } from "../grid.ts"
 import {
-  Field, FieldOf, Game, Gatherer, Grid, House, Inventory, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock,
-  Storage, Tile, Time, Tree, maybe, type Status as StatusValue
+  Charter, Field, FieldOf, Game, Gatherer, Grid, House, Inventory, Land, Paused, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status,
+  Stock, Storage, Tile, Time, Tree, maybe, type Status as StatusValue
 } from "../schema.ts"
-import { connected, TileRead, useOf } from "./shared.ts"
+import { connected, elapsed, seasonAt, TileRead, useOf } from "./shared.ts"
 
-/** What stands where, for every system after it this step. */
+/** What stands where on the land, for every system after it this step. */
 export const IndexGrid = Game.System(
   "Town/IndexGrid",
-  { queries: { tiles: TileRead }, resources: { grid: Game.System.writeResource(Grid) } },
+  { queries: { tiles: TileRead }, resources: { land: Game.System.readResource(Land), grid: Game.System.writeResource(Grid) } },
   ({ queries, resources }) => {
-    const grid = new GridBuilder()
+    const grid = new GridBuilder(resources.land.get().mask)
     for (const { entity, data } of queries.tiles.each()) grid.claim(data.tile.get(), entity.id, useOf(data))
-    resources.grid.set(grid.value())
+    const value = grid.value()
+    resources.grid.set({ ...value, roads: roadPrint(value) })
   }
 )
 
@@ -75,13 +76,16 @@ export const Raise = Game.System(
 
 // ── Workers ───────────────────────────────────────────────────────────────
 
-/** Residents go to work in the order buildings were placed, as many as each needs while any are left. */
+/**
+ * Residents go to work in the order buildings were placed, as many as each
+ * needs while any are left; a paused building gets nobody.
+ */
 export const AssignStaff = Game.System(
   "Town/AssignStaff",
   {
     queries: {
       homes: Game.Query({ selection: { house: Game.Query.read(House) }, without: [Site, Rising] }),
-      workplaces: Game.Query({ selection: { tile: Game.Query.read(Tile), staff: Game.Query.write(Staff) }, without: [Site, Rising] })
+      workplaces: Game.Query({ selection: { tile: Game.Query.read(Tile), staff: Game.Query.write(Staff), paused: Game.Query.optional(Paused) }, without: [Site, Rising] })
     },
     resources: { grid: Game.System.readResource(Grid) }
   },
@@ -91,7 +95,7 @@ export const AssignStaff = Game.System(
     for (const { data } of queries.homes.each()) pool += data.house.get().residents
     for (const { data } of queries.workplaces.each()) {
       const staff = data.staff.get()
-      const assigned = connected(grid, data.tile.get()) ? Math.min(staff.needed, pool) : 0
+      const assigned = connected(grid, data.tile.get()) && !data.paused.present ? Math.min(staff.needed, pool) : 0
       pool -= assigned
       if (assigned !== staff.assigned) data.staff.set({ ...staff, assigned })
     }
@@ -105,7 +109,7 @@ export const AssignStaff = Game.System(
  * makes, its input is in, and (for a gatherer) the land has what it needs
  * within reach: a grown tree is felled, a rock chipped, a ripe field
  * reaped. Then the crew puts its worker-steps in; a full crew finishes in
- * `period` steps.
+ * `period` steps. In winter, fishing goes at half pace.
  */
 export const Work = Game.System(
   "Town/Work",
@@ -118,7 +122,8 @@ export const Work = Game.System(
           recipe: Game.Query.write(Recipe),
           inventory: Game.Query.write(Inventory),
           status: Game.Query.write(Status),
-          gatherer: Game.Query.optional(Gatherer)
+          gatherer: Game.Query.optional(Gatherer),
+          paused: Game.Query.optional(Paused)
         },
         without: [Site, Rising]
       }),
@@ -126,10 +131,12 @@ export const Work = Game.System(
       rocks: Game.Query({ selection: { rock: Game.Query.write(Rock) } }),
       fields: Game.Query({ selection: { field: Game.Query.write(Field) } })
     },
-    resources: { grid: Game.System.readResource(Grid) }
+    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time), charter: Game.System.readResource(Charter) }
   },
   ({ queries, resources, commands }) => {
     const grid = resources.grid.get()
+    const t = elapsed(resources.time.get(), resources.charter.get())
+    const slowFishing = seasonAt(t, resources.charter.get()).winter && t % 2 === 1
     const trees = new Map(queries.trees.each().map((row) => [row.entity.id as number, row]))
     const rocks = new Map(queries.rocks.each().map((row) => [row.entity.id as number, row]))
     const fields = new Map(queries.fields.each().map((row) => [row.entity.id as number, row]))
@@ -190,14 +197,16 @@ export const Work = Game.System(
           recipe = { ...recipe, progress: 1 }
         }
       }
-      if (open && recipe.progress > 0 && staff.assigned > 0) {
+      if (open && recipe.progress > 0 && staff.assigned > 0 && !(slowFishing && gatherer?.source === "water")) {
         const progress = recipe.progress + staff.assigned
         if (progress > recipe.period * staff.needed) {
           recipe = { ...recipe, progress: 0, made: recipe.made + 1 }
           stock = { ...stock, [recipe.output]: stock[recipe.output] + recipe.batch }
         } else recipe = { ...recipe, progress }
       }
-      const status: StatusValue = !open
+      const status: StatusValue = data.paused.present
+        ? "paused"
+        : !open
         ? "unconnected"
         : staff.assigned === 0
         ? "unstaffed"
@@ -228,7 +237,8 @@ export const Plant = Game.System(
           staff: Game.Query.read(Staff),
           planter: Game.Query.write(Planter),
           status: Game.Query.write(Status),
-          recipe: Game.Query.optional(Recipe)
+          recipe: Game.Query.optional(Recipe),
+          paused: Game.Query.optional(Paused)
         },
         without: [Site, Rising]
       })
@@ -249,7 +259,7 @@ export const Plant = Game.System(
       const spots = reach.filter((c) => useAt(grid, c.x, c.y) === "empty" && !sown.has(key(c.x, c.y)))
       // A forester has no recipe of its own: its status is its planting.
       if (!maybe(data.recipe)) {
-        const status: StatusValue = !open ? "unconnected" : staff.assigned === 0 ? "unstaffed" : grown < planter.max && spots.length > 0 ? "working" : "idle"
+        const status: StatusValue = data.paused.present ? "paused" : !open ? "unconnected" : staff.assigned === 0 ? "unstaffed" : grown < planter.max && spots.length > 0 ? "working" : "idle"
         if (data.status.get() !== status) data.status.set(status)
       }
       const cooldown = Math.max(0, planter.cooldown - 1)
@@ -297,20 +307,22 @@ export const Spread = Game.System(
   }
 )
 
-/** Trees and fields grow until they are ready. */
+/** Trees and fields grow until they are ready; fields not in winter. */
 export const Grow = Game.System(
   "Town/Grow",
   {
     queries: {
       trees: Game.Query({ selection: { tree: Game.Query.write(Tree) } }),
       fields: Game.Query({ selection: { field: Game.Query.write(Field) } })
-    }
+    },
+    resources: { time: Game.System.readResource(Time), charter: Game.System.readResource(Charter) }
   },
-  ({ queries }) => {
+  ({ queries, resources }) => {
     for (const { data } of queries.trees.each()) {
       const growth = data.tree.get().growth
       if (growth < GROWN.tree) data.tree.set({ growth: growth + 1 })
     }
+    if (seasonAt(elapsed(resources.time.get(), resources.charter.get()), resources.charter.get()).winter) return
     for (const { data } of queries.fields.each()) {
       const growth = data.field.get().growth
       if (growth < GROWN.field) data.field.set({ growth: growth + 1 })

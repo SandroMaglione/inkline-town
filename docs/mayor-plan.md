@@ -4,14 +4,69 @@ A plan for turning the current simulation into a game you play as the town's
 mayor for one sitting of 45, 60, or 90 minutes, which ends with a town that
 either flourished or fell apart, and lets you see why.
 
-It starts with what the code does today and where it will not hold up over a
-long run (§1). Then it covers what similar games do and what they leave out
+Section 0 is the version that was built from it. The rest starts with what
+the code did before it, and where it would not hold up over a long run (§1). Then it covers what similar games do and what they leave out
 (§2), how a session should be set up and paced (§3–4), the levers (§5), the
 pressures that make decline possible (§6), new content (§7), how you win or
 lose (§8),
 what the engine needs (§9), and the order to build it in (§10).
 
 ---
+
+## 0. The version built: "the charter"
+
+The plan below is the full menu. The first version takes the smallest part
+of it that makes a complete game: you feel the pressure of managing the
+town's goods and coins for the whole sitting, and every term ends in a way
+you can read. It keeps the levers few, so the game stays easy to learn and
+to maintain.
+
+### What is in
+
+| Area | In this version | From the plan |
+|------|-----------------|---------------|
+| **Setting up** | A new-town dialog: land size (small, medium, large), richness (rich, fair, harsh), term (45, 60, 90 minutes), and seed, with a preview of the land | §3 |
+| **Land** | An island-like stretch of land on a 64-cell square: a wandering coast, capes reaching out, lakes, forests, stone, and ore, all scaled by size and richness | user request |
+| **Rhythm** | Six years a term; every year after the first ends in a winter (fields stop, fishing halves, homes eat faster) | §6.2 |
+| **Pressure** | Administration grows with the number of homes; prices fall as the town sells and rise as it buys; stone and ore run out; crown requests grow through the term, with fines and snubs for missed ones | §5.4, §6.3, §6.4 |
+| **Approval** | One town-wide figure from needs, taxes, unpaid wages, the crown's snubs, and hungry winters, with its parts shown. It sets how many people each home holds | §6.1, simplified |
+| **Levers** | Taxes per tier; sell, buy, or neither for each good; the reserve; pausing a building; answering the crown; game speed (pause, 1×, 2×, 4×) | §5.1, §5.3, §5.4, §9 |
+| **Ends** | Complete (every goal held two minutes; retire or keep governing); bankrupt; revolt; abandoned; or the term runs out with a verdict. The reckoning shows the term's chart and chronicle | §8 |
+| **Engine** | Road paths cached against a fingerprint of the road network; history and chronicle saved with the town; `pnpm check` drives every end state | §9 |
+
+### What is left for later
+
+Laws and edicts, wages and service funding, loans, tiers 3 and 4,
+desirability, fire and sickness, elections, gold and favor, and great works.
+Each can be added on top of approval and the crown without changing what is
+here.
+
+### What the simulation changed
+
+The bot (`pnpm balance`) played every change before it stayed. These are
+the calls it forced:
+
+- **The first year has no winter.** On a 45-minute term, a winter at
+  minute 5 sent most towns into a hunger spiral, then debt, then bankruptcy
+  by minute 12.
+- **Administration grows per home and more gently.** It started at
+  homes²/45; a town of settlers went bankrupt by minute 15. It is now
+  homes × (0.5 + homes/200).
+- **Crown requests are sized by what the town makes** of the good in the
+  time given, and capped by what it can store. Requests sized by the clock
+  asked a small town for 120 fish.
+- **Markets do more.** A walker's basket holds 10 of each provision (not
+  6), a market's shelf 12, and two walkers can be out at once. With one
+  small walker, food reached about half the homes however many fisheries
+  there were, which made the game about walkers rather than goods.
+- **Bread, cloth, and faith last longer** (90, 180, and 150 seconds), so a
+  home can have all three at once and become citizens.
+- **Four goals, not five.** "Food in store" fought the markets for the same
+  fish; approval already measures whether homes are fed.
+
+### Measured outcomes
+
+MEASURED
 
 ## 1. What we have, and how it holds up over a long run
 

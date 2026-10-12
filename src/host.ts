@@ -1,17 +1,20 @@
 /**
  * The page around the town: the Pixi stage and its layers, the camera (drag
  * to pan, wheel or pinch to zoom), the pointer turned into gestures, and the
- * top bar, toolbar, build menu, panel, tooltip, and toasts.
+ * top bar, toolbar, build menu, panel, tooltip, and toasts; the dialog a new
+ * town is founded from, and the reckoning at the end of its term.
  */
 import { Application, Container, Graphics } from "pixi.js"
 
-import { drawFloor, type Stage } from "./art.ts"
+import { seaFill, type Stage } from "./art.ts"
 import {
-  appealOf, categoryColor, categoryOrder, costText, goodIds, goods, home, kindOrder, kinds, needTitle, RESERVES, ROAD_COST, TAX_STEPS,
-  type GoodId, type Kind, type KindId
+  categoryColor, categoryOrder, costText, defaultCharter, goodIds, goods, home, kindOrder, kinds, landIds, lands, mood as moodRules, needTitle,
+  RESERVES, ROAD_COST, sizeIds, sizes, TAX_STEPS, TERMS, type CharterValue, type GoodId, type Kind, type KindId
 } from "./content.ts"
 import { GRID, toScreen, type Point } from "./iso.ts"
-import type { Tool, UiValue } from "./ui.ts"
+import { generate } from "./mapgen.ts"
+import { askOf, priceOf } from "./sim/index.ts"
+import type { Stats, Tool, TradeMode, UiValue } from "./ui.ts"
 import { emptyPreview } from "./ui.ts"
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
@@ -22,6 +25,9 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
 }
 
 const hex = (color: number) => `#${color.toString(16).padStart(6, "0")}`
+/** Seconds as m:ss. */
+const clockText = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`
+const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)}`
 
 export interface Persistence {
   readonly save: () => string | null
@@ -33,7 +39,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   await app.init({
     resizeTo: window,
     antialias: true,
-    background: 0xf0f2ec,
+    background: seaFill,
     resolution: Math.min(window.devicePixelRatio || 1, 2),
     autoDensity: true
   })
@@ -42,7 +48,6 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   // ── Layers ──
   const world = new Container()
   const floor = new Graphics()
-  drawFloor(floor)
   const ground = new Graphics()
   const plates = new Container()
   const roads = new Graphics()
@@ -56,7 +61,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const labels = new Container()
   world.addChild(floor, ground, plates, roads, preview, objects, labels)
   app.stage.addChild(world)
-  const stage: Stage = { world, ground, plates, roads, preview, objects, labels, overlay, ghost }
+  const stage: Stage = { world, floor, ground, plates, roads, preview, objects, labels, overlay, ghost }
 
   // ── Camera ──
   const centre = toScreen(GRID / 2, GRID / 2)
@@ -91,7 +96,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const coins = el("div", "cell coins")
   const people = el("div", "cell")
   const jobs = el("div", "cell")
-  bar.append(coins, people, jobs)
+  const clock = el("div", "cell clock")
+  const approval = el("div", "cell")
+  bar.append(clock, coins, approval, people, jobs)
   const stock = el("div", "card stock")
   const groups: ReadonlyArray<ReadonlyArray<GoodId>> = [["wood", "planks", "stone", "tools"], ["fish", "bread"], ["wool", "cloth"]]
   const goodCells = new Map<GoodId, HTMLElement>()
@@ -108,14 +115,28 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     }
     stock.append(cell)
   }
-  hud.append(bar, stock)
-  hud.title = "Open the town's numbers and taxes"
+  // The crown's request, when there is one, and what threatens (or is about to complete) the term.
+  const request = el("div", "card request")
+  const requestText = el("div", "cell")
+  const send = el("button", "send", "send")
+  send.onclick = (event) => {
+    event.stopPropagation()
+    ui.edits.push({ type: "deliver" })
+  }
+  request.append(requestText, send)
+  const alarm = el("div", "card alarm")
+  hud.append(bar, stock, request, alarm)
+  hud.title = "Open the town's numbers, goals, and levers"
   hud.onclick = () => toggleMenu("town")
   const tooltip = el("div", "tooltip")
   const toastBox = el("div", "toast")
   const toolbar = el("div", "toolbar")
   const panel = el("aside", "panel")
-  document.body.append(hud, tooltip, toastBox, toolbar, panel)
+  const dialog = el("div", "dialog")
+  const reckoning = el("div", "dialog")
+  const result = el("button", "result", "")
+  result.onclick = () => showReckoning(true)
+  document.body.append(hud, tooltip, toastBox, toolbar, panel, result, dialog, reckoning)
 
   let toastTimer = 0
   const ui: UiValue = {
@@ -126,12 +147,15 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     dragFrom: null,
     selected: null,
     gestures: [],
-    edits: [{ type: "newTown", seed: (Date.now() & 0x7fffffff) >>> 0 }],
+    // A town is founded behind the dialog, so there is land to look at while choosing.
+    edits: [{ type: "newTown", charter: defaultCharter((Date.now() & 0x7fffffff) >>> 0) }],
     preview: emptyPreview(),
     hits: [],
     panel: null,
     centres: new Map(),
     stats: null,
+    speed: 1,
+    founding: true,
     toast: (message) => {
       toastBox.textContent = message
       toastBox.classList.add("show")
@@ -160,17 +184,33 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     return { tool, button }
   })
   toolbar.append(el("span", "sep"))
+  const speeds = [
+    { speed: 0, label: "pause", key: "space" },
+    { speed: 1, label: "1×", key: "1" },
+    { speed: 2, label: "2×", key: "2" },
+    { speed: 4, label: "4×", key: "3" }
+  ].map(({ speed, label, key }) => {
+    const button = el("button", "", label)
+    button.title = speed === 0 ? "Pause the town (space)" : `Run the town at ${label} (${key})`
+    button.onclick = () => setSpeed(speed)
+    toolbar.append(button)
+    return { speed, button }
+  })
+  let lastSpeed = 1
+  const setSpeed = (speed: number) => {
+    if (speed > 0) lastSpeed = speed
+    ui.speed = speed
+    for (const s of speeds) s.button.classList.toggle("on", s.speed === speed)
+  }
+  setSpeed(1)
+  toolbar.append(el("span", "sep"))
   const action = (label: string, tip: string, run: () => void) => {
     const button = el("button", "", label)
     button.title = tip
     button.onclick = run
     toolbar.append(button)
   }
-  action("new town", "Found a new town on new land", () => {
-    ui.edits.push({ type: "newTown", seed: (Date.now() & 0x7fffffff) >>> 0 })
-    history.length = 0
-    choose("select")
-  })
+  action("new town", "Found a new town on new land", () => openCharter(true))
   action("save", "Save the town in this browser", () => ui.toast(persistence().save() ?? "Saved"))
   action("load", "Load the saved town", () => ui.toast(persistence().load() ?? "Loaded"))
 
@@ -201,6 +241,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   choose("select")
 
   window.addEventListener("keydown", (event) => {
+    if (ui.founding || reckoning.classList.contains("open")) return
+    if (event.key === " ") {
+      event.preventDefault()
+      setSpeed(ui.speed === 0 ? lastSpeed : 0)
+    }
+    if (event.key === "1") setSpeed(1)
+    if (event.key === "2") setSpeed(2)
+    if (event.key === "3") setSpeed(4)
     if (event.key === "Escape") {
       if (ui.tool !== "select") choose("select")
       else if (ui.menu) ui.menu = null
@@ -325,13 +373,32 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const sub = el("p", "sub")
     panel.append(sub)
 
+    // The goals that complete the town, and how near each one is.
+    const goals = section("to complete the town")
+    const goalNote = el("p", "empty")
+    goals.append(goalNote)
+    const goalRows: Array<{ line: HTMLElement; mark: HTMLElement; text: HTMLElement; value: HTMLElement }> = []
+    panel.append(goals)
+
+    const mood = section("approval")
+    const moodLine = el("div", "row")
+    const moodValue = el("span", "count")
+    moodLine.append(el("span", "", "now, heading for"), moodValue)
+    const moodTrack = el("div", "meter")
+    const moodFill = el("span", "fill")
+    moodTrack.append(moodFill)
+    const moodParts = el("div", "")
+    mood.append(moodLine, moodTrack, moodParts, el("p", "empty", `Homes hold more residents when approval is high and fewer when it is low. At −50 for two minutes, the town turns the mayor out.`))
+    panel.append(mood)
+
     const treasury = section("treasury")
     const taxes = row(treasury, "taxes")
     const traded = row(treasury, "trade")
     const upkeep = row(treasury, "upkeep")
+    const admin = row(treasury, "administration")
     const net = row(treasury, "a minute")
     const coinLine = el("div", "spark")
-    treasury.append(coinLine)
+    treasury.append(coinLine, el("p", "empty", "Administration grows faster than the town. Three minutes in debt and the town is bankrupt."))
     panel.append(treasury)
 
     const levers = section("taxes")
@@ -356,12 +423,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       live.push(() => {
         const rate = ui.stats?.policy[tier] ?? 100
         value.textContent = `${rate}%`
-        const appeal = Math.round((appealOf(rate) - 1) * 100)
-        effect.textContent = appeal === 0
-          ? "the usual rate"
-          : appeal > 0
-          ? `homes keep up to ${appeal}% more residents when short of needs`
-          : `homes hold ${-appeal}% fewer residents`
+        const sway = Math.round((100 - rate) * moodRules.perTaxPoint)
+        effect.textContent = sway === 0 ? "the usual rate" : `${sway > 0 ? "+" : ""}${sway} approval from ${tier} (weighed by how many there are)`
       })
     }
     panel.append(levers)
@@ -387,7 +450,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       needs.append(line)
       return { n, fill, value }
     })
+    const larderLine = row(needs, "food in store")
     panel.append(needs)
+
+    const crown = section("the crown")
+    const crownLine = row(crown, "requests met · missed")
+    const crownNext = el("p", "empty")
+    crown.append(crownNext)
+    panel.append(crown)
 
     const store = section("goods and trade")
     const reserveLine = el("div", "row lever")
@@ -396,7 +466,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const reserveValue = el("span", "rate")
     const more = el("button", "frame step", "+")
     reserveControls.append(fewer, reserveValue, more)
-    reserveLine.append(el("span", "", "keep before selling"), reserveControls)
+    reserveLine.append(el("span", "", "keep in store"), reserveControls)
     store.append(reserveLine)
     const stepReserve = (by: number) => {
       const now = ui.stats?.policy.reserve ?? 25
@@ -405,30 +475,75 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     }
     fewer.onclick = () => stepReserve(-1)
     more.onclick = () => stepReserve(1)
-    store.append(el("p", "empty", "Ticked goods are sold to traders beyond what the town keeps, for the price shown."))
+    store.append(el("p", "empty", "Traders buy what the town sells beyond what it keeps, and sell it what it buys up to that, at half again the price. Prices fall as the town sells and rise as it buys."))
+    const modes: ReadonlyArray<TradeMode> = ["none", "sell", "buy"]
     const goodRows = goodIds.map((g) => {
-      const line = el("label", "row good-row")
-      const box = el("input", "")
-      box.type = "checkbox"
-      box.onchange = () => ui.edits.push({ type: "sell", good: g, on: box.checked })
-      const name = el("span", "", `${goods[g].title} · ${goods[g].price}c`)
+      const line = el("div", "row good-row")
+      const mode = el("button", "frame mode", "")
+      mode.onclick = () => {
+        const s = ui.stats
+        if (!s) return
+        const now: TradeMode = s.policy.sells.includes(g) ? "sell" : s.policy.buys.includes(g) ? "buy" : "none"
+        ui.edits.push({ type: "trade", good: g, mode: modes[(modes.indexOf(now) + 1) % modes.length]! })
+      }
+      const name = el("span", "")
       const left = el("span", "")
-      left.append(box, name)
+      left.append(mode, name)
       const value = el("span", "count")
       line.append(left, value)
       store.append(line)
-      return { g, value, box }
+      return { g, value, mode, name }
     })
     panel.append(store)
+
+    const chronicle = section("chronicle")
+    const lines = el("div", "chronicle")
+    chronicle.append(lines)
+    panel.append(chronicle)
 
     live.push(() => {
       const s = ui.stats
       if (!s) return
-      sub.textContent = `${s.settlers + s.citizens} residents · ${s.coins} coins`
+      sub.textContent = `${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · a ${s.charter.term}-minute term · seed ${s.charter.seed}`
+      // Goals.
+      while (goalRows.length < s.goals.length) {
+        const line = el("div", "row goal")
+        const mark = el("span", "mark")
+        const text = el("span", "")
+        const value = el("span", "count")
+        const left = el("span", "")
+        left.append(mark, text)
+        line.append(left, value)
+        goals.append(line)
+        goalRows.push({ line, mark, text, value })
+      }
+      s.goals.forEach((g, i) => {
+        const r = goalRows[i]!
+        r.mark.textContent = g.met ? "✓" : "·"
+        r.line.classList.toggle("met", g.met)
+        r.text.textContent = g.text
+        r.value.textContent = g.value
+      })
+      goalNote.textContent = s.fate.governing
+        ? "Complete: the mayor governs on to the end of the term."
+        : s.fate.complete !== null
+        ? `Every goal is met: hold them ${clockText(s.fate.complete)} more.`
+        : `Meet every goal at once and hold them for two minutes to complete the town.`
+      // Approval.
+      moodValue.textContent = `${signed(s.mood.approval)} → ${signed(s.mood.target)}`
+      moodFill.style.left = `${Math.min(50, 50 + s.mood.approval / 2)}%`
+      moodFill.style.width = `${Math.abs(s.mood.approval) / 2}%`
+      moodFill.classList.toggle("low", s.mood.approval < 0)
+      const parts = s.mood.parts.map((p) => `<div class="row"><span>${p.label}</span><span class="count">${signed(p.value)}</span></div>`).join("")
+      if (moodParts.dataset.html !== parts) {
+        moodParts.dataset.html = parts
+        moodParts.innerHTML = parts
+      }
       taxes.textContent = `+${s.taxes}`
-      traded.textContent = `+${s.trade}`
-      upkeep.textContent = `−${s.upkeep}`
-      net.textContent = `${s.net >= 0 ? "+" : ""}${s.net} coins`
+      traded.textContent = signed(s.trade)
+      upkeep.textContent = signed(-s.upkeep)
+      admin.textContent = signed(-s.admin)
+      net.textContent = `${signed(s.net)} coins`
       settlers.textContent = String(s.settlers)
       citizens.textContent = String(s.citizens)
       homes.textContent = String(s.homes)
@@ -438,24 +553,38 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         b.fill.style.width = `${Math.round(share * 100)}%`
         b.value.textContent = `${s.needs[b.n]} of ${s.homes}`
       }
+      larderLine.textContent = `${s.larder} fish and bread`
+      crownLine.textContent = `${s.crown.met} · ${s.crown.missed}`
+      crownNext.textContent = s.crown.open
+        ? `Asking for ${s.crown.amount} ${goods[s.crown.good].title}: ${clockText(s.crown.left)} left, ${s.crown.reward} coins when sent.`
+        : `The next request in ${clockText(s.crown.next)}. A missed one is a fine, and the town remembers the snub for a while.`
       // Goods' change over the last minute of samples.
       const ago = history[Math.max(0, history.length - 1 - Math.round(60 / SAMPLE_SECONDS))]
       reserveValue.textContent = String(s.policy.reserve)
       for (const r of goodRows) {
         const change = ago ? s.stock[r.g] - ago.stock[r.g] : 0
         r.value.textContent = `${s.stock[r.g]}${change !== 0 ? `  ${change > 0 ? "+" : ""}${change}/min` : ""}`
-        const selling = s.policy.sells.includes(r.g)
-        if (r.box.checked !== selling) r.box.checked = selling
+        const now: TradeMode = s.policy.sells.includes(r.g) ? "sell" : s.policy.buys.includes(r.g) ? "buy" : "none"
+        r.mode.textContent = now === "none" ? "—" : now
+        r.mode.classList.toggle("on", now !== "none")
+        const price = now === "buy" ? askOf(r.g, s.prices[r.g]) : Math.round(priceOf(r.g, s.prices[r.g]) * 10) / 10
+        r.name.textContent = `${goods[r.g].title} · ${price}c${s.prices[r.g] !== 100 ? ` (${s.prices[r.g]}%)` : ""}`
       }
-      const coinsSvg = sparkline(history.map((h) => h.coins))
+      const samples = s.history
+      const coinsSvg = sparkline(samples.map((h) => h.coins))
       if (coinLine.dataset.svg !== coinsSvg) {
         coinLine.dataset.svg = coinsSvg
         coinLine.innerHTML = coinsSvg
       }
-      const peopleSvg = sparkline(history.map((h) => h.residents))
+      const peopleSvg = sparkline(samples.map((h) => h.residents))
       if (peopleLine.dataset.svg !== peopleSvg) {
         peopleLine.dataset.svg = peopleSvg
         peopleLine.innerHTML = peopleSvg
+      }
+      const recent = s.chronicle.slice(-10).reverse().map((l) => `<p><b>${clockText(Math.round(l.tick / 60))}</b> ${l.text}</p>`).join("")
+      if (lines.dataset.html !== recent) {
+        lines.dataset.html = recent
+        lines.innerHTML = recent
       }
     })
   }
@@ -490,6 +619,21 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     })
     if (!(p.type === "building" && p.kind === "townhall")) {
       const actions = el("div", "actions")
+      if (p.type === "building") {
+        const pause = el("button", "frame", "Pause work")
+        pause.title = "A paused building has no workers and pays a quarter of its upkeep"
+        pause.onclick = () => {
+          const now = ui.panel
+          if (now?.type === "building") ui.edits.push({ type: "pause", cell: now.cell, on: !now.paused })
+        }
+        live.push(() => {
+          const now = ui.panel
+          if (now?.type !== "building") return
+          pause.textContent = now.paused ? "Resume work" : "Pause work"
+          pause.style.display = now.pausable ? "" : "none"
+        })
+        actions.append(pause)
+      }
       const remove = el("button", "frame danger", "Remove")
       remove.onclick = () => ui.edits.push({ type: "remove", cell: p.cell })
       actions.append(remove)
@@ -509,6 +653,208 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       refreshTools()
     }
     for (const update of live) update()
+  }
+
+  // ── Founding a town ──
+  const choice: { -readonly [K in keyof CharterValue]: CharterValue[K] } = defaultCharter((Date.now() & 0x7fffffff) >>> 0)
+  /** The land a charter would found, drawn small: a dot a cell. */
+  const drawLand = (canvas: HTMLCanvasElement) => {
+    const land = generate(choice)
+    const water = new Set(land.water.map((c) => c.y * GRID + c.x))
+    const trees = new Set(land.trees.map((t) => t.cell.y * GRID + t.cell.x))
+    const rocks = new Map(land.rocks.map((r) => [r.cell.y * GRID + r.cell.x, r.ore]))
+    const scale = 3
+    canvas.width = GRID * scale
+    canvas.height = GRID * scale
+    const g = canvas.getContext("2d")!
+    g.clearRect(0, 0, canvas.width, canvas.height)
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        const k = y * GRID + x
+        if (land.mask[k] !== "1") continue
+        g.fillStyle = water.has(k) ? "#b9cfcb" : trees.has(k) ? "#9bb08a" : rocks.has(k) ? (rocks.get(k) ? "#5a6479" : "#8f9891") : "#f7f8f4"
+        g.fillRect(x * scale, y * scale, scale, scale)
+      }
+    }
+    return land
+  }
+  const openCharter = (cancellable: boolean) => {
+    ui.founding = true
+    dialog.replaceChildren()
+    const card = el("div", "sheet")
+    card.append(el("h2", "", "found a town"), el("p", "sub", "Choose the land and how long the term runs. Grow the town until it is complete, or keep it from bankruptcy, revolt, and ruin until the term is out."))
+    const body = el("div", "charter")
+    const options = el("div", "")
+    const preview = el("div", "preview")
+    const map = document.createElement("canvas")
+    const facts = el("p", "sub")
+    preview.append(map, facts)
+    body.append(options, preview)
+    const group = <T extends string | number>(title: string, values: ReadonlyArray<T>, label: (v: T) => string, blurb: (v: T) => string, get: () => T, set: (v: T) => void) => {
+      const box = section(title)
+      const row = el("div", "choices")
+      const note = el("p", "empty")
+      const buttons = values.map((v) => {
+        const b = el("button", "frame choice", label(v))
+        b.onclick = () => {
+          set(v)
+          refresh()
+        }
+        row.append(b)
+        return { v, b }
+      })
+      box.append(row, note)
+      options.append(box)
+      return () => {
+        for (const { v, b } of buttons) b.classList.toggle("on", v === get())
+        note.textContent = blurb(get())
+      }
+    }
+    const refreshers = [
+      group("land", sizeIds, (v) => sizes[v].title, (v) => `${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins to complete it`, () => choice.size, (v) => (choice.size = v)),
+      group("term", TERMS, (v) => `${v} min`, (v) => `${v} minutes of the town at 1×: six years, a winter at the end of each after the first`, () => choice.term, (v) => (choice.term = v)),
+      group("richness", landIds, (v) => lands[v].title, (v) => lands[v].blurb, () => choice.land, (v) => (choice.land = v))
+    ]
+    const seedLine = el("div", "row")
+    const seedText = el("span", "")
+    const reroll = el("button", "frame", "other land")
+    reroll.onclick = () => {
+      choice.seed = (Math.random() * 0x7fffffff) >>> 0
+      refresh()
+    }
+    seedLine.append(seedText, reroll)
+    preview.append(seedLine)
+    const refresh = () => {
+      for (const r of refreshers) r()
+      const land = drawLand(map)
+      seedText.textContent = `seed ${choice.seed}`
+      facts.textContent = `${land.cells} cells of land · ${land.trees.length} trees · ${land.rocks.filter((r) => !r.ore).length} stone · ${land.rocks.filter((r) => r.ore).length} ore · ${lands[choice.land].coins} coins to start`
+    }
+    refresh()
+    const actions = el("div", "actions")
+    const found = el("button", "frame primary", "Found the town")
+    found.onclick = () => {
+      ui.edits.push({ type: "newTown", charter: { ...choice } })
+      history.length = 0
+      ui.selected = null
+      ui.menu = null
+      closeCharter()
+      showReckoning(false)
+      choose("select")
+      setSpeed(1)
+    }
+    actions.append(found)
+    if (cancellable) {
+      const cancel = el("button", "frame", "Cancel")
+      cancel.onclick = () => closeCharter()
+      actions.append(cancel)
+    }
+    card.append(body, actions)
+    dialog.append(card)
+    dialog.classList.add("open")
+  }
+  const closeCharter = () => {
+    ui.founding = false
+    dialog.classList.remove("open")
+  }
+  openCharter(false)
+
+  // ── The end of the term ──
+  /** Lines of residents, coins, and approval over the term, on the term's own time axis. */
+  const chart = (s: Stats): string => {
+    const w = 520
+    const h = 150
+    const end = Math.max(s.charter.term * 3600, ...s.history.map((p) => p.tick))
+    const line = (values: ReadonlyArray<number>, lo: number, hi: number, color: string, dash = "") => {
+      if (values.length < 2) return ""
+      const span = hi - lo || 1
+      const points = s.history.map((p, i) => `${((p.tick / end) * w).toFixed(1)},${(h - 4 - ((values[i]! - lo) / span) * (h - 8)).toFixed(1)}`).join(" ")
+      return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="${dash}" vector-effect="non-scaling-stroke"/>`
+    }
+    const residents = s.history.map((p) => p.residents)
+    const coinsLine = s.history.map((p) => p.coins)
+    const approvalLine = s.history.map((p) => p.approval)
+    const top = Math.max(1, ...residents, sizes[s.charter.size].goal.residents)
+    const goal = h - 4 - (sizes[s.charter.size].goal.residents / top) * (h - 8)
+    const winters = Array.from({ length: 5 }, (_, i) => {
+      const y = i + 1
+      const from = ((y + 0.7) / 6) * w
+      return `<rect x="${from.toFixed(1)}" y="0" width="${(w * 0.3 / 6).toFixed(1)}" height="${h}" fill="#3d6db5" opacity="0.06"/>`
+    }).join("")
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${winters}<line x1="0" x2="${w}" y1="${goal}" y2="${goal}" stroke="#77817a" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>${line(coinsLine, Math.min(0, ...coinsLine), Math.max(1, ...coinsLine), "#d6ae2e")}${line(approvalLine, -100, 100, "#3d6db5", "4 3")}${line(residents, 0, top, "#3d4943")}</svg>`
+  }
+  /** What became of a town whose term ran out. */
+  const verdictOf = (s: Stats): string => {
+    if (s.fate.governing) return "complete"
+    const residents = s.settlers + s.citizens
+    if (s.fate.peak < 40) return "the town never took root"
+    if (residents >= sizes[s.charter.size].goal.residents * 0.75) return "flourishing"
+    if (residents >= s.fate.peak * 0.7) return "holding on"
+    return "declining"
+  }
+  let reckoned = ""
+  let reckoningOpen = false
+  const showReckoning = (open: boolean) => {
+    reckoningOpen = open
+    reckoning.classList.toggle("open", open && ui.stats !== null && ui.stats.fate.state !== "playing")
+  }
+  const syncReckoning = (s: Stats) => {
+    const over = s.fate.state !== "playing"
+    result.classList.toggle("show", over && !reckoningOpen && !ui.founding)
+    if (!over) {
+      reckoned = ""
+      reckoning.classList.remove("open")
+      return
+    }
+    const id = `${s.charter.seed}|${s.fate.state}|${s.fate.at}`
+    result.textContent = s.fate.state === "won" ? "the town is complete · see how" : s.fate.state === "lost" ? "the term is lost · see how" : "the term is over · see how"
+    if (id === reckoned) return
+    reckoned = id
+    const title = s.fate.state === "won" ? "the town is complete" : s.fate.state === "lost" ? s.fate.reason.split(":")[0]!.toLowerCase() : `the term is over: ${verdictOf(s)}`
+    reckoning.replaceChildren()
+    const card = el("div", "sheet wide")
+    card.append(el("h2", "", title), el("p", "sub", s.fate.reason))
+    const facts = el("div", "facts")
+    const fact = (label: string, value: string) => {
+      const f = el("div", "fact")
+      f.append(el("b", "", value), el("span", "", label))
+      facts.append(f)
+    }
+    fact("minutes in office", `${Math.round(s.fate.at)}`)
+    fact("residents", `${s.settlers + s.citizens}`)
+    fact("citizens", `${s.citizens}`)
+    fact("coins", `${s.coins}`)
+    fact("approval", signed(s.mood.approval))
+    fact("crown met · missed", `${s.crown.met} · ${s.crown.missed}`)
+    fact("score", `${s.fate.score}`)
+    card.append(facts)
+    const graph = el("div", "chart")
+    graph.innerHTML = chart(s)
+    card.append(graph, el("p", "legend", "— residents (dashed: the goal) · coins · - - approval · shaded: winters"))
+    const story = el("div", "chronicle")
+    story.innerHTML = s.chronicle.map((l) => `<p><b>${clockText(Math.round(l.tick / 60))}</b> ${l.text}</p>`).join("")
+    card.append(story)
+    const actions = el("div", "actions")
+    if (s.fate.state === "won") {
+      const govern = el("button", "frame primary", "Keep governing")
+      govern.title = "Stay on to the end of the term: the town is already complete"
+      govern.onclick = () => {
+        ui.edits.push({ type: "govern" })
+        showReckoning(false)
+      }
+      actions.append(govern)
+    }
+    const again = el("button", "frame" + (s.fate.state === "won" ? "" : " primary"), "Found a new town")
+    again.onclick = () => {
+      showReckoning(false)
+      openCharter(true)
+    }
+    const look = el("button", "frame", "Look at the town")
+    look.onclick = () => showReckoning(false)
+    actions.append(again, look)
+    card.append(actions)
+    reckoning.append(card)
+    showReckoning(true)
   }
 
   // ── Pointer ──
@@ -609,7 +955,36 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       coins.classList.toggle("debt", s.coins < 0)
       people.textContent = `${s.settlers} settlers · ${s.citizens} citizens`
       jobs.textContent = `${s.employed}/${s.jobs} jobs`
+      const left = Math.max(0, s.charter.term * 60 - Math.floor(s.minute * 60))
+      clock.innerHTML = `year ${s.season.year} · ${s.season.winter ? `<span class="winter">winter, spring in ${clockText(s.season.left)}</span>` : `winter in ${clockText(s.season.left)}`} · <b>${clockText(left)}</b> left`
+      clock.title = s.season.winter ? "Winter: fields lie still, fishing is slow, and homes eat faster" : `Winter comes in ${clockText(s.season.left)}`
+      approval.innerHTML = `approval <b class="${s.mood.approval < 0 ? "down" : ""}">${signed(s.mood.approval)}</b> <span class="${s.mood.target >= s.mood.approval ? "up" : "down"}">${s.mood.target > s.mood.approval ? "↑" : s.mood.target < s.mood.approval ? "↓" : ""}</span>`
       for (const [g, count] of goodCells) count.textContent = String(s.stock[g])
+      // The crown's request.
+      request.classList.toggle("show", s.crown.open && s.fate.state === "playing")
+      if (s.crown.open) {
+        const have = s.stock[s.crown.good]
+        requestText.innerHTML = `the crown asks for <b>${s.crown.amount} ${goods[s.crown.good].title}</b> (${have} in store) · <b>${clockText(s.crown.left)}</b> · ${s.crown.reward} coins`
+        send.disabled = have < s.crown.amount
+      }
+      // What threatens the term, or is about to complete it.
+      const warnings: Array<string> = []
+      if (s.fate.state === "playing") {
+        if (s.fate.bankrupt !== null) warnings.push(`<b>In debt:</b> bankrupt in ${clockText(s.fate.bankrupt)} unless the treasury recovers`)
+        else if (s.coins < 0) warnings.push("<b>In debt:</b> wages are going unpaid")
+        if (s.fate.revolt !== null) warnings.push(`<b>Uproar:</b> the town turns the mayor out in ${clockText(s.fate.revolt)}`)
+        else if (s.mood.approval < -30) warnings.push("<b>Restless:</b> approval is falling towards revolt")
+        if (s.fate.peak >= 40 && s.settlers + s.citizens < s.fate.peak * 0.4) warnings.push("<b>Emptying:</b> people are leaving the town")
+        if (s.fate.complete !== null) warnings.push(`<b>Every goal met:</b> the town is complete in ${clockText(s.fate.complete)}`)
+      }
+      const html = warnings.map((w) => `<div class="cell">${w}</div>`).join("")
+      if (alarm.dataset.html !== html) {
+        alarm.dataset.html = html
+        alarm.innerHTML = html
+      }
+      alarm.classList.toggle("show", warnings.length > 0)
+      alarm.classList.toggle("good", warnings.length === 1 && s.fate.complete !== null)
+      syncReckoning(s)
     }
     const text = ui.preview.tooltip
     if (text && screenPointer) {

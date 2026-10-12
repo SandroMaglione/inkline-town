@@ -36,7 +36,8 @@ export const goods: Readonly<Record<GoodId, { readonly title: string; readonly c
  */
 export const TRADE_LOAD = 12
 export const RESERVES = [10, 25, 50, 100] as const
-export const trade = { sells: ["wood", "stone", "wheat", "wool"] as ReadonlyArray<GoodId>, reserve: 25 }
+/** A new town sells its surplus wood, wheat, and wool. Stone is finite: it is not sold until the town says so. */
+export const trade = { sells: ["wood", "wheat", "wool"] as ReadonlyArray<GoodId>, reserve: 25 }
 
 export type Amounts = Readonly<Record<GoodId, number>>
 export const none: Amounts = { wood: 0, planks: 0, stone: 0, ore: 0, tools: 0, fish: 0, wheat: 0, flour: 0, bread: 0, wool: 0, cloth: 0 }
@@ -216,7 +217,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     id: "market", title: "Market", blurb: "a walker carries fish, bread, and cloth to the homes it passes",
     category: "services", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "flag",
     cost: { coins: 120, materials: { planks: 6, stone: 2 } }, upkeep: 6, workers: 2, unlock: free, buildable: true,
-    holds: { accepts: ["fish", "bread", "cloth"], cap: 8 },
+    holds: { accepts: ["fish", "bread", "cloth"], cap: 12 },
     service: { service: "goods", seconds: 6, range: 18 }
   },
   chapel: {
@@ -252,16 +253,11 @@ export const home = {
   /** A resident moves in (or out) this often. */
   settle: ticks(3),
   /** How long each need stays met after a walker's visit: cloth and faith last longer than a meal. */
-  lasts: { food: ticks(60), bread: ticks(60), cloth: ticks(150), faith: ticks(90) } as Readonly<Record<Need, number>>
+  lasts: { food: ticks(60), bread: ticks(90), cloth: ticks(180), faith: ticks(150) } as Readonly<Record<Need, number>>
 }
 
 /** Tax rates the town can set, in percent of the usual. */
 export const TAX_STEPS = [50, 75, 100, 125, 150, 200] as const
-/**
- * How a tax rate sits with residents: low taxes make homes hold more people
- * than their needs alone allow, high ones fewer. 100% is neutral.
- */
-export const appealOf = (rate: number): number => 1.5 - rate / 200
 
 export const needTitle: Readonly<Record<Need, string>> = { food: "food", bread: "bread", cloth: "cloth", faith: "faith" }
 
@@ -272,11 +268,163 @@ export const BUILD_TICKS = ticks(2.4)
 /** Taxes are collected and upkeep paid this often. */
 export const LEDGER_TICKS = ticks(10)
 export const ROAD_COST = 2
-/** A new town's treasury and the goods in its town hall. */
-export const start = {
-  coins: 1500,
-  stock: amounts({ wood: 10, planks: 40, stone: 16, tools: 8, fish: 20 })
-}
 /** Trees and fields are ready to harvest once this grown. */
 export const GROWN = { tree: ticks(40), field: ticks(20) }
+/** The most a rock holds (see `lands` for how much each starts with). */
 export const ROCK_AMOUNT = 40
+
+// ── The charter: what a new town is founded on ────────────────────────────
+
+export const sizeIds = ["small", "medium", "large"] as const
+export type SizeId = (typeof sizeIds)[number]
+export const landIds = ["rich", "fair", "harsh"] as const
+export type LandId = (typeof landIds)[number]
+/** How long a term in office runs, in minutes of game time. */
+export const TERMS = [45, 60, 90] as const
+
+/**
+ * Sizes of land: its rough radius in cells (the coast wanders in and out of
+ * it, with capes reaching further), and what the town must reach to be
+ * complete (see `Fate`).
+ */
+export const sizes: Readonly<Record<SizeId, {
+  readonly title: string
+  readonly radius: number
+  readonly goal: { readonly residents: number; readonly coins: number }
+}>> = {
+  small: { title: "small", radius: 14, goal: { residents: 180, coins: 2500 } },
+  medium: { title: "medium", radius: 19, goal: { residents: 320, coins: 4000 } },
+  large: { title: "large", radius: 25, goal: { residents: 520, coins: 6000 } }
+}
+
+/**
+ * How generous the land is: forests, outcrops of stone, deposits of ore
+ * (each per thousand cells of land), how much each rock holds, lakes, and
+ * what the town starts with.
+ */
+export const lands: Readonly<Record<LandId, {
+  readonly title: string
+  readonly blurb: string
+  readonly forests: number
+  readonly stone: number
+  readonly ore: number
+  readonly rock: number
+  readonly lakes: number
+  readonly coins: number
+  readonly stock: Amounts
+}>> = {
+  rich: {
+    title: "rich", blurb: "deep forests, plenty of stone and ore, two lakes, a full treasury",
+    forests: 7, stone: 4.5, ore: 3, rock: 40, lakes: 2, coins: 2000,
+    stock: amounts({ wood: 15, planks: 50, stone: 24, tools: 10, fish: 30 })
+  },
+  fair: {
+    title: "fair", blurb: "enough of everything, if it is not wasted",
+    forests: 5.5, stone: 3, ore: 2, rock: 32, lakes: 2, coins: 1500,
+    stock: amounts({ wood: 10, planks: 40, stone: 16, tools: 8, fish: 20 })
+  },
+  harsh: {
+    title: "harsh", blurb: "thin woods, little stone, one deposit of ore, one lake",
+    forests: 4, stone: 2, ore: 1, rock: 24, lakes: 1, coins: 1100,
+    stock: amounts({ wood: 10, planks: 30, stone: 12, tools: 6, fish: 15 })
+  }
+}
+
+export interface CharterValue {
+  readonly size: SizeId
+  readonly term: number
+  readonly land: LandId
+  readonly seed: number
+}
+export const defaultCharter = (seed: number): CharterValue => ({ size: "medium", term: 60, land: "fair", seed })
+
+// ── Pressure ──────────────────────────────────────────────────────────────
+
+/**
+ * Seasons: a term is six years; the last part of each but the first is
+ * winter, when fields do not grow, fisheries catch half as much, and homes
+ * eat faster.
+ */
+export const YEARS_PER_TERM = 6
+export const WINTER_SHARE = 0.3
+
+/**
+ * Running a town costs more the bigger it gets: the town hall's
+ * administration costs `perHome` coins a minute a home, and a further
+ * (homes / `growth`) a home, so a large town of poor homes cannot pay
+ * its way.
+ */
+export const admin = { perHome: 0.5, growth: 200 }
+
+/**
+ * Approval, -100 → +100: where the town's mood is heading, and how fast it
+ * gets there (points every collection). Homes hold more residents when it
+ * is high and fewer when it is low (see `capacity`).
+ */
+export const mood = {
+  base: 10,
+  /** At no needs met to every need met. */
+  needs: [-35, 30] as const,
+  /** Points for each percent the average tax rate is below (or above) 100%. */
+  perTaxPoint: 0.4,
+  debt: -20,
+  /** Per unanswered crown request, while the crown remembers it. */
+  snub: -20,
+  winterHunger: -10,
+  step: 2
+}
+
+/**
+ * Crown requests: every so often the crown asks for goods within a time.
+ * Requests grow as the term goes on. Sending them earns coins; missing one
+ * costs a fine and the crown's goodwill for a while.
+ */
+export const crown = {
+  /** Requests in a term. */
+  perTerm: 9,
+  /** Share of the gap between requests the town has to answer one. */
+  window: 0.6,
+  /**
+   * How much it asks for: this share of what the town could make of the
+   * good in the time given, from the start of the term to its end.
+   */
+  share: [0.25, 0.6] as const,
+  /** Nor more than this share of what the town's storage holds of one good. */
+  room: 0.6,
+  /** Reward as a multiple of what the goods would fetch from traders, plus a bonus; the fine is the goods' worth plus the bonus. */
+  reward: 2,
+  fine: 1,
+  bonus: 50,
+  /** How long the crown remembers a missed request, in minutes. */
+  memory: 4
+}
+
+/**
+ * The market: each good's price moves with what the town trades. Selling
+ * drives it down, buying up; it drifts back by a tenth of the gap every
+ * collection. Buying costs half again the price.
+ */
+export const market = { floor: 30, ceiling: 250, perUnit: 1, markup: 1.5 }
+
+/** A paused building pays this share of its upkeep. */
+export const PAUSED_UPKEEP = 0.25
+
+/** How long each end state's danger has to last, in minutes, before the term ends with it. */
+export const fate = {
+  /** Victory: every goal held this long. */
+  hold: 2,
+  /** Bankruptcy: in debt this long without a break. */
+  debt: 3,
+  /** Revolt: approval at or below `revolt` this long. */
+  revolt: 2,
+  revoltAt: -50,
+  /** Abandonment: residents below this share of their peak, once the peak reached `peak`. */
+  abandon: 0.15,
+  peak: 40,
+  /** The goals besides residents and coins: a share of them citizens, and approval. */
+  citizens: 0.4,
+  approval: 20
+}
+
+/** The town's history: a sample this often. */
+export const HISTORY_TICKS = ticks(15)

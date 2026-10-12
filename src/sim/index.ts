@@ -2,9 +2,11 @@
  * The simulation, one fixed step at a time. Nothing here touches the
  * renderer, so it runs headless too.
  */
+import { amounts, defaultCharter } from "../content.ts"
 import { Game, Time } from "../schema.ts"
 import { ApplyEdits } from "./edits.ts"
 import { Deliver, Dispatch } from "./logistics.ts"
+import { Approve, foundedFate, Judge, Record, Requests, Seasons } from "./term.ts"
 import { Collect, Households, TakeCensus } from "./town.ts"
 import { SendWalkers, Walk, Wander } from "./walkers.ts"
 import { AssignStaff, CountStock, Grow, IndexGrid, Plant, Raise, Spread, Work } from "./work.ts"
@@ -23,6 +25,7 @@ export const simulate = Game.Schedule(
   ApplyEdits,
   Game.Schedule.applyDeferred(),
   IndexGrid,
+  Seasons,
   Raise,
   AssignStaff,
   Grow,
@@ -39,10 +42,35 @@ export const simulate = Game.Schedule(
   Households,
   Collect,
   CountStock,
-  TakeCensus
+  TakeCensus,
+  Requests,
+  Approve,
+  Judge,
+  Record
 )
 
-export { CELL_STEPS } from "./shared.ts"
+/** The world's resources before any town is founded (a `newTown` edit fills them in). */
+export const blankResources = () => ({
+  Time: { tick: 0 },
+  Rng: 0x5eed,
+  Treasury: { coins: 0 },
+  Ledger: { taxes: 0, trade: 0, upkeep: 0, admin: 0 },
+  Census: { homes: 0, settlers: 0, citizens: 0, jobs: 0, employed: 0, food: 0, bread: 0, cloth: 0, faith: 0 },
+  Policy: { settlers: 100, citizens: 100, sells: [], buys: [], reserve: 25 },
+  Charter: { ...defaultCharter(0), founded: 0 },
+  Land: { mask: "", cells: 0 },
+  Market: { prices: amounts({}) },
+  Mood: { approval: 0, target: 0, base: 0, needs: 0, taxes: 0, debt: 0, crown: 0, winter: 0 },
+  Crown: { open: false, good: "wood" as const, amount: 0, issued: 0, due: 0, reward: 0, next: 0, met: 0, missed: 0, snubs: [] },
+  Fate: foundedFate(),
+  History: { samples: [] },
+  Chronicle: { lines: [] },
+  Grid: { owner: [], use: [] },
+  Stock: amounts({})
+})
+
+export { CELL_STEPS, elapsed, seasonAt, termTicks } from "./shared.ts"
 export { SITE_SHARE } from "./work.ts"
 export { unlocked } from "./edits.ts"
-export { capacity, met, satisfaction, taxOf } from "./town.ts"
+export { adminOf, askOf, capacity, met, priceOf, satisfaction, taxOf } from "./town.ts"
+export { crownGap, goalsOf, larder } from "./term.ts"

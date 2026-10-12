@@ -3,17 +3,19 @@
  * bevy-ts ECS with Pixi drawing it. The simulation runs on a fixed step;
  * the views follow once a frame.
  */
+import { Result } from "@typeonce/bevy-ts"
 import { FixedLoop } from "@typeonce/bevy-ts-browser"
 import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
 
 import type { BuildingView, FieldView, HouseView, RockView, TreeView, WalkerView } from "./art.ts"
-import { amounts, STEP_SECONDS } from "./content.ts"
+import { STEP_SECONDS } from "./content.ts"
 import { createHost, type Persistence } from "./host.ts"
 import { present } from "./present.ts"
 import { BuildingNodes, Clock, FieldNodes, Game, HouseNodes, RockNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
-import { simulate } from "./sim/index.ts"
+import { blankResources, simulate } from "./sim/index.ts"
 
-const SAVE_KEY = "town/save"
+/** Saves of the charter's towns: older ones (a square map, no term) do not load into it. */
+const SAVE_KEY = "town/save/charter"
 
 const start = async () => {
   const mount = document.getElementById("app")!
@@ -33,16 +35,7 @@ const start = async () => {
       Game.Runtime.service(RockNodes, PixiNodeRegistry.make<RockView>(stage.objects)),
       Game.Runtime.service(FieldNodes, PixiNodeRegistry.make<FieldView>(stage.plates))
     ),
-    resources: {
-      Time: { tick: 0 },
-      Rng: 0x5eed,
-      Treasury: { coins: 0 },
-      Ledger: { taxes: 0, trade: 0, upkeep: 0 },
-      Census: { homes: 0, settlers: 0, citizens: 0, jobs: 0, employed: 0, food: 0, bread: 0, cloth: 0, faith: 0 },
-      Policy: { settlers: 100, citizens: 100, sells: [], reserve: 25 },
-      Grid: { owner: [], use: [] },
-      Stock: amounts({})
-    }
+    resources: blankResources()
   })
   if (!made.ok) {
     mount.textContent = `The town could not start: ${JSON.stringify(made.error)}`
@@ -80,8 +73,19 @@ const start = async () => {
     }),
     stepSeconds: STEP_SECONDS,
     maxFrameSeconds: 0.25,
-    maxStepsPerFrame: 8,
-    update: () => runtime.tick(simulate),
+    maxStepsPerFrame: 4,
+    // The town runs at the chosen speed; it waits while paused, while the
+    // new-town dialog is open, and once the term has ended (an edit, such as
+    // founding a new town, still gets its step).
+    update: () => {
+      const waiting = ui.speed === 0 || ui.founding || (ui.stats !== null && ui.stats.fate.state !== "playing")
+      const steps = waiting ? (ui.edits.length > 0 ? 1 : 0) : ui.speed
+      for (let i = 0; i < steps; i++) {
+        const stepped = runtime.tick(simulate)
+        if (!stepped.ok) return stepped
+      }
+      return Result.success(undefined)
+    },
     render: ({ elapsedSeconds }) => {
       clock.deltaSeconds = elapsedSeconds
       clock.elapsed += elapsedSeconds

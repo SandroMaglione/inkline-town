@@ -10,7 +10,7 @@ import { amounts, categoryColor, each, home, kinds, provisions, total, type Amou
 import { DIRS, doors, isRoad, key, nearest, pathTo, reach } from "../grid.ts"
 import { inside, type Point } from "../iso.ts"
 import {
-  Building, Figure, Game, Grid, House, Inventory, Recipe, Rising, Rng, Roam, Route, Service, Site, Staff, Status, Tile, WalkerOf,
+  Building, Figure, Game, Grid, House, Inventory, Paused, Recipe, Rising, Rng, Roam, Route, Service, Site, Staff, Status, Tile, WalkerOf,
   maybe, type Status as StatusValue
 } from "../schema.ts"
 import { CELL_STEPS } from "./shared.ts"
@@ -18,7 +18,9 @@ import { CELL_STEPS } from "./shared.ts"
 /** Steps a walker takes each tick: 1.25 cells a second. */
 const WALK = 1
 /** Of each provision, the most a walker's basket holds. */
-const BASKET = 6
+const BASKET = 10
+/** Walkers a service building may have out on the roads at once. */
+const OUT = 2
 
 /** Every walker steps along its route; one whose next cell is no longer road is lost. */
 export const Walk = Game.System(
@@ -49,8 +51,8 @@ export const Walk = Game.System(
 )
 
 /**
- * A staffed service building sends one walker at a time, every `interval`
- * steps. A provisions walker fills its basket from the building's stock, and
+ * A staffed service building sends a walker every `interval` steps, up to
+ * `OUT` at a time. A provisions walker fills its basket from the building's stock, and
  * only goes when there is something to hand out.
  */
 export const SendWalkers = Game.System(
@@ -65,7 +67,8 @@ export const SendWalkers = Game.System(
           service: Game.Query.write(Service),
           status: Game.Query.write(Status),
           inventory: Game.Query.optional(Inventory),
-          recipe: Game.Query.optional(Recipe)
+          recipe: Game.Query.optional(Recipe),
+          paused: Game.Query.optional(Paused)
         },
         without: [Site, Rising]
       }),
@@ -76,19 +79,21 @@ export const SendWalkers = Game.System(
   },
   ({ queries, resources, commands }) => {
     const grid = resources.grid.get()
-    const out = new Set<number>()
-    for (const { data } of queries.walkers.each()) out.add(data.home.get())
+    const out = new Map<number, number>()
+    for (const { data } of queries.walkers.each()) out.set(data.home.get(), (out.get(data.home.get()) ?? 0) + 1)
 
     for (const { entity, data } of queries.services.each()) {
       const service = data.service.get()
       const staff = data.staff.get()
       const starts = doors(grid, data.tile.get())
       const stock = maybe(data.inventory)?.stock
-      const staffed = staff.needed === 0 || staff.assigned > 0
+      const staffed = !data.paused.present && (staff.needed === 0 || staff.assigned > 0)
       const basket: Amounts = each((g) => (service.service === "goods" && stock && provisions.includes(g) ? Math.min(BASKET, stock[g]) : 0))
       const goes = service.service === "faith" || total(basket) > 0
       if (!maybe(data.recipe)) {
-        const status: StatusValue = starts.length === 0
+        const status: StatusValue = data.paused.present
+          ? "paused"
+          : starts.length === 0
           ? "unconnected"
           : !staffed
           ? "unstaffed"
@@ -101,7 +106,7 @@ export const SendWalkers = Game.System(
       }
 
       const cooldown = Math.max(0, service.cooldown - 1)
-      if (cooldown === 0 && !out.has(entity.id) && starts.length > 0 && staffed && goes) {
+      if (cooldown === 0 && (out.get(entity.id) ?? 0) < OUT && starts.length > 0 && staffed && goes) {
         const color = categoryColor[kinds[data.building.get().kind].category]
         const draft = Game.Command.spawn(
           [Figure, { role: "walker", color }],

@@ -16,7 +16,7 @@ import type { OptionalReadCell } from "@typeonce/bevy-ts/Query"
 import type { NodeRegistry } from "@typeonce/bevy-ts-render"
 
 import type { BuildingView, FieldView, HouseView, RockView, Stage, TreeView, WalkerView } from "./art.ts"
-import { goodIds, kindIds, type Amounts } from "./content.ts"
+import { goodIds, kindIds, landIds, sizeIds, type Amounts } from "./content.ts"
 import type { UiValue } from "./ui.ts"
 
 export const Root = Schema.defineRoot("Town")
@@ -34,7 +34,7 @@ const amounts = Decode.struct({
   wheat: integer, flour: integer, bread: integer, wool: integer, cloth: integer
 })
 
-export const statuses = ["building", "idle", "working", "starved", "blocked", "unstaffed", "unconnected"] as const
+export const statuses = ["building", "idle", "working", "starved", "blocked", "unstaffed", "unconnected", "paused"] as const
 export type Status = (typeof statuses)[number]
 
 // ── On the grid ───────────────────────────────────────────────────────────
@@ -72,6 +72,8 @@ export const House = Descriptor.ConstructedComponent(Decode.struct({
 export const Building = Descriptor.ConstructedComponent(Decode.struct({ kind: Decode.literal(...kindIds) }))("Town/Building")
 export const TownHall = Descriptor.Tag("Town/TownHall")
 export const Status = Descriptor.ConstructedComponent(Decode.literal(...statuses))("Town/Status")
+/** Stopped by the town: no workers, a quarter of its upkeep. */
+export const Paused = Descriptor.Tag("Town/Paused")
 
 /** Workers it needs, and how many the town could spare it this step. */
 export const Staff = Descriptor.ConstructedComponent(Decode.struct({ needed: integer, assigned: integer }))("Town/Staff")
@@ -148,8 +150,8 @@ export const Time = Descriptor.ConstructedResource(Decode.struct({ tick: integer
 /** The deterministic random state (see `@typeonce/bevy-ts-math/Random`). */
 export const Rng = Descriptor.ConstructedResource(integer)("Town/Rng")
 export const Treasury = Descriptor.ConstructedResource(Decode.struct({ coins: integer }))("Town/Treasury")
-/** The last collection's taxes, trade, and upkeep, per minute. */
-export const Ledger = Descriptor.ConstructedResource(Decode.struct({ taxes: integer, trade: integer, upkeep: integer }))("Town/Ledger")
+/** The last collection's taxes, trade (sold less bought), upkeep, and administration, per minute. */
+export const Ledger = Descriptor.ConstructedResource(Decode.struct({ taxes: integer, trade: integer, upkeep: integer, admin: integer }))("Town/Ledger")
 export const Census = Descriptor.ConstructedResource(Decode.struct({
   homes: integer,
   settlers: integer,
@@ -162,15 +164,101 @@ export const Census = Descriptor.ConstructedResource(Decode.struct({
   cloth: integer,
   faith: integer
 }))("Town/Census")
-/** The town's tax rates (in percent of the usual, for each tier), and what it sells to traders beyond the reserve it keeps. */
-export const Policy = Descriptor.ConstructedResource(Decode.struct({ settlers: integer, citizens: integer, sells: Decode.array(good), reserve: integer }))("Town/Policy")
+/**
+ * The town's tax rates (in percent of the usual, for each tier), what it
+ * sells to traders beyond the reserve it keeps, and what it buys up to it.
+ */
+export const Policy = Descriptor.ConstructedResource(Decode.struct({
+  settlers: integer,
+  citizens: integer,
+  sells: Decode.array(good),
+  buys: Decode.array(good),
+  reserve: integer
+}))("Town/Policy")
+
+/**
+ * What the town was founded on: the size of its land, its term in minutes,
+ * how rich the land is, its seed, and the step it was founded on.
+ */
+export const Charter = Descriptor.ConstructedResource(Decode.struct({
+  size: Decode.literal(...sizeIds),
+  term: integer,
+  land: Decode.literal(...landIds),
+  seed: integer,
+  founded: integer
+}))("Town/Charter")
+/** Which cells are land ("1") and which open water beyond the coast ("0"), by `key`; and how many are land. */
+export const Land = Descriptor.ConstructedResource(Decode.struct({ mask: Decode.string, cells: integer }))("Town/Land")
+
+/** Each good's price with traders, in percent of the usual (see `market`). */
+export const Market = Descriptor.ConstructedResource(Decode.struct({ prices: amounts }))("Town/Market")
+
+/** The town's approval, -100 → 100, where it is heading, and why: each part of the target. */
+export const Mood = Descriptor.ConstructedResource(Decode.struct({
+  approval: integer,
+  target: integer,
+  base: integer,
+  needs: integer,
+  taxes: integer,
+  debt: integer,
+  crown: integer,
+  winter: integer
+}))("Town/Mood")
+
+/**
+ * The crown's requests: the one open now (if `open`), when the next comes,
+ * how many were met and missed, and when the misses the crown still
+ * remembers were.
+ */
+export const Crown = Descriptor.ConstructedResource(Decode.struct({
+  open: Decode.boolean,
+  good,
+  amount: integer,
+  issued: integer,
+  due: integer,
+  reward: integer,
+  next: integer,
+  met: integer,
+  missed: integer,
+  snubs: Decode.array(integer)
+}))("Town/Crown")
+
+export const fateStates = ["playing", "won", "lost", "over"] as const
+/**
+ * How the term is going: still `playing`; `won` (every goal held), `lost`
+ * (bankrupt, in revolt, or abandoned), or `over` (the term ran out), with
+ * why and when. `governing`: won, and carried on anyway. The `since`
+ * fields are when each danger (or the goals) began, or -1.
+ */
+export const Fate = Descriptor.ConstructedResource(Decode.struct({
+  state: Decode.literal(...fateStates),
+  reason: Decode.string,
+  at: integer,
+  governing: Decode.boolean,
+  won: integer,
+  debtSince: integer,
+  revoltSince: integer,
+  goalSince: integer,
+  peak: integer,
+  score: integer
+}))("Town/Fate")
+
+/** The town over its term: a sample every `HISTORY_TICKS`. */
+export const History = Descriptor.ConstructedResource(Decode.struct({
+  samples: Decode.array(Decode.struct({ tick: integer, coins: integer, residents: integer, citizens: integer, approval: integer, net: integer }))
+}))("Town/History")
+/** What happened, in a line each. */
+export const Chronicle = Descriptor.ConstructedResource(Decode.struct({ lines: Decode.array(Decode.struct({ tick: integer, text: Decode.string })) }))("Town/Chronicle")
 
 /** What stands on each cell, rebuilt every step from the tiles (see `grid.ts`). */
-export type Use = "empty" | "road" | "house" | "building" | "tree" | "rock" | "water" | "field"
+/** `void`: off the land, past the coast. */
+export type Use = "empty" | "road" | "house" | "building" | "tree" | "rock" | "water" | "field" | "void"
 export interface GridValue {
   /** Entity id on each cell (by `key`), or 0. */
   readonly owner: ReadonlyArray<number>
   readonly use: ReadonlyArray<Use>
+  /** A fingerprint of where the roads are, when known: paths are cached against it. */
+  readonly roads?: number
 }
 export const Grid = Descriptor.TransientResource<GridValue>()("Town/Grid")
 /** Goods in the town's storage, summed every step. */
@@ -192,10 +280,12 @@ export const FieldNodes = Descriptor.Service<NodeRegistry.NodeRegistry<FieldView
 export const Game = Schema.bind(
   Schema.fragment({
     components: {
-      Tile, Road, Site, Rising, Tree, Rock, Water, Field, House, Building, TownHall, Status, Staff, Inventory, Storage,
+      Tile, Road, Site, Rising, Tree, Rock, Water, Field, House, Building, TownHall, Status, Paused, Staff, Inventory, Storage,
       Recipe, Gatherer, Planter, Carriers, Service, Figure, Route, Errand, Roam
     },
-    resources: { Time, Rng, Treasury, Ledger, Census, Policy, Grid, Stock },
+    resources: {
+      Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Grid, Stock
+    },
     relations: { WalkerOf, FieldOf }
   }),
   Root

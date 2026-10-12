@@ -21,10 +21,18 @@ export interface TileLike {
 
 export type { Use }
 
-/** A grid being filled in: tiles are claimed one by one, and placement checks see the claims so far. */
+/**
+ * A grid being filled in: tiles are claimed one by one, and placement checks
+ * see the claims so far. Cells off the land (`mask`, "0" by `key`) are void.
+ */
 export class GridBuilder {
   readonly owner: Array<number> = new Array(GRID * GRID).fill(0)
   readonly use: Array<Use> = new Array(GRID * GRID).fill("empty")
+
+  constructor(mask?: string) {
+    if (mask === undefined) return
+    for (let k = 0; k < GRID * GRID; k++) if (mask[k] !== "1") this.use[k] = "void"
+  }
 
   claim(tile: TileLike, id: number, use: Use) {
     for (const c of cellsOf(tile)) {
@@ -53,7 +61,7 @@ export const cellsOf = (tile: TileLike): Array<Point> => {
   return out
 }
 
-export const useAt = (grid: GridValue, x: number, y: number): Use => (inside(x, y) ? grid.use[key(x, y)]! : "water")
+export const useAt = (grid: GridValue, x: number, y: number): Use => (inside(x, y) ? grid.use[key(x, y)]! : "void")
 export const ownerAt = (grid: GridValue, x: number, y: number): number => (inside(x, y) ? grid.owner[key(x, y)]! : 0)
 export const isRoad = (grid: GridValue, x: number, y: number): boolean => inside(x, y) && grid.use[key(x, y)] === "road"
 
@@ -110,7 +118,41 @@ export interface Reach {
   readonly previous: Int32Array
 }
 
+/** A fingerprint of where the roads are: paths found on one road network hold until it changes. */
+export const roadPrint = (grid: GridValue): number => {
+  let h = 0x811c9dc5
+  for (let k = 0; k < grid.use.length; k++) {
+    if (grid.use[k] !== "road") continue
+    h = Math.imul(h ^ k, 0x01000193) >>> 0
+  }
+  return h
+}
+
+/** Reaches found on the current road network, by where they start. */
+const reaches = new Map<string, Reach>()
+let reachesFor: number | undefined
+
+/**
+ * Distances along the road from a set of road cells. On a grid with a road
+ * fingerprint the answer is kept until the roads change: every carrier
+ * leaving the same door would otherwise search the whole network again.
+ */
 export const reach = (grid: GridValue, from: ReadonlyArray<Point>): Reach => {
+  if (grid.roads === undefined) return search(grid, from)
+  if (reachesFor !== grid.roads) {
+    reaches.clear()
+    reachesFor = grid.roads
+  }
+  const id = from.map((c) => key(c.x, c.y)).join(",")
+  const known = reaches.get(id)
+  if (known) return known
+  if (reaches.size > 2048) reaches.clear()
+  const found = search(grid, from)
+  reaches.set(id, found)
+  return found
+}
+
+const search = (grid: GridValue, from: ReadonlyArray<Point>): Reach => {
   const distance = new Int32Array(GRID * GRID).fill(-1)
   const previous = new Int32Array(GRID * GRID).fill(-1)
   const queue: Array<number> = []
