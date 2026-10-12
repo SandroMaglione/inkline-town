@@ -14,6 +14,39 @@ pnpm check      # every way a term can end, ends it
 pnpm balance    # a bot plays terms headless and reports the pressure
 ```
 
+## Cloudflare release
+
+The game is deployed with [Alchemy](https://alchemy.run/) as a Cloudflare
+Worker serving the Vite build. The separate `deploy/` package keeps its
+dependencies out of the game, and Cloudflare stores the deployment state.
+Saves stay in the player's browser.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm --dir deploy install --frozen-lockfile
+pnpm --dir deploy exec alchemy plan --stage prod --profile admin --no-input
+pnpm release --profile admin --yes --no-input
+```
+
+Release from an up-to-date `main`. The release command checks the game's
+types and simulation and the deployment config, then Alchemy builds and
+deploys the game. It prints the live URL; check that the game opens and
+save/load works there after each release.
+
+`admin` is the existing local Alchemy Cloudflare profile. On another
+machine, use your own logged-in profile or set `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_API_TOKEN`, then omit `--profile admin`. Keep credentials outside
+the repository. Releases run locally; pushing to GitHub does not deploy.
+
+For a temporary preview, run:
+
+```sh
+pnpm --dir deploy exec alchemy deploy --stage preview --profile admin
+pnpm --dir deploy exec alchemy destroy --stage preview --profile admin
+```
+
+The second command removes the preview. Each stage has its own Worker.
+
 ## A term in office
 
 - **The charter**: a new town is founded on land you choose: its size
