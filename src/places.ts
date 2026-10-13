@@ -10,8 +10,7 @@ const streetOf: Readonly<Record<KindId, string>> = {
   townhall: "Hall", warehouse: "Warehouse", granary: "Granary", lumberjack: "Timber", forester: "Forest", quarry: "Quarry",
   mine: "Mine", fishery: "Fisher", smokehouse: "Smokehouse", sawmill: "Sawmill", smithy: "Smithy", farm: "Farm", mill: "Mill",
   bakery: "Baker", sheep: "Shepherd", weaver: "Weaver", market: "Market", chapel: "Chapel", firewatch: "Watch", healer: "Healer",
-  hospital: "Hospital", watchhouse: "Constable", builder: "Builder", garden: "Garden", park: "Park", fountain: "Fountain",
-  statue: "Statue", plaza: "Plaza"
+  hospital: "Hospital", watchhouse: "Constable", builder: "Builder"
 }
 const suffixes = ["Lane", "Street", "Row", "Way", "Close", "Walk"] as const
 

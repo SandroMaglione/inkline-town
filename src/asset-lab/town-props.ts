@@ -1,23 +1,20 @@
 /**
  * Town models for what the town gained with desirability, services,
- * and decay: ornaments (garden, park, fountain, statue, plaza) and ruins.
+ * and decay: parks (ground and furnishings, laid cell by cell) and ruins.
  * They are built from the same primitives as everything else so they
  * have complete rotatable geometry in the same pale ink palette.
  */
-import { kinds, type KindId } from "../content.ts"
+import type { ParkCell } from "../appeal.ts"
+import { props, type GroundId, type PropId } from "../content.ts"
+import { cellOf, DIRS, key } from "../grid.ts"
 import { U } from "../iso.ts"
+import { hash } from "./land.ts"
 import { Drawing, palette, square, type Vertex } from "./primitives.ts"
 
 const green = 0xd8e6c9
 const leaves = 0xa9c79a
 const stone = 0xe4e6e0
 const water = 0xc9dde6
-
-const tree = (d: Drawing, u: number, v: number, size = 1) => {
-  d.cylinder(u, v, 0.5 * U * size, 0, 8 * size, 0xb08a5e, 0xb08a5e, 1, 8)
-  for (const [x, y, z, r] of [[-2, 0, 11, 4], [2, 1, 13, 4.5], [0, -2, 16, 3.5]] as const)
-    d.ellipsoid(u + x * U * size, v + y * U * size, z * size, r * U * size, r * U * size, r * size, 0xb7cbaa, 1, 0xe2ead4, 12)
-}
 
 export function flowerBed(d: Drawing, u: number, v: number, width = 3, color = 0xc78374) {
   d.box(u, v, width * U, 1.2 * U, 0, 2, 0xbac9a4, 0xe4d7bd, 0xd0c2a8, 1)
@@ -61,55 +58,150 @@ const figure = (d: Drawing, u: number, v: number, z: number) => {
   d.face([[u + 2.8 * U, v, z + 19], [u + 5 * U, v, z + 17], [u + 2.8 * U, v, z + 16]], 0xc9d2c7, 1)
 }
 
-/** An ornament of `id`, `size` cells a side, on its plate. */
-export function makeDecor(id: KindId) {
-  const kind = kinds[id],
-    p = (kind.size * 8 - 1) * U
-  const d = new Drawing(id, kind.title, "Planting beds, carved stone and timber furniture in the town's pale ink palette.")
-  d.asset.category = "buildings"
-  d.asset.reference = { type: "building", kind: id }
-  d.asset.footprint = kind.size
-  d.face(square(0, 0, p, -0.15), id === "plaza" || id === "statue" || id === "fountain" ? stone : green)
-  if (id === "garden") {
-    d.box(0, 0, p, U, 0, 0.3, 0xeee9de, 0xe3ddcf, 0xd5d0c4, 0.75)
-    tree(d, -2*U, -2*U, 0.6)
-    tree(d, 2*U, 2*U, 0.6)
-    flowerBed(d, p / 2, -p / 2, 2, 0xc78374)
-    flowerBed(d, -p / 2, p / 2, 2, 0xd6ba69)
-  } else if (id === "park") {
-    tree(d, -p / 2, -p / 2, 1.1)
-    tree(d, p / 2, -p / 3, 0.9)
-    tree(d, -p / 3, p / 2, 1)
-    d.box(0, 0, p, U, 0, 0.3, 0xeee9de, 0xe3ddcf, 0xd5d0c4, 0.75)
-    bench(d, p / 2, p / 2)
-    flowerBed(d, p / 2, p * 0.8, 3, 0xb29ac2)
-  } else if (id === "fountain") {
-    d.cylinder(0, 0, 5.5 * U, 0, 4, 0xdfe3dc, water, 1, 16)
-    d.cylinder(0, 0, 1.2 * U, 4, 7, 0xdfe3dc, stone, 1, 10)
-    d.cylinder(0, 0, 2.5 * U, 11, 2, 0xdfe3dc, water, 1, 12)
-    d.cylinder(0, 0, 4.6 * U, 4.03, 0.2, water, 0xd8e8ee, 0.75, 24)
-    d.ellipsoid(0, 0, 15, U, U, 1.8, stone, 1, undefined, 12)
-    for (let i = 0; i < 4; i++) {
-      const a = i * Math.PI / 2
-      d.line(Array.from({ length: 9 }, (_, j): Vertex => { const t = j / 8; return [Math.cos(a) * (1 + 3 * t) * U, Math.sin(a) * (1 + 3 * t) * U, 13 + 2 * Math.sin(t * Math.PI) - 8 * t] }), 1, 0x8faebd)
-    }
-    for (const r of [2.5, 3.5]) d.line(Array.from({ length: 25 }, (_, i): Vertex => [Math.cos(i * Math.PI / 12) * r * U, Math.sin(i * Math.PI / 12) * r * U, 4.3]), 0.75, 0xa9c5d0)
-  } else if (id === "statue") {
-    setts(d, 0, 0, p - 0.02, 0)
-    figure(d, 0, 0, 6)
-  } else if (id === "plaza") {
-    setts(d, 0, 0, p - 0.02, 0)
-    figure(d, 0, 0, 6)
-    tree(d, -p * 0.65, -p * 0.65, 0.65)
-    tree(d, p * 0.65, p * 0.65, 0.65)
-    bench(d, p * 0.6, -p * 0.7)
-    bench(d, -p * 0.6, p * 0.7)
+/** A fountain's basin, column, and jets, centred on (u, v). */
+function fountain(d: Drawing, u: number, v: number) {
+  d.cylinder(u, v, 5.5 * U, 0, 4, 0xdfe3dc, water, 1, 16)
+  d.cylinder(u, v, 1.2 * U, 4, 7, 0xdfe3dc, stone, 1, 10)
+  d.cylinder(u, v, 2.5 * U, 11, 2, 0xdfe3dc, water, 1, 12)
+  d.cylinder(u, v, 4.6 * U, 4.03, 0.2, water, 0xd8e8ee, 0.75, 24)
+  d.ellipsoid(u, v, 15, U, U, 1.8, stone, 1, undefined, 12)
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2
+    d.line(Array.from({ length: 9 }, (_, j): Vertex => { const t = j / 8; return [u + Math.cos(a) * (1 + 3 * t) * U, v + Math.sin(a) * (1 + 3 * t) * U, 13 + 2 * Math.sin(t * Math.PI) - 8 * t] }), 1, 0x8faebd)
   }
-  if (id === "garden" || id === "park") for (const y of [-p + U, p - U]) {
-    for (let x = -p + U; x <= p - U; x += 2 * U) d.box(x, y, 0.25 * U, 0.25 * U, 0, 5, 0xe9d2a8, 0xd0b58c, 0xb08a5e, 0.75)
-    d.line([[-p + U, y, 3], [p - U, y, 3]], 1, 0xb08a5e)
+  for (const r of [2.5, 3.5]) d.line(Array.from({ length: 25 }, (_, i): Vertex => [u + Math.cos(i * Math.PI / 12) * r * U, v + Math.sin(i * Math.PI / 12) * r * U, 4.3]), 0.75, 0xa9c5d0)
+}
+
+/** An iron lamp post with a lantern. */
+function lamp(d: Drawing, u: number, v: number) {
+  d.cylinder(u, v, 1.2 * U, 0, 1.5, 0x8d9589, 0xaeb5ab, 1, 8)
+  d.cylinder(u, v, 0.35 * U, 1.5, 15, palette.ink, palette.ink, 0.75, 6)
+  d.box(u, v, 1.1 * U, 1.1 * U, 16.5, 4, 0xf6e6a8, 0xf1d98a, 0xe2c46e, 1)
+  d.box(u, v, 1.5 * U, 1.5 * U, 20.5, 1.2, 0x5b665f, 0x46514b, 0x3d4943, 1)
+  d.cylinder(u, v, 0.4 * U, 21.7, 1.5, palette.ink, palette.ink, 0.75, 6)
+}
+
+/** A park's furnishing on a cell centred on (u, v). */
+export function parkProp(d: Drawing, prop: PropId, u: number, v: number) {
+  if (prop === "lamp") lamp(d, u + 4 * U, v - 4 * U)
+  else if (prop === "statue") {
+    d.box(u, v, 4.5 * U, 4.5 * U, 0, 2, 0xe9ebe5, 0xd5d9d0, 0xbec5bb, 1)
+    figure(d, u, v, 8)
+  } else fountain(d, u, v)
+}
+
+const lawn = 0xdce8cd
+const lawnDark = 0xd3e1c2
+const gravel = 0xece4d3
+
+/**
+ * Parks laid on the ground, cell by cell (by `key`): lawn with its blades,
+ * flower beds, gravel walks that join their neighbours (and the roads they
+ * meet), paved squares, a stone kerb where the park ends, and each cell's
+ * furnishing. `roads` lets a walk run out to the street.
+ */
+export function parkAsset(cells: ReadonlyMap<number, ParkCell>, roads: ReadonlySet<number> = new Set(), preview = false) {
+  const d = new Drawing("parks", "Parks", "")
+  const z = preview ? 0.17 : -0.12
+  const isPark = (x: number, y: number) => cells.has(key(x, y))
+  const walk = (x: number, y: number) => {
+    const c = cells.get(key(x, y))
+    return c !== undefined && (c.ground === "path" || c.ground === "square")
+  }
+  for (const [k, c] of cells) {
+    const { x, y } = cellOf(k), u = x + 0.5, v = y + 0.5
+    const h = hash(x, y)
+    if (c.ground === "square") setts(d, u, v, 0.5, z)
+    else d.face(square(u, v, 0.5, z), h < 0.5 ? lawn : lawnDark, 0)
+    if (c.ground === "lawn" || c.ground === "flowers")
+      for (let i = 0; i < 4; i++) {
+        const a = u - 0.35 + hash(x * 5 + i, y * 3) * 0.7, b = v - 0.35 + hash(y * 7 + i, x * 2) * 0.7
+        d.line([[a - 0.03, b, z + 0.02], [a, b, z + 2], [a + 0.03, b, z + 0.02]], 0.75, 0xa9c79a)
+      }
+    if (c.ground === "flowers") {
+      d.face(square(u, v, 0.34, z + 0.03), 0xd9c7a6, 1, 0xb6a27f)
+      const colors = [0xc78374, 0xd6ba69, 0xb29ac2, 0xe0a0a8]
+      for (let i = 0; i < 9; i++) {
+        const a = u + ((i % 3) - 1) * 0.2, b = v + (Math.floor(i / 3) - 1) * 0.2
+        d.ellipsoid(a, b, 1.2, 1.1 * U, 1.1 * U, 1.3, 0xa9c79a, 0, undefined, 8)
+        d.ellipsoid(a, b, 2.4, 0.7 * U, 0.7 * U, 0.8, colors[(i + Math.floor(h * 4)) % 4]!, 0.5, undefined, 8)
+      }
+    }
+    if (c.ground === "path") {
+      // A walk: a square in the middle, and a strip out to each walk or road beside it.
+      const w = 0.2
+      d.face(square(u, v, w, z + 0.02), gravel, 0)
+      const out: Array<Vertex> = []
+      for (const { x: dx, y: dy } of DIRS) {
+        const joined = walk(x + dx, y + dy) || roads.has(key(x + dx, y + dy))
+        const q = (along: number, across: number): Vertex => [u + dx * along - dy * across, v + dy * along + dx * across, z + 0.03]
+        if (joined) {
+          d.face([q(w, -w), q(0.5, -w), q(0.5, w), q(w, w)], gravel, 0)
+          d.line([q(w, -w), q(0.5, -w)], 1, 0xc2b79f)
+          d.line([q(w, w), q(0.5, w)], 1, 0xc2b79f)
+        } else d.line([q(w, -w), q(w, w)], 1, 0xc2b79f)
+        out.push(q(0.1 + hash(x * 3 + dx, y * 3 + dy) * 0.08, 0.05))
+      }
+      for (const p of out) d.line([p, [p[0] + 0.02, p[1], p[2]]], 1, 0xb8ad95)
+    }
+    // A low stone kerb where the park ends.
+    for (const { x: dx, y: dy } of DIRS) {
+      if (isPark(x + dx, y + dy)) continue
+      const q = (along: number, across: number): Vertex => [u + dx * along - dy * across, v + dy * along + dx * across, z]
+      const centre = q(0.47, 0)
+      d.box(centre[0], centre[1], dx ? 0.03 : 0.5, dy ? 0.03 : 0.5, z, 1.2, 0xeceee8, 0xd7dbd2, 0xc9cec4, 0.75)
+    }
+    if (c.prop !== "none") parkProp(d, c.prop, u, v)
   }
   return d.asset
+}
+
+/** One furnishing on a cell of lawn (or square), for the catalogue and the build menu. */
+export function makeParkProp(prop: PropId) {
+  const ground: GroundId = prop === "statue" || prop === "fountain" ? "square" : "lawn"
+  const asset = parkAsset(new Map([[key(0, 0), { x: 0, y: 0, ground, prop }]]))
+  const shift = ([u, v, z]: Vertex): Vertex => [u - 0.5, v - 0.5, z]
+  asset.faces.forEach((f) => { f.points = f.points.map(shift) })
+  asset.strokes.forEach((s) => { s.points = s.points.map(shift) })
+  asset.id = `park-${prop}`
+  asset.title = `Park · ${props[prop].title.toLowerCase()}`
+  asset.note = props[prop].blurb
+  asset.category = "land"
+  asset.reference = { type: "none" }
+  asset.footprint = 1
+  return asset
+}
+
+/** A small park laid out the way a player would: lawn, walks, flower beds, lamps, a fountain, and a statue. */
+export const samplePark: ReadonlyArray<ParkCell> = (() => {
+  const plan = [
+    "FLPLF",
+    "LAPAL",
+    "PPWPP",
+    "LAPSL",
+    "FLPLF"
+  ]
+  const out: Array<ParkCell> = []
+  plan.forEach((row, y) => [...row].forEach((ch, x) => {
+    const ground: GroundId = ch === "P" || ch === "A" ? "path" : ch === "S" || ch === "W" ? "square" : ch === "F" ? "flowers" : "lawn"
+    const prop: PropId | "none" = ch === "A" ? "lamp" : ch === "S" ? "statue" : ch === "W" ? "fountain" : "none"
+    out.push({ x, y, ground, prop })
+  }))
+  return out
+})()
+
+export function makeSamplePark() {
+  const asset = parkAsset(new Map(samplePark.map((c) => [key(c.x, c.y), c])))
+  const shift = ([u, v, z]: Vertex): Vertex => [u - 2.5, v - 2.5, z]
+  asset.faces.forEach((f) => { f.points = f.points.map(shift) })
+  asset.strokes.forEach((s) => { s.points = s.points.map(shift) })
+  asset.id = "park-sample"
+  asset.title = "Park · laid out"
+  asset.note = "A five-by-five park built piece by piece: lawn, a cross of walks, flower beds in the corners, lamps, a fountain, and a statue on paved squares."
+  asset.category = "land"
+  asset.reference = { type: "none" }
+  asset.footprint = 5
+  return asset
 }
 
 /** What is left of a home or building: charred, tumbled down, or boarded up. */

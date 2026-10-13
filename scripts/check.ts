@@ -22,12 +22,12 @@
  * - a workplace with no homes within reach stays unstaffed;
  * - a home nobody mends falls down, and a builder keeps it standing;
  * - citizens will not take settlers' work, and settlers stand in for citizens as apprentices;
- * - and homes with every need met become citizens on a street with fountains, not packed beside industry.
+ * - and homes with every need met become citizens on a street with a park behind it, not packed beside industry.
  */
-import { amounts, CONDITION_MAX, goodIds, kinds, RISK_MAX, ticks, type CharterValue, type KindId } from "../src/content.ts"
+import { amounts, CONDITION_MAX, goodIds, kinds, RISK_MAX, ticks, type CharterValue, type GroundId, type KindId, type PropId } from "../src/content.ts"
 import { canPlace, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/grid.ts"
 import { inside } from "../src/iso.ts"
-import { ringOf } from "../src/appeal.ts"
+import { parkValue, ringOf, type ParkCell } from "../src/appeal.ts"
 import { headless, type Snapshot } from "../src/sim/headless.ts"
 
 const town = (charter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }) => {
@@ -52,27 +52,43 @@ const building = (s: Snapshot, kind: string, x: number, y: number, size: number,
   return id
 }
 
-/** Citizens' homes, every need met for good, on free cells beside the roads; every third free cell a statue, so the street is fine enough for them. */
+/** A cell of park on a snapshot: its ground, and what stands on it. */
+const parkCell = (s: Snapshot, x: number, y: number, ground: GroundId, prop: PropId | "none" = "none") => {
+  s.entities.push({ id: s.nextEntity++, components: { "Town/Tile": { x, y, size: 1 }, "Town/Park": { ground, prop } } })
+}
+
+/**
+ * Citizens' homes, every need met for good, on free cells beside the roads;
+ * every fifth spot a small park instead (a statue, a fountain, and a lamp on
+ * flower beds and lawn), so the street is fine enough for them.
+ */
 const settle = (s: Snapshot, homes: number) => {
   const grid = new GridBuilder(s.resources["Town/Land"].mask)
   for (const e of s.entities) {
     const tile = e.components["Town/Tile"]
-    if (tile) grid.claim(tile, e.id, e.components["Town/Road"] ? "road" : "building")
+    if (tile) grid.claim(tile, e.id, e.components["Town/Road"] ? "road" : e.components["Town/Park"] ? "park" : "building")
   }
   const g = grid.value()
   let placed = 0
-  let statues = 0
+  let parks = 0
   for (let k = 0; k < g.use.length && placed < homes; k++) {
     if (g.use[k] !== "empty") continue
     const x = k % 64
     const y = Math.floor(k / 64)
     if (!DIRS.some((d) => inside(x + d.x, y + d.y) && g.use[key(x + d.x, y + d.y)] === "road")) continue
     const forever = 10_000_000
-    if ((placed + statues) % 3 === 2) {
-      building(s, "statue", x, y, 1)
-      statues += 1
+    // Any square of four free cells this one is in.
+    const corner = (placed + parks) % 5 === 4 ? [{ x, y }, { x: x - 1, y }, { x, y: y - 1 }, { x: x - 1, y: y - 1 }].find((c) => canPlace(g, { ...c, size: 2 })) : undefined
+    if (corner) {
+      parkCell(s, corner.x, corner.y, "square", "statue")
+      parkCell(s, corner.x + 1, corner.y, "flowers", "fountain")
+      parkCell(s, corner.x, corner.y + 1, "flowers", "lamp")
+      parkCell(s, corner.x + 1, corner.y + 1, "lawn")
+      grid.claim({ ...corner, size: 2 }, -1, "park")
+      parks += 1
       continue
     }
+    grid.claim({ x, y, size: 1 }, -1, "house")
     s.entities.push({
       id: s.nextEntity++,
       components: {
@@ -199,7 +215,7 @@ const gridOf = (s: Snapshot) => {
     const c = e.components
     const tile = c["Town/Tile"]
     if (!tile) continue
-    const use: Use = c["Town/Road"] ? "road" : c["Town/House"] ? "house" : c["Town/Tree"] ? "tree" : c["Town/Rock"] ? "rock" : c["Town/Water"] ? "water" : c["Town/Field"] ? "field" : c["Town/Ruin"] ? "ruin" : "building"
+    const use: Use = c["Town/Road"] ? "road" : c["Town/Park"] ? "park" : c["Town/House"] ? "house" : c["Town/Tree"] ? "tree" : c["Town/Rock"] ? "rock" : c["Town/Water"] ? "water" : c["Town/Field"] ? "field" : c["Town/Ruin"] ? "ruin" : "building"
     builder.claim(tile, e.id, use)
   }
   return builder
@@ -255,10 +271,8 @@ const standing = (s: Snapshot, kind: KindId, x: number, y: number, stock: Partia
   } else if (k.recipe) c["Town/Inventory"] = { stock: amounts(stock), accepts: [k.recipe.output, ...tools], cap: 8 }
   if (k.carriers) c["Town/Carriers"] = { count: k.carriers }
   if (k.service) c["Town/Service"] = { service: k.service.service, interval: ticks(k.service.seconds), cooldown: 0, range: k.service.range }
-  if (!k.decor) {
-    c["Town/Risk"] = { fire: 0, health: 0, order: 0, thefts: 0 }
-    c["Town/Condition"] = { value: CONDITION_MAX }
-  }
+  c["Town/Risk"] = { fire: 0, health: 0, order: 0, thefts: 0 }
+  c["Town/Condition"] = { value: CONDITION_MAX }
   const id = s.nextEntity++
   s.entities.push({ id, components: c })
   return id
@@ -275,9 +289,12 @@ const entity = (t: ReturnType<typeof town>, id: number) => t.snapshot().entities
     // Room for a smithy right beside it.
     spot = find(g, 1, (x, y) => besideRoad(g)(x, y) && [[1, 0], [-2, 0], [0, 1], [0, -2]].some(([dx, dy]) => canPlace(g.value(), { x: x + dx!, y: y + dy!, size: 2 })), "house")
     home = homeAt(s, spot.x, spot.y, 2, 8)
-    // A statue two cells off makes the street fine enough for citizens.
-    const statue = find(g, 1, (x, y) => ringOf({ x, y, size: 1 }, spot.x, spot.y) === 2 && !isRoad(g.value(), x, y))
-    building(s, "statue", statue.x, statue.y, 1)
+    // A small park two cells off (a statue and a fountain on it) makes the street fine enough for citizens.
+    const park = find(g, 2, (x, y) => ringOf({ x, y, size: 2 }, spot.x, spot.y) === 2, "park")
+    parkCell(s, park.x, park.y, "square", "statue")
+    parkCell(s, park.x + 1, park.y, "flowers", "fountain")
+    parkCell(s, park.x, park.y + 1, "lawn", "lamp")
+    parkCell(s, park.x + 1, park.y + 1, "lawn")
   })
   t.run(10)
   const before = entity(t, home)?.components["Town/House"]?.tier
@@ -413,7 +430,8 @@ const entity = (t: ReturnType<typeof town>, id: number) => t.snapshot().entities
     for (let i = 0; i < 3; i++) {
       const c = find(g, 1, besideRoad(g), "house")
       homeAt(s, c.x, c.y, 2, 8)
-      building(s, "statue", ...(() => { const st = find(g, 1, () => true); return [st.x, st.y] as const })(), 1)
+      const p = find(g, 1, () => true, "park")
+      parkCell(s, p.x, p.y, "flowers", "statue")
     }
   })
   t.run(3)
@@ -464,7 +482,7 @@ const entity = (t: ReturnType<typeof town>, id: number) => t.snapshot().entities
   check("wear and mending", fell && kept > 900, `the neglected home ${fell ? "fell down" : "still stands"}; the one by the builder's yard is at ${Math.round(kept / 10)}%`)
 }
 
-// Zoned against crowded: the same homes, every need met, on a street with fountains away from industry,
+// Zoned against crowded: the same homes, every need met, on a street with a park behind it away from industry,
 // and packed in beside a smithy and a quarry. Only the first become citizens.
 {
   const t = town()
@@ -492,10 +510,11 @@ const entity = (t: ReturnType<typeof town>, id: number) => t.snapshot().entities
         ;(y < hall.y ? zoned : crowded).push(id)
       }
       if (y < hall.y) {
-        // Fountains behind the zoned homes.
-        for (const x of [hall.x - 1, hall.x + 3]) if (empty(x, besideAt)) {
-          building(s, "fountain", x, besideAt, 1)
-          lay(x, besideAt, "building")
+        // A strip of park behind the zoned homes: lawn, a fountain, and lamps.
+        const furnished: Record<number, PropId> = { [hall.x - 1]: "lamp", [hall.x + 1]: "fountain", [hall.x + 3]: "lamp" }
+        for (let x = hall.x - 2; x <= hall.x + 4; x++) if (empty(x, besideAt)) {
+          parkCell(s, x, besideAt, "lawn", furnished[x] ?? "none")
+          lay(x, besideAt, "park")
         }
       } else {
         // A smithy and a quarry right behind the crowded ones.
@@ -517,6 +536,16 @@ const entity = (t: ReturnType<typeof town>, id: number) => t.snapshot().entities
     zoned.length >= 4 && crowded.length >= 4 && citizens(zoned) > 0 && citizens(crowded) === 0,
     `zoned street: ${citizens(zoned)} citizens (tiers ${tiers(zoned).join("")}); crowded street: ${citizens(crowded)} citizens (tiers ${tiers(crowded).join("")})`
   )
+}
+
+// A park with walks out to the street is worth more than the same park shut in behind homes.
+{
+  const cells: Array<ParkCell> = []
+  for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) cells.push({ x, y, ground: x === 1 ? "path" : "lawn", prop: x === 1 && y === 1 ? "fountain" : "none" })
+  const shut = parkValue(cells)
+  // A road runs past both ends of the walk.
+  const open = parkValue(cells, (x, y) => x === 1 && (y === -1 || y === 3))
+  check("park entrances", open.entrances === 2 && open.value === shut.value + 3, `shut in: ${shut.value}; two walks out to the road: ${open.value}`)
 }
 
 console.log(failures === 0 ? "\nall ends hold" : `\n${failures} failed`)

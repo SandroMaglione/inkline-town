@@ -2,7 +2,7 @@
  * The town's world. Every entity is assembled from small components (see
  * `archetypes.ts`): a `Tile` on the grid, then whichever roles it has. The
  * land is `Tree`s, `Rock`s, `Water`, and a farm's `Field`s; the town is
- * `Road`s, `House`s, and `Building`s that may hold an `Inventory`, follow a
+ * `Road`s, `Park` cells, `House`s, and `Building`s that may hold an `Inventory`, follow a
  * `Recipe`, gather from the land (`Gatherer`), plant (`Planter`), send
  * `Carriers`, or offer a `Service`. A building still owed materials is a
  * `Site`; one going up is `Rising`. Walkers follow a `Route` on an `Errand`
@@ -17,7 +17,7 @@ import type { NodeRegistry } from "@typeonce/bevy-ts-render"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
 import type { GameScene } from "./render3d/scene.ts"
-import { goodIds, kindIds, landIds, serviceIds, sizeIds, type Amounts } from "./content.ts"
+import { goodIds, groundIds, kindIds, landIds, propIds, serviceIds, sizeIds, type Amounts } from "./content.ts"
 import type { UiValue } from "./ui.ts"
 
 export const Root = Schema.defineRoot("Town")
@@ -45,6 +45,8 @@ export const Tile = Descriptor.ConstructedComponent(Decode.struct({ x: integer, 
 export const Road = Descriptor.Tag("Town/Road")
 /** A road paved with stone: a little nicer to live on (see `appeal.ts`). */
 export const Paved = Descriptor.Tag("Town/Paved")
+/** A cell of park: its ground, and what stands on it (see `parks` in content). */
+export const Park = Descriptor.ConstructedComponent(Decode.struct({ ground: Decode.literal(...groundIds), prop: Decode.literal("none", ...propIds) }))("Town/Park")
 /** What is left of a home or building that burned, fell down, or was left derelict, until it is cleared. */
 export const Ruin = Descriptor.ConstructedComponent(Decode.struct({ cause: Decode.literal("burnt", "collapsed", "derelict") }))("Town/Ruin")
 /** Materials still owed before it can go up, out of `total`. */
@@ -305,7 +307,7 @@ export const Fires = Descriptor.ConstructedResource(Decode.struct({
 
 /** What stands on each cell, rebuilt every step from the tiles (see `grid.ts`). */
 /** `void`: off the land, past the coast. */
-export type Use = "empty" | "road" | "house" | "building" | "tree" | "rock" | "water" | "field" | "ruin" | "void"
+export type Use = "empty" | "road" | "park" | "house" | "building" | "tree" | "rock" | "water" | "field" | "ruin" | "void"
 export interface GridValue {
   /** Entity id on each cell (by `key`), or 0. */
   readonly owner: ReadonlyArray<number>
@@ -336,7 +338,7 @@ export const RuinNodes = Descriptor.Service<NodeRegistry.NodeRegistry<RuinView>>
 export const Game = Schema.bind(
   Schema.fragment({
     components: {
-      Tile, Road, Paved, Ruin, Site, Rising, Tree, Rock, Water, Field, House, Risk, Condition, Burning, Sick, Building, TownHall, Status,
+      Tile, Road, Paved, Park, Ruin, Site, Rising, Tree, Rock, Water, Field, House, Risk, Condition, Burning, Sick, Building, TownHall, Status,
       Paused, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Figure, Route, Errand, Rescue, Roam
     },
     resources: {

@@ -65,8 +65,6 @@ export function constructionAsset(size: number, half: number, height: number, bu
 export function buildingAsset(id: KindId, build: number, share: number | null, doors: DoorSet, open: number, appearance: Appearance = {}) {
   const kind = kinds[id],
     stage = buildStages(build)
-  // An ornament is laid out at once.
-  if (kind.decor) return makeBuilding(id)
   if (build < 0.78) return constructionAsset(kind.size, kind.half, kind.roof === "gable" ? 20 : kind.stories * 32, build, share)
   const asset = makeBuilding(id, { doors, open, fit: stage.fit, plate: false, motion: false } satisfies BuildingOptions)
   return build >= 1 ? withAppearance(asset, kind.half * U, kind.roof === "gable" ? 20 : kind.stories * 32, appearance) : asset

@@ -121,7 +121,7 @@ const layout: Array<[string, number, number]> = [
   ["fishery", 13, 1]
 ]
 for (const [id, x, y] of layout) place(id, x, y)
-// Services, food stores and ornaments along the south-west street.
+// Services, food stores and a park along the south-west street.
 const quarter: Array<[string, number, number]> = [
   ["firewatch", -17, -2],
   ["healer", -17, 1],
@@ -130,11 +130,10 @@ const quarter: Array<[string, number, number]> = [
   ["granary", -9.5, 1],
   ["smokehouse", 10, 1],
   ["hospital", 9.5, -11],
-  ["garden", -15, -8],
-  ["park", -16.5, -8],
-  ["fountain", 0.5, -8],
-  ["statue", 4.5, -8],
-  ["plaza", 9, -8]
+  ["park-sample", 2.5, -8],
+  ["park-lamp", -13.5, -8],
+  ["park-statue", 9.5, -8],
+  ["park-fountain", 11, -8]
 ]
 for (const [id, x, y] of quarter) place(id, x, y)
 // The review annex gives seasonal/condition variants their own ground,

@@ -10,14 +10,14 @@
  */
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
-import { appealGrid, appealAt, buildingSource, landSource, type AppealSource } from "../appeal.ts"
+import { appealGrid, appealAt, buildingSource, landSource, parkSources, type AppealSource } from "../appeal.ts"
 import { ruinDraft } from "../archetypes.ts"
 import { appeal, condition as wear, goodIds, goods, home, kinds, risk, RISK_MAX, winters, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../grid.ts"
 import { counted, placeName, type Landmark } from "../places.ts"
 import type { Point } from "../iso.ts"
 import {
-  Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Grid, House, Inventory, Mood, Paved, Rescue, Rising, Risk, Rng,
+  Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Grid, House, Inventory, Mood, Park, Paved, Rescue, Rising, Risk, Rng,
   Road, Route, Ruin, Service, Sick, Site, Staff, Storage, Tile, Time, Tree, Treasury, WalkerOf, Water, maybe
 } from "../schema.ts"
 import { elapsed, seasonAt, write } from "./shared.ts"
@@ -33,6 +33,8 @@ export const Appraise = Game.System(
       trees: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Tree] }),
       water: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Water] }),
       paved: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road, Paved] }),
+      parks: Game.Query({ selection: { tile: Game.Query.read(Tile), park: Game.Query.read(Park) } }),
+      roads: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road] }),
       ruins: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Ruin] }),
       homes: Game.Query({ selection: { tile: Game.Query.read(Tile), condition: Game.Query.read(Condition) }, with: [House], without: [Site, Rising] })
     },
@@ -48,6 +50,8 @@ export const Appraise = Game.System(
     for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get()))
     for (const { data } of queries.water.each()) sources.push(landSource("water", data.tile.get()))
     for (const { data } of queries.paved.each()) sources.push(landSource("paved", data.tile.get()))
+    const roads = new Set(queries.roads.each().map(({ data }) => `${data.tile.get().x},${data.tile.get().y}`))
+    sources.push(...parkSources(queries.parks.each().map(({ data }) => ({ ...data.tile.get(), ...data.park.get() })), (x, y) => roads.has(`${x},${y}`)))
     for (const { data } of queries.ruins.each()) sources.push(landSource("ruin", data.tile.get()))
     for (const { data } of queries.homes.each()) if (data.condition.get().value < wear.worn) sources.push(landSource("worn", data.tile.get()))
     resources.appeal.set({ cells: appealGrid(sources) })

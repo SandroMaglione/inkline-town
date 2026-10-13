@@ -21,7 +21,7 @@ export interface Snapshot {
 
 export const headless = (charter: CharterValue, options: { readonly toast?: (message: string) => void } = {}) => {
   const ui: UiValue = {
-    tool: "select", placing: null, menu: null, pointer: null, dragFrom: null, selected: null, gestures: [],
+    tool: "select", placing: null, ground: "lawn", prop: "lamp", menu: null, pointer: null, dragFrom: null, selected: null, gestures: [],
     edits: [{ type: "newTown", charter }],
     preview: emptyPreview(), hits: [], panel: null, centres: new Map(), stats: null, speed: 1, founding: false,
     view: "none", overlay: { key: "", cells: [] }, legend: null,

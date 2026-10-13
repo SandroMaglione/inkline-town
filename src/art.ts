@@ -22,7 +22,7 @@
 import { Container, Graphics } from "pixi.js"
 import type { SurfaceState } from "./render3d/surface-state.ts"
 
-import { goods, GROWN, home, kinds, ROCK_AMOUNT, type GoodId, type Kind, type KindId, type Tier } from "./content.ts"
+import { goods, GROWN, home, kinds, ROCK_AMOUNT, type GoodId, type GroundId, type Kind, type KindId, type PropId, type Tier } from "./content.ts"
 import { cellOf, DIRS, key } from "./grid.ts"
 import { flat, GRID, toScreen, U, type Point } from "./iso.ts"
 
@@ -638,12 +638,7 @@ const dresses: Readonly<Record<KindId, Dress>> = {
   healer: { accent: 0x4f9a8a },
   hospital: { accent: 0x4f9a8a, glass: glassCool },
   watchhouse: { accent: 0x3d4f6e, flag: 0x3d4f6e },
-  builder: { accent: 0x8a6a45, roof: roofOf(0xb08a5a) },
-  garden: { accent: 0x4f9a6a },
-  park: { accent: 0x4f9a6a },
-  fountain: { accent: 0x5f8fb0 },
-  statue: { accent: 0x8f9891 },
-  plaza: { accent: 0x8f9891 }
+  builder: { accent: 0x8a6a45, roof: roofOf(0xb08a5a) }
 }
 
 /**
@@ -652,36 +647,57 @@ const dresses: Readonly<Record<KindId, Dress>> = {
  * and grey, as a ghost.
  */
 /**
- * An ornament (a garden, park, fountain, statue, or plaza), drawn simply: a
- * placeholder until each has a drawing of its own.
+ * A piece of park for the build menu, on a cell of its ground: lawn, a
+ * flower bed, a gravel walk, a paved square, or a furnishing (a lamp on
+ * lawn, a statue or a fountain on a square).
  */
-export const drawDecor = (g: Graphics, kind: Kind) => {
-  const p = plateHalf(kind.size)
+export const drawParkPiece = (g: Graphics, what: GroundId | PropId) => {
+  const p = plateHalf(1)
   const green = 0xd8e6c9
   const stone = 0xe4e6e0
-  quad(g, square(0, 0, p), kind.id === "plaza" ? stone : green)
-  if (kind.id === "garden" || kind.id === "park") {
-    const spots = kind.id === "garden" ? [[-0.2, -0.2], [0.2, 0.2]] : [[-0.5, -0.5], [0.5, -0.4], [-0.4, 0.5], [0.45, 0.45]]
-    for (const [u, v] of spots) {
-      const c = at(u!, v!, 0)
-      g.ellipse(c.x, c.y - 9, 6, 6).fill({ color: 0xa9c79a }).stroke({ color: ink, width: DETAIL })
-      line(g, c, { x: c.x, y: c.y - 4 }, LINE, 0x6b5a45)
+  quad(g, square(0, 0, p), what === "square" || what === "statue" || what === "fountain" ? stone : green)
+  const tree = (u: number, v: number, r = 6) => {
+    const c = at(u, v, 0)
+    line(g, c, { x: c.x, y: c.y - 4 }, LINE, 0x6b5a45)
+    g.ellipse(c.x, c.y - 4 - r, r, r).fill({ color: 0xa9c79a }).stroke({ color: ink, width: DETAIL })
+  }
+  switch (what) {
+    case "lawn":
+      for (const [u, v] of [[-0.2, -0.1], [0.15, 0.2], [0.25, -0.25], [-0.25, 0.25]]) {
+        const c = at(u!, v!, 0)
+        line(g, { x: c.x - 1.5, y: c.y }, { x: c.x, y: c.y - 3 }, DETAIL, 0x8fae80)
+        line(g, { x: c.x + 1.5, y: c.y }, { x: c.x, y: c.y - 3 }, DETAIL, 0x8fae80)
+      }
+      return
+    case "flowers":
+      quad(g, square(0, 0, p * 0.65), 0xd9c7a6)
+      for (const [i, [u, v]] of [[-0.2, -0.2], [0.2, -0.2], [0, 0], [-0.2, 0.2], [0.2, 0.2]].entries())
+        g.circle(at(u!, v!, 0).x, at(u!, v!, 0).y - 1.5, 2.2).fill({ color: [0xc78374, 0xd6ba69, 0xb29ac2, 0xe0a0a8][i % 4]! })
+      return
+    case "path":
+      quad(g, [at(-0.5, -0.2, 0), at(0.5, -0.2, 0), at(0.5, 0.2, 0), at(-0.5, 0.2, 0)], 0xece4d3)
+      return
+    case "square":
+      for (const u of [-0.25, 0, 0.25]) line(g, at(u, -0.45, 0), at(u, 0.45, 0), DETAIL, 0xc6ccc3)
+      for (const v of [-0.25, 0, 0.25]) line(g, at(-0.45, v, 0), at(0.45, v, 0), DETAIL, 0xc6ccc3)
+      return
+    case "lamp": {
+      line(g, at(0, 0, 0), at(0, 0, 18), LINE)
+      g.rect(at(0, 0, 22).x - 2.5, at(0, 0, 22).y, 5, 5).fill({ color: 0xf6e6a8 }).stroke({ color: ink, width: DETAIL })
+      return
     }
-    if (kind.id === "garden") for (const [u, v] of [[0.25, -0.25], [-0.25, 0.25]]) g.circle(at(u!, v!, 0).x, at(u!, v!, 0).y - 1, 1.6).fill({ color: 0xe89a7c })
-    return
+    case "fountain":
+      cylinder(g, 0, 0, 5 * U, 0, 4, 0xdfe3dc, 0xc9dde6)
+      cylinder(g, 0, 0, 1.2 * U, 4, 8, 0xdfe3dc, 0xeef0ea)
+      return
+    case "statue":
+      cylinder(g, 0, 0, 2.5 * U, 0, 6, 0xdfe3dc, stone)
+      cylinder(g, 0, 0, 1.2 * U, 6, 16, 0xc9ccc4, 0xb9beb5)
+      return
   }
-  if (kind.id === "fountain") {
-    cylinder(g, 0, 0, 5 * U, 0, 4, 0xdfe3dc, 0xc9dde6)
-    cylinder(g, 0, 0, 1.2 * U, 4, 8, 0xdfe3dc, 0xeef0ea)
-    return
-  }
-  // A statue (on its own, or in the middle of a plaza).
-  cylinder(g, 0, 0, 2.5 * U, 0, 6, 0xdfe3dc, stone)
-  cylinder(g, 0, 0, 1.2 * U, 6, 16, 0xc9ccc4, 0xb9beb5)
 }
 
 export const drawBuilding = (g: Graphics, kind: Kind, build: number, door: number, wave: number, doors: Doors, plain = false) => {
-  if (kind.decor) return drawDecor(g, kind)
   const dress: Dress = plain ? { accent: 0xb9beb5 } : dresses[kind.id]
   const color = dress.accent
   const a = kind.half * U

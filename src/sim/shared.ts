@@ -1,13 +1,14 @@
 /** Queries and small helpers the simulation's systems share. */
 import { ticks, winters, YEARS_PER_TERM, type WinterId } from "../content.ts"
 import { doors, type TileLike, type Use } from "../grid.ts"
-import { Field, Game, House, Road, Rock, Ruin, Tile, Tree, Water, type GridValue } from "../schema.ts"
+import { Field, Game, House, Park, Road, Rock, Ruin, Tile, Tree, Water, type GridValue } from "../schema.ts"
 
 /** Every tile, with enough to tell what it is. */
 export const TileRead = Game.Query({
   selection: {
     tile: Game.Query.read(Tile),
     road: Game.Query.optional(Road),
+    park: Game.Query.optional(Park),
     house: Game.Query.optional(House),
     tree: Game.Query.optional(Tree),
     rock: Game.Query.optional(Rock),
@@ -19,6 +20,7 @@ export const TileRead = Game.Query({
 
 export const useOf = (data: {
   readonly road: { readonly present: boolean }
+  readonly park: { readonly present: boolean }
   readonly house: { readonly present: boolean }
   readonly tree: { readonly present: boolean }
   readonly rock: { readonly present: boolean }
@@ -27,6 +29,7 @@ export const useOf = (data: {
   readonly ruin: { readonly present: boolean }
 }): Use =>
   data.road.present ? "road"
+  : data.park.present ? "park"
   : data.house.present ? "house"
   : data.tree.present ? "tree"
   : data.rock.present ? "rock"

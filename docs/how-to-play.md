@@ -77,10 +77,23 @@ Nobody tells you to build it that way; it works best that way.
   take from it, fading with distance: a smithy, quarry, or mine takes 8
   beside it and less out to four cells; a sawmill, bakery, mill, or
   smokehouse 4; warehouses, farms, a granary, a builder's yard 2. Water and
-  woods give 2, a garden 3, a park or fountain 6, a statue or plaza 10, a
-  market 2 and a chapel 4, the town hall 4, and a paved street 1 beside it.
-  Ruins and run-down homes take a little. Ornaments cost upkeep: a fine
-  centre is something you choose to pay for.
+  woods give 2, a market 2 and a chapel 4, the town hall 4, and a paved
+  street 1 beside it. Ruins and run-down homes take a little.
+- **Parks** are laid out cell by cell from the build menu. Drag a
+  rectangle of ground (lawn, flower beds, gravel walks, a paved square),
+  then click a cell of it to set a furnishing (a lamp, a fountain once 30
+  live in town, a statue once 20 are citizens). Ground that touches is one
+  park, and the whole park is what the streets around it feel: its beauty
+  adds up from its ground (at most 4), its furnishings (the first of a
+  kind in full, each more of it half as much, and one for every two
+  cells), and its ways in from the street (a walk or a square beside a
+  road: 1.5 each, two count), up to 15, out to 2 cells and one more for
+  every 6 cells of park, up to 5. A lone statue is worth little; a lawn
+  with walks in from the street, lamps, and a statue is worth a street of
+  citizens.
+  Parks cost upkeep by the cell and by the furnishing: a fine centre is
+  something you choose to pay for. Bulldozing a cell takes its furnishing
+  first, then its ground.
 - **Tiers.** Settlers live anywhere. A citizens' home needs desirability 5
   as well as bread, cloth, and faith; a home whose street drops below 5
   goes back to settlers even with every need met. A **townhouse** of
@@ -160,7 +173,7 @@ store) and the latest news, which also pops up as it happens.
   and pays twice as much, and on a fine street (15) with every service
   calling, a three-story townhouse.
 - **Buildings** need a road at the middle of a side and workers of their
-  crew from homes within 15 road cells. Ornaments need no road and no
+  crew from homes within 15 road cells. Parks need no road and no
   workers; their stone comes straight out of storage. Gatherers work the land within their reach (trees, rocks, water,
   fields); workshops turn one good into another.
 - **Carriers** walk every good along the roads: producers send to whoever

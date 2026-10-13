@@ -5,7 +5,7 @@
  */
 import { Application, Graphics } from "pixi.js"
 
-import { drawBuilding, drawHouse, homeVariant, plate, plateHalf } from "./art.ts"
+import { drawBuilding, drawHouse, drawParkPiece, homeVariant, plate, plateHalf } from "./art.ts"
 import {
   categoryColor,
   categoryOrder,
@@ -13,8 +13,13 @@ import {
   defaultCharter,
   goodIds,
   goods,
+  groundIds,
+  grounds,
   home,
   kindOrder,
+  park as parkRules,
+  propIds,
+  props,
   PAVE_COST,
   tierHome,
   winters,
@@ -32,8 +37,11 @@ import {
   type Category,
   type CharterValue,
   type GoodId,
+  type GroundId,
   type Kind,
   type KindId,
+  type ParkPiece,
+  type PropId,
   type Tier
 } from "./content.ts"
 import { GRID } from "./iso.ts"
@@ -140,6 +148,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const ui: UiValue = {
     tool: "select",
     placing: null,
+    ground: "lawn",
+    prop: "lamp",
     menu: null,
     pointer: null,
     dragFrom: null,
@@ -309,7 +319,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
 
   const refreshTools = () => {
     for (const { tool, button } of buttons) {
-      const on = tool.tool === "build" ? ui.menu === "build" || ui.tool === "place" : tool.tool === ui.tool
+      const on = tool.tool === "build" ? ui.menu === "build" || ui.tool === "place" || ui.tool === "ground" || ui.tool === "prop" : tool.tool === ui.tool
       button.classList.toggle("on", on)
     }
     townButton.classList.toggle("on", ui.menu === "town")
@@ -331,6 +341,18 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     ui.menu = null
     choose("place")
     ui.toast(`Click to place a ${kinds[kind].title.toLowerCase()} · Esc to stop`)
+  }
+  const layGround = (ground: GroundId) => {
+    ui.ground = ground
+    ui.menu = null
+    choose("ground")
+    ui.toast(`Drag a rectangle to lay ${grounds[ground].title.toLowerCase()} · Esc to stop`)
+  }
+  const furnish = (prop: PropId) => {
+    ui.prop = prop
+    ui.menu = null
+    choose("prop")
+    ui.toast(`Click a cell of park to set a ${props[prop].title.toLowerCase()} · Esc to stop`)
   }
   choose("select")
 
@@ -398,7 +420,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   // ── Pictures of buildings, for the build menu and the panel ──
   const pictures = new Map<string, Promise<string>>()
   /** A building (or a home of a tier) drawn as the town draws it, as an image. */
-  const picture = (what: KindId | Tier): HTMLImageElement => {
+  const picture = (what: KindId | Tier | `park:${GroundId | PropId}`): HTMLImageElement => {
     const img = document.createElement("img")
     img.className = "thumb"
     img.alt = ""
@@ -406,12 +428,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     let url = pictures.get(id)
     if (!url) {
       const g = new Graphics()
-      if (what === 1 || what === 2 || what === 3) {
+      if (typeof what === "string" && what.startsWith("park:")) drawParkPiece(g, what.slice(5) as GroundId | PropId)
+      else if (what === 1 || what === 2 || what === 3) {
         plate(g, plateHalf(1))
         drawHouse(g, what, 1, { right: true, left: false }, homeVariant(0.1))
       } else {
-        plate(g, plateHalf(kinds[what].size))
-        drawBuilding(g, kinds[what], 1, 0, 0.6, { right: true, left: true })
+        const kind = kinds[what as KindId]
+        plate(g, plateHalf(kind.size))
+        drawBuilding(g, kind, 1, 0, 0.6, { right: true, left: true })
       }
       url = app.renderer.extract.base64({ target: g, resolution: 2 })
       void url.finally(() => g.destroy())
@@ -458,7 +482,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     return head
   }
 
-  const lockText = (kind: Kind): string | null => {
+  const lockText = (kind: Pick<Kind, "unlock"> | ParkPiece): string | null => {
     const s = ui.stats
     if (!s) return null
     const residents = s.settlers + s.citizens
@@ -500,8 +524,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     gathering: "wood",
     crafts: "tools",
     food: "bread",
-    services: "faith",
-    decor: "decor"
+    services: "faith"
   }
 
   const buildMenu = () => {
@@ -509,7 +532,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     for (const category of categoryOrder) {
       const options = kindOrder.filter((id) => kinds[id].category === category && kinds[id].buildable)
       if (options.length === 0) continue
-      const box = section(category === "decor" ? "decorations" : category, categoryIcon[category], category === "decor" ? "Ornaments raise the desirability of the streets around them: citizens need 5, townhouses 15." : undefined)
+      const box = section(category, categoryIcon[category])
       box.style.borderTop = `3px solid ${hex(categoryColor[category])}`
       for (const id of options) {
         const kind = kinds[id]
@@ -533,6 +556,40 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       }
       panel.append(box)
     }
+    // Parks are laid out piece by piece: ground first, then what stands on it.
+    const parks = section(
+      "parks",
+      "decor",
+      `Lay ground, then set furnishings on it. Ground that touches is one park: the more it holds the nicer the streets around it (citizens need 5, townhouses 15). One furnishing counts for every ${parkRules.cellsPerProp} cells.`
+    )
+    parks.style.borderTop = "3px solid #4f9a6a"
+    const pieces: ReadonlyArray<{ readonly id: GroundId | PropId; readonly piece: ParkPiece; readonly pick: () => void; readonly ground: boolean }> = [
+      ...groundIds.map((id) => ({ id, piece: grounds[id], pick: () => layGround(id), ground: true })),
+      ...propIds.map((id) => ({ id, piece: props[id], pick: () => furnish(id), ground: false }))
+    ]
+    for (const { id, piece, pick, ground } of pieces) {
+      if (ground && id === "lawn") parks.append(el("p", "empty", "ground · drag a rectangle"))
+      if (!ground && id === "lamp") parks.append(el("p", "empty", "furnishings · click a cell of park"))
+      const option = el("button", "option")
+      const cost = costChips(piece.cost)
+      const terms = el("span", "chips")
+      terms.innerHTML = `<span class="chip dim" title="beauty it adds to its park">${icon("appeal", 14)}+${piece.beauty}</span><span class="chip dim" title="upkeep, coins a minute">${icon("upkeep", 14)}${piece.upkeep}/min</span>`
+      const blurb = el("span", "blurb", piece.blurb)
+      option.append(picture(`park:${id}`), el("span", "name", piece.title.toLowerCase()), cost.box, blurb)
+      option.title = `${piece.title}: ${piece.blurb} · beauty +${piece.beauty}${ground ? " a cell" : ""} · ${piece.upkeep} coins a minute`
+      cost.box.append(terms)
+      option.onclick = pick
+      live.push(() => {
+        const lock = lockText(piece)
+        const short = cost.refresh()
+        option.disabled = lock !== null
+        option.classList.toggle("short", lock === null && short)
+        option.classList.toggle("on", (ground ? ui.tool === "ground" && ui.ground === id : ui.tool === "prop" && ui.prop === id))
+        blurb.textContent = lock ?? piece.blurb
+      })
+      parks.append(option)
+    }
+    panel.append(parks)
   }
 
   const row = (box: HTMLElement, label: string, glyph?: IconName | GoodId) => {
@@ -863,7 +920,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     if (p.type === "build") return buildMenu()
     if (p.type === "town") return townPanel()
 
-    const title = p.type === "building" ? kinds[p.kind].title.toLowerCase() : p.type === "house" ? tierHome[p.tier] : "ruin"
+    const title = p.type === "building" ? kinds[p.kind].title.toLowerCase() : p.type === "house" ? tierHome[p.tier] : p.type === "park" ? "park" : "ruin"
     const status = el("span", "pill")
     const about = el(
       "p",
@@ -872,6 +929,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         ? kinds[p.kind].blurb
         : p.type === "ruin"
           ? "bulldoze it to clear the plot"
+          : p.type === "park"
+            ? "every cell of ground that touches this one: lay more, or set furnishings on it, to make the streets around it nicer"
           : p.tier === 1
             ? "settlers: fish or bread from a market keeps them; they do the rough work"
             : p.tier === 2
@@ -880,8 +939,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     )
     const below = el("div", "")
     below.append(status, about)
-    panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : picture(p.type === "building" ? p.kind : p.tier), below))
-    const box = section(p.type === "building" ? "at work" : p.type === "ruin" ? "what is left" : "household", p.type === "building" ? "jobs" : "homes")
+    panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier), below))
+    const box = section(p.type === "building" ? "at work" : p.type === "ruin" ? "what is left" : p.type === "park" ? "what makes it" : "household", p.type === "building" ? "jobs" : p.type === "park" ? "appeal" : "homes")
     box.classList.add("lines")
     const rows: Array<HTMLElement> = []
     panel.append(box)
@@ -893,6 +952,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         status.className = `pill ${now.problem !== null ? "problem" : now.status === "working" ? "working" : ""}`
       } else if (now.type === "house") {
         status.textContent = `${home.tiers[now.tier].residents} at most`
+        status.className = "pill working"
+      } else if (now.type === "park") {
+        status.textContent = `${now.value > 0 ? "+" : ""}${now.value} out to ${now.reach} cells`
         status.className = "pill working"
       } else {
         status.textContent = now.cause

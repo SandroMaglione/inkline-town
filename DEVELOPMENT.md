@@ -157,7 +157,7 @@ That is how the README's screenshots of grown towns were made.
 - `src/art.ts`: all drawing: buildings and their yards, homes, the land, roads, carts, and figures.
 - `src/render3d/`: live world renderer, model instances, camera and map input,
   overlays, ruins, surface shaders and roof particle emitters.
-- `src/asset-lab/town-props.ts`: gardens, furniture, stone paving and ruins.
+- `src/asset-lab/town-props.ts`: parks (ground and furnishings, drawn cell by cell), stone paving and ruins.
 - `src/asset-lab/services.ts`: grain hoist, fish racks, watch tower, herbs,
   medical signs, street noticeboard and builder's equipment.
 - `src/asset-lab/appearance.ts`: material state metadata for catalogue presets.
@@ -167,7 +167,7 @@ That is how the README's screenshots of grown towns were made.
 ### Reviewing the new town models
 
 Open [`/model-review.html`](http://localhost:5232/model-review.html) for
-the models added for PR #3. Collections cover buildings, gardens and squares,
+the models added for PR #3. Collections cover buildings, parks,
 home tiers and neighbourhoods, winter, hazards, people/cargo and building
 condition. Drag any model or use the rotation slider to turn the collection.
 **Inspect** opens the full asset viewer. **Download GLB** exports one model;
@@ -226,7 +226,7 @@ averaged over the seeds still in office every few minutes.
 ```sh
 pnpm balance -- --size large --term 90 --land harsh
 pnpm balance -- --bot greedy          # sensible (default), greedy (taxes at 200%, sells everything, ignores the crown), idle,
-                                      # crowded (homes packed beside industry, no ornaments), uncovered (no fire, health, or order services)
+                                      # crowded (homes packed beside industry, no parks), uncovered (no fire, health, or order services)
 pnpm balance -- --versus crowded      # the bot against another on the same seeds: citizens, burghers, homes lost
 pnpm balance -- --versus uncovered
 pnpm balance -- --set kinds.sawmill.crew=settlers --set risk.fire.wooden=0   # content changes, numbers or words

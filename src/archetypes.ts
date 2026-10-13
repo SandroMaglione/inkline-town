@@ -5,10 +5,10 @@
  * costs materials starts as a `Site`, anything else starts `Rising`; the
  * land is a `Tile` and its own marker.
  */
-import { amounts, CONDITION_MAX, goodIds, home, total, type Kind } from "./content.ts"
+import { amounts, CONDITION_MAX, goodIds, home, total, type GroundId, type Kind } from "./content.ts"
 import type { Point } from "./iso.ts"
 import {
-  Building, Carriers, Condition, Field, Game, Gatherer, House, Inventory, Planter, Recipe, Rising, Risk, Road, Rock, Ruin, Service, Site,
+  Building, Carriers, Condition, Field, Game, Gatherer, House, Inventory, Park, Planter, Recipe, Rising, Risk, Road, Rock, Ruin, Service, Site,
   Staff, Status, Storage, Tile, Tree, Water
 } from "./schema.ts"
 import { ticks } from "./content.ts"
@@ -65,8 +65,8 @@ export const rolesOf = (kind: Kind) => {
     const s = kind.service
     roles.push(Game.Command.entry(Service, { service: s.service, interval: ticks(s.seconds), cooldown: 0, range: s.range }))
   }
-  // Ornaments and the town hall neither burn nor wear.
-  if (!kind.decor && kind.id !== "townhall") roles.push(...wearOf())
+  // The town hall neither burns nor wears.
+  if (kind.id !== "townhall") roles.push(...wearOf())
   return roles
 }
 
@@ -79,6 +79,7 @@ export const houseStart = () => [site(home.cost), ...wearOf()]
 export const ruinDraft = (tile: { readonly x: number; readonly y: number; readonly size: number }, cause: "burnt" | "collapsed" | "derelict") =>
   Game.Command.spawn([Tile, { x: tile.x, y: tile.y, size: tile.size }], [Ruin, { cause }])
 
+export const parkDraft = (cell: Point, ground: GroundId) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Park, { ground, prop: "none" }])
 export const roadDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Road, {}])
 export const treeDraft = (cell: Point, growth: number) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Tree, { growth }])
 export const rockDraft = (cell: Point, ore: boolean, amount: number) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Rock, { ore, amount }])

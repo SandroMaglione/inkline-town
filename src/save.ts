@@ -15,7 +15,7 @@ export const SAVE_FORMAT = "inkline-town/save"
  * 2: the charter's towns. 3: neighbourhoods and their dangers (desirability, crews, risks, wear, ruins,
  * winters). Older saves cannot be loaded.
  */
-export const SAVE_VERSION = 3
+export const SAVE_VERSION = 4
 
 export type Slot = "manual" | "auto"
 export const slots: ReadonlyArray<Slot> = ["manual", "auto"]

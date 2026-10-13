@@ -50,8 +50,9 @@ in the colour of its roof.
 ## A town that looks and works like a real one
 
 Every street has a desirability. A smithy or a quarry drags it down for
-several cells around; gardens, parks, fountains, statues, a chapel, and
-paved streets lift it. Citizens will only live on a decent street, and the
+several cells around; parks you lay out yourself (lawns, flower beds,
+walks in from the street, lamps, a fountain, a statue), a chapel, and paved streets
+lift it. Citizens will only live on a decent street, and the
 finest streets, with every service calling, grow three-storey townhouses.
 Settlers do the rough work and citizens the skilled, and nobody walks more
 than fifteen road cells to a job, so the far-off mine needs its own

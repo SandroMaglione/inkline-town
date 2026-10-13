@@ -46,7 +46,7 @@ export class MapInput {
               ? "pan"
               : this.mode === "rotate"
                 ? "rotate"
-                : ui.tool === "road" || ui.tool === "home"
+                : ui.tool === "road" || ui.tool === "home" || ui.tool === "pave" || ui.tool === "ground"
                   ? "edit"
                   : "pan"
         this.press = { id: e.pointerId, start: p, last: p, mode, moved: false }
@@ -131,7 +131,7 @@ export class MapInput {
     this.controls = document.createElement("nav")
     this.controls.className = "camera-controls"
     this.controls.setAttribute("aria-label", "Map camera")
-    this.controls.innerHTML = `<button data-mode="pan" aria-pressed="true" title="Drag to pan; road and home tools drag to build">Pan</button><button data-mode="rotate" aria-pressed="false" title="Drag to rotate instead of placing. Right-drag also rotates.">Rotate</button><button data-action="left" aria-label="Rotate map left" title="Rotate left (Q)">↶</button><button data-action="right" aria-label="Rotate map right" title="Rotate right (E)">↷</button><button data-action="out" aria-label="Zoom out">−</button><output aria-label="Camera zoom"></output><button data-action="in" aria-label="Zoom in">+</button><button data-action="reset" aria-label="Reset camera" title="Original angle and centre (Home)">⌂</button>`
+    this.controls.innerHTML = `<button data-mode="pan" aria-pressed="true" title="Drag to pan; the road, pave, home, and park ground tools drag to build">Pan</button><button data-mode="rotate" aria-pressed="false" title="Drag to rotate instead of placing. Right-drag also rotates.">Rotate</button><button data-action="left" aria-label="Rotate map left" title="Rotate left (Q)">↶</button><button data-action="right" aria-label="Rotate map right" title="Rotate right (E)">↷</button><button data-action="out" aria-label="Zoom out">−</button><output aria-label="Camera zoom"></output><button data-action="in" aria-label="Zoom in">+</button><button data-action="reset" aria-label="Reset camera" title="Original angle and centre (Home)">⌂</button>`
     this.controls.querySelectorAll<HTMLButtonElement>("button").forEach(
       (button) =>
         (button.onclick = () => {

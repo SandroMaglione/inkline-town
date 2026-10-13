@@ -139,7 +139,7 @@ export class BuildingView extends WorldView {
     this.marker.root.visible = look.problem && look.build >= 1 && !signed
     const state = structureState(look,this.stage.frost)
     this.body.effects = build >= 1 ? state : surfaceState()
-    this.body.effectBounds.set(kind.half * U * 32 * Math.SQRT2,H/Math.cos(Math.PI/6),this.entity%97/97,Number(!kind.decor))
+    this.body.effectBounds.set(kind.half * U * 32 * Math.SQRT2,H/Math.cos(Math.PI/6),this.entity%97/97,1)
     if(!this.effects&&build>=1&&(state.burning||state.fireRisk)){
       this.effects = new StructureEffects(buildingAsset(this.kindId,1,null,noDoors,0),H)
       this.group.add(this.effects.group)

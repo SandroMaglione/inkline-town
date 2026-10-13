@@ -4,12 +4,12 @@
  * preview, and edits; the simulation applies the edits on its next step.
  * None of it is saved: it is host state, handed to systems as a service.
  */
-import type { Amounts, CharterValue, GoodId, KindId, Tier, WinterId } from "./content.ts"
+import type { Amounts, CharterValue, GoodId, GroundId, KindId, PropId, Tier, WinterId } from "./content.ts"
 import type { Point } from "./iso.ts"
 import type { Status } from "./schema.ts"
 import type { OverlayCell } from "./render3d/models.ts"
 
-export type Tool = "select" | "road" | "pave" | "home" | "bulldoze" | "place"
+export type Tool = "select" | "road" | "pave" | "home" | "bulldoze" | "place" | "ground" | "prop"
 
 /** What the map shows over the town: nothing, or one of its views, cell by cell. */
 export const viewIds = ["none", "appeal", "workers", "fire", "health", "order", "condition"] as const
@@ -23,7 +23,11 @@ export type Edit =
   | { readonly type: "roads"; readonly cells: ReadonlyArray<Point> }
   /** Paves the road on each cell (coins, and stone from storage). */
   | { readonly type: "pave"; readonly cells: ReadonlyArray<Point> }
-  /** Removes whatever stands on a cell (not rocks, water, or the town hall). */
+  /** Lays park ground on each empty cell (or relays a park cell's ground). */
+  | { readonly type: "ground"; readonly ground: GroundId; readonly cells: ReadonlyArray<Point> }
+  /** Sets a furnishing on a cell of park. */
+  | { readonly type: "prop"; readonly prop: PropId; readonly cell: Point }
+  /** Removes whatever stands on a cell (not rocks, water, or the town hall); on a park, its furnishing first. */
   | { readonly type: "remove"; readonly cell: Point }
   /** Sets a tier's tax rate, in percent of the usual. */
   | { readonly type: "tax"; readonly tier: "settlers" | "citizens"; readonly rate: number }
@@ -57,6 +61,8 @@ export interface Preview {
   ghosts: Array<{ readonly what: KindId | "home"; readonly cell: Point }>
   /** Road cells about to be laid. */
   roads: Array<Point>
+  /** Park cells about to be laid or furnished, as they will look. */
+  parks: Array<{ readonly x: number; readonly y: number; readonly ground: GroundId; readonly prop: PropId | "none" }>
   /** The entity under the pointer. */
   hover: number | null
   /** Bulldozing: the hovered thing is tinted. */
@@ -64,7 +70,7 @@ export interface Preview {
   tooltip: string | null
 }
 
-export const emptyPreview = (): Preview => ({ plots: [], ghosts: [], roads: [], hover: null, danger: false, tooltip: null })
+export const emptyPreview = (): Preview => ({ plots: [], ghosts: [], roads: [], parks: [], hover: null, danger: false, tooltip: null })
 
 /** The side panel: the build menu, the town's numbers and taxes, a building, or a home. */
 export type Panel =
@@ -88,6 +94,16 @@ export type Panel =
       readonly id: number
       readonly cell: Point
       readonly tier: Tier
+      readonly lines: ReadonlyArray<string>
+    }
+  | {
+      readonly type: "park"
+      readonly id: number
+      readonly cell: Point
+      /** Cells, and the desirability it gives out to how far. */
+      readonly cells: number
+      readonly value: number
+      readonly reach: number
       readonly lines: ReadonlyArray<string>
     }
   | {
@@ -211,13 +227,16 @@ export interface UiValue {
   tool: Tool
   /** The kind being placed with the `place` tool. */
   placing: KindId | null
+  /** The ground laid with the `ground` tool, and the furnishing set with the `prop` tool. */
+  ground: GroundId
+  prop: PropId
   /** Which side panel the toolbar opened, when nothing is selected. */
   menu: "build" | "town" | null
   /** The pointer on the grid, or `null` off the canvas. */
   pointer: Point | null
   /** Camera-ray entity hit. Undefined allows grid-only headless interaction. */
   pointerHit?: number | null
-  /** Where a road or a row of homes being dragged started. */
+  /** Where a road, a row of homes, or a patch of park being dragged started. */
   dragFrom: Point | null
   selected: number | null
   gestures: Array<Gesture>

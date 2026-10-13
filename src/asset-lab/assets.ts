@@ -1,6 +1,6 @@
 /** Portable polygon-and-stroke assets. Floor coordinates remain in cells;
  * heights remain in the original drawing's pixels. No renderer types here. */
-import { kindIds, goodIds, kinds, home } from "../content.ts"
+import { kindIds, goodIds, kinds, home, propIds } from "../content.ts"
 import { withAppearance } from "./appearance.ts"
 import { groundAsset } from "../render3d/models.ts"
 import { key } from "../grid.ts"
@@ -10,7 +10,7 @@ import { U } from "../iso.ts"
 import { makeTree, makeRock, makeField, makeRoadPatch, makeWater } from "./land.ts"
 import { personCatalogue, makeCarrier, makeGoods, makeCrate } from "./people.ts"
 import { makeSite, makeConstruction, makeMarker, makeSmoke, makePlot } from "./construction.ts"
-import { makeRuin } from "./town-props.ts"
+import { makeParkProp, makeRuin, makeSamplePark } from "./town-props.ts"
 
 import { Drawing, mix, pale, square, sides, palette, type InkAsset, type Vertex } from "./primitives.ts"
 export * from "./primitives.ts"
@@ -148,6 +148,7 @@ additional.push(makeRoadPatch(), makeWater(), ...personCatalogue())
   asset.id = "paved-street"; asset.title = "Paved street"; asset.note = "Raised stone setts with staggered joints and joined edges."; asset.category = "land"; asset.reference = { type: "roads" }; asset.footprint = 3
   additional.push(asset)
 }
+additional.push(makeSamplePark(), ...propIds.map(makeParkProp))
 for (const barrow of [false, true]) {
   additional.push(makeCarrier(null, barrow))
   for (const good of goodIds) for (const count of [1, 4]) additional.push(makeCarrier(good, barrow, count))

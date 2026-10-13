@@ -1,15 +1,15 @@
 /**
  * The town: homes grow, level up, or empty depending on what reaches them;
  * taxes are collected from homes connected to the town hall and upkeep paid
- * for every standing building; and the census counts it all.
+ * for every standing building and park; and the census counts it all.
  */
 import { appealAt } from "../appeal.ts"
 import {
-  admin, goodIds, goods, home, kinds, LEDGER_TICKS, market, PAUSED_UPKEEP, risk, TRADE_LOAD, type GoodId, type Need, type Tier
+  admin, goodIds, goods, grounds, home, kinds, LEDGER_TICKS, market, PAUSED_UPKEEP, props, risk, TRADE_LOAD, type GoodId, type Need, type Tier
 } from "../content.ts"
 import { doors, key, reach } from "../grid.ts"
 import {
-  Appeal, Building, Burning, Census, Charter, Game, Grid, House, Inventory, Ledger, Market, Mood, Paused, Policy, Rising, Risk, Sick, Site,
+  Appeal, Building, Burning, Census, Charter, Game, Grid, House, Inventory, Ledger, Market, Mood, Park, Paused, Policy, Rising, Risk, Sick, Site,
   Staff, Storage, Tile, Time, TownHall, Treasury, maybe
 } from "../schema.ts"
 import { connected, elapsed, seasonAt } from "./shared.ts"
@@ -159,7 +159,8 @@ export const Collect = Game.System(
       homes: Game.Query({ selection: { tile: Game.Query.read(Tile), house: Game.Query.read(House) }, without: [Site, Rising] }),
       buildings: Game.Query({ selection: { building: Game.Query.read(Building), paused: Game.Query.optional(Paused) }, without: [Site] }),
       halls: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [TownHall] }),
-      stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage], without: [Site, Rising] })
+      stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage], without: [Site, Rising] }),
+      parks: Game.Query({ selection: { park: Game.Query.read(Park) } })
     },
     resources: {
       time: Game.System.readResource(Time),
@@ -186,6 +187,10 @@ export const Collect = Game.System(
     }
     let upkeep = 0
     for (const { data } of queries.buildings.each()) upkeep += kinds[data.building.get().kind].upkeep * (data.paused.present ? PAUSED_UPKEEP : 1)
+    for (const { data } of queries.parks.each()) {
+      const p = data.park.get()
+      upkeep += grounds[p.ground].upkeep + (p.prop === "none" ? 0 : props[p.prop].upkeep)
+    }
     const admin = adminOf(homes)
 
     // Trade.

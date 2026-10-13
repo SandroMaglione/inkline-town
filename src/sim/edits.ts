@@ -1,28 +1,28 @@
 /**
  * The player's edits, applied at the start of a step: building, laying
- * roads and homes, bulldozing, pausing, the town's policy, answering the
+ * roads and homes, laying out parks, bulldozing, pausing, the town's policy, answering the
  * crown, and founding a new town. Costs are checked against the treasury
  * and the town's stock and paid up front in coins; the materials are
  * carried to the site afterwards. Once the term has ended, only a new town
  * (or carrying on after completing this one) is taken.
  */
 import {
-  buildingDraft, houseDraft, houseStart, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft
+  buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft
 } from "../archetypes.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
-import { amounts, goodIds, goods, home, kinds, lands, PAVE_COST, ROAD_COST, sizes, trade, type Amounts, type Kind } from "../content.ts"
+import { amounts, goodIds, goods, grounds, home, kinds, lands, PAVE_COST, props, ROAD_COST, sizes, trade, type Amounts, type Kind, type ParkPiece } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
 import {
-  Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, History, Inventory, Land, Ledger, Market, Mood, Pantry, Paved, Paused,
-  Policy, Rising, Rng, Status, Stock, Storage, Time, TownHall, Treasury, Ui
+  Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, History, Inventory, Land, Ledger, Market, Mood, Pantry, Park, Paved, Paused,
+  Policy, Rng, Status, Stock, Storage, Time, TownHall, Treasury, Ui
 } from "../schema.ts"
 import { elapsed, rollWinters, TileRead, useOf, write } from "./shared.ts"
 import { crownGap, foundedFate } from "./term.ts"
 
-export const unlocked = (kind: Kind, census: { readonly settlers: number; readonly citizens: number }) =>
+export const unlocked = (kind: Pick<Kind, "unlock"> | ParkPiece, census: { readonly settlers: number; readonly citizens: number }) =>
   census.settlers + census.citizens >= kind.unlock.residents && census.citizens >= kind.unlock.citizens
 
 export const ApplyEdits = Game.System(
@@ -31,6 +31,7 @@ export const ApplyEdits = Game.System(
     queries: {
       tiles: TileRead,
       paved: Game.Query({ selection: { paved: Game.Query.read(Paved) } }),
+      parks: Game.Query({ selection: { park: Game.Query.write(Park) } }),
       halls: Game.Query({ selection: { hall: Game.Query.read(TownHall) } }),
       buildings: Game.Query({ selection: { building: Game.Query.read(Building), paused: Game.Query.optional(Paused) } }),
       stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage] })
@@ -103,7 +104,7 @@ export const ApplyEdits = Game.System(
         if (tree !== undefined) commands.despawn(tree)
       }
     }
-    const spawn = (draft: Parameters<typeof commands.spawn>[0], tile: { x: number; y: number; size: number }, use: "building" | "house" | "road") => {
+    const spawn = (draft: Parameters<typeof commands.spawn>[0], tile: { x: number; y: number; size: number }, use: "building" | "house" | "road" | "park") => {
       fell(tile)
       const id = commands.spawn(draft)
       grid.claim(tile, id, use)
@@ -136,11 +137,7 @@ export const ApplyEdits = Game.System(
           }
           pay(kind.cost)
           const id = spawn(buildingDraft(kind, edit.cell), tile, "building")
-          if (kind.decor) {
-            // An ornament needs no road: its materials come out of storage at once, and it goes straight up.
-            take(kind.cost.materials)
-            commands.insert(id, Game.Command.entry(Rising, { ticks: 0 }), ...rolesOf(kind))
-          } else commands.insert(id, startOf(kind), ...rolesOf(kind))
+          commands.insert(id, startOf(kind), ...rolesOf(kind))
           if (edit.open) ui.selected = id
           break
         }
@@ -194,6 +191,51 @@ export const ApplyEdits = Game.System(
           if (short) ui.toast(short)
           break
         }
+        case "ground": {
+          // Park needs no road: it is laid at once, its materials straight out of storage.
+          const piece = grounds[edit.ground]
+          const parks = new Map(queries.parks.each().map((row) => [row.entity.id as number, row] as const))
+          let short: string | null = null
+          const spent: Record<string, number> = {}
+          for (const cell of edit.cells) {
+            const tile = { ...cell, size: 1 }
+            const relay = useAt(grid.value(), cell.x, cell.y) === "park" ? parks.get(ownerAt(grid.value(), cell.x, cell.y)) : undefined
+            if (relay ? relay.data.park.get().ground === edit.ground : !canPlace(grid.value(), tile)) continue
+            short = afford(piece.cost)
+            if (short) break
+            pay(piece.cost)
+            for (const [g, n] of Object.entries(piece.cost.materials)) spent[g] = (spent[g] ?? 0) + (n ?? 0)
+            if (relay) relay.data.park.set({ ...relay.data.park.get(), ground: edit.ground })
+            else spawn(parkDraft(cell, edit.ground), tile, "park")
+          }
+          take(spent)
+          if (short) ui.toast(short)
+          break
+        }
+        case "prop": {
+          const piece = props[edit.prop]
+          if (!unlocked(piece, resources.census.get())) {
+            ui.toast(`${piece.title} needs a bigger town`)
+            break
+          }
+          const row = useAt(grid.value(), edit.cell.x, edit.cell.y) === "park"
+            ? queries.parks.each().find((r) => r.entity.id === ownerAt(grid.value(), edit.cell.x, edit.cell.y))
+            : undefined
+          if (!row) {
+            ui.toast("Lay park ground first")
+            break
+          }
+          if (row.data.park.get().prop === edit.prop) break
+          const short = afford(piece.cost)
+          if (short) {
+            ui.toast(short)
+            break
+          }
+          pay(piece.cost)
+          take(piece.cost.materials)
+          row.data.park.set({ ...row.data.park.get(), prop: edit.prop })
+          break
+        }
         case "remove": {
           if (!inside(edit.cell.x, edit.cell.y)) break
           const use = useAt(grid.value(), edit.cell.x, edit.cell.y)
@@ -201,6 +243,12 @@ export const ApplyEdits = Game.System(
           if (owner === undefined || use === "rock" || use === "water") break
           if (halls.has(owner)) {
             ui.toast("The town hall stays")
+            break
+          }
+          // A park's furnishing goes before its ground.
+          const furnished = use === "park" ? queries.parks.each().find((r) => r.entity.id === owner && r.data.park.get().prop !== "none") : undefined
+          if (furnished) {
+            furnished.data.park.set({ ...furnished.data.park.get(), prop: "none" })
             break
           }
           // A building's walkers and a farm's fields are its children, and go with it.

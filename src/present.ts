@@ -7,13 +7,13 @@
 import { RenderSync } from "@typeonce/bevy-ts-render"
 import { hazardStrength } from "./render3d/surface-state.ts"
 
-import { appealAt, appealParts, buildingSource, landSource, type AppealSource } from "./appeal.ts"
+import { appealAt, appealParts, buildingSource, landSource, parkSources, parksOf, type AppealSource, type ParkCell, type ParkValue } from "./appeal.ts"
 import { homeHeight, topOf, type Alert, type Load, type Emphasis } from "./art.ts"
 import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView, RuinView } from "./render3d/views.ts"
 import type { DoorSet, OverlayCell } from "./render3d/models.ts"
 import {
-  BUILD_TICKS, COMMUTE, condition as wear, CONDITION_MAX, crewOf, crown as crownRules, fate, goodIds, goods, home, kinds, needTitle, risk,
-  RISK_MAX, tierHome, total, winters, type Kind, type Tier
+  BUILD_TICKS, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
+  propIds, props, risk, RISK_MAX, tierHome, total, winters, type Kind, type Tier
 } from "./content.ts"
 import { around, canPlace, doors, entrances, isRoad, key, lPath, reach, useAt, type TileLike } from "./grid.ts"
 import { GRID, inside, U, type Point } from "./iso.ts"
@@ -44,6 +44,7 @@ import {
   Market,
   Mood,
   Pantry,
+  Park,
   Paused,
   Paved,
   Policy,
@@ -188,6 +189,14 @@ const HouseRead = Game.Query({
   }
 })
 const RuinRead = Game.Query({ selection: { tile: Game.Query.read(Tile), ruin: Game.Query.read(Ruin) } })
+const ParkRead = Game.Query({ selection: { tile: Game.Query.read(Tile), park: Game.Query.read(Park) } })
+
+/** Every cell between two corners, both included. */
+const rectangle = (a: Point, b: Point): Array<Point> => {
+  const out: Array<Point> = []
+  for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++) for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) out.push({ x, y })
+  return out
+}
 
 /** How far up a building or home is: a site rises to its frame as materials come in, then the rest of the way. */
 const buildOf = (
@@ -239,7 +248,7 @@ const legends: Readonly<Record<Exclude<View, "none">, Legend>> = {
       { color: 0xe0a060, label: "below 0" },
       { color: BAD, label: `${home.squalid} or less: squalid` }
     ],
-    note: "Industry pushes homes away; gardens, parks, fountains, statues, a chapel, and paved streets draw them in."
+    note: "Industry pushes homes away; parks (the more they hold, the further they reach), a chapel, and paved streets draw them in."
   },
   workers: {
     title: "workers",
@@ -300,6 +309,7 @@ export const Interact = Game.System(
       buildings: BuildingRead,
       houses: HouseRead,
       ruins: RuinRead,
+      parks: ParkRead,
       trees: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Tree] }),
       water: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Water] }),
       paved: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road, Paved] })
@@ -333,6 +343,46 @@ export const Interact = Game.System(
     const buildings = queries.buildings.each()
     const houses = queries.houses.each()
     const ruins = queries.ruins.each()
+    const parkRows = queries.parks.each()
+    const parkCells: Array<ParkCell> = parkRows.map(({ data }) => ({ ...data.tile.get(), ...data.park.get() }))
+    const parkAt = new Map(parkRows.map((row) => [key(row.data.tile.get().x, row.data.tile.get().y), row] as const))
+    const road = (x: number, y: number) => isRoad(grid, x, y)
+    /** The park a cell belongs to, as it is, or as it would be with `changed` cells laid over it. */
+    const parkOf = (cell: Point, changed: ReadonlyArray<ParkCell> = []): ParkValue | undefined => {
+      const over = new Map(parkCells.map((c) => [key(c.x, c.y), c]))
+      for (const c of changed) over.set(key(c.x, c.y), c)
+      return parksOf([...over.values()], road).find((p) => p.cells.some((c) => c.x === cell.x && c.y === cell.y))
+    }
+    /** How far a park reaches, as one square around it. */
+    const reachPlots = (p: ParkValue) => {
+      const xs = p.cells.map((c) => c.x)
+      const ys = p.cells.map((c) => c.y)
+      const x = Math.min(...xs)
+      const y = Math.min(...ys)
+      const size = Math.max(Math.max(...xs) - x, Math.max(...ys) - y) + 1
+      return [{ x: x - p.reach, y: y - p.reach, size: size + 2 * p.reach, look: "reach" as const }]
+    }
+    /** A park, for its panel: what it is worth, why, and what would make it better. */
+    const describePark = (p: ParkValue) => {
+      const has = new Set(p.cells.map((c) => c.prop))
+      const missing = propIds.filter((id) => !has.has(id)).map((id) => props[id].title.toLowerCase())
+      const upkeep = p.cells.reduce((n, c) => n + grounds[c.ground].upkeep + (c.prop === "none" ? 0 : props[c.prop].upkeep), 0)
+      return [
+        `${p.cells.length} cell${p.cells.length === 1 ? "" : "s"} · beauty ${p.beauty}`,
+        `made of: ${p.parts.map((part) => `${part.label} ${part.value}`).join(", ") || "nothing yet"}`,
+        parkText(p),
+        p.entrances > 0 ? `ways in from the street: ${p.entrances}${p.entrances > 2 ? " (2 count)" : ""}` : "no way in: lay a walk or a square out to a road for +1.5 (two count)",
+        `one furnishing counts for every 2 cells: ${p.cells.filter((c) => c.prop !== "none").length - p.crowded} of ${Math.ceil(p.cells.length / 2)}${p.crowded > 0 ? ` (${p.crowded} too many)` : ""}`,
+        ...(missing.length > 0 ? [`nicer with: ${missing.join(", ")}`] : []),
+        `upkeep ${Math.round(upkeep * 10) / 10} coins a minute`
+      ]
+    }
+    /** What the pointer is on: the model the camera ray hit, or else (parks have nothing standing to hit) the park on the cell. */
+    const pickAt = (at: Point, entity?: number | null) => {
+      const hit = hitAt(hits, at, entity)
+      return hit ?? parkAt.get(key(Math.floor(at.x), Math.floor(at.y)))?.entity.id ?? null
+    }
+    const parkText = (p: ParkValue) => `desirability ${signed(p.value)} out to ${p.reach} cells`
 
     const hits: Array<HitBox> = [
       ...buildings.map(({ entity, data }) => {
@@ -340,16 +390,17 @@ export const Interact = Game.System(
         return hitBox(entity.id, data.tile.get(), kind.half, topOf(kind))
       }),
       ...houses.map(({ entity, data }) => hitBox(entity.id, data.tile.get(), home.half, homeHeight(data.house.get().tier))),
-      ...ruins.map(({ entity, data }) => hitBox(entity.id, data.tile.get(), 0, 0))
+      ...ruins.map(({ entity, data }) => hitBox(entity.id, data.tile.get(), 0, 0)),
+      ...parkRows.map(({ entity, data }) => hitBox(entity.id, data.tile.get(), 0, 0))
     ].sort((l, r) => r.depth - l.depth)
     ui.hits = hits
-    const tileOf = (id: number) => [...buildings, ...houses, ...ruins].find((row) => row.entity.id === id)?.data.tile.get()
+    const tileOf = (id: number) => [...buildings, ...houses, ...ruins, ...parkRows].find((row) => row.entity.id === id)?.data.tile.get()
 
     // ── Gestures ──
     for (const gesture of ui.gestures.splice(0)) {
       const cell = cellAt(gesture.at)
       if (gesture.type === "press") {
-        ui.dragFrom = (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave") && inside(cell.x, cell.y) ? cell : null
+        ui.dragFrom = (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave" || ui.tool === "ground") && inside(cell.x, cell.y) ? cell : null
         continue
       }
       switch (ui.tool) {
@@ -363,6 +414,16 @@ export const Interact = Game.System(
           ui.dragFrom = null
           break
         }
+        case "ground": {
+          if (ui.dragFrom) ui.edits.push({ type: "ground", ground: ui.ground, cells: rectangle(ui.dragFrom, cell).filter((c) => inside(c.x, c.y)) })
+          ui.dragFrom = null
+          break
+        }
+        case "prop": {
+          if (gesture.panned) break
+          ui.edits.push({ type: "prop", prop: ui.prop, cell })
+          break
+        }
         case "place": {
           if (gesture.panned || !ui.placing) break
           ui.edits.push({ type: "building", kind: ui.placing, cell: footprintAt(gesture.at, kinds[ui.placing].size), open: false })
@@ -370,13 +431,13 @@ export const Interact = Game.System(
         }
         case "bulldoze": {
           if (gesture.panned) break
-          const hit = hitAt(hits, gesture.at, gesture.hit)
+          const hit = pickAt(gesture.at, gesture.hit)
           ui.edits.push({ type: "remove", cell: (hit !== null ? tileOf(hit) : undefined) ?? cell })
           break
         }
         case "select": {
           if (gesture.panned) break
-          ui.selected = hitAt(hits, gesture.at, gesture.hit)
+          ui.selected = pickAt(gesture.at, gesture.hit)
           if (ui.selected !== null) ui.menu = null
           break
         }
@@ -388,7 +449,7 @@ export const Interact = Game.System(
     const preview = emptyPreview()
     const pointer = ui.pointer
     const cell = pointer ? cellAt(pointer) : null
-    preview.hover = pointer && (ui.tool === "select" || ui.tool === "bulldoze") ? hitAt(hits, pointer, ui.pointerHit) : null
+    preview.hover = pointer && (ui.tool === "select" || ui.tool === "bulldoze") ? pickAt(pointer, ui.pointerHit) : null
     const showReach = (tile: TileLike, kind: Kind) => {
       const r = reachOf(kind)
       if (r !== null) preview.plots.push({ x: tile.x - r, y: tile.y - r, size: tile.size + 2 * r, look: "reach" })
@@ -410,6 +471,34 @@ export const Interact = Game.System(
         } else if (free) preview.ghosts.push({ what: "home", cell: c })
         else preview.plots.push({ ...c, size: 1, look: "blocked" })
       }
+    } else if (ui.tool === "ground" && cell) {
+      const laid: Array<ParkCell> = []
+      for (const c of ui.dragFrom ? rectangle(ui.dragFrom, cell) : [cell]) {
+        if (!inside(c.x, c.y)) continue
+        const there = parkAt.get(key(c.x, c.y))?.data.park.get()
+        if (there ? there.ground !== ui.ground : canPlace(grid, { ...c, size: 1 })) laid.push({ ...c, ground: ui.ground, prop: there?.prop ?? "none" })
+        else if (!there) preview.plots.push({ ...c, size: 1, look: "blocked" })
+      }
+      preview.parks.push(...laid)
+      const after = laid.length > 0 ? parkOf(laid[0]!, laid) : undefined
+      // What the park it joins gives now, if it joins one.
+      const before = laid.map((c) => parkOf(c)).find((p) => p !== undefined)
+      const cost = grounds[ui.ground].cost
+      preview.tooltip = `${grounds[ui.ground].title.toLowerCase()} · ${laid.length} cell${laid.length === 1 ? "" : "s"}, ${costText({ coins: cost.coins * laid.length, materials: Object.fromEntries(Object.entries(cost.materials).map(([g, n]) => [g, (n ?? 0) * laid.length])) })}${after ? ` · the park: ${parkText(after)}${before && before.value !== after.value ? ` (now ${signed(before.value)})` : ""}` : ""} · drag a rectangle`
+      if (after) preview.plots.push(...reachPlots(after))
+    } else if (ui.tool === "prop" && cell && inside(cell.x, cell.y)) {
+      const there = parkAt.get(key(cell.x, cell.y))?.data.park.get()
+      if (there) {
+        const placed = { ...cell, ground: there.ground, prop: ui.prop }
+        preview.parks.push(placed)
+        const before = parkOf(cell)
+        const after = parkOf(cell, [placed])
+        preview.tooltip = `${props[ui.prop].title.toLowerCase()} · ${costText(props[ui.prop].cost)}${after ? ` · the park: ${parkText(after)}${before && before.value !== after.value ? ` (now ${signed(before.value)})` : ""}` : ""}${after && after.crowded > 0 ? " · too crowded: lay more ground for it to count" : ""}`
+        if (after) preview.plots.push(...reachPlots(after))
+      } else {
+        preview.plots.push({ ...cell, size: 1, look: "blocked" })
+        preview.tooltip = `${props[ui.prop].title.toLowerCase()} · lay park ground first`
+      }
     } else if (ui.tool === "place" && ui.placing && pointer) {
       const kind = kinds[ui.placing]
       const at = footprintAt(pointer, kind.size)
@@ -420,13 +509,20 @@ export const Interact = Game.System(
       else preview.plots.push({ ...tile, look: "blocked" })
     } else if (ui.tool === "bulldoze") {
       preview.danger = true
-      if (preview.hover === null && cell && ["road", "tree", "field"].includes(useAt(grid, cell.x, cell.y)))
+      if ((preview.hover === null || useAt(grid, cell?.x ?? -1, cell?.y ?? -1) === "park") && cell && ["road", "tree", "field", "park"].includes(useAt(grid, cell.x, cell.y)))
         preview.plots.push({ ...cell, size: 1, look: "blocked" })
+      const there = cell ? parkAt.get(key(cell.x, cell.y))?.data.park.get() : undefined
+      if (there) preview.tooltip = there.prop !== "none" ? `remove the ${props[there.prop].title.toLowerCase()}` : `remove the ${grounds[there.ground].title.toLowerCase()}`
     }
     if (ui.selected !== null) {
       const row = buildings.find((b) => b.entity.id === ui.selected)
       const tile = tileOf(ui.selected)
-      if (tile) preview.plots.push({ ...tile, look: "picked" })
+      const whole = tile && useAt(grid, tile.x, tile.y) === "park" ? parkOf(tile) : undefined
+      if (whole) {
+        // A park is picked whole: every cell of it, and how far it reaches.
+        for (const c of whole.cells) preview.plots.push({ x: c.x, y: c.y, size: 1, look: "hover" })
+        preview.plots.push(...reachPlots(whole))
+      } else if (tile) preview.plots.push({ ...tile, look: "picked" })
       if (row && tile) showReach(tile, kinds[row.data.building.get().kind])
     }
 
@@ -443,6 +539,7 @@ export const Interact = Game.System(
       for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get()))
       for (const { data } of queries.water.each()) sources.push(landSource("water", data.tile.get()))
       for (const { data } of queries.paved.each()) sources.push(landSource("paved", data.tile.get()))
+      sources.push(...parkSources(parkCells, road))
       for (const { data } of ruins) sources.push(landSource("ruin", data.tile.get()))
       for (const { data } of houses) if ((maybe(data.condition)?.value ?? CONDITION_MAX) < wear.worn) sources.push(landSource("worn", data.tile.get()))
       return sources
@@ -548,6 +645,11 @@ export const Interact = Game.System(
       preview.tooltip = `${tierHome[h.tier]} · ${h.residents} residents · desirability ${appealAt(cells, t.x, t.y)}${hoveredHouse.data.burning.present ? " · on fire!" : hoveredHouse.data.sick.present ? " · sick" : ""}`
     } else if (hoveredRuin) {
       preview.tooltip = `ruin · ${hoveredRuin.data.ruin.get().cause} · bulldoze to clear`
+    } else if (hovered !== null && ui.tool === "select" && parkRows.some((row) => row.entity.id === hovered)) {
+      const row = parkRows.find((r) => r.entity.id === hovered)!
+      const p = parkOf(row.data.tile.get())
+      const here = row.data.park.get()
+      preview.tooltip = `park · ${here.prop !== "none" ? props[here.prop].title.toLowerCase() : grounds[here.ground].title.toLowerCase()}${p ? ` · ${p.cells.length} cells · ${parkText(p)}` : ""}`
     } else if (ui.tool === "place" && ui.placing) {
       const kind = kinds[ui.placing]
       const r = reachOf(kind)
@@ -560,9 +662,11 @@ export const Interact = Game.System(
     const pickedBuilding = ui.selected !== null ? buildings.find((row) => row.entity.id === ui.selected) : undefined
     const pickedHouse = ui.selected !== null ? houses.find((row) => row.entity.id === ui.selected) : undefined
     const pickedRuin = ui.selected !== null ? ruins.find((row) => row.entity.id === ui.selected) : undefined
+    const pickedPark = ui.selected !== null ? parkRows.find((row) => row.entity.id === ui.selected) : undefined
+    const picked = pickedPark ? parkOf(pickedPark.data.tile.get()) : undefined
     if (pickedBuilding) {
       const { kind, status, problem, lines } = describeBuilding(pickedBuilding)
-      const pausable = kind.id !== "townhall" && !kind.decor && !pickedBuilding.data.site.present && !pickedBuilding.data.rising.present
+      const pausable = kind.id !== "townhall" && !pickedBuilding.data.site.present && !pickedBuilding.data.rising.present
       ui.panel = {
         type: "building",
         id: pickedBuilding.entity.id,
@@ -577,6 +681,16 @@ export const Interact = Game.System(
     } else if (pickedHouse) {
       const { h, lines } = describeHouse(pickedHouse)
       ui.panel = { type: "house", id: pickedHouse.entity.id, cell: pickedHouse.data.tile.get(), tier: h.tier, lines }
+    } else if (pickedPark && picked) {
+      ui.panel = {
+        type: "park",
+        id: pickedPark.entity.id,
+        cell: pickedPark.data.tile.get(),
+        cells: picked.cells.length,
+        value: picked.value,
+        reach: picked.reach,
+        lines: describePark(picked)
+      }
     } else if (pickedRuin) {
       const r = pickedRuin.data.ruin.get()
       ui.panel = {
@@ -872,7 +986,7 @@ export const DrawOverlay = Game.System(
   }
 )
 
-/** Roads and water, each redrawn as one layer whenever one is laid or anything is removed. */
+/** Roads, water, and parks, each redrawn as one layer whenever one is laid or anything is removed. */
 export const DrawGround = Game.System(
   "Town/DrawGround",
   {
@@ -881,16 +995,21 @@ export const DrawGround = Game.System(
       paved: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road, Paved] }),
       added: Game.Query({ selection: { paved: Game.Query.read(Paved) }, filters: [Game.Query.added(Paved)] }),
       water: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Water] }),
+      parks: ParkRead,
+      relaid: Game.Query({ selection: { park: Game.Query.read(Park) }, filters: [Game.Query.changed(Park)] }),
       laid: Game.Query({ selection: { tile: Game.Query.read(Tile) }, filters: [Game.Query.added(Tile)] })
     },
     despawned: { entities: Game.System.readDespawned() },
     services: { stage: Game.System.service(StageService) }
   },
   ({ queries, despawned, services }) => {
-    if (!services.stage.groundDirty && queries.laid.each().length === 0 && queries.added.each().length === 0 && despawned.entities.all().length === 0) return
+    const dirty = services.stage.groundDirty
+    if (!dirty && queries.laid.each().length === 0 && queries.added.each().length === 0 && queries.relaid.each().length === 0 && despawned.entities.all().length === 0) return
     const cellsOf = (rows: ReadonlyArray<{ readonly data: { readonly tile: { get(): TileLike } } }>) =>
       new Set(rows.map(({ data }) => key(data.tile.get().x, data.tile.get().y)))
-    services.stage.setGround(cellsOf(queries.roads.each()), cellsOf(queries.water.each()), cellsOf(queries.paved.each()))
+    const roads = cellsOf(queries.roads.each())
+    services.stage.setGround(roads, cellsOf(queries.water.each()), cellsOf(queries.paved.each()))
+    services.stage.setParks(new Map(queries.parks.each().map(({ data }) => [key(data.tile.get().x, data.tile.get().y), { ...data.tile.get(), ...data.park.get() }])), roads)
   }
 )
 

@@ -14,7 +14,7 @@ page.on("console", e => { if (e.type() === "error") errors.push(e.text()) })
 page.on("response", r => { if (r.status() >= 400) errors.push(`${r.status()} ${r.url()}`) })
 const output = "output/inkline-3d/town-review"
 await mkdir(output, { recursive: true })
-const groups = ["Review fixes", "Buildings", "Gardens & squares", "Homes & neighbourhoods", "Winter", "Ruins", "People & cargo", "Building condition"]
+const groups = ["Review fixes", "Buildings", "Parks", "Homes & neighbourhoods", "Winter", "Ruins", "People & cargo", "Building condition"]
 const captureSheet = async () => {
   const previous = await page.locator("#sheet-link").getAttribute("href")
   await page.getByRole("button", { name: "Save model sheet", exact: true }).click()
@@ -50,7 +50,7 @@ try {
     console.log(`ok ${collection}: ${await page.locator(".model-view").count()} models, rotation, elevation, PNG export`)
   }
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByRole("button", { name: "Gardens & squares", exact: true }).click()
+  await page.getByRole("button", { name: "Parks", exact: true }).click()
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "Phone preview must fit the viewport")
   await page.screenshot({ path: `${output}/phone.png` })
   assert.deepEqual(errors, [])

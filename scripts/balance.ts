@@ -20,11 +20,11 @@
  *   ignoring the crown;
  * - idle: founds the basics, then leaves the town to itself;
  * - crowded: the sensible mayor, but homes packed in beside the industry,
- *   and no gardens, parks, statues, or paving;
+ *   and no parks or paving;
  * - uncovered: the sensible mayor, but no fire watch, healer, or watch house.
  *
  * The sensible mayor also keeps homes off squalid streets and dirty
- * workshops a little way from homes, plants gardens and paves streets where
+ * workshops a little way from homes, lays out parks and paves streets where
  * homes are just short of the next tier, sends for a fire watch, a healer,
  * or a watch house when warning signs go up over a few homes and for a
  * builder when homes start to run down, clears ruins, and puts workers'
@@ -38,10 +38,10 @@
  * wants at each decision, and `DEBUG=1` every edit it pushes. The bot only does what a player
  * could: it reads the world, then pushes the same edits the page does.
  */
-import { goodIds, home, kinds, landIds, ROAD_COST, sizeIds, type Amounts, type CharterValue, type GoodId, type Kind, type KindId } from "../src/content.ts"
+import { goodIds, home, kinds, landIds, ROAD_COST, sizeIds, type Amounts, type CharterValue, type GoodId, type GroundId, type Kind, type KindId, type PropId } from "../src/content.ts"
 import * as content from "../src/content.ts"
 import { around, canPlace, DIRS, entrances, GridBuilder, isRoad, key, useAt, type Use } from "../src/grid.ts"
-import { ringOf } from "../src/appeal.ts"
+import { parksOf, ringOf } from "../src/appeal.ts"
 import { GRID, inside, type Point } from "../src/iso.ts"
 import type { GridValue } from "../src/schema.ts"
 import { headless, type Snapshot } from "../src/sim/headless.ts"
@@ -73,7 +73,7 @@ const verbose = args.includes("--verbose")
 const snapshotAt = Number(option("snapshot", "0"))
 const out = option("out", "snapshots")
 if (!sizeIds.includes(size) || !landIds.includes(land) || !bots.includes(bot) || (versus !== "" && !bots.includes(versus))) throw new Error("Unknown --size, --land, --bot, or --versus")
-/** Mayors who look after the neighbourhood: gardens, paving, homes away from industry. */
+/** Mayors who look after the neighbourhood: parks, paving, homes away from industry. */
 const zoned = () => bot !== "crowded" && bot !== "idle"
 /** Mayors who keep fire watches, healers, and watch houses. */
 const covered = () => bot !== "uncovered" && bot !== "idle"
@@ -103,6 +103,8 @@ interface World {
   /** Desirability by cell (see `appeal.ts`), paved road cells, and ruins. */
   readonly appeal: ReadonlyArray<number>
   readonly paved: ReadonlySet<number>
+  /** Cells of park, by `key`: their ground and furnishing. */
+  readonly parks: ReadonlyMap<number, { readonly x: number; readonly y: number; readonly ground: GroundId; readonly prop: PropId | "none" }>
   readonly ruins: ReadonlyArray<{ readonly id: number; readonly tile: Tile }>
   /** Cells of ore rocks (other rocks are stone). */
   readonly ore: ReadonlySet<number>
@@ -139,15 +141,17 @@ const read = (snapshot: Snapshot): World => {
   const stock: Record<string, number> = Object.fromEntries(goodIds.map((g) => [g, 0]))
   const ore = new Set<number>()
   const paved = new Set<number>()
+  const parks = new Map<number, { x: number; y: number; ground: GroundId; prop: PropId | "none" }>()
   const ruins: Array<World["ruins"][number]> = []
   for (const e of snapshot.entities) {
     const c = e.components
     const tile = c["Town/Tile"] as Tile | undefined
     if (!tile) continue
-    const use: Use = c["Town/Road"] ? "road" : c["Town/House"] ? "house" : c["Town/Tree"] ? "tree" : c["Town/Rock"] ? "rock" : c["Town/Water"] ? "water" : c["Town/Field"] ? "field" : c["Town/Ruin"] ? "ruin" : "building"
+    const use: Use = c["Town/Road"] ? "road" : c["Town/Park"] ? "park" : c["Town/House"] ? "house" : c["Town/Tree"] ? "tree" : c["Town/Rock"] ? "rock" : c["Town/Water"] ? "water" : c["Town/Field"] ? "field" : c["Town/Ruin"] ? "ruin" : "building"
     builder.claim(tile, e.id, use)
     if (c["Town/Rock"]?.ore) ore.add(key(tile.x, tile.y))
     if (c["Town/Paved"]) paved.add(key(tile.x, tile.y))
+    if (c["Town/Park"]) parks.set(key(tile.x, tile.y), { x: tile.x, y: tile.y, ...c["Town/Park"] })
     if (c["Town/Ruin"]) ruins.push({ id: e.id, tile })
     if (c["Town/Building"]) buildings.push({ kind: c["Town/Building"].kind, tile, status: c["Town/Status"], site: !!c["Town/Site"], nearby: c["Town/Staff"]?.nearby ?? 0 })
     if (c["Town/House"])
@@ -166,6 +170,7 @@ const read = (snapshot: Snapshot): World => {
     grid: builder.value(),
     appeal: r["Town/Appeal"].cells,
     paved,
+    parks,
     ruins,
     ore,
     buildings,
@@ -285,28 +290,53 @@ const homeSpots = (w: World, n: number, near?: Tile): Array<Point> => {
 }
 
 /**
- * Where a garden (or park, or statue) helps most: the free cell off the
+ * Where a new park helps most: the free square of `size` cells off the
  * lanes with the most homes within its reach that fall just short of the
- * next tier's desirability.
+ * next tier's desirability (a furnished park of `size` gives about `value`).
  */
-const ornamentFor = (w: World, kind: Kind): Point | null => {
+const parkFor = (w: World, size: number, value: number): Point | null => {
   const short = w.homes.filter((h) => {
     if (h.site || h.tier === 3 || !h.provided) return false
     const v = w.appeal[key(h.tile.x, h.tile.y)] ?? 0
     const goal = content.home.tiers[h.tier === 1 ? 2 : 3].appeal
-    return v < goal && v >= goal - kind.appeal!.value
+    return v < goal && v >= goal - value
   })
   if (short.length < 3) return null
+  const reach = content.park.reach[0] + Math.floor((size * size) / content.park.reach[1])
   let best: { cell: Point; value: number } | null = null
-  for (let y = 0; y + kind.size <= GRID; y++) {
-    for (let x = 0; x + kind.size <= GRID; x++) {
-      const tile = { x, y, size: kind.size }
+  for (let y = 0; y + size <= GRID; y++) {
+    for (let x = 0; x + size <= GRID; x++) {
+      const tile = { x, y, size }
       if (!canPlace(w.grid, tile) || offPlan(tile)) continue
-      const value = short.filter((h) => ringOf(tile, h.tile.x, h.tile.y) <= Math.max(1, kind.appeal!.reach - 1)).length
+      const value = short.filter((h) => ringOf(tile, h.tile.x, h.tile.y) <= Math.max(1, reach - 1)).length
       if (value >= 3 && (!best || value > best.value)) best = { cell: { x, y }, value }
     }
   }
   return best?.cell ?? null
+}
+
+/**
+ * The next furnishing for the town's parks: on a bare cell of a park with
+ * room for more, the finest the town can afford that the park lacks
+ * (a statue, a fountain, a lamp).
+ */
+const furnishing = (w: World): Edit | null => {
+  const parks = parksOf([...w.parks.values()])
+  for (const p of parks) {
+    const placed = p.cells.filter((c) => c.prop !== "none")
+    if (placed.length >= Math.ceil(p.cells.length / content.park.cellsPerProp)) continue
+    const bare = p.cells.find((c) => c.prop === "none")
+    if (!bare) continue
+    const has = new Set(placed.map((c) => c.prop))
+    const wanted: ReadonlyArray<PropId> = w.coins > 1500 ? ["statue", "fountain", "lamp"] : w.coins > 300 ? ["fountain", "lamp"] : ["lamp"]
+    for (const id of wanted) {
+      const piece = content.props[id]
+      if (has.has(id) && id !== "lamp") continue
+      if (residents(w) < piece.unlock.residents || w.census.citizens! < piece.unlock.citizens || !affordable(w, piece.cost)) continue
+      return { type: "prop", prop: id, cell: { x: bare.x, y: bare.y } }
+    }
+  }
+  return null
 }
 
 /** Homes whose sign for a risk is up, or nearly. */
@@ -518,16 +548,17 @@ const decide = (w: World): ReadonlyArray<Edit> => {
     roading.delete(want.kind)
     resting.set(want.kind, w.tick + 5 * 3600)
   }
-  // Ornaments, then (with stone to spare) paving, where homes fall a little short of the next tier: a
-  // garden is cheap; parks and statues once the treasury is comfortable.
+  // Parks, then (with stone to spare) paving, where homes fall a little short of the next tier: furnish
+  // the parks there are first, then lay a small lawn (a bigger one once the treasury is comfortable).
   if (zoned() && w.coins > 150) {
-    // A fountain in the middle of a block lifts all eight homes around it past what citizens need.
-    const options: ReadonlyArray<KindId> = w.coins > 1500 ? ["statue", "fountain", "garden"] : w.coins > 300 ? ["fountain", "garden"] : ["garden"]
-    for (const id of options) {
-      const kind = kinds[id]
-      if (!unlocked(w, kind) || !affordable(w, kind.cost)) continue
-      const spot = ornamentFor(w, kind)
-      if (spot) return [...edits, { type: "building", kind: id, cell: spot, open: false }]
+    const furnish = furnishing(w)
+    if (furnish) return [...edits, furnish]
+    const size = w.coins > 1500 ? 3 : 2
+    const spot = parkFor(w, size, size === 3 ? 12 : 6)
+    if (spot && affordable(w, { coins: size * size * content.grounds.lawn.cost.coins, materials: {} })) {
+      const cells: Array<Point> = []
+      for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) cells.push({ x: spot.x + dx, y: spot.y + dy })
+      return [...edits, { type: "ground", ground: "lawn", cells }]
     }
     if (w.stock.stone >= 15 && w.coins > 400) {
       const cells: Array<Point> = []
@@ -594,8 +625,8 @@ const run = (seed: number) => {
     const chosen = decide(w)
     if (process.env.SPEND) {
       for (const e of chosen) {
-        const k = e.type === "building" ? kinds[e.kind].category === "services" || kinds[e.kind].decor ? e.kind : kinds[e.kind].category : e.type
-        const cost = e.type === "building" ? kinds[e.kind].cost.coins : e.type === "homes" ? e.cells.length * home.cost.coins : e.type === "roads" ? e.cells.length * ROAD_COST : e.type === "pave" ? e.cells.length * 3 : 0
+        const k = e.type === "building" ? kinds[e.kind].category === "services" ? e.kind : kinds[e.kind].category : e.type === "prop" ? e.prop : e.type
+        const cost = e.type === "building" ? kinds[e.kind].cost.coins : e.type === "homes" ? e.cells.length * home.cost.coins : e.type === "roads" ? e.cells.length * ROAD_COST : e.type === "pave" ? e.cells.length * 3 : e.type === "ground" ? e.cells.length * content.grounds[e.ground].cost.coins : e.type === "prop" ? content.props[e.prop].cost.coins : 0
         if (cost > 0) spend[k] = (spend[k] ?? 0) + cost
       }
       if ((t + DECIDE) % 300 === 0) {

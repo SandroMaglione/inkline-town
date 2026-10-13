@@ -1,7 +1,6 @@
 import { kinds, type KindId } from "../content.ts"
 import { U } from "../iso.ts"
 import { Drawing, palette, pale, square, sides, type Vertex, type Side } from "./primitives.ts"
-import { makeDecor } from "./town-props.ts"
 import { finishTownBuilding, townBuildingNotes, institutionDoor, makeQuarry } from "./services.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
@@ -28,12 +27,7 @@ const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }>
   healer: { accent: 0x4f9a8a },
   hospital: { accent: 0x4f9a8a, glass: 0xc9d6ee },
   watchhouse: { accent: 0x3d4f6e },
-  builder: { accent: 0x8a6a45, roof: 0xb08a5a },
-  garden: { accent: 0x4f9a6a },
-  park: { accent: 0x4f9a6a },
-  fountain: { accent: 0x5f8fb0 },
-  statue: { accent: 0x8f9891 },
-  plaza: { accent: 0x8f9891 }
+  builder: { accent: 0x8a6a45, roof: 0xb08a5a }
 }
 
 export interface BuildingOptions {
@@ -44,7 +38,6 @@ export interface BuildingOptions {
   motion?: boolean
 }
 export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
-  if (kinds[id].decor) return makeDecor(id)
   if (id === "quarry") return makeQuarry(options)
   const fit = options.fit ?? 1
   const kind = kinds[id],
