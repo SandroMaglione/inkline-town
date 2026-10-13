@@ -69,8 +69,11 @@ export const askOf = (good: GoodId, percent: number, rules: Rules = shippedRules
 export const taxOf = (h: Needs & { readonly residents: number }, rates: Rates, rules: Rules = shippedRules): number =>
   h.residents * rules.home.tiers[h.tier].tax * (rateOf(rates, h.tier) / 100) * (0.25 + 0.75 * satisfaction(h, h.tier, rules))
 
-export const lowNeed = (left: number, need: Need, rules: Rules = shippedRules) => left < rules.home.lasts[need] / 2
+export const refreshLevel = (need: Need, rules: Rules = shippedRules) => rules.home.lasts[need] / 2
+export const lowNeed = (left: number, need: Need, rules: Rules = shippedRules) => left < refreshLevel(need, rules)
 export const mealDecay = (tick: number, winter: boolean) => winter && tick % 2 === 0 ? 2 : 1
+/** Mean of the same two-tick meal cadence, for rate-based consumers. */
+export const mealRate = (winter: boolean) => (mealDecay(0, winter) + mealDecay(1, winter)) / 2
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
 export const ageNeeds = <T extends Needs & { readonly clock: number }>(h: T, eat: number): Mutable<T> => ({
   ...h, clock: h.clock + 1, food: Math.max(0, h.food - eat), bread: Math.max(0, h.bread - eat),

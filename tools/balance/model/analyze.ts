@@ -1,8 +1,8 @@
 import { amounts, goodIds, type GoodId, type WinterId } from "../../../src/content.ts"
-import { appealAt, appealGrid, buildingSource, landSource } from "../../../src/appeal.ts"
+import { appealAt, appealGrid, buildingSource, landSource, parkSources, parkUpkeep } from "../../../src/appeal.ts"
 import { doors, nearest, reach } from "../../../src/grid.ts"
 import { assignWorkers, type Assignment } from "../../../src/rules/production.ts"
-import { baseCollection, taxOf, tierFor } from "../../../src/rules/households.ts"
+import { baseCollection, mealRate, refreshLevel, taxOf, tierFor } from "../../../src/rules/households.ts"
 import { riskIncrements, near } from "../../../src/rules/risks.ts"
 import { seasonAt } from "../../../src/rules/seasons.ts"
 import { spoilExpectation } from "../../../src/rules/decay.ts"
@@ -34,6 +34,8 @@ export const analyze = ({ rules, scenario: s }: Inputs, options: AnalysisOptions
   for (const r of s.roads) if (r.paved) sources.push(landSource("paved", r, rules))
   for (const r of s.ruins ?? []) sources.push(landSource("ruin", r, rules))
   for (const h of s.homes) if (h.condition < rules.condition.worn) sources.push(landSource("worn", h.tile, rules))
+  const roadCells = new Set(s.roads.map((p) => `${p.x},${p.y}`))
+  sources.push(...parkSources(s.parks ?? [], (x, y) => roadCells.has(`${x},${y}`), rules))
   const appeal = appealGrid(sources, rules), findings: Finding[] = []
   const recipes = s.buildings.filter((b) => !b.site && !b.paused && rules.kinds[b.kind].recipe).map((b) => {
     const kind = rules.kinds[b.kind], crew = staff.get(b.id) ?? zero
@@ -79,11 +81,11 @@ export const analyze = ({ rules, scenario: s }: Inputs, options: AnalysisOptions
   if (heldTools < toolWorkplaces.length) findings.push({ code: "working-tool-capital", confidence: "exact", detail: `${toolWorkplaces.length} wearing workplaces need ${toolWorkplaces.length} working tools; only ${heldTools} tools are held across all buildings` })
   const spoil = { ...amounts({}) }
   for (const b of s.buildings.filter((b) => !b.site)) for (const g of goodIds) spoil[g] += spoilExpectation(b.stock[g], g, rules.kinds[b.kind].keeps ?? 1, rules) * 60 / (rules.spoilTicks * rules.stepSeconds)
-  const foodDecay = severity === null ? 1 : 1.5
+  const foodDecay = mealRate(severity !== null)
   const needBounds = {
-    food: { min: s.homes.length * foodDecay * 60 / (rules.home.lasts.food * rules.stepSeconds), frequent: s.homes.length * foodDecay * 120 / (rules.home.lasts.food * rules.stepSeconds) },
-    cloth: { min: s.homes.length * 60 / (rules.home.lasts.cloth * rules.stepSeconds), frequent: s.homes.length * 120 / (rules.home.lasts.cloth * rules.stepSeconds) },
-    citizenCloth: { min: s.homes.filter((h) => h.tier >= 2).length * 60 / (rules.home.lasts.cloth * rules.stepSeconds), frequent: s.homes.filter((h) => h.tier >= 2).length * 120 / (rules.home.lasts.cloth * rules.stepSeconds) }
+    food: { min: s.homes.length * foodDecay * 60 / (rules.home.lasts.food * rules.stepSeconds), frequent: s.homes.length * foodDecay * 60 / ((rules.home.lasts.food - refreshLevel("food", rules)) * rules.stepSeconds) },
+    cloth: { min: s.homes.length * 60 / (rules.home.lasts.cloth * rules.stepSeconds), frequent: s.homes.length * 60 / ((rules.home.lasts.cloth - refreshLevel("cloth", rules)) * rules.stepSeconds) },
+    citizenCloth: { min: s.homes.filter((h) => h.tier >= 2).length * 60 / (rules.home.lasts.cloth * rules.stepSeconds), frequent: s.homes.filter((h) => h.tier >= 2).length * 60 / ((rules.home.lasts.cloth - refreshLevel("cloth", rules)) * rules.stepSeconds) }
   }
   const net = Object.fromEntries(goodIds.map((g) => [g, supply[g] - inputs[g] - spoil[g]])) as Record<GoodId, number>
   const foodCeiling = supply.fish + supply.smoked + supply.bread - inputs.fish - inputs.smoked - inputs.bread
@@ -92,7 +94,8 @@ export const analyze = ({ rules, scenario: s }: Inputs, options: AnalysisOptions
   const hall = s.buildings.find((b) => b.kind === "townhall"), hallRoads = hall ? reach(g, doors(g, hall.tile)) : null
   const taxes = s.homes.reduce((sum, h) => sum + (hallRoads && nearest(hallRoads, doors(g, h.tile)) ? taxOf(h, s.policy, rules) : 0), 0)
   const upkeep = s.buildings.filter((b) => !b.site).reduce((sum, b) => sum + rules.kinds[b.kind].upkeep * (b.paused ? rules.pausedUpkeep : 1), 0)
-  const collection = baseCollection(taxes, upkeep, s.homes.length, rules), cashPerMinute = collection.delta * 60 / (rules.ledgerTicks * rules.stepSeconds)
+  const parkCost = (s.parks ?? []).reduce((n, p) => n + parkUpkeep(p, rules), 0)
+  const collection = baseCollection(taxes, upkeep + parkCost, s.homes.length, rules), cashPerMinute = collection.delta * 60 / (rules.ledgerTicks * rules.stepSeconds)
   const profiles = options.services === false ? [] : s.buildings.flatMap((b) => { const p = serviceProfile(s, b, staff.get(b.id) ?? zero, rules); return p ? [p] : [] })
   const household = s.homes.map((h) => {
     const desirable = appealAt(appeal, h.tile.x, h.tile.y)
@@ -134,13 +137,13 @@ export const analyze = ({ rules, scenario: s }: Inputs, options: AnalysisOptions
     assumptions: ["Resource flow is a steady-state pooled relaxation; it is an upper bound before household demand and transport cuts.", "Transport ceilings assume full loads and available destinations; nearest-demand dispatch and construction can lower realized throughput.", "Service path probabilities are exact for the stated uniform-walk graph; renewal timing and unlimited baskets are estimates.", "Risk deadlines freeze hunger, approval, neighbourhood and condition; contagion and fire spread are excluded from these local deadlines."],
     staff: Object.fromEntries(staff), recipes: recipes.map((r) => ({ ...r, flowCeiling: rates.get(r.id)! })),
     supply, workshopDemand: inputs, spoilage: spoil, availableAfterWorkshops: net, needBounds,
-    economy: { taxesPerMinute: taxes, upkeepPerMinute: upkeep, administrationPerMinute: collection.admin, roundedNetPerMinute: cashPerMinute,
+    economy: { taxesPerMinute: taxes, upkeepPerMinute: upkeep + parkCost, parkUpkeepPerMinute: parkCost, administrationPerMinute: collection.admin, roundedNetPerMinute: cashPerMinute,
       noTradeRunwayMinutes: cashPerMinute < 0 ? Math.max(0, s.coins) / -cashPerMinute : null },
     currentGoalsWithoutTrade: goalsOf(s.charter, { settlers: s.homes.filter((h) => h.tier === 1).reduce((n, h) => n + h.residents, 0), citizens: s.homes.filter((h) => h.tier >= 2).reduce((n, h) => n + h.residents, 0), coins: s.coins, net: cashPerMinute, approval: s.approval }, rules),
     tools: { wearingWorkplaces: toolWorkplaces.length, equippedWorkplaces: workingTools, held: heldTools },
     repair: { upkeepCycleMinutes: (rules.conditionMax - rules.condition.mend) * rules.condition.every * rules.stepSeconds / 60,
-      planksPerMinute: (s.homes.length + s.buildings.filter((b) => !rules.kinds[b.kind].decor && b.kind !== "townhall").length) * 60 / ((rules.conditionMax - rules.condition.mend) * rules.condition.every * rules.stepSeconds),
-      stonePerMinute: s.buildings.filter((b) => !rules.kinds[b.kind].decor && b.kind !== "townhall").length * 60 / ((rules.conditionMax - rules.condition.mend) * rules.condition.every * rules.stepSeconds),
+      planksPerMinute: (s.homes.length + s.buildings.filter((b) => b.kind !== "townhall").length) * 60 / ((rules.conditionMax - rules.condition.mend) * rules.condition.every * rules.stepSeconds),
+      stonePerMinute: s.buildings.filter((b) => b.kind !== "townhall").length * 60 / ((rules.conditionMax - rules.condition.mend) * rules.condition.every * rules.stepSeconds),
       graceBeforeHalfSpeedSeconds: (rules.condition.mend - rules.condition.worn) * rules.condition.every * rules.stepSeconds },
     citizenGoal: { housingCeilingAtCurrentDesirability: citizenHousingCeiling, minimumAtPopulationGoal: requiredCitizensAtPopulationGoal, scope: "Existing homes and frozen neighbourhood; assumes every need/service could be supplied. Clearing ruins, repairs, new homes or amenities can change this ceiling." },
     household, transport, services: profiles, findings }

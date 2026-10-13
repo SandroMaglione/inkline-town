@@ -9,6 +9,7 @@ import type { BuildAction, Scenario } from "../types.ts"
 
 export const fixture = (scenario: Scenario, rules: Rules): Headless => {
   validateScenario(scenario, rules)
+  if (scenario.buildings.some((b) => b.site)) throw new Error("Controlled fixtures require completed buildings; a construction site needs its original owed materials and progress")
   const town = headless(scenario.charter, { rules })
   town.change((s) => {
     s.entities = []; s.relations = {}; s.nextEntity = Math.max(0, ...scenario.homes.map((h) => h.id), ...scenario.buildings.map((b) => b.id)) + 1
@@ -16,7 +17,8 @@ export const fixture = (scenario: Scenario, rules: Rules): Headless => {
     for (const h of scenario.homes) add({
       "Town/Tile": h.tile, "Town/House": { tier: h.tier, residents: h.residents, food: h.food, bread: h.bread, cloth: h.cloth, faith: h.faith, clock: h.clock },
       ...Object.fromEntries(wearOf(rules).map(([d, v]) => [d.name, structuredClone(v)])),
-      "Town/Risk": { ...h.meters, thefts: 0 }, "Town/Condition": { value: h.condition }
+      "Town/Risk": { ...h.meters, thefts: 0 }, "Town/Condition": { value: h.condition },
+      ...(h.sick ? { "Town/Sick": { left: rules.risk.health.lasts } } : {})
     }, h.id)
     for (const b of scenario.buildings) {
       const kind = rules.kinds[b.kind]
@@ -31,6 +33,8 @@ export const fixture = (scenario: Scenario, rules: Rules): Headless => {
       add(components, b.id)
     }
     for (const p of scenario.roads) add({ "Town/Tile": { x: p.x, y: p.y, size: 1 }, "Town/Road": {}, ...(p.paved ? { "Town/Paved": {} } : {}) })
+    for (const p of scenario.parks ?? []) add({ "Town/Tile": { x: p.x, y: p.y, size: 1 }, "Town/Park": { ground: p.ground, prop: p.prop } })
+    for (const tile of scenario.ruins ?? []) add({ "Town/Tile": tile, "Town/Ruin": { cause: "burnt" } })
     const grid = scenarioGrid(scenario, rules).value()
     for (const [i, l] of scenario.land.entries()) {
       if (ownerAt(grid, l.tile.x, l.tile.y) !== -1 - i) continue
@@ -49,5 +53,9 @@ export const fixture = (scenario: Scenario, rules: Rules): Headless => {
   return town
 }
 
-export const pushBuild = (town: Headless, action: BuildAction) => town.edit(action.kind === "home" ? { type: "homes", cells: [action.tile] } : { type: "building", kind: action.kind, cell: action.tile, open: false })
+export const pushBuild = (town: Headless, action: BuildAction) => {
+  if (action.kind === "ground") town.edit({ type: "ground", ground: action.ground, cells: [action.tile] })
+  else if (action.kind === "prop") town.edit({ type: "prop", prop: action.prop, cell: action.tile })
+  else town.edit(action.kind === "home" ? { type: "homes", cells: [action.tile] } : { type: "building", kind: action.kind, cell: action.tile, open: false })
+}
 export const component = (snapshot: Snapshot, id: number, name: string): any => snapshot.entities.find((e) => e.id === id)?.components[name]

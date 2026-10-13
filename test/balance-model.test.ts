@@ -52,6 +52,23 @@ test("paused upkeep candidates are shared with the actual ledger", () => {
   assert.notEqual(expected, analyze({ rules: resolveRules(), scenario }, { services: false }).economy.roundedNetPerMinute)
 })
 
+test("cell parks share grouping, beauty and upkeep with the real game", () => {
+  const rules = resolveRules([{ path: "grounds.flowers.beauty", value: 1.25 }, { path: "props.fountain.beauty", value: 6 }, { path: "grounds.flowers.upkeep", value: 0.4 }])
+  const base = citizensDistrict(rules), scenario = { ...base,
+    homes: base.homes.map((h) => ({ ...h, food: 10000000 })), buildings: base.buildings.filter((b) => b.kind === "townhall").map((b) => ({ ...b, stock: amounts({}) })) }
+  const expected = analyze({ rules, scenario }, { services: false })
+  const town = fixture(scenario, rules), before = town.snapshot().resources["Town/Treasury"].coins
+  town.run(60)
+  const actual = town.snapshot()
+  assert.equal(actual.resources["Town/Treasury"].coins - before, expected.economy.roundedNetPerMinute)
+  for (const h of expected.household) {
+    const tile = scenario.homes.find((home) => home.id === h.id)!.tile
+    assert.equal(actual.resources["Town/Appeal"].cells[tile.y * 64 + tile.x], h.desirability)
+  }
+  assert(expected.economy.parkUpkeepPerMinute > 0)
+  assert.notEqual(expected.household[0]!.desirability, analyze({ rules: resolveRules(), scenario }, { services: false }).household[0]!.desirability)
+})
+
 test("desirability rejects an industrial citizen plan even with sufficient goods", () => {
   const rules = resolveRules(), industrial = analyze({ rules, scenario: citizensDistrict(rules, false) }), zoned = analyze({ rules, scenario: citizensDistrict(rules, true) })
   assert.equal(industrial.household.filter((h) => h.potentialTier >= 2).length, 0)

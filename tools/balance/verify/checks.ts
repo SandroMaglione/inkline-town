@@ -1,3 +1,4 @@
+import { citizenPark } from "../catalog.ts"
 import { amounts, type KindId } from "../../../src/content.ts"
 import { type Rules } from "../../../src/rules/config.ts"
 import { analyze } from "../model/analyze.ts"
@@ -14,7 +15,7 @@ const compare = (name: string, confidence: string, expected: number, actual: num
 
 export const verifyProduction = (rules: Rules, kind: KindId, apprentices: boolean, tools: boolean, worn = false): Verification => {
   let scenario = district(`production-${kind}`, [apprentices ? 1 : 2, apprentices ? 1 : 2], [kind], false, rules)
-  scenario = { ...scenario, buildings: [...scenario.buildings, ...scenario.homes.map((h, i) => ({ id: 200 + i, kind: "garden" as const, tile: { x: h.tile.x, y: h.tile.y - 1, size: 1 }, condition: rules.conditionMax, paused: false, site: false, stock: amounts({}) }))] }
+  scenario = { ...scenario, parks: citizenPark() }
   const producer = scenario.buildings.find((b) => b.kind === kind)!, recipe = rules.kinds[kind].recipe!
   scenario = { ...scenario, homes: scenario.homes.map((h) => ({ ...h, food: 10000000, bread: apprentices ? 0 : 10000000, cloth: apprentices ? 0 : 10000000, faith: apprentices ? 0 : 10000000 })),
     buildings: scenario.buildings.map((b) => ({ ...b, stock: amounts(b.id === producer.id ? { tools: tools ? 1 : 0 } : {}), condition: b.id === producer.id && worn ? rules.condition.worn - 1 : b.condition })) }

@@ -7,7 +7,7 @@ const stable = (value: unknown): unknown => Array.isArray(value) ? value.map(sta
 export const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(stable(value))).digest("hex")
 export const provenance = (rules: Rules, scenarios: ReadonlyArray<Scenario>) => {
   const paths = ["src/content.ts", "src/grid.ts", "src/appeal.ts", "tools/balance/catalog.ts", "tools/balance/scenario.ts", "tools/balance/types.ts", ...readdirSync("src/rules").filter((f) => f.endsWith(".ts")).map((f) => `src/rules/${f}`), ...readdirSync("src/sim").filter((f) => f.endsWith(".ts")).map((f) => `src/sim/${f}`), ...readdirSync("tools/balance/model").filter((f) => f.endsWith(".ts")).map((f) => `tools/balance/model/${f}`)].sort()
-  return { modelVersion: 1, referencePr: "https://github.com/SandroMaglione/inkline-town/pull/3", referenceSha: "8de46be33c351052af64326f034888e0f09092a8",
+  return { modelVersion: 1, referencePr: "https://github.com/SandroMaglione/inkline-town/pull/3", referenceSha: "9b7ce7336a18f917a10aa6e21ae32cb57af88643",
     rulesSha256: fingerprint(rules), contentSha256: createHash("sha256").update(readFileSync("src/content.ts")).digest("hex"),
     modelSourceSha256: fingerprint(paths.map((p) => [p, readFileSync(p, "utf8")])), scenarioSha256: scenarios.map((s) => ({ name: s.name, sha256: fingerprint(s) })),
     parametersChanged: fingerprint(rules) !== fingerprint(resolveRules()) }

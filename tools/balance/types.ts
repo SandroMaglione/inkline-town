@@ -1,4 +1,5 @@
-import type { Amounts, CharterValue, KindId } from "../../src/content.ts"
+import type { Amounts, CharterValue, GroundId, PropId, KindId } from "../../src/content.ts"
+import type { ParkCell } from "../../src/appeal.ts"
 import type { TileLike } from "../../src/grid.ts"
 import type { Rules } from "../../src/rules/config.ts"
 import type { Needs, Rates } from "../../src/rules/households.ts"
@@ -21,6 +22,7 @@ export interface Scenario {
   readonly homes: ReadonlyArray<ModelHome>; readonly buildings: ReadonlyArray<ModelBuilding>
   readonly land: ReadonlyArray<LandResource>; readonly mask?: string
   readonly ruins?: ReadonlyArray<TileLike>
+  readonly parks?: ReadonlyArray<ParkCell>
   readonly imports?: Partial<Record<keyof Amounts, number>>
   readonly exports?: Partial<Record<keyof Amounts, number>>
   readonly trade?: TradePolicy & { readonly prices?: Amounts }
@@ -32,7 +34,10 @@ export interface RecipeCapacity {
   readonly jobsPerMinute: number; readonly outputPerMinute: number; readonly inputPerMinute: number
   readonly toolsPerMinute: number; readonly meanJobTicks: number; readonly cadenceTicks: number
 }
-export interface BuildAction { readonly at: number; readonly kind: KindId | "home"; readonly tile: TileLike }
+export type BuildingAction = { readonly at: number; readonly kind: KindId | "home"; readonly tile: TileLike }
+export type BuildAction = BuildingAction |
+  { readonly at: number; readonly kind: "ground"; readonly ground: GroundId; readonly tile: TileLike } |
+  { readonly at: number; readonly kind: "prop"; readonly prop: PropId; readonly tile: TileLike }
 export interface ProjectionOptions {
   readonly seconds: number; readonly stepSeconds?: number; readonly builds?: ReadonlyArray<BuildAction>
   readonly feeding?: "fish" | "bread"; readonly visitSeconds?: number; readonly faith?: boolean

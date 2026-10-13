@@ -1,10 +1,10 @@
 # Balance model results
 
-Generated from PR #3 at 8de46be33c351052af64326f034888e0f09092a8. No shipped parameter changes. Rules SHA-256: c2654cafa41aad51176030ba4f2ec484d61bfd372f9d8a247284a64855ab3c7c.
+Generated from PR #3 at 9b7ce7336a18f917a10aa6e21ae32cb57af88643. No shipped parameter changes. Rules SHA-256: 75d55bee5b0cc2f6167082e8e01d3030171fa8fb2eebf35fa966d6c47a778ac1.
 
 ## First citizens, with unchanged rules
 
-An authored starting district pays for its roads and homes, then uses ordinary construction edits and the UI-supported tool reserve of 10. The real game first reaches citizens at 336 seconds; the coarse model estimates 255. At ten minutes the game has 32 citizens, 55 residents and 1149 coins. The forecast has 32 citizens, 61 residents and 1467 coins. This is a progression fixture, not a generated-map victory claim.
+An authored starting district pays for its roads and homes, then uses ordinary construction edits and the UI-supported tool reserve of 10. The real game first reaches citizens at 336 seconds; the coarse model estimates 255. At ten minutes the game has 32 citizens, 54 residents and 1071 coins. The forecast has 32 citizens, 60 residents and 1399 coins. This is a progression fixture, not a generated-map victory claim.
 
 ## Production capacity
 
@@ -23,6 +23,7 @@ Outputs per minute with full crews, sufficient inputs, output room and maintaine
 ## Useful constraints
 
 - The first citizen chain alone costs 870 coins and 3 construction tools. Its 3 wearing workshops also need working tools. Total 6, versus 8 at a fair start. Raw industry adds more tool demand.
+- The verified park uses three adjacent flower cells, one fountain and one lamp: 97 coins, 2.65/min upkeep, +8 desirability at the nearest cells, reach 2. Its effects combine with industry and chapel effects; nearby raw industry remains a liability. Place furnishings after the ground exists.
 - Settlers accept cloth, and bread is preferred for food. Supplying a broad settler district can consume goods intended for citizen upgrades.
 - Promotion changes the workforce: citizens cannot fill settlers' jobs. Keep raw-production households within commuting distance.
 - Build mills/bakeries before farms can plant on their future plots. A previous ordering failed with the real game's “No room there”; the revised verified schedule has 0 rejected-action messages.

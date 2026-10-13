@@ -1,6 +1,7 @@
 import { amounts, goodIds, type Amounts } from "../../../src/content.ts"
+import { parkUpkeep } from "../../../src/appeal.ts"
 import { ruleTicks } from "../../../src/rules/config.ts"
-import { baseCollection, capacity, serveGoods, taxOf, tierFor } from "../../../src/rules/households.ts"
+import { baseCollection, capacity, mealRate, serveGoods, taxOf, tierFor } from "../../../src/rules/households.ts"
 import { seasonAt } from "../../../src/rules/seasons.ts"
 import { spoilExpectation } from "../../../src/rules/decay.ts"
 import { tradeCollection } from "../../../src/rules/trade.ts"
@@ -8,7 +9,7 @@ import { approvalTarget, nextApproval } from "../../../src/rules/approval.ts"
 import { analyze } from "./analyze.ts"
 import { around, cellsOf, key, ownerAt } from "../../../src/grid.ts"
 import { scenarioGrid } from "../scenario.ts"
-import type { Inputs, ModelBuilding, ProjectionOptions, Scenario } from "../types.ts"
+import type { Inputs, BuildingAction, ModelBuilding, ProjectionOptions, Scenario } from "../types.ts"
 
 /** Rate-based forecast with explicit temporal assumptions. It never calls the game runtime. */
 export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions) => {
@@ -16,10 +17,11 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
   if (!Number.isInteger(step) || step < 1 || step > 3 || !Number.isInteger(options.seconds) || options.seconds <= 0) throw new Error("Projection requires a 1..3 second step and a positive integer horizon")
   const stock = { ...amounts({}) }
   for (const b of scenario.buildings) if (!b.site) for (const g of goodIds) stock[g] += b.stock[g]
+  let parks = [...scenario.parks ?? []]
   let homes = scenario.homes.map((h) => ({ ...h, meters: { ...h.meters } })), buildings = [...scenario.buildings], coins = scenario.coins, approval = scenario.approval
   const events: Array<{ second: number; type: string; detail: string }> = [], rows: Array<{ second: number; coins: number; residents: number; citizens: number; approval: number; stock: Amounts }> = []
   const builds = [...options.builds ?? []].sort((a, b) => a.at - b.at), crown = [...options.crown ?? []].sort((a, b) => a.at - b.at)
-  const pending: Array<{ ready: number; action: typeof builds[number] }> = []
+  const pending: Array<{ ready: number; action: BuildingAction }> = []
   let nextId = Math.max(0, ...homes.map((h) => h.id), ...buildings.map((b) => b.id)) + 1
   let analysis = analyze({ rules, scenario }, { services: true }), cachedKey = "", firstCitizen: number | null = null
   let prices = scenario.trade?.prices ?? amounts(Object.fromEntries(goodIds.map((g) => [g, 100])))
@@ -29,7 +31,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
   const crop = (b: ModelBuilding) => {
     let state = fields.get(b.id)
     if (!state) {
-      const grid = scenarioGrid({ ...scenario, buildings, homes }, rules).value()
+      const grid = scenarioGrid({ ...scenario, buildings, homes, parks }, rules).value()
       const k = rules.kinds[b.kind], ids = new Set(around(b.tile, k.gathers!.radius).map((p) => ownerAt(grid, p.x, p.y)))
       const existing = scenario.land.filter((l, i) => l.type === "field" && ids.has(-1 - i))
       state = { credit: existing.filter((l) => l.growth >= rules.grown.field).length, slots: existing.length, planting: 0,
@@ -53,19 +55,30 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
     if (second === options.seconds) break
     const tick = scenario.tick + ruleTicks(second, rules), season = seasonAt(tick, scenario.charter, rules)
     while (builds.length > 0 && builds[0]!.at <= second) {
-      const action = builds.shift()!, k = action.kind === "home" ? null : rules.kinds[action.kind], cost = k?.cost ?? rules.home.cost
+      const action = builds.shift()!
+      const piece = action.kind === "ground" ? rules.grounds[action.ground] : action.kind === "prop" ? rules.props[action.prop] : null
+      const k = action.kind === "home" || action.kind === "ground" || action.kind === "prop" ? null : rules.kinds[action.kind]
+      const cost = piece?.cost ?? k?.cost ?? rules.home.cost
       if (k?.plants?.what === "field") {
         const plantingCells = new Set(around(action.tile, k.plants.radius).map((p) => key(p.x, p.y)))
         for (const future of builds) if (cellsOf(future.tile).some((p) => plantingCells.has(key(p.x, p.y)))) events.push({ second, type: "crop-placement-risk", detail: `${future.kind}'s future plot is inside ${action.kind}'s planting area; construct it first or clear fields later` })
       }
       const people = homes.reduce((n, h) => n + h.residents, 0), citizens = homes.filter((h) => h.tier >= 2).reduce((n, h) => n + h.residents, 0)
       const equipped = buildings.filter((b) => rules.kinds[b.kind].wear && b.stock.tools > 0).length
-      if ((k && (people < k.unlock.residents || citizens < k.unlock.citizens)) || coins < cost.coins || Object.entries(cost.materials).some(([g, n]) => stock[g as keyof Amounts] - (g === "tools" ? equipped : 0) < n!)) {
+      if (((k || piece) && (people < (k ?? piece)!.unlock.residents || citizens < (k ?? piece)!.unlock.citizens)) || coins < cost.coins || Object.entries(cost.materials).some(([g, n]) => stock[g as keyof Amounts] - (g === "tools" ? equipped : 0) < n!)) {
         events.push({ second, type: "build-blocked", detail: `${action.kind}: unlock, coins or materials unavailable` }); continue
+      }
+      if (action.kind === "prop" && !parks.some((p) => p.x === action.tile.x && p.y === action.tile.y)) {
+        events.push({ second, type: "build-blocked", detail: "A furnishing needs a park cell" }); continue
       }
       coins -= cost.coins
       for (const [g, n] of Object.entries(cost.materials)) stock[g as keyof Amounts] -= n!
-      pending.push({ ready: second + rules.buildTicks * rules.stepSeconds, action })
+      if (action.kind === "ground") {
+        const cell = parks.find((p) => p.x === action.tile.x && p.y === action.tile.y)
+        if (cell) parks = parks.map((p) => p === cell ? { ...p, ground: action.ground } : p)
+        else parks.push({ x: action.tile.x, y: action.tile.y, ground: action.ground, prop: "none" })
+      } else if (action.kind === "prop") parks = parks.map((p) => p.x === action.tile.x && p.y === action.tile.y ? { ...p, prop: action.prop } : p)
+      else pending.push({ ready: second + rules.buildTicks * rules.stepSeconds, action })
       events.push({ second, type: "build-paid", detail: `${action.kind}: ${cost.coins} coins` })
     }
     for (let i = pending.length - 1; i >= 0; i--) {
@@ -78,9 +91,9 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
     }
     let toolSlots = Math.floor(stock.tools)
     buildings = buildings.map((b) => rules.kinds[b.kind].wear ? { ...b, stock: { ...b.stock, tools: toolSlots-- > 0 ? 1 : 0 } } : b)
-    const stateKey = JSON.stringify([homes.map((h) => [h.id, h.tier, h.residents]), buildings.map((b) => [b.id, b.stock.tools, b.condition < rules.condition.worn]), season.severity])
+    const stateKey = JSON.stringify([homes.map((h) => [h.id, h.tier, h.residents]), buildings.map((b) => [b.id, b.stock.tools, b.condition < rules.condition.worn]), season.severity, parks])
     if (stateKey !== cachedKey) {
-      const current: Scenario = { ...scenario, tick, coins, approval, homes, buildings }
+      const current: Scenario = { ...scenario, tick, coins, approval, homes, buildings, parks }
       analysis = analyze({ rules, scenario: current }, { minutes: Math.max(1 / 60, (options.seconds - second) / 60), services: true })
       updatePeriods()
       cachedKey = stateKey
@@ -103,7 +116,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
         jobs = Math.min(jobs, state.credit); state.credit -= jobs
         if (jobs > 0) state.growing.push({ left: rules.grown.field * rules.stepSeconds, credit: jobs })
       } else if (k.gathers && k.gathers.source !== "water") {
-        const b = buildings.find((b) => b.id === row.id)!, grid = scenarioGrid({ ...scenario, buildings, homes }, rules).value()
+        const b = buildings.find((b) => b.id === row.id)!, grid = scenarioGrid({ ...scenario, buildings, homes, parks }, rules).value()
         const ids = new Set(around(b.tile, k.gathers.radius).map((p) => ownerAt(grid, p.x, p.y)))
         const sources = land.filter((l, i) => ids.has(-1 - i) && l.type === k.gathers!.source && (l.type !== "tree" || l.growth >= rules.grown.tree))
         jobs = Math.min(jobs, sources.reduce((n, l) => n + l.remaining, 0))
@@ -128,7 +141,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
         next = { ...served.house }
       }
       if (Number.isFinite(faith) && Math.floor(second / faith) !== Math.floor((second + step) / faith)) next.faith = rules.home.lasts.faith
-      const dt = ruleTicks(step, rules), eat = season.winter ? dt * 1.5 : dt
+      const dt = ruleTicks(step, rules), eat = dt * mealRate(season.winter)
       next.clock += dt; next.food = Math.max(0, next.food - eat); next.bread = Math.max(0, next.bread - eat); next.cloth = Math.max(0, next.cloth - dt); next.faith = Math.max(0, next.faith - dt)
       const settleCount = Math.floor(next.clock / rules.home.settle) - Math.floor(h.clock / rules.home.settle)
       const appeal = analysis.household.find((a) => a.id === h.id)?.desirability ?? 0
@@ -143,7 +156,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
     })
     if (firstCitizen === null && homes.some((h) => h.tier >= 2 && h.residents > 0)) firstCitizen = second + step
     for (let i = 0; i < homes.length; i++) if (homes[i]!.tier !== oldTiers[i]) events.push({ second: second + step, type: "tier", detail: `Home #${homes[i]!.id}: ${oldTiers[i]} → ${homes[i]!.tier}` })
-    buildings = buildings.map((b) => ({ ...b, condition: rules.kinds[b.kind].decor || b.kind === "townhall" ? b.condition : Math.max(0, b.condition - step / (rules.condition.every * rules.stepSeconds)) }))
+    buildings = buildings.map((b) => ({ ...b, condition: b.kind === "townhall" ? b.condition : Math.max(0, b.condition - step / (rules.condition.every * rules.stepSeconds)) }))
     const elapsed = second + step
     if (Math.floor(elapsed / (rules.spoilTicks * rules.stepSeconds)) > Math.floor(second / (rules.spoilTicks * rules.stepSeconds))) {
       const keeps = buildings.some((b) => rules.kinds[b.kind].keeps) ? Math.max(...buildings.map((b) => rules.kinds[b.kind].keeps ?? 1)) : 1
@@ -151,7 +164,8 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
     }
     if (Math.floor(elapsed / (rules.ledgerTicks * rules.stepSeconds)) > Math.floor(second / (rules.ledgerTicks * rules.stepSeconds))) {
       const tax = homes.reduce((n, h) => n + (analysis.household.find((a) => a.id === h.id)?.taxConnected ? taxOf(h, scenario.policy, rules) : 0), 0), upkeep = buildings.reduce((n, b) => n + rules.kinds[b.kind].upkeep * (b.paused ? rules.pausedUpkeep : 1), 0)
-      coins += baseCollection(tax, upkeep, homes.length, rules).delta
+      const parkCost = parks.reduce((n, p) => n + parkUpkeep(p, rules), 0)
+      coins += baseCollection(tax, upkeep + parkCost, homes.length, rules).delta
       if (scenario.trade) {
         const equipped = buildings.filter((b) => rules.kinds[b.kind].wear && b.stock.tools > 0).length
         const left = { ...stock, tools: Math.max(0, stock.tools - equipped) }, stores = buildings.filter((b) => rules.kinds[b.kind].holds?.accepts === "all" || rules.kinds[b.kind].keeps).map((b) => {

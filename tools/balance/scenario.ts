@@ -1,3 +1,4 @@
+import type { ParkCell } from "../../src/appeal.ts"
 import { amounts, goodIds, type KindId, type Tier } from "../../src/content.ts"
 import { GridBuilder, canPlace, doors, nearest, reach, type Use, type TileLike } from "../../src/grid.ts"
 import { GRID } from "../../src/iso.ts"
@@ -12,6 +13,7 @@ export const scenarioGrid = (s: Scenario, rules: Rules = shippedRules): GridBuil
   for (const h of s.homes) grid.claim(h.tile, h.id, "house")
   for (const b of s.buildings) grid.claim({ ...b.tile, size: rules.kinds[b.kind].size }, b.id, "building")
   for (const [i, r] of (s.ruins ?? []).entries()) grid.claim(r, -200000 - i, "ruin")
+  for (const [i, p] of (s.parks ?? []).entries()) grid.claim({ ...p, size: 1 }, -300000 - i, "park")
   return grid
 }
 
@@ -37,16 +39,21 @@ export const validateScenario = (s: Scenario, rules: Rules = shippedRules) => {
     lay({ ...b.tile, size: rules.kinds[b.kind].size }, b.id, "building")
   }
   for (const [i, r] of (s.ruins ?? []).entries()) lay(r, -200000 - i, "ruin")
+  for (const [i, p] of (s.parks ?? []).entries()) {
+    if (!rules.grounds[p.ground] || (p.prop !== "none" && !rules.props[p.prop])) throw new Error("Unknown park piece")
+    lay({ ...p, size: 1 }, -300000 - i, "park")
+  }
 }
 
 /** Read-only adapter; loading a snapshot never starts the runtime. */
 export const fromSnapshot = (snapshot: Snapshot, name = "saved-town", rules: Rules = shippedRules): Scenario => {
   const r = snapshot.resources, homes: ModelHome[] = [], buildings: ModelBuilding[] = [], land: Scenario["land"][number][] = [], roads: Scenario["roads"][number][] = []
-  const ruins: TileLike[] = []
+  const ruins: TileLike[] = [], parks: ParkCell[] = []
   for (const { id, components: c } of snapshot.entities) {
     const tile = c["Town/Tile"]
     if (!tile) continue
     if (c["Town/Road"]) roads.push({ x: tile.x, y: tile.y, ...(c["Town/Paved"] ? { paved: true } : {}) })
+    if (c["Town/Park"]) parks.push({ x: tile.x, y: tile.y, ...c["Town/Park"] })
     if (c["Town/Ruin"]) ruins.push(tile)
     if (c["Town/House"] && !c["Town/Site"] && !c["Town/Rising"] && !c["Town/Burning"]) homes.push({ id, tile, ...c["Town/House"], condition: c["Town/Condition"]?.value ?? rules.conditionMax, meters: c["Town/Risk"] ?? { fire: 0, health: 0, order: 0 }, ...(c["Town/Sick"] ? { sick: true } : {}) })
     if (c["Town/Building"] && !c["Town/Burning"]) buildings.push({ id, kind: c["Town/Building"].kind, tile, stock: amounts(c["Town/Inventory"]?.stock ?? {}), condition: c["Town/Condition"]?.value ?? rules.conditionMax, paused: !!c["Town/Paused"], site: !!c["Town/Site"] || !!c["Town/Rising"] })
@@ -55,7 +62,7 @@ export const fromSnapshot = (snapshot: Snapshot, name = "saved-town", rules: Rul
   }
   const charter = r["Town/Charter"]
   return { name, charter, tick: r["Town/Time"].tick - charter.founded, coins: r["Town/Treasury"].coins, approval: r["Town/Mood"].approval,
-    policy: r["Town/Policy"], trade: { ...r["Town/Policy"], prices: r["Town/Market"].prices }, homes, buildings, roads, land, ruins, mask: r["Town/Land"].mask }
+    policy: r["Town/Policy"], trade: { ...r["Town/Policy"], prices: r["Town/Market"].prices }, homes, buildings, roads, land, ruins, parks, mask: r["Town/Land"].mask }
 }
 
 /** Small authored districts. The same geometry is used by analysis and controlled runtime verification. */

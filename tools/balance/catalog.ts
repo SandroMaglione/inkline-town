@@ -1,12 +1,17 @@
-import { amounts, type KindId } from "../../src/content.ts"
+import { type KindId } from "../../src/content.ts"
 import type { Rules } from "../../src/rules/config.ts"
 import { district } from "./scenario.ts"
 import type { BuildAction, Scenario } from "./types.ts"
 
-export const citizensDistrict = (rules: Rules, gardens = true): Scenario => {
-  const s = district(gardens ? "zoned-citizens" : "industrial-citizens", Array(12).fill(1), ["farm", "mill", "bakery", "sheep", "weaver", "market", "chapel"], false, rules)
-  return gardens ? { ...s, buildings: [...s.buildings, ...s.homes.slice(0, 4).map((h, i) => ({ id: 300 + i, kind: "garden" as const,
-    tile: { x: h.tile.x, y: h.tile.y - 1, size: 1 }, condition: rules.conditionMax, site: false, paused: false, stock: amounts({}) }))] } : s
+/** A three-cell planted park beside four homes; uses the actual cell/prop rules. */
+export const citizenPark = () => [
+  { x: 9, y: 28, ground: "flowers" as const, prop: "fountain" as const },
+  { x: 10, y: 28, ground: "flowers" as const, prop: "lamp" as const },
+  { x: 11, y: 28, ground: "flowers" as const, prop: "none" as const }
+]
+export const citizensDistrict = (rules: Rules, parks = true): Scenario => {
+  const s = district(parks ? "zoned-citizens" : "industrial-citizens", Array(12).fill(1), ["farm", "mill", "bakery", "sheep", "weaver", "market", "chapel"], false, rules)
+  return parks ? { ...s, parks: citizenPark() } : s
 }
 
 /** Authored flat-land starting district. Roads/homes are charged; it is not a generated-map or human-win claim. */
@@ -23,6 +28,8 @@ export const buildScenario = (rules: Rules) => {
     buildings: [{ ...hall, stock: initial }], trade: { buys: ["tools"], sells: [], reserve: 10 } }
   const order: ReadonlyArray<readonly [KindId, number]> = [["sawmill", 0], ["lumberjack", 0], ["fishery", 0], ["quarry", 30], ["mill", 60], ["bakery", 90], ["farm", 120], ["sheep", 150], ["weaver", 180], ["market", 210], ["chapel", 240]]
   const builds: BuildAction[] = order.map(([kind, at]) => ({ kind, at, tile: template.buildings.find((b) => b.kind === kind)!.tile }))
-  for (const h of scenario.homes.slice(0, 4)) builds.push({ kind: "garden", at: 0, tile: { x: h.tile.x, y: h.tile.y - 1, size: 1 } })
+  for (const p of citizenPark()) builds.push({ kind: "ground", ground: p.ground, at: 0, tile: { x: p.x, y: p.y, size: 1 } })
+  // Ground commands must have been applied before a furnishing can address their entities.
+  for (const p of citizenPark()) if (p.prop !== "none") builds.push({ kind: "prop", prop: p.prop, at: 1, tile: { x: p.x, y: p.y, size: 1 } })
   return { scenario, builds }
 }

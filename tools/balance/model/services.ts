@@ -24,7 +24,7 @@ export const serviceProfile = (scenario: Scenario, building: ModelBuilding, staf
   const grid = scenarioGrid(scenario, rules).value(), starts = doors(grid, building.tile)
   if (starts.length === 0) return null
   const homeRoads = reach(grid, starts), secondsPerCell = rules.transport.cellSteps * rules.stepSeconds / rules.transport.walk
-  const targets: ReadonlyArray<{ readonly id: number; readonly tile: TileLike }> = service.service === "fire" || service.service === "repair" ? [...scenario.homes, ...scenario.buildings.filter((b) => !b.site && !rules.kinds[b.kind].decor)] : scenario.homes
+  const targets: ReadonlyArray<{ readonly id: number; readonly tile: TileLike }> = service.service === "fire" || service.service === "repair" ? [...scenario.homes, ...scenario.buildings.filter((b) => !b.site && b.kind !== "townhall")] : scenario.homes
   const beside = new Map<number, Set<number>>()
   for (const t of targets) for (const d of doors(grid, t.tile)) {
     const k = key(d.x, d.y), set = beside.get(k) ?? new Set<number>(); set.add(t.id); beside.set(k, set)

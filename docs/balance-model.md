@@ -48,6 +48,18 @@ const transport = assessTransfers(inputs, [
 
 `Scenario` contains plain buildings, households, roads, land, reserves, policy and optional trade conditions. Counts and locations are scenario choices. Rule values come from `resolveRules()`; there is no second recipe table in the analyzer. Construction schedules use the same scenario and ordinary player edits in `verifyBuilds`.
 
+Parks are individual ground cells with optional furnishings. Their grouping, repeat penalties, entrance bonuses, reach, desirability and upkeep come from the same functions as the game. Construction schedules can place ground and furnishings as well as ordinary buildings. Furnishings are scheduled after the ground's entities exist.
+
+```mermaid
+flowchart LR
+  Content["Game content"] --> Rules["Shared pure rules"]
+  Rules --> Game["Live game"]
+  Rules --> Model["Offline mathematics"]
+  Model --> Candidates["Constraints and candidate plans"]
+  Candidates --> Verify["Real-game verification"]
+  Game --> Verify
+```
+
 `src/rules/` contains game behavior. `tools/balance/model/` contains mathematical transformations and approximations. `tools/balance/verify/` owns runtime adapters and controlled experiments. `catalog.ts` contains authored examples, not universal winning layouts.
 
 ## What is calculated
@@ -77,13 +89,13 @@ pnpm balance:model sweep --path kinds.weaver.recipe.seconds --values 4,8,12
 
 ## Verification and interpreting results
 
-`balance:model:check` checks module boundaries, immutable candidate inputs, staffing, inaccessible workplaces, resource conservation, desirability, carrier-pool accounting, configuration search and controlled real-game comparisons. A candidate weaver period is also executed by the game to verify that both consumers receive the same inputs.
+`balance:model:check` checks module boundaries, immutable candidate inputs, staffing, inaccessible workplaces, resource conservation, desirability, carrier-pool accounting, configuration search and controlled real-game comparisons. Candidate weaver periods and park beauty/upkeep values are also executed by the game to verify that both consumers receive the same inputs.
 
 The construction case starts on authored flat land with roads and homes charged against fair starting funds, then builds through ordinary edits. It demonstrates a reachable citizen district in that stated starting configuration. It does not establish victory from every generated charter.
 
 Production comparisons allow one incomplete job; transport allows one in-flight load per carrier at the observation boundary. Service comparisons use independent fixed seeds and report their sample sizes and statistical tolerances. The coarse forecast's timing and cash errors remain visible. Passing the controlled checks does not turn an approximate forecast into an exact outcome prediction.
 
-The original seed-1000 sensible mayor's entire minute-30 world is checked against the PR #3 reference SHA-256 `3eff85260d3a97c25ad628dcf244e8f8b4abc6cd02407eed4446807e03d97557`. This checks the shared-rule extraction across production, transport, random streams, risks, economy and persistence. Refresh that reference only after an intentional gameplay or engine change has been reviewed.
+The original seed-1000 sensible mayor's entire minute-30 world is checked against PR #3 commit `9b7ce7336a18f917a10aa6e21ae32cb57af88643`, with reference SHA-256 `3eff85260d3a97c25ad628dcf244e8f8b4abc6cd02407eed4446807e03d97557`. This checks the shared-rule extraction across production, transport, random streams, risks, economy and persistence. The bot has no parks by minute 30; a separate real-game park comparison covers that rule family. Refresh the reference only after an intentional gameplay or engine change has been reviewed.
 
 Every report includes rule, content, source and scenario fingerprints. A rule change recomputes the analysis; a semantic change in the game must either update a shared function or fail the behavior/verification checks. Mathematical approximations also need calibration when their assumptions change.
 
