@@ -243,14 +243,14 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
   mill: {
     id: "mill", title: "Mill", blurb: "grinds wheat into flour",
     category: "food", size: 2, half: 8, stories: 2, roof: "flat", bays: 2, window: 4, topper: "sails",
-    cost: { coins: 150, materials: { planks: 6, stone: 2, tools: 2 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 30, citizens: 0 }, buildable: true,
+    cost: { coins: 150, materials: { planks: 6, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 30, citizens: 0 }, buildable: true,
     recipe: { input: "wheat", inputs: 1, output: "flour", batch: 1, seconds: 6 }, holds: { accepts: ["wheat", "flour"], cap: 8 }, carriers: 2,
     wear: 60, appeal: { value: -4, reach: 3 }
   },
   bakery: {
     id: "bakery", title: "Bakery", blurb: "bakes flour into bread",
     category: "food", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "chimney",
-    cost: { coins: 150, materials: { planks: 4, stone: 4, tools: 2 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 30, citizens: 0 }, buildable: true,
+    cost: { coins: 150, materials: { planks: 4, stone: 4, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 30, citizens: 0 }, buildable: true,
     recipe: { input: "flour", inputs: 1, output: "bread", batch: 2, seconds: 6 }, holds: { accepts: ["flour", "bread"], cap: 8 }, carriers: 2,
     wear: 60, hot: true, appeal: { value: -4, reach: 3 }
   },
@@ -263,7 +263,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
   weaver: {
     id: "weaver", title: "Weaver", blurb: "weaves wool into cloth",
     category: "crafts", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "none",
-    cost: { coins: 150, materials: { planks: 4, stone: 2, tools: 2 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 15, citizens: 0 }, buildable: true,
+    cost: { coins: 150, materials: { planks: 4, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 15, citizens: 0 }, buildable: true,
     recipe: { input: "wool", inputs: 1, output: "cloth", batch: 1, seconds: 8 }, holds: { accepts: ["wool", "cloth"], cap: 8 }, carriers: 2,
     wear: 60, appeal: { value: -2, reach: 2 }
   },
@@ -364,8 +364,8 @@ export const home = {
   half: 5,
   cost: { coins: 10, materials: { planks: 1 } } as Kind["cost"],
   tiers: {
-    1: { title: "settlers", residents: 4, tax: 2, height: 14, needs: ["food"], appeal: -100 },
-    2: { title: "citizens", residents: 8, tax: 4, height: 26, needs: ["bread", "cloth", "faith"], appeal: 5 },
+    1: { title: "settlers", residents: 4, tax: 3, height: 14, needs: ["food"], appeal: -100 },
+    2: { title: "citizens", residents: 8, tax: 5, height: 26, needs: ["bread", "cloth", "faith"], appeal: 5 },
     3: { title: "burghers", residents: 12, tax: 6.5, height: 38, needs: ["bread", "cloth", "faith"], appeal: 15 }
   } as Readonly<Record<Tier, {
     readonly title: string
@@ -617,7 +617,7 @@ export const WINTER_WARNING = ticks(60)
  * (homes / `growth`) a home, so a large town of poor homes cannot pay
  * its way.
  */
-export const admin = { perHome: 0.5, growth: 200 }
+export const admin = { perHome: 0.4, growth: 200 }
 
 /**
  * Approval, -100 → +100: where the town's mood is heading, and how fast it
