@@ -29,6 +29,7 @@ for (const asset of inkAssets) {
   await writeFile(path.join(output, "models", `${asset.id}.glb`), new Uint8Array(glb))
   await writeFile(path.join(output, "models", `${asset.id}.json`), JSON.stringify(asset, null, 2))
   const imported = await loader.parseAsync(glb, "")
+  if(asset.effects&&!imported.scene.getObjectByName(asset.id)?.userData.inklineSurfaceEffects)throw new Error(`${asset.id}: surface state metadata lost on export`)
   let meshes = 0,
     vertices = 0
   imported.scene.traverse((object) => {
@@ -50,6 +51,7 @@ for (const asset of inkAssets) {
     id: asset.id,
     title: asset.title,
     category: asset.category,
+    effects: asset.effects,
     glb: `models/${asset.id}.glb`,
     geometry: `models/${asset.id}.json`,
     bytes: glb.byteLength,
@@ -62,7 +64,9 @@ for (const asset of inkAssets) {
 await writeFile(path.join(output, "manifest.json"), JSON.stringify({ models: manifest.length, assets: manifest }, null, 2))
 for (const [input, directory, filename] of [
   ["asset-lab.html", "viewer", "inkline-3d-study.html"],
-  ["map-lab.html", "map-viewer", "inkline-3d-map.html"]
+  ["map-lab.html", "map-viewer", "inkline-3d-map.html"],
+  ["model-review.html", "town-viewer", "inkline-town-model-review.html"],
+  ["effects-lab.html", "effects-viewer", "inkline-house-effects.html"]
 ]) {
   await build({
     configFile: false,

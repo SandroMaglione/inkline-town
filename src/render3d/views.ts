@@ -2,7 +2,6 @@ import * as THREE from "three"
 import {
   carrierDress,
   cartLook,
-  homeHeight,
   serviceDress,
   type Alert,
   type BuildingLook,
@@ -12,54 +11,31 @@ import {
   type Load,
   type Emphasis
 } from "../art.ts"
-import { kinds, GROWN, ROCK_AMOUNT, type KindId } from "../content.ts"
+import { kinds, home, GROWN, ROCK_AMOUNT, type KindId } from "../content.ts"
 import { U, type Point } from "../iso.ts"
 import { vertex3 } from "../asset-lab/renderer.ts"
 import { Drawing, type Vertex } from "../asset-lab/primitives.ts"
 import { makeSails, makeFlag } from "../asset-lab/buildings.ts"
 import { makeMarker } from "../asset-lab/construction.ts"
-import { makeFlames, makeRuin, makeWarning } from "../asset-lab/placeholders.ts"
-import { makePerson } from "../asset-lab/people.ts"
+import { makeRuin } from "../asset-lab/town-props.ts"
+import { StructureEffects } from "./structure-effects.ts"
+import { surfaceState, type SurfaceState } from "./surface-state.ts"
+import { makePerson, serviceCostume, type ServiceRole } from "../asset-lab/people.ts"
 import { makeTree, makeRock, makeField, hash } from "../asset-lab/land.ts"
 import { ModelHandle } from "./pool.ts"
 import { buildingAsset, homeAsset, homeKey, doorKey, noDoors, quantizeBuild, plateAsset, treeVariant } from "./models.ts"
 import type { GameScene, SceneNode } from "./scene.ts"
 
-/** Winter's cold tint over everything that stands (a placeholder for snowy roofs). */
+/** Winter's cold light complements the roof snow shader. */
 const FROST = 0xe4ecf6
-/** Run down, and a poor street: duller, browner. */
-const WORN = 0xe2d9c8
-const POOR = 0xeee8dc
 const multiply = (a: number, b: number) => {
   const c = (shift: number) => Math.round((((a >> shift) & 0xff) * ((b >> shift) & 0xff)) / 255)
   return (c(16) << 16) | (c(8) << 8) | c(0)
 }
 
-/** A sign over a home or building at risk, and flames when it burns: both face the camera. */
-class Signs {
-  private readonly sign: ModelHandle
-  private readonly flames: ModelHandle
-  constructor(make: (pickable?: boolean) => ModelHandle) {
-    this.sign = make(false)
-    this.flames = make(false)
-    this.sign.root.visible = false
-    this.flames.root.visible = false
-  }
-  update(alert: Alert | null | undefined, burning: boolean, height: number) {
-    this.sign.root.visible = !burning && alert !== null && alert !== undefined
-    if (alert && !burning) this.sign.use("warning-" + alert, () => makeWarning(alert))
-    this.sign.root.position.set(0, (height + 10) / Math.cos(Math.PI / 6), 0)
-    this.flames.root.visible = burning
-    if (burning) {
-      const phase = Math.floor(performance.now() / 160) % 2
-      this.flames.use("flames-" + phase, () => makeFlames(phase))
-      this.flames.root.position.set(0, (height * 0.6) / Math.cos(Math.PI / 6), 0)
-    }
-  }
-  orient(heading: number) {
-    this.sign.root.rotation.y = heading - Math.PI / 4
-    this.flames.root.rotation.y = heading - Math.PI / 4
-  }
+/** Surface parameters are independent of shared architectural geometry. */
+export function structureState(look: {worn?: boolean; band?: "poor" | "plain" | "fine"; alert?: Alert | null; burning?: boolean; effects?: Partial<SurfaceState>}, winter: boolean) {
+  return surfaceState({wear: look.worn?0.9:look.band==="poor"?0.55:0, care: look.band==="fine"?1:0, snow:Number(winter), burning:Number(!!look.burning), fireRisk:look.alert==="fire"?1:0, health:look.alert==="health"?1:0, order:look.alert==="order"?1:0,sick:look.alert==="sick"?1:0,...look.effects})
 }
 
 export class WorldView implements SceneNode {
@@ -68,6 +44,7 @@ export class WorldView implements SceneNode {
   readonly stage: GameScene
   readonly entity: number
   protected models: Array<ModelHandle> = []
+  protected effects: StructureEffects | null = null
   private disposed = false
   private opacity = 1
   constructor(stage: GameScene, entity: number) {
@@ -98,6 +75,7 @@ export class WorldView implements SceneNode {
     if (this.disposed) return
     this.disposed = true
     for (const m of this.models) m.dispose()
+    this.effects?.dispose()
     this.group.removeFromParent()
     this.stage.remove(this)
   }
@@ -116,14 +94,12 @@ export class BuildingView extends WorldView {
   private opening = 0
   private beat = -1
   private pulse = 0
-  private signs: Signs
   constructor(kindId: KindId, stage: GameScene, entity: number) {
     super(stage, entity)
     this.kindId = kindId
     this.body = this.model()
     this.plate = this.model()
     this.marker = this.model()
-    this.signs = new Signs((pickable) => this.model(pickable))
     this.motion = this.model()
     this.marker.use("problem-marker", makeMarker)
     this.marker.root.visible = false
@@ -163,8 +139,15 @@ export class BuildingView extends WorldView {
     )
     const signed = !!look.burning || (look.alert !== null && look.alert !== undefined)
     this.marker.root.visible = look.problem && look.build >= 1 && !signed
-    this.signs.update(look.alert, !!look.burning, H + (kind.topper === "none" ? 0 : 16))
-    this.shade = look.worn ? WORN : 0xffffff
+    const state = structureState(look,this.stage.frost)
+    this.body.effects = build >= 1 ? state : surfaceState()
+    this.body.effectBounds.set(kind.half * U * 32 * Math.SQRT2,H/Math.cos(Math.PI/6),this.entity%97/97,Number(!kind.decor))
+    if(!this.effects&&build>=1&&(state.burning||state.fireRisk)){
+      this.effects = new StructureEffects(buildingAsset(this.kindId,1,null,noDoors,0),H)
+      this.group.add(this.effects.group)
+    }
+    this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
+    this.shade = 0xffffff
     this.motion.root.visible = look.build >= 1 && (kind.topper === "flag" || kind.topper === "sails")
     if (kind.topper === "flag") {
       this.wave += dt * (look.working ? 6 : 3)
@@ -218,23 +201,17 @@ export class BuildingView extends WorldView {
   override orient() {
     this.marker.root.rotation.y = this.stage.heading - Math.PI / 4
     for (const smoke of this.smokes) smoke.root.rotation.y = this.stage.heading - Math.PI / 4
-    this.signs.orient(this.stage.heading)
   }
 }
 
 export class HouseView extends WorldView {
   private body: ModelHandle
   private plate: ModelHandle
-  private signs: Signs
   private n = 0.03
   constructor(stage: GameScene, entity: number) {
     super(stage, entity)
     this.body = this.model()
     this.plate = this.model()
-    this.signs = new Signs((pickable) => this.model(pickable))
-  }
-  override orient() {
-    this.signs.orient(this.stage.heading)
   }
   place(x: number, y: number) {
     this.n = hash(x, y)
@@ -250,9 +227,17 @@ export class HouseView extends WorldView {
       homeAsset(look.tier, this.n, build, share, doors)
     )
     this.plate.use(`plate/1/${build}`, () => plateAsset(1, build))
-    this.signs.update(look.alert, !!look.burning, homeHeight(look.tier))
-    // Placeholder for homes that look like their street: fences and gardens on a fine one, a patched roof on a poor one.
-    this.shade = look.worn ? WORN : look.band === "poor" ? POOR : 0xffffff
+    const state=structureState(look,this.stage.frost), H=home.tiers[look.tier].height
+    this.body.effects=build>=1?state:surfaceState()
+    this.body.effectBounds.set((home.half+(look.tier>=2?1:0))*U*32*Math.SQRT2,H/Math.cos(Math.PI/6),this.n,1)
+    // Recreate emitters only if an actual architectural upgrade changes the roof.
+    if(this.effects&&this.effects.group.userData.tier!==look.tier){this.effects.dispose();this.effects=null}
+    if(!this.effects&&build>=1&&(state.burning||state.fireRisk)){
+      this.effects=new StructureEffects(homeAsset(look.tier,this.n,1,null,noDoors),H)
+      this.effects.group.userData.tier=look.tier;this.group.add(this.effects.group)
+    }
+    this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
+    this.shade=0xffffff
     this.emphasis(emphasis)
   }
 }
@@ -338,6 +323,7 @@ export class WalkerView extends WorldView {
   private cart: CartLook | null
   private faithDress: PersonDress | null = null
   private currentDress: PersonDress | null = null
+  private serviceDresses = new Map<ServiceRole, PersonDress>()
   constructor(stage: GameScene, entity: number, dress: PersonDress, cart: CartLook | null) {
     super(stage, entity)
     this.dress = dress
@@ -356,7 +342,8 @@ export class WalkerView extends WorldView {
     return view
   }
   update(x: number, y: number, dir: Point, phase: number, load: Load) {
-    const dress = load.kind === "bell" && this.faithDress ? this.faithDress : this.dress
+    if (load.kind === "service" && !this.serviceDresses.has(load.role)) this.serviceDresses.set(load.role, serviceCostume(this.dress, load.role))
+    const dress = load.kind === "service" ? this.serviceDresses.get(load.role)! : load.kind === "bell" && this.faithDress ? this.faithDress : this.dress
     // Costume colours vary per person without duplicating the same geometry.
     const canonicalDress = { ...dress, coat: 0xff0001, skin: 0xff0003, trim: dress.trim === 0xf7f8f4 ? dress.trim : 0xff0002 },
       canonicalCart = this.cart ? { ...this.cart, wood: { top: 0xff0004, left: 0xff0005, right: 0xff0006 } } : null

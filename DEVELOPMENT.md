@@ -66,27 +66,31 @@ compares the complete world catalogue with the actual drawings from
 and elevation controls also work with a keyboard. The original view uses a
 30-degree orthographic camera with the game's 64×32 projection.
 
-| Collection | Models | Coverage |
+| Collection | Entries | Coverage |
 | --- | ---: | --- |
-| Buildings | 28 | Every building kind, with its roof, topper and yard (the twelve added with the neighbourhood are placeholders, see below) |
-| Homes | 9 | Settlers' and citizens' homes in all four roof palettes, and the placeholder townhouse |
-| Land | 19 | Three tree shapes at three growth stages, stone and ore in both resource states, four crop stages, roads and water |
-| People | 27 | Carriers, settlers, citizens, market and chapel walkers, all six hats and the sixteen reference-gallery residents |
+| Buildings | 42 | Every building kind, plus winter and worn material presets of the seven town services and stores |
+| Homes | 21 | Four settler and citizen roof palettes, townhouse, and fine/poor/worn/winter material presets of every tier |
+| Land | 20 | Trees, rocks, crops, roads, water and raised stone paving |
+| People | 32 | Carriers, residents, market and chapel walkers, and five equipped service workers |
 | Cargo and vehicles | 75 | Twelve distinct goods and labelled crates; empty handcart/barrow and small/full loads of each good; the approved mixed goods plate |
-| Construction and effects | 20 | Empty/supplied sites, frame/walls, problem sign, smoke, four placement/reach outlines, and the placeholder ruins, warning signs, and flames |
+| Construction and effects | 14 | Sites, frame/walls, problem sign, smoke, placement outlines and three kinds of ruin |
 
-The 178 entries cover object families and representative seeded variants.
+The 204 entries cover object families and representative seeded variants.
 Continuous growth, construction progress, walk poses and colours can be
 generated; this is not a list of every possible random seed. Page icons
 remain the game's original 2D UI art.
 
 ![Complete 3D world catalogue at a rotated angle](screenshots/3d-catalogue.webp)
 
-`pnpm assets:build` exports 178 GLBs and editable geometry descriptions,
-a manifest, and two standalone viewers to `output/inkline-3d/`:
-`inkline-3d-study.html` and `inkline-3d-map.html`. It reimports every GLB and
+`pnpm assets:build` exports 204 GLBs and editable geometry descriptions,
+a manifest, and four standalone viewers to `output/inkline-3d/`:
+`inkline-3d-study.html`, `inkline-3d-map.html`, and
+`inkline-town-model-review.html`, and `inkline-house-effects.html`. It reimports every GLB and
 checks geometry and unlit materials. The viewers work without a dev server;
 their optional web fonts use the network. The game build remains separate.
+Material effects render in the viewers and live game. Ordinary GLB viewers
+show the underlying mesh; effect parameters are preserved as GLB extras and
+in the editable geometry descriptions, rather than baked into duplicate meshes.
 
 - `src/asset-lab/primitives.ts`: renderer-independent polygon/stroke schema
   and reusable modelling operations in the game's cell units and pixel heights.
@@ -113,7 +117,7 @@ Double-click the ground to focus the camera there.
 ![Every model together on the review island](screenshots/3d-map-complete.webp)
 
 District shortcuts focus the town, workshops, homes, people, cargo yard or
-forest. Inspect selects any of the 178 models and links to its original
+forest. Inspect selects any of the 204 entries and links to its original
 drawing comparison. Eight additional people walk along the street using two
 procedural poses; pause them for review. Smoke and the problem sign face
 the camera so they stay readable when the map turns.
@@ -151,22 +155,39 @@ That is how the README's screenshots of grown towns were made.
   (seasons and the almanac, the crown, approval, the end of the term, history).
 - `src/present.ts`: per-frame interaction, panel, and view sync.
 - `src/art.ts`: all drawing: buildings and their yards, homes, the land, roads, carts, and figures.
-- `src/render3d/`: live world renderer, model instances, camera and map input, the map views' overlay,
-  warning signs, flames, ruins, and winter frost.
-- `src/asset-lab/placeholders.ts`: stand-in models for ornaments, ruins, warning signs, and flames.
+- `src/render3d/`: live world renderer, model instances, camera and map input,
+  overlays, ruins, surface shaders and roof particle emitters.
+- `src/asset-lab/town-props.ts`: gardens, furniture, stone paving and ruins.
+- `src/asset-lab/services.ts`: grain hoist, fish racks, watch tower, herbs,
+  medical signs, street noticeboard and builder's equipment.
+- `src/asset-lab/appearance.ts`: material state metadata for catalogue presets.
+  Wear, neighbourhood, hazards and winter are per-instance attributes in the
+  live renderer. A state change does not change the geometry cache key.
 
-**Placeholders.** The neighbourhood brought kinds with no approved model yet.
-They are drawn so the game is playable, and are meant to be replaced:
-the granary, smokehouse, fire watch, healer, hospital, watch house, and
-builder's yard use the generic building in their colour; the garden, park,
-fountain, statue, and plaza are simple shapes (`placeholders.ts`, and
-`drawDecor` in `art.ts` for the menu pictures); the townhouse is the
-citizens' home raised a storey; ruins, the warning signs over homes,
-and flames are simple stand-ins; a paved street is the road with setts
-drawn on it; a home's neighbourhood (fine or poor) and a run-down building
-are shown only as a tint, not as fences, gardens, or a patched roof; and
-winter frosts the land and tints what stands, rather than putting snow on
-roofs.
+### Reviewing the new town models
+
+Open [`/model-review.html`](http://localhost:5232/model-review.html) for
+the models added for PR #3. Collections cover buildings, gardens and squares,
+home tiers and neighbourhoods, winter, hazards, people/cargo and building
+condition. Drag any model or use the rotation slider to turn the collection.
+**Inspect** opens the full asset viewer. **Download GLB** exports one model;
+**Save model sheet** captures a labelled sheet of the selected collection.
+`pnpm check:models` checks every collection, camera controls, sheet exports
+and phone layout, and saves PNGs to `output/inkline-3d/town-review/`.
+
+Open [`/effects-lab.html`](http://localhost:5232/effects-lab.html) to inspect
+eight conditions on the same house geometry. Select any home tier, rotate,
+adjust effect strength or pause animation. Dirt, masonry, cracks, snow,
+glazing damage and fire light come from `surface-shader.ts`. `structure-effects.ts`
+samples the roof triangles for animated fire, smoke and ember emitters.
+`pnpm check:effects` captures all tiers, verifies that animation changes the
+rendered pixels, checks phone layout and exports a five-second MP4 to
+`output/inkline-3d/house-effects/`. The runtime and this preview share the
+same instanced renderer and effect code.
+
+The original 2D menu drawings remain in `art.ts` for comparison. The live
+3D town uses the new geometry, including equipped service workers and cured
+fish cargo. The game has no audio, so winter music is outside this model work.
 - `src/townsfolk.ts`: residents out walking, for looking at only: not simulated, not saved.
 - `src/icons.ts`: the page's line-drawn icons.
 - `src/gallery.ts`: the dev-only art gallery (see above).
@@ -272,3 +293,8 @@ pnpm --dir deploy exec alchemy destroy --stage preview --profile admin
 
 The second command removes the preview. Each stage has its own Worker;
 previews stay on their `workers.dev` URL and never claim the custom domain.
+
+The production build includes the game and all review pages. On any deployed
+stage, use `/asset-lab.html` for the complete catalogue, `/model-review.html`
+for the PR #3 collections, `/effects-lab.html` for animated house states, and
+`/map-lab.html` to inspect all models together in a town.

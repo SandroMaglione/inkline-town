@@ -1,7 +1,8 @@
 import { kinds, type KindId } from "../content.ts"
 import { U } from "../iso.ts"
 import { Drawing, palette, pale, square, sides, type Vertex, type Side } from "./primitives.ts"
-import { makeDecor } from "./placeholders.ts"
+import { makeDecor } from "./town-props.ts"
+import { finishTownBuilding, townBuildingNotes } from "./services.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
   townhall: { accent: 0x8a58a8, glass: 0xf3dca6 },
@@ -20,7 +21,7 @@ const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }>
   weaver: { accent: 0x8a58a8 },
   market: { accent: 0x3d6db5 },
   chapel: { accent: 0x3d6db5, glass: 0xc9d6ee },
-  // New kinds: the plain building in their colour, a placeholder until each has a model of its own.
+  // Town services and stores share the palette; services.ts adds their fittings.
   granary: { accent: 0xd6ae2e },
   smokehouse: { accent: 0x9a5b3a, roof: 0x9a5b3a },
   firewatch: { accent: 0xc4523f, roof: 0xc4523f },
@@ -54,13 +55,13 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
   const d = new Drawing(
     id,
     kind.title,
-    id === "mill"
+    townBuildingNotes[id] ?? (id === "mill"
       ? "The lattice sails sit on a real upright plane. Flour sacks remain softly rounded."
       : id === "market"
         ? "Striped canopy, coloured goods crates and roof flag, all built as geometry."
         : id === "townhall"
           ? "Two storeys, clock faces, violet trim, three skylights and a red flag. Original dimensions throughout."
-          : "Original footprint, palette and yard details, with complete walls and roof geometry."
+          : "Original footprint, palette and yard details, with complete walls and roof geometry.")
   )
   d.asset.category = "buildings"
   d.asset.reference = { type: "building", kind: id }
@@ -202,7 +203,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
   if (kind.topper === "chimney" && fit > 0) {
     d.box(u, v, 2 * U, 2 * U, H, 24 * fit)
     d.face(square(u, v, 1.5 * U, H + 24 * fit + 0.035), 0x8b938c, 0)
-  } else if (kind.topper === "cupola" && fit > 0) {
+  } else if (kind.topper === "cupola" && id !== "hospital" && fit > 0) {
     const half = 3 * U,
       top = H + 10 * fit,
       base = square(u, v, half, top)
@@ -247,6 +248,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
     for (let i = 0; i < 4; i++) d.face([base[i]!, base[(i + 1) % 4]!, [x, y, z + rise]], pale(color, i >= 2 ? 0.7 : 0.52))
   }
   if (fit <= 0.75) return
+  finishTownBuilding(d, id, a, p, H)
   switch (id) {
     case "warehouse":
       d.crate(c, c - 1.5 * U, 0, 0x2f8c87, 1.6 * U, 6)

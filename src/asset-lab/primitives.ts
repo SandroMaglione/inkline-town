@@ -2,6 +2,7 @@
 import { U } from "../iso.ts"
 import type { GoodId, KindId, Tier } from "../content.ts"
 import type { CartLook, Load, PersonDress } from "../art.ts"
+import type { SurfaceState } from "../render3d/surface-state.ts"
 
 export type Vertex = readonly [u: number, v: number, height: number]
 export interface Face {
@@ -32,6 +33,8 @@ export type AssetReference =
   | { type: "roads" | "water" }
   | { type: "none" }
 export interface InkAsset {
+  effects?: { half: number; height: number; state: SurfaceState }
+  appearance?: "fine" | "poor" | "worn" | "winter"
   category?: AssetCategory
   reference?: AssetReference
   footprint?: number

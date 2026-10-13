@@ -11,6 +11,8 @@
     "balance": "node scripts/balance.ts",
     "check": "node scripts/check.ts",
     "check:browser": "node scripts/check-browser.ts",
+    "check:models": "node scripts/check-town-models.ts",
+    "check:effects": "node scripts/check-house-effects.ts",
     "test": "node --test \"test/*.test.ts\"",
     "release": "pnpm --dir deploy release"
   },

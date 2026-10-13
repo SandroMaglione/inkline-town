@@ -18,7 +18,7 @@ test("the portable catalogue covers all world object families", () => {
   }
   const hats = new Set(inkAssets.flatMap((a) => (a.reference?.type === "walker" ? [a.reference.dress.hat] : [])))
   assert.deepEqual([...hats].sort(), ["bonnet", "brim", "cap", "hood", "none", "top"])
-  for (const tier of [1, 2]) assert.equal(inkAssets.filter((a) => a.reference?.type === "house" && a.reference.tier === tier).length, 4)
+  for (const tier of [1, 2]) assert.equal(inkAssets.filter((a) => a.reference?.type === "house" && a.reference.tier === tier && !a.appearance).length, 4)
   assert.equal(inkAssets.filter((a) => a.reference?.type === "tree").length, 9)
   assert.equal(inkAssets.filter((a) => a.reference?.type === "rock").length, 4)
   assert.equal(inkAssets.filter((a) => a.reference?.type === "field").length, 4)

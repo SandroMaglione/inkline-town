@@ -26,7 +26,7 @@ import "./style.css"
 
 const root = document.querySelector<HTMLDivElement>("#lab")!
 root.innerHTML = `
-  <header><a href="/">Inkline Town</a><span>COMPLETE ASSET STUDY</span></header>
+  <header><a href="/model-review.html">Model review ↗</a><span>COMPLETE ASSET CATALOGUE</span><a href="/effects-lab.html">Animated house effects ↗</a></header>
   <div class="intro"><div><h1>The same ink.<br>A different angle.</h1><p>Original game drawings and complete 3D assets, side by side.</p></div><span class="tag">Procedural · Orthographic · Rotatable</span></div>
   <div class="filters"><label>Collection <select id="category"></select></label><label>Find <input id="search" type="search" placeholder="Name or material"></label><a href="/map-lab.html">See everything on the map ↗</a></div><nav class="assets" aria-label="Choose an asset"></nav>
   <section class="comparison" aria-label="Compare the original drawing with the 3D model">
@@ -35,7 +35,7 @@ root.innerHTML = `
   </section>
   <section class="controls" aria-label="Camera controls"><button id="reset">Match original view</button><label>Rotation <input id="rotation" type="range" min="-180" max="180" value="0" step="1"><output id="rotation-value">0°</output></label><label>Elevation <input id="elevation" type="range" min="10" max="65" value="30" step="1"><output id="elevation-value">30°</output></label><button id="rear">See the back</button></section>
   <section class="caption"><div><h2 id="asset-title"></h2><p id="asset-note"></p></div><div class="downloads"><button id="download-glb">Download GLB</button><button id="download-source">Download geometry</button><button id="download-png">Save comparison</button></div></section>
-  <footer><span>Same palette, dimensions and two ink weights. New faces complete the volume.</span><span>Three.js prototype · PixiJS 3D integration pending</span></footer>
+  <footer><span>Same palette, dimensions and two ink weights. New faces complete the volume.</span><span>These models are used in the live 3D game.</span></footer>
 `
 const viewer = document.querySelector<HTMLDivElement>("#viewer")!
 const reference = document.querySelector<HTMLCanvasElement>("#reference")!

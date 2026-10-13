@@ -5,6 +5,7 @@
  * and the views follow the world.
  */
 import { RenderSync } from "@typeonce/bevy-ts-render"
+import { hazardStrength } from "./render3d/surface-state.ts"
 
 import { appealAt, appealParts, buildingSource, landSource, type AppealSource } from "./appeal.ts"
 import { homeHeight, topOf, type Alert, type Load, type Emphasis } from "./art.ts"
@@ -964,6 +965,10 @@ export const Animate = Game.System(
           alert: alertOf(r ? { fire: r.fire, health: 0, order: 0 } : undefined, false, worn),
           burning: data.burning.present,
           worn,
+          effects: {
+            wear: 1-(maybe(data.condition)?.value??CONDITION_MAX)/CONDITION_MAX,
+            fireRisk: hazardStrength(r?.fire??0,risk.warn,RISK_MAX)
+          },
           working: status === "working",
           problem: problemOf(kind, status) !== null,
           build: buildOf(maybe(data.site), maybe(data.rising)),
@@ -990,6 +995,13 @@ export const Animate = Game.System(
             alert: data.site.present ? null : alertOf(maybe(data.risk), data.sick.present, worn),
             burning: data.burning.present,
             worn,
+            effects: {
+              wear: Math.max(desirability<0?0.55:0,1-(maybe(data.condition)?.value??CONDITION_MAX)/CONDITION_MAX),
+              fireRisk: hazardStrength(maybe(data.risk)?.fire??0,risk.warn,RISK_MAX),
+              health: hazardStrength(maybe(data.risk)?.health??0,risk.warn,RISK_MAX),
+              order: hazardStrength(maybe(data.risk)?.order??0,risk.warn,RISK_MAX),
+              sick: Number(data.sick.present)
+            },
             band: desirability < 0 ? "poor" : desirability >= home.tiers[2].appeal ? "fine" : "plain"
           },
           emphasis(entity.id)
@@ -1002,7 +1014,17 @@ export const Animate = Game.System(
       const roam = maybe(data.roam)
       const load: Load = errand
         ? { kind: "cart", good: errand.good, count: !errand.back || errand.count > 0 ? errand.count : 0 }
-        : roam?.service === "faith" || roam?.service === "health"
+        : maybe(data.rescue)
+          ? { kind: "service", role: "firefighter" }
+        : roam?.service === "fire"
+          ? { kind: "service", role: "watchman" }
+        : roam?.service === "health"
+          ? { kind: "service", role: "physician" }
+        : roam?.service === "order"
+          ? { kind: "service", role: "constable" }
+        : roam?.service === "repair"
+          ? { kind: "service", role: "builder" }
+        : roam?.service === "faith"
           ? { kind: "bell" }
           : roam && total(roam.basket) > 0
             ? { kind: "basket", goods: goodIds.filter((g) => roam.basket[g] > 0) }

@@ -1,6 +1,8 @@
 import * as THREE from "three"
 import { buildAsset, type BuiltAsset } from "../asset-lab/renderer.ts"
 import type { InkAsset } from "../asset-lab/primitives.ts"
+import { surfaceState, type SurfaceState } from "./surface-state.ts"
+import { installSurfaceShader } from "./surface-shader.ts"
 
 interface Part {
   source: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>
@@ -16,6 +18,9 @@ interface Template {
   handles: Set<ModelHandle>
   capacity: number
   alpha: Float32Array
+  effects: Float32Array
+  hazards: Float32Array
+  bounds: Float32Array
   used: number
 }
 
@@ -25,6 +30,8 @@ export class ModelHandle {
   readonly tint = new THREE.Color(0xffffff)
   alpha = 1
   colors: ReadonlyMap<number, number> | null = null
+  effects: SurfaceState = surfaceState()
+  effectBounds = new THREE.Vector4()
   template: Template | null = null
   readonly pool: ModelPool
   readonly entity: number | null
@@ -56,10 +63,11 @@ export class ModelPool {
   private matrix = new THREE.Matrix4()
   private color = new THREE.Color()
   readonly viewDirection = new THREE.Vector3(1, 1, 1).normalize()
+  readonly time = { value: 0 }
   acquire(key: string, create: () => InkAsset): Template {
     let entry = this.templates.get(key)
     if (!entry) {
-      const model = buildAsset(create(), { batchFaces: true, meshInk: true, meshContours: true })
+      const model = buildAsset(create(), { batchFaces: true, meshInk: true, meshContours: true, surfaceEffects: false })
       const parts: Array<Part> = []
       model.group.updateMatrixWorld(true)
       for (const child of model.group.children) {
@@ -88,6 +96,7 @@ export class ModelPool {
         }
         material.customProgramCacheKey = () =>
           source.geometry.hasAttribute("inkNormalA") ? "ink-instance-silhouette-v1" : "ink-instance-opacity-v1"
+        if (source.userData.structureSurface) installSurfaceShader(material,color,this.time,surfaceState(),new THREE.Vector4(),true)
         parts.push({ source, material, mesh: null, color })
       }
       entry = {
@@ -98,6 +107,7 @@ export class ModelPool {
         handles: new Set(),
         capacity: 0,
         alpha: new Float32Array(),
+        effects: new Float32Array(), hazards: new Float32Array(), bounds: new Float32Array(),
         used: ++this.stamp
       }
       this.templates.set(key, entry)
@@ -127,6 +137,9 @@ export class ModelPool {
       if (entry.capacity < handles.length) {
         entry.capacity = 2 ** Math.ceil(Math.log2(Math.max(4, handles.length)))
         entry.alpha = new Float32Array(entry.capacity)
+        entry.effects = new Float32Array(entry.capacity * 4)
+        entry.hazards = new Float32Array(entry.capacity * 4)
+        entry.bounds = new Float32Array(entry.capacity * 4)
         for (const part of entry.parts) {
           if (part.mesh) {
             part.mesh.removeFromParent()
@@ -137,6 +150,9 @@ export class ModelPool {
           geometry.setIndex(part.source.geometry.index)
           for (const [key, attribute] of Object.entries(part.source.geometry.attributes)) geometry.setAttribute(key, attribute)
           geometry.setAttribute("inkOpacity", new THREE.InstancedBufferAttribute(entry.alpha, 1))
+          geometry.setAttribute("structureState",new THREE.InstancedBufferAttribute(entry.effects,4))
+          geometry.setAttribute("structureHazards",new THREE.InstancedBufferAttribute(entry.hazards,4))
+          geometry.setAttribute("structureBounds",new THREE.InstancedBufferAttribute(entry.bounds,4))
           geometry.boundingBox = part.source.geometry.boundingBox?.clone() ?? null
           geometry.boundingSphere = part.source.geometry.boundingSphere?.clone() ?? null
           part.mesh = new THREE.InstancedMesh(geometry, part.material, entry.capacity)
@@ -149,6 +165,10 @@ export class ModelPool {
       handles.forEach((handle, i) => {
         handle.root.updateWorldMatrix(true, false)
         entry.alpha[i] = Math.min(1, Math.max(0, handle.alpha))
+        const e=handle.effects
+        entry.effects.set([e.wear,e.care,e.snow,e.burning],i*4)
+        entry.hazards.set([e.fireRisk,e.health,e.order,e.sick],i*4)
+        handle.effectBounds.toArray(entry.bounds,i*4)
         for (const part of entry.parts) {
           this.matrix.multiplyMatrices(handle.root.matrixWorld, part.source.matrixWorld)
           part.mesh!.setMatrixAt(i, this.matrix)
@@ -163,6 +183,7 @@ export class ModelPool {
         mesh.instanceMatrix.needsUpdate = true
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
         mesh.geometry.getAttribute("inkOpacity").needsUpdate = true
+        for(const key of ["structureState","structureHazards","structureBounds"])mesh.geometry.getAttribute(key).needsUpdate=true
         mesh.computeBoundingSphere()
       }
     }

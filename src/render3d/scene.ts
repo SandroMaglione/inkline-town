@@ -259,6 +259,7 @@ export class GameScene {
       onTick({ deltaMS: delta })
       for (const node of this.nodes) node.orient()
       this.camera.getWorldDirection(this.pool.viewDirection).negate()
+      this.pool.time.value = now / 1000
       this.pool.flush()
       this.renderer.render(this.scene, this.camera)
       this.frames++

@@ -20,6 +20,7 @@
  * - a crate is 6 units wide, a carried one 4.
  */
 import { Container, Graphics } from "pixi.js"
+import type { SurfaceState } from "./render3d/surface-state.ts"
 
 import { goods, GROWN, home, kinds, ROCK_AMOUNT, type GoodId, type Kind, type KindId, type Tier } from "./content.ts"
 import { cellOf, DIRS, key } from "./grid.ts"
@@ -847,6 +848,7 @@ export const drawSite = (g: Graphics, half: number, share: number) => {
 
 /** What a building view shows each frame. */
 export interface BuildingLook {
+  readonly effects?: Partial<SurfaceState>
   /** A sign over it, and whether it is on fire. */
   readonly alert?: Alert | null
   readonly burning?: boolean
@@ -1031,6 +1033,7 @@ export const drawHouse = (g: Graphics, tier: Tier, build: number, doors: Doors, 
 
 /** What a home view shows each frame. */
 export interface HouseLook {
+  readonly effects?: Partial<SurfaceState>
   readonly tier: Tier
   readonly build: number
   readonly doors: Doors
@@ -1427,6 +1430,7 @@ export interface PersonDress {
 /** What a figure has with it. */
 export type Load =
   | { readonly kind: "none" }
+  | { readonly kind: "service"; readonly role: "watchman" | "firefighter" | "physician" | "constable" | "builder" }
   /** A carrier's cart: `good` on it, `count` of it (none on the way back). */
   | { readonly kind: "cart"; readonly good: GoodId; readonly count: number }
   /** A market walker's basket of provisions. */

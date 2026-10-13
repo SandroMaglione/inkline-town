@@ -6,6 +6,7 @@ import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js"
 import { palette, type Face, type InkAsset, type Vertex } from "./primitives.ts"
+import { installSurfaceShader } from "../render3d/surface-shader.ts"
 
 /** A 30° elevation and 45° heading reproduce the game's 64×32 projection.
  * The vertical conversion preserves pixel-authored building heights exactly. */
@@ -100,16 +101,19 @@ function faceMesh(points: ReadonlyArray<Vertex>, color: number, opacity = 1) {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
   geometry.computeVertexNormals()
-  return new THREE.Mesh(geometry, fillMaterial(color, opacity))
+  const mesh = new THREE.Mesh(geometry, fillMaterial(color, opacity))
+  mesh.userData.structureSurface = true
+  return mesh
 }
 
 export interface BuiltAsset {
   group: THREE.Group
   lineMaterials: Array<{ material: LineMaterial; width: number }>
   updateContours: (camera: THREE.Camera) => void
+  updateEffects: (time: number) => void
   dispose: () => void
 }
-export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean; meshInk?: boolean; hullContours?: boolean; meshContours?:boolean } = {}): BuiltAsset {
+export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean; meshInk?: boolean; hullContours?: boolean; meshContours?:boolean; surfaceEffects?: boolean } = {}): BuiltAsset {
   const group = new THREE.Group()
   group.name = asset.id
   if (options.batchFaces) {
@@ -124,12 +128,23 @@ export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean; mes
       const geometry = mergeGeometries(geometries)
       if (!geometry) throw new Error("Could not batch map faces")
       geometries.forEach((g) => g.dispose())
-      group.add(new THREE.Mesh(geometry, fillMaterial(color, opacity)))
+      const mesh = new THREE.Mesh(geometry, fillMaterial(color, opacity))
+      mesh.userData.structureSurface = true
+      group.add(mesh)
     }
   } else {
     for (const face of asset.faces) group.add(faceMesh(face.points, face.color, face.opacity ?? 1))
   }
   const lineMaterials: Array<{ material: LineMaterial; width: number }> = []
+  const effectTime = { value: 0 }, effectMaterials: THREE.MeshBasicMaterial[] = []
+  if (asset.effects && options.surfaceEffects !== false) {
+    const e = asset.effects
+    for (const child of group.children) if (child instanceof THREE.Mesh && child.userData.structureSurface) {
+      const source = child.material as THREE.MeshBasicMaterial, material = source.clone()
+      installSurfaceShader(material, source.color.getHex(THREE.SRGBColorSpace), effectTime, e.state, new THREE.Vector4(e.half * floorScale, e.height / Math.cos(Math.PI / 6), 0.31, 1))
+      child.material = material; effectMaterials.push(material)
+    }
+  }
   const curveMaterials: Array<THREE.MeshBasicMaterial> = []
   const curves = new Map<string, { geometries: Array<THREE.BufferGeometry>; color: number; opacity: number }>()
   const batches = new Map<string, { positions: Array<number>; width: number; color: number; opacity: number }>()
@@ -290,10 +305,11 @@ export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean; mes
     })
     for (const { material } of lineMaterials) material.dispose()
     curveMaterials.forEach((material) => material.dispose())
+    effectMaterials.forEach(m => m.dispose())
     if (hull) (hull.material as THREE.Material).dispose()
     for (const object of group.children) if (object instanceof LineSegments2) object.geometry.dispose()
   }
-  return { group, lineMaterials, updateContours, dispose }
+  return { group, lineMaterials, updateContours, updateEffects: time => { effectTime.value = time }, dispose }
 }
 
 /** GLB uses ordinary meshes for ink strokes so the outlines survive import.
@@ -301,6 +317,7 @@ export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean; mes
 export async function exportAsset(asset: InkAsset) {
   const group = new THREE.Group()
   group.name = asset.id
+  if(asset.effects)group.userData.inklineSurfaceEffects=asset.effects
   for (const face of asset.faces) group.add(faceMesh(face.points, face.color, face.opacity ?? 1))
   const contourFaces = asset.faces.filter((face) => face.contour)
   const hull = contourFaces.length ? silhouetteMesh(asset, contourFaces) : null
@@ -328,6 +345,7 @@ export async function exportAsset(asset: InkAsset) {
   // Batch like materials before export rather than shipping hundreds of nodes.
   const merged = new THREE.Group()
   merged.name = group.name
+  merged.userData = { ...group.userData }
   group.updateMatrixWorld(true)
   const batches = new Map<THREE.MeshBasicMaterial, Array<THREE.BufferGeometry>>()
   group.traverse((object) => {

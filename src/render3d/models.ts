@@ -7,6 +7,8 @@ import { kinds, home, type KindId, type Tier } from "../content.ts"
 import { GRID, U, type Point } from "../iso.ts"
 import { key, cellOf, DIRS } from "../grid.ts"
 import type { Preview } from "../ui.ts"
+import { withAppearance, type Appearance } from "../asset-lab/appearance.ts"
+import { setts } from "../asset-lab/town-props.ts"
 
 export type DoorSet = Record<Side, boolean>
 export const noDoors: DoorSet = { right: false, left: false, backRight: false, backLeft: false }
@@ -60,17 +62,19 @@ export function constructionAsset(size: number, half: number, height: number, bu
   if (stage.walls > 0) d.box(0, 0, a, a, 0, Math.max(2, Math.round(height * stage.walls)))
   return d.asset
 }
-export function buildingAsset(id: KindId, build: number, share: number | null, doors: DoorSet, open: number) {
+export function buildingAsset(id: KindId, build: number, share: number | null, doors: DoorSet, open: number, appearance: Appearance = {}) {
   const kind = kinds[id],
     stage = buildStages(build)
   // An ornament is laid out at once.
   if (kind.decor) return makeBuilding(id)
   if (build < 0.78) return constructionAsset(kind.size, kind.half, kind.roof === "gable" ? 20 : kind.stories * 32, build, share)
-  return makeBuilding(id, { doors, open, fit: stage.fit, plate: false, motion: false } satisfies BuildingOptions)
+  const asset = makeBuilding(id, { doors, open, fit: stage.fit, plate: false, motion: false } satisfies BuildingOptions)
+  return build >= 1 ? withAppearance(asset, kind.half * U, kind.roof === "gable" ? 20 : kind.stories * 32, appearance) : asset
 }
-export function homeAsset(tier: Tier, n: number, build: number, share: number | null, doors: DoorSet) {
+export function homeAsset(tier: Tier, n: number, build: number, share: number | null, doors: DoorSet, appearance: Appearance = {}) {
   if (build < 0.78) return constructionAsset(1, home.half + (tier >= 2 ? 1 : 0), home.tiers[tier].height, build, share)
-  return house(tier, n, "home", { doors, fit: buildStages(build).fit, plate: false })
+  const asset = house(tier, n, "home", { doors, fit: buildStages(build).fit, plate: false })
+  return build >= 1 ? withAppearance(asset, (home.half + (tier >= 2 ? 1 : 0)) * U, home.tiers[tier].height, appearance, true) : asset
 }
 export function homeKey(n: number) {
   return JSON.stringify(homeVariant(n))
@@ -132,7 +136,7 @@ export function landAsset(mask: string, frost = false) {
         frost ? 0xf7f9fb : 0xf0f2ec,
         0
       )
-      // Frost: a few pale flecks of snow (a placeholder for a proper winter look).
+      // Windblown flecks complement the material snow on roofs.
       if (frost && hash(x * 7 + 3, y * 5 + 1) < 0.18) {
         const u = x + 0.2 + hash(x, y * 3) * 0.6,
           v = y + 0.2 + hash(y, x * 3) * 0.6
@@ -198,12 +202,7 @@ export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<numbe
       half = 0.375,
       stone = paved.has(k),
       color = stone ? (hash(cell.x, cell.y) < 0.25 ? 0xd3d6cf : 0xd8dbd4) : hash(cell.x, cell.y) < 0.25 ? 0xe2e4dd : 0xe6e8e2
-    // Paved: setts in rows across the street (a placeholder for a proper paved road).
-    if (stone)
-      for (const t of [-0.22, 0, 0.22]) {
-        d.line([[x - 0.3, y + t, z + 0.015], [x + 0.3, y + t, z + 0.015]], 1, 0xb4b9b1, 0.8)
-        d.line([[x + t, y - 0.3, z + 0.015], [x + t, y + 0.3, z + 0.015]], 1, 0xb4b9b1, 0.5)
-      }
+    if (stone) setts(d, x, y, half, z + 0.015)
     d.face(square(x, y, half, z), color, 0)
     for (const { x: dx, y: dy } of DIRS) {
       const q = (along: number, across: number, height = z + 0.02): Vertex => [
@@ -213,6 +212,11 @@ export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<numbe
       ]
       if (roads.has(key(cell.x + dx, cell.y + dy))) {
         d.face([q(half, -half, z), q(0.5, -half, z), q(0.5, half, z), q(half, half, z)], color, 0)
+        if (stone) {
+          // Complete the short joining strip as a pair of stone kerbs.
+          const center = q((half + 0.5) / 2, 0, z + 0.015)
+          d.box(center[0], center[1], dx ? 0.0575 : half - 0.005, dy ? 0.0575 : half - 0.005, center[2], 0.22, 0xe0e4dc, 0xc6ccc3, 0xbfc6bc, 0.5, 0xa0aaa0)
+        }
         d.line([q(half, -half), q(0.5, -half)], 1.5)
         d.line([q(half, half), q(0.5, half)], 1.5)
         d.line([q(0.0625, 0), q(0.1875, 0)], 1, 0xb4b9b1)

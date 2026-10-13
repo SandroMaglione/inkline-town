@@ -14,7 +14,7 @@ export function house(
     id,
     tier === 1 ? "Settler cottage" : tier === 2 ? "Citizen home" : "Townhouse",
     tier === 3
-      ? "Placeholder townhouse: the citizens' home raised a storey, until it has a model of its own."
+      ? "A burgher's townhouse with stone quoins, a cornice, iron balconies, a fanlight and a stepped entrance."
       : "Original roof palette, footprint, chimney, windows and awnings. Rear walls completed for rotation."
   )
   const variant = homeVariant(variantN)
@@ -45,5 +45,25 @@ export function house(
       variant.roof.shade,
       fit > 0.8 && (variant.chimney || tier >= 2)
     )
+  if (tier === 3 && fit > 0.75) {
+    for (const side of sides) {
+      const p = (s: number, z: number, out = 0.02) => d.wall(side, a, s, z, out)
+      for (const x of [-a + U, a - U]) for (let z = 1; z < H; z += 4)
+        d.face([p(x - 0.6 * U, z), p(x + 0.6 * U, z), p(x + 0.6 * U, z + 2), p(x - 0.6 * U, z + 2)], 0xe7e3d4, 0.75, 0xa7b1a1)
+      d.line([p(-a - U, H - 1), p(a + U, H - 1)], 2, 0xb8c4af)
+      for (const along of [-3 * U, 3 * U]) {
+        d.line([p(along - 1.5 * U, 17, 0.055), p(along + 1.5 * U, 17, 0.055)], 1)
+        for (const dx of [-1.5, 0, 1.5]) d.line([p(along + dx * U, 14, 0.055), p(along + dx * U, 17, 0.055)], 0.75)
+      }
+      if (options.doors ? options.doors[side] : side === "right") {
+        d.face([p(-2 * U, 10), p(2 * U, 10), p(U, 13), p(-U, 13)], 0xe2ebde, 1)
+        const [u, v] = p(0, 0, 0.035)
+        for (let i = 0; i < 3; i++) {
+          const h = 0.04 + i * 0.035
+          d.box(u, v, side === "left" || side === "backLeft" ? 2.5 * U : h, side === "right" || side === "backRight" ? 2.5 * U : h, 0, 1.5 - i * 0.4, 0xe5e6dd, 0xd3d9cc, 0xc3ccbd, 0.75)
+        }
+      }
+    }
+  }
   return d.asset
 }
