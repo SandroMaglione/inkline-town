@@ -158,7 +158,9 @@ export function finishTownBuilding(d: Drawing, id: KindId, a: number, p: number,
     d.box(-a / 2, c, 3 * U, 2 * U, 6, 1, 0xe9d2a8, 0xd0b58c, 0xb08a5e, 1)
     d.line([[-a / 2, c, 7], [-a / 2 + U, c, 11]], 1.5, 0x8a6a45)
     d.box(-a / 2 + U, c, U, 0.7 * U, 10, 2, 0x9ca79a, 0xbfc8ba, 0x8f9a8c, 0.75)
-    ladder(p-U,a+0.003,a/2,18)
-    for (const x of [-1, 1]) d.box(c + x * U, c - 2 * U, U, U, 0, 3, 0xe4e6df, 0xd6d9cf, 0xc2c9bd, 1)
+    // Both rails clear the six-unit awning; the rear rack and ground blocks
+    // leave this stretch of wall and the ladder's feet unobstructed.
+    ladder(p-U,a+0.003,a-2*U,18)
+    for (const x of [-1, 1]) d.box(c + x * U, c - U, U, U, 0, 3, 0xe4e6df, 0xd6d9cf, 0xc2c9bd, 1)
   }
 }

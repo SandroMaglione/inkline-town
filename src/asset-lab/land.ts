@@ -148,20 +148,14 @@ export function rockOutcrop(d: Drawing, u: number, v: number, radius: number, he
     const a=rings[j]![i]!,b=rings[j]![(i+1)%n]!,c=rings[j+1]![(i+1)%n]!,e=rings[j+1]![i]!
     d.face([a,b,c,e],i<4?colors.right:colors.left,0)
   }
-  const summit:Vertex=[u-radius*0.19,v+radius*0.09,height*0.99]
+  const summit:Vertex=[u-radius*0.19,v+radius*0.09,height*1.06]
   for(let i=0;i<n;i++)d.face([rings[3]![i]!,rings[3]![(i+1)%n]!,summit],i%3===0?colors.left:colors.top,0)
   d.face([...rings[0]!].reverse(),colors.left,0)
   d.volume(start,0.8)
-  for(const j of [1,2])for(const indices of [[0,1,2],[3,4,5]])d.line(indices.map(i=>rings[j]![i]!),0.65,ore?0x73849c:0x98a68c,0.65)
-  for(const i of [0,2,5])d.line([rings[0]![i]!,rings[1]![i]!,rings[2]![(i+1)%n]!],0.75,ore?0x73849c:0x98a68c,0.6)
-  if(ore)for(const i of [0,1,3,6]){
-    const a=rings[1]![i]!,b=rings[2]![i]!
-    d.line([[a[0]*0.997+u*0.003+0.003,a[1]+0.003,a[2]+1],[b[0]+0.003,b[1]+0.003,b[2]-1]],1.8,0x8199bb)
-  }
 }
 
 export function makeRock(ore: boolean, full: boolean, variant = 0) {
-  const d=new Drawing(`${ore?"ore":"stone"}-${full?"full":"quarried"}`,`${ore?"Ore":"Stone"} · ${full?"full":"quarried"}`,"A clustered deposit with layered rock faces, fractures and exposed mineral seams. Seeded silhouettes vary across the land.")
+  const d=new Drawing(`${ore?"ore":"stone"}-${full?"full":"quarried"}`,`${ore?"Ore":"Stone"} · ${full?"full":"quarried"}`,"A clustered deposit with clean shaded facets and seeded silhouettes. Stone and ore use distinct mineral palettes.")
   d.asset.category="land";d.asset.reference={type:"rock",x:ore?5:0,y:ore?3:0,ore,amount:full?40:10};d.asset.footprint=1
   rockOutcrop(d,-2.9*U,-2.2*U,2.8*U,full?10:4,ore,variant+2)
   rockOutcrop(d,0.3*U,-0.1*U,(full?4.4:4)*U,full?12+(variant%3)*1.5:6,ore,variant)
