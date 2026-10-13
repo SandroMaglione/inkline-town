@@ -1,0 +1,109 @@
+/* ── Phones and other small or touch screens ──
+ * Layout only: every rule here rearranges or resizes the page that
+ * factory.css draws, so new UI works on a phone by default and only needs a
+ * line here when it has to move. Three layers, each a media query:
+ *   compact  (narrow or short screens): icon-only bars, a shorter ticker
+ *   portrait (narrow screens): the chrome stacked top and bottom, the panel as a bottom sheet
+ *   touch    (coarse pointers): bigger targets, no key hints, the hint line pinned
+ */
+
+/* ── Compact: narrow (portrait phone) or short (landscape phone) ── */
+@media (max-width: 760px), (max-height: 500px) {
+  /* The bars keep their icons; the words are in each button's title. */
+  .toolbar button, .toolbar .town-button { font-size: 0; gap: 0; padding: 6px; min-width: 40px; min-height: 40px; justify-content: center; }
+  .toolbar .speed button { font-size: 12px; min-width: 36px; }
+  .toolbar button kbd { display: none; }
+  .system button { font-size: 0; gap: 0; padding: 6px; min-width: 38px; min-height: 38px; justify-content: center; }
+  .camera-controls [data-mode="pan"], .camera-controls output { display: none; }
+
+  /* The goods on one line that scrolls, a little smaller. */
+  .hud .stock { max-width: 100%; overflow-x: auto; flex: none; padding: 4px; scrollbar-width: none; }
+  .hud .stock .group { flex: none; gap: 3px; padding: 0 3px; }
+  .hud .good { gap: 4px; padding: 3px 7px 3px 4px; }
+  .hud .good .count { font-size: 12px; }
+
+  /* The ticker: only what needs looking at now, in at most two lines. */
+  .hud .ticker .head, .hud .ticker .cell ~ .cell { display: none; }
+  .hud .ticker .cell { padding: 6px 4px 6px 12px; font-size: 11px; line-height: 1.45; }
+  .hud .ticker .cell .text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+
+  /* The map overlays: a column of icons on the right, the legend beside it. */
+  .views { top: auto; right: 10px; bottom: calc(120px + env(safe-area-inset-bottom)); flex-direction: column; max-width: none; }
+  .views button { font-size: 0; gap: 0; padding: 7px; justify-content: center; }
+  .views button kbd, .views-title { display: none; }
+  .legend { top: auto; right: 64px; bottom: calc(120px + env(safe-area-inset-bottom)); max-width: min(220px, calc(100vw - 84px)); }
+}
+
+/* ── Portrait phone: stacked chrome, map in the middle, panel from the bottom ── */
+@media (max-width: 760px) {
+  /* Top: the clock and treasury (with save and load beside them), the people, the goods, the ticker. */
+  .hud { top: calc(8px + env(safe-area-inset-top)); gap: 6px; }
+  .hud.left { left: 10px; right: 10px; max-width: none; }
+  .hud.right, .panel-open .hud.right { top: calc(58px + env(safe-area-inset-top)); left: 10px; right: auto; max-width: calc(100vw - 20px); align-items: flex-start; }
+  .hud .card .cell { padding: 6px 9px; gap: 7px; }
+  .hud .stack b { font-size: 14px; }
+  .hud .coins b { font-size: 15px; }
+  .hud.left .stock { margin-top: 48px; }
+  .hud .ticker { width: auto; }
+  .system, .panel-open .system { top: calc(8px + env(safe-area-inset-top)); bottom: auto; right: 10px; padding: 3px; }
+  .system button { min-height: 32px; }
+
+  /* Bottom: the tools along the edge; the camera and the speed just above them. */
+  .toolbar { left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); justify-content: center; overflow: visible; max-width: none; }
+  .toolbar .group, .toolbar .town-button { flex: none; }
+  .toolbar .speed { position: fixed; right: 10px; bottom: calc(66px + env(safe-area-inset-bottom)); padding: 3px; }
+  .toolbar .speed button { min-height: 38px; }
+  /* Pinch zooms, so the zoom buttons give their room to the speed. */
+  .camera-controls { left: 10px; bottom: calc(66px + env(safe-area-inset-bottom)); padding: 3px; }
+  .camera-controls [data-action="in"], .camera-controls [data-action="out"] { display: none; }
+  .camera-controls button { min-height: 38px; padding: 6px 9px; }
+  .toast { bottom: calc(120px + env(safe-area-inset-bottom)); max-width: calc(100vw - 28px); white-space: normal; text-align: center; }
+
+  /* The panel slides up as a sheet over the bottom half, so the town stays in view above it. */
+  .panel {
+    top: auto; left: 0; width: auto; max-width: none; height: 58dvh; border-left: 0; border-top: 1px solid #c3c8bf;
+    border-radius: 14px 14px 0 0; box-shadow: 0 -3px 0 #dfe2db; padding-top: 22px; transform: translateY(100%);
+  }
+  .panel::before { content: ""; position: absolute; top: 8px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: #c9cec4; }
+  .panel.open { transform: none; }
+  .panel-open .hud .stock, .panel-open .hud .ticker, .panel-open .hud .request, .panel-open .hud .alarm, .panel-open .views, .panel-open .legend { display: none; }
+}
+
+/* A very narrow phone: a little less padding so the tool row still fits. */
+@media (max-width: 370px) {
+  .toolbar .group { gap: 2px; padding: 3px; }
+  .toolbar button, .toolbar .town-button { min-width: 38px; }
+  .camera-controls button { padding: 6px; min-width: 34px; }
+  .toolbar .speed button { min-width: 32px; padding: 6px 4px; }
+}
+
+/* ── Landscape phone: short, so the bars stay low and the panel keeps to the side ── */
+@media (max-height: 500px) {
+  .hud { top: calc(6px + env(safe-area-inset-top)); gap: 5px; }
+  .hud .card .cell { padding: 5px 10px; }
+  .toolbar { bottom: calc(6px + env(safe-area-inset-bottom)); }
+  .system { bottom: calc(6px + env(safe-area-inset-bottom)); }
+  .panel-open .system { display: none; }
+  .camera-controls { bottom: calc(60px + env(safe-area-inset-bottom)); padding: 3px; }
+  .views { bottom: calc(60px + env(safe-area-inset-bottom)); }
+  .legend { bottom: calc(60px + env(safe-area-inset-bottom)); }
+  .toast { bottom: calc(110px + env(safe-area-inset-bottom)); }
+  .panel { padding-top: 12px; }
+}
+
+/* ── Touch: fingers instead of a mouse ── */
+@media (pointer: coarse) {
+  /* No hover, so no key hints; targets big enough for a thumb. */
+  .toolbar button kbd, .views button kbd { display: none; }
+  .camera-controls button, .views button { min-width: 40px; min-height: 40px; }
+  .panel .close { min-width: 40px; min-height: 40px; }
+  .hud .ticker .act { width: 32px; height: 32px; opacity: 0.6; }
+  /* The build hint follows no finger: it sits in one place above the bottom bars. */
+  .tooltip {
+    left: 10px !important; right: 62px; top: auto !important; bottom: calc(120px + env(safe-area-inset-bottom));
+    transform: none; white-space: normal; text-align: center; font-size: 12px; line-height: 1.4;
+  }
+}
+@media (pointer: coarse) and (max-height: 500px) {
+  .tooltip { bottom: calc(110px + env(safe-area-inset-bottom)); left: 25% !important; right: 25%; }
+}

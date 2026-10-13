@@ -160,7 +160,6 @@ try {
   await page.setViewportSize({width:390,height:844})
   await page.getByRole("button",{name:"Reset camera",exact:true}).click()
   await page.getByRole("button",{name:"Rotate map left",exact:true}).click()
-  await page.getByRole("button",{name:"Zoom in",exact:true}).click()
   assert.equal(await page.evaluate(()=>[...document.querySelectorAll(".camera-controls,.toolbar,.system,.hud")].some(e=>{const r=e.getBoundingClientRect();return r.left<0||r.right>innerWidth+1})),false)
   facts.phoneViewport=true
   await tool("homes")
