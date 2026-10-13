@@ -5,6 +5,9 @@ import { kindIds } from "../src/content.ts"
 import { Drawing, type InkAsset } from "../src/asset-lab/primitives.ts"
 import { buildingAsset, homeAsset, noDoors, treeVariant } from "../src/render3d/models.ts"
 import { ModelHandle, ModelPool } from "../src/render3d/pool.ts"
+import { assetById } from "../src/asset-lab/assets.ts"
+import { surfaceState, hazardStrength } from "../src/render3d/surface-state.ts"
+import { StructureEffects } from "../src/render3d/structure-effects.ts"
 
 function valid(asset: InkAsset) {
   for (const face of asset.faces) {
@@ -18,12 +21,12 @@ function valid(asset: InkAsset) {
   for (const stroke of asset.strokes) assert.ok(stroke.points.every(p => p.every(Number.isFinite)), asset.id)
 }
 
-test("live construction and fitting are valid for every building and both home tiers", () => {
+test("live construction and fitting are valid for every building and all three home tiers", () => {
   for (const build of [0, 0.125, 0.3, 0.55, 0.77, 0.78, 0.8, 0.9, 1]) {
     for (const kind of kindIds) for (const side of Object.keys(noDoors)) {
       valid(buildingAsset(kind, build, 0.5, { ...noDoors, [side]: true }, 0.5))
     }
-    for (const tier of [1, 2] as const) valid(homeAsset(tier, 0.62, build, 1, { ...noDoors, backLeft: true }))
+    for (const tier of [1, 2, 3] as const) valid(homeAsset(tier, 0.62, build, 1, { ...noDoors, backLeft: true }))
   }
 })
 
@@ -81,4 +84,57 @@ test("a seeded forest uses a bounded set of variants and preserves cell offsets"
     assert.ok(v.offset.every(Number.isFinite))
   }
   assert.ok(variants.size <= 34)
+})
+
+test("surface states preserve the base geometry instead of making variant meshes", () => {
+  for (const id of ["granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder"] as const) {
+    const plain = buildingAsset(id, 1, null, noDoors, 0)
+    for (const appearance of ["worn", "winter"] as const) {
+      const model = buildingAsset(id, 1, null, noDoors, 0, { worn: appearance === "worn", winter: appearance === "winter" })
+      valid(model)
+      assert.ok(assetById.has(`${id}-${appearance}`))
+      assert.deepEqual(model.faces,plain.faces)
+      assert.deepEqual(model.strokes,plain.strokes)
+      assert.ok(model.effects)
+    }
+  }
+  for (const tier of [1, 2, 3] as const) {
+    const plain = homeAsset(tier, 0.03, 1, null, noDoors)
+    for (const look of [{ band: "fine" as const }, { band: "poor" as const }, { worn: true }, { winter: true }]) {
+      const model = homeAsset(tier, 0.03, 1, null, noDoors, look)
+      valid(model)
+      assert.deepEqual(model.faces,plain.faces)
+      assert.deepEqual(model.strokes,plain.strokes)
+      assert.ok(model.effects)
+    }
+  }
+})
+
+test("different surface states share geometry and remain independent per instance", () => {
+  const pool=new ModelPool(),a=new ModelHandle(pool),b=new ModelHandle(pool)
+  let built=0
+  const create=()=>{built++;return homeAsset(2,0.28,1,null,noDoors)}
+  a.use("home",create);b.use("home",create)
+  a.effectBounds.set(12,30,0.1,1);b.effectBounds.copy(a.effectBounds)
+  a.effects=surfaceState({snow:1});b.effects=surfaceState({wear:0.9,burning:1})
+  pool.flush()
+  // Non-pickable effects use the same pool; inspect the render batch directly.
+  const part=pool.root.children[0]!.children[0] as THREE.Mesh
+  const state=part.geometry.getAttribute("structureState")
+  assert.equal(state.getZ(0),1);assert.equal(state.getX(1),Math.fround(0.9));assert.equal(state.getW(1),1)
+  for(let i=0;i<100;i++){a.effects=surfaceState({wear:i/100});pool.flush()}
+  assert.equal(built,1);assert.equal(pool.stats().templates,1)
+  const particles=new StructureEffects(create(),26)
+  particles.set(surfaceState({burning:1}));particles.update(0)
+  assert.equal(particles.group.children.length,3)
+  particles.update(100);assert.equal(particles.group.children.length,3)
+  particles.set(surfaceState());assert.equal(particles.group.visible,false)
+  particles.dispose();pool.dispose()
+})
+
+test("hazard effects become visible at the warning threshold and remain bounded", () => {
+  assert.equal(hazardStrength(6999,7000,10000),0)
+  assert.equal(hazardStrength(7000,7000,10000),0.35)
+  assert.equal(hazardStrength(10000,7000,10000),1)
+  assert.equal(hazardStrength(12000,7000,10000),1)
 })

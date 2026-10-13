@@ -4,6 +4,11 @@ import { Drawing, palette, type Vertex } from "./primitives.ts"
 import { U } from "../iso.ts"
 
 const R = 45.2548
+export type ServiceRole = "watchman" | "firefighter" | "physician" | "constable" | "builder"
+export function serviceCostume(dress: PersonDress, role: ServiceRole): PersonDress {
+  const coats = { watchman: 0xb56e58, firefighter: 0xb96750, physician: 0xdce7d4, constable: 0x6e88a2, builder: 0xb69b72 }
+  return { ...dress, coat: coats[role], trim: role === "firefighter" ? 0xc3aa72 : role === "physician" ? 0xeef2e4 : coats[role], hat: role === "physician" ? "bonnet" : role === "firefighter" ? "brim" : "cap", long: role === "physician" }
+}
 export function drawPerson(d: Drawing, dress: PersonDress, load: Load, cart: CartLook | null, phase = 0) {
   const swing = phase === 0 ? 1 : -1
   // Complete rounded volumes preserve the simple original silhouette.
@@ -127,6 +132,32 @@ export function drawPerson(d: Drawing, dress: PersonDress, load: Load, cart: Car
       0x8a6a45
     )
   }
+  if (load.kind === "service") {
+    const u = 0.08, v = -0.05
+    if (load.role === "physician") {
+      d.box(u, v, 1.3 * U, U, 4, 3.5, 0xa9bfad, 0xc9dac7, 0x92ad98, 0.75)
+      d.line([[u - U, v, 8], [u - U, v, 9], [u + U, v, 9], [u + U, v, 8]], 0.75)
+      d.line([[u, v + 1.01 * U, 4.8], [u, v + 1.01 * U, 6.8]], 1, 0xf4f5eb)
+      d.line([[u - 0.6 * U, v + 1.01 * U, 5.8], [u + 0.6 * U, v + 1.01 * U, 5.8]], 1, 0xf4f5eb)
+    } else if (load.role === "firefighter") {
+      d.cylinder(u, v, 1.5 * U, 2, 4, 0xb8a27d, 0xb4cfdb, 0.75, 12)
+      d.line([[u - U, v, 6], [u, v, 9], [u + U, v, 6]], 0.75)
+      d.line([[-0.08, 0.02, 5], [-0.08, 0.02, 13]], 1.5, 0x8a6a45)
+      d.box(-0.08, 0.02, 1.3 * U, 0.6 * U, 12, 2, 0xbfc7bd, 0xd7dfd1, 0x9da89c, 0.75)
+    } else if (load.role === "watchman") {
+      d.line([[u, v, 6], [u, v, 18]], 1, 0x8a6a45)
+      d.box(u, v, U, U, 8, 3, 0xe5d6a5, 0xf3e6bd, 0xd6c48d, 0.75)
+      d.cylinder(u, v, 1.4 * U, 11, 0.5, palette.ink, palette.ink, 0.75, 12)
+    } else if (load.role === "constable") {
+      d.line([[u, v, 4], [u, v, 11]], 1.5, 0x8a6a45)
+      d.face([[-0.05, 0.058, 8], [-0.01, 0.058, 8], [-0.01, 0.058, 6], [-0.03, 0.058, 5], [-0.05, 0.058, 6]], 0xd5c697, 0.75)
+    } else {
+      d.box(u, v, 1.7 * U, U, 3, 3, 0xd5b28a, 0xe9d2a8, 0xbda07a, 0.75)
+      d.line([[u - U, v, 6], [u - U, v, 8], [u + U, v, 8], [u + U, v, 6]], 0.75)
+      d.line([[-0.07, 0, 6], [-0.07, 0, 12]], 1.5, 0x8a6a45)
+      d.box(-0.07, 0, U, 0.7 * U, 11, 2, 0xb8bfae, 0xd5dbc9, 0x9ea993, 0.75)
+    }
+  }
 }
 
 export function drawCargo(d: Drawing, good: GoodId, count: number, u: number, v: number, z: number) {
@@ -162,24 +193,38 @@ export function drawCargo(d: Drawing, good: GoodId, count: number, u: number, v:
       break
     }
     case "fish":
-    case "bread":
+    case "bread": {
+      const fishy = good !== "bread",
+        tint = good === "fish" ? 0x2f8c87 : 0xd98a6a
       d.box(u, v, 1.6 * U, 1.1 * U, z, 3, 0xc9a46a, 0xe3c592, 0xd2b07a, 1)
       for (let i = 0; i < n + 1; i++) {
         const x = u + (i - n / 2) * 0.9 * U,
           y = v + (i % 2 === 0 ? -0.3 : 0.3) * U
-        d.ellipsoid(x, y, z + 3.6, good === "fish" ? 0.049 : 0.04, 0.028, 0.75, good === "fish" ? 0x2f8c87 : 0xd98a6a, 0.75)
-        if (good === "fish")
+        d.ellipsoid(x, y, z + 3.6, fishy ? 0.049 : 0.04, 0.028, 0.75, tint, 0.75)
+        if (fishy)
           d.face(
             [
               [x - 0.055, y - 0.03, z + 3.6],
               [x - 0.055, y + 0.03, z + 3.6],
               [x - 0.02, y, z + 3.6]
             ],
-            0x2f8c87,
+            tint,
             0.75
           )
       }
       break
+    }
+    case "smoked": {
+      d.box(u, v, 2.2 * U, 1.3 * U, z, 2, 0xd5b28a, 0xe9d2a8, 0xbda07a, 1)
+      for (let i = 0; i < n + 1; i++) {
+        const y = v + (i - n / 2) * 0.8 * U
+        // Split cured fillets, tied in pairs: flatter and longer than fresh fish.
+        d.ellipsoid(u, y, z + 2.8, 2 * U, 0.4 * U, 0.6, 0xb98a61, 0.75, 0xd9b589, 12)
+        for (const x of [-1, 0, 1]) d.line([[u + x * U, y - 0.3 * U, z + 3.2], [u + (x + 0.3) * U, y + 0.3 * U, z + 3.2]], 0.5, 0x8a6a45)
+      }
+      for (const x of [-0.8, 0.8]) d.line([[u + x * U, v - U, z + 3.6], [u + x * U, v + U, z + 3.6]], 0.75, 0xe6d4b2)
+      break
+    }
     case "flour":
       ;[-1, 1, 0].slice(0, n).forEach((a, i) => d.sack(u + a * U, v, z + (i === 2 ? 4 : 0)))
       break
@@ -282,6 +327,8 @@ export function personCatalogue() {
     makePerson("market-walker", "Market walker", serviceDress(0x3d6db5, 0.3, false), { kind: "basket", goods: ["fish", "bread", "cloth"] })
   )
   items.push(makePerson("chapel-walker", "Chapel walker", serviceDress(0x3d6db5, 0.6, true), { kind: "bell" }))
+  for (const role of ["watchman", "firefighter", "physician", "constable", "builder"] as const)
+    items.push(makePerson(`service-${role}`, role[0]!.toUpperCase() + role.slice(1), serviceCostume(serviceDress(0x3d6db5, 0.3, false), role), { kind: "service", role }))
   for (let i = 0; i < 16; i++) {
     const tier = i < 8 ? 1 : 2,
       n = (i * 0.37) % 1,

@@ -4,11 +4,16 @@
  * preview, and edits; the simulation applies the edits on its next step.
  * None of it is saved: it is host state, handed to systems as a service.
  */
-import type { Amounts, CharterValue, GoodId, KindId, Tier } from "./content.ts"
+import type { Amounts, CharterValue, GoodId, GroundId, KindId, PropId, Tier, WinterId } from "./content.ts"
 import type { Point } from "./iso.ts"
 import type { Status } from "./schema.ts"
+import type { OverlayCell } from "./render3d/models.ts"
 
-export type Tool = "select" | "road" | "home" | "bulldoze" | "place"
+export type Tool = "select" | "road" | "pave" | "home" | "bulldoze" | "place" | "ground" | "prop"
+
+/** What the map shows over the town: nothing, or one of its views, cell by cell. */
+export const viewIds = ["none", "appeal", "workers", "fire", "health", "order", "condition"] as const
+export type View = (typeof viewIds)[number]
 
 /** A change to the town, applied by the simulation (see `ApplyEdits`). */
 export type Edit =
@@ -16,7 +21,13 @@ export type Edit =
   | { readonly type: "building"; readonly kind: KindId; readonly cell: Point; readonly open: boolean }
   | { readonly type: "homes"; readonly cells: ReadonlyArray<Point> }
   | { readonly type: "roads"; readonly cells: ReadonlyArray<Point> }
-  /** Removes whatever stands on a cell (not rocks, water, or the town hall). */
+  /** Paves the road on each cell (coins, and stone from storage). */
+  | { readonly type: "pave"; readonly cells: ReadonlyArray<Point> }
+  /** Lays park ground on each empty cell (or relays a park cell's ground). */
+  | { readonly type: "ground"; readonly ground: GroundId; readonly cells: ReadonlyArray<Point> }
+  /** Sets a furnishing on a cell of park. */
+  | { readonly type: "prop"; readonly prop: PropId; readonly cell: Point }
+  /** Removes whatever stands on a cell (not rocks, water, or the town hall); on a park, its furnishing first. */
   | { readonly type: "remove"; readonly cell: Point }
   /** Sets a tier's tax rate, in percent of the usual. */
   | { readonly type: "tax"; readonly tier: "settlers" | "citizens"; readonly rate: number }
@@ -50,6 +61,8 @@ export interface Preview {
   ghosts: Array<{ readonly what: KindId | "home"; readonly cell: Point }>
   /** Road cells about to be laid. */
   roads: Array<Point>
+  /** Park cells about to be laid or furnished, as they will look. */
+  parks: Array<{ readonly x: number; readonly y: number; readonly ground: GroundId; readonly prop: PropId | "none" }>
   /** The entity under the pointer. */
   hover: number | null
   /** Bulldozing: the hovered thing is tinted. */
@@ -57,7 +70,7 @@ export interface Preview {
   tooltip: string | null
 }
 
-export const emptyPreview = (): Preview => ({ plots: [], ghosts: [], roads: [], hover: null, danger: false, tooltip: null })
+export const emptyPreview = (): Preview => ({ plots: [], ghosts: [], roads: [], parks: [], hover: null, danger: false, tooltip: null })
 
 /** The side panel: the build menu, the town's numbers and taxes, a building, or a home. */
 export type Panel =
@@ -81,6 +94,23 @@ export type Panel =
       readonly id: number
       readonly cell: Point
       readonly tier: Tier
+      readonly lines: ReadonlyArray<string>
+    }
+  | {
+      readonly type: "park"
+      readonly id: number
+      readonly cell: Point
+      /** Cells, and the desirability it gives out to how far. */
+      readonly cells: number
+      readonly value: number
+      readonly reach: number
+      readonly lines: ReadonlyArray<string>
+    }
+  | {
+      readonly type: "ruin"
+      readonly id: number
+      readonly cell: Point
+      readonly cause: "burnt" | "collapsed" | "derelict"
       readonly lines: ReadonlyArray<string>
     }
 
@@ -114,13 +144,23 @@ export interface Stats {
   /** Each good's price with traders, in percent of the usual. */
   readonly prices: Amounts
   readonly settlers: number
+  /** Citizens in citizens' homes and townhouses; of them, `burghers` in townhouses. */
   readonly citizens: number
+  readonly burghers: number
   readonly jobs: number
   readonly employed: number
   readonly charter: CharterValue
   /** Minutes into the term. */
   readonly minute: number
-  readonly season: { readonly year: number; readonly winter: boolean; readonly left: number }
+  readonly season: {
+    readonly year: number
+    readonly winter: boolean
+    readonly left: number
+    /** This winter's severity, while it lasts; and the next one the almanac foresees, and the one after. */
+    readonly severity: WinterId | null
+    readonly coming: WinterId | null
+    readonly after: WinterId | null
+  }
   readonly mood: {
     readonly approval: number
     readonly target: number
@@ -157,6 +197,12 @@ export interface Stats {
   }
   readonly goals: ReadonlyArray<{ readonly text: string; readonly value: string; readonly met: boolean }>
   readonly larder: number
+  /** Food the town ate, and food that rotted in store, over the last minute. */
+  readonly eaten: number
+  readonly rotted: number
+  /** Homes sick, and homes and buildings on fire, right now. */
+  readonly sick: number
+  readonly burning: number
   readonly history: ReadonlyArray<{
     readonly tick: number
     readonly coins: number
@@ -165,20 +211,32 @@ export interface Stats {
     readonly approval: number
     readonly net: number
   }>
-  readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly text: string }>
+  readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly text: string; readonly alarm: boolean }>
+  /** What needs looking at right now, a line each: workshops waiting, workplaces no one can reach, food running out. */
+  readonly alerts: ReadonlyArray<string>
+}
+
+/** A map view's legend: what each colour means. */
+export interface Legend {
+  readonly title: string
+  readonly keys: ReadonlyArray<{ readonly color: number; readonly label: string }>
+  readonly note: string
 }
 
 export interface UiValue {
   tool: Tool
   /** The kind being placed with the `place` tool. */
   placing: KindId | null
+  /** The ground laid with the `ground` tool, and the furnishing set with the `prop` tool. */
+  ground: GroundId
+  prop: PropId
   /** Which side panel the toolbar opened, when nothing is selected. */
   menu: "build" | "town" | null
   /** The pointer on the grid, or `null` off the canvas. */
   pointer: Point | null
   /** Camera-ray entity hit. Undefined allows grid-only headless interaction. */
   pointerHit?: number | null
-  /** Where a road or a row of homes being dragged started. */
+  /** Where a road, a row of homes, or a patch of park being dragged started. */
   dragFrom: Point | null
   selected: number | null
   gestures: Array<Gesture>
@@ -193,5 +251,9 @@ export interface UiValue {
   speed: number
   /** The new-town dialog is open: the town waits. */
   founding: boolean
+  /** The map view shown over the town, its cells (rebuilt as the town changes), and its legend. */
+  view: View
+  overlay: { readonly key: string; readonly cells: ReadonlyArray<OverlayCell> }
+  legend: Legend | null
   toast: (message: string) => void
 }

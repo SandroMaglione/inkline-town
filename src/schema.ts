@@ -2,7 +2,7 @@
  * The town's world. Every entity is assembled from small components (see
  * `archetypes.ts`): a `Tile` on the grid, then whichever roles it has. The
  * land is `Tree`s, `Rock`s, `Water`, and a farm's `Field`s; the town is
- * `Road`s, `House`s, and `Building`s that may hold an `Inventory`, follow a
+ * `Road`s, `Park` cells, `House`s, and `Building`s that may hold an `Inventory`, follow a
  * `Recipe`, gather from the land (`Gatherer`), plant (`Planter`), send
  * `Carriers`, or offer a `Service`. A building still owed materials is a
  * `Site`; one going up is `Rising`. Walkers follow a `Route` on an `Errand`
@@ -15,9 +15,10 @@ import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
 import type { OptionalReadCell } from "@typeonce/bevy-ts/Query"
 import type { NodeRegistry } from "@typeonce/bevy-ts-render"
 
-import type { BuildingView, FieldView, HouseView, RockView, TreeView, WalkerView } from "./render3d/views.ts"
+import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
 import type { GameScene } from "./render3d/scene.ts"
-import { goodIds, kindIds, landIds, sizeIds, type Amounts } from "./content.ts"
+import { goodIds, groundIds, kindIds, landIds, propIds, serviceIds, sizeIds, type Amounts } from "./content.ts"
+import type { Rules as RuleInputs } from "./rules/config.ts"
 import type { UiValue } from "./ui.ts"
 
 export const Root = Schema.defineRoot("Town")
@@ -28,10 +29,10 @@ export const maybe = <T>(cell: OptionalReadCell<T>) => (cell.present ? cell.get(
 const integer = Decode.integer
 const cell = Decode.struct({ x: integer, y: integer })
 const good = Decode.literal(...goodIds)
-const service = Decode.literal("goods", "faith")
+const service = Decode.literal(...serviceIds)
 /** A count of every good. */
 const amounts = Decode.struct({
-  wood: integer, planks: integer, stone: integer, ore: integer, tools: integer, fish: integer,
+  wood: integer, planks: integer, stone: integer, ore: integer, tools: integer, fish: integer, smoked: integer,
   wheat: integer, flour: integer, bread: integer, wool: integer, cloth: integer
 })
 
@@ -43,6 +44,12 @@ export type Status = (typeof statuses)[number]
 /** A square of cells on the grid, by its top cell, `size` cells a side. */
 export const Tile = Descriptor.ConstructedComponent(Decode.struct({ x: integer, y: integer, size: integer }))("Town/Tile")
 export const Road = Descriptor.Tag("Town/Road")
+/** A road paved with stone: a little nicer to live on (see `appeal.ts`). */
+export const Paved = Descriptor.Tag("Town/Paved")
+/** A cell of park: its ground, and what stands on it (see `parks` in content). */
+export const Park = Descriptor.ConstructedComponent(Decode.struct({ ground: Decode.literal(...groundIds), prop: Decode.literal("none", ...propIds) }))("Town/Park")
+/** What is left of a home or building that burned, fell down, or was left derelict, until it is cleared. */
+export const Ruin = Descriptor.ConstructedComponent(Decode.struct({ cause: Decode.literal("burnt", "collapsed", "derelict") }))("Town/Ruin")
 /** Materials still owed before it can go up, out of `total`. */
 export const Site = Descriptor.ConstructedComponent(Decode.struct({ owed: amounts, total: integer }))("Town/Site")
 /** Going up: steps since its materials were all in (see `BUILD_TICKS`). Removed once it stands. */
@@ -59,7 +66,7 @@ export const Field = Descriptor.ConstructedComponent(Decode.struct({ growth: int
 
 /** A home: its tier, residents, and steps left of each need a walker last met. */
 export const House = Descriptor.ConstructedComponent(Decode.struct({
-  tier: Decode.literal(1, 2),
+  tier: Decode.literal(1, 2, 3),
   residents: integer,
   food: integer,
   bread: integer,
@@ -67,6 +74,21 @@ export const House = Descriptor.ConstructedComponent(Decode.struct({
   faith: integer,
   clock: integer
 }))("Town/House")
+
+// ── Risks and wear (homes and buildings) ──────────────────────────────────
+
+/**
+ * Risk meters, 0 → `RISK_MAX` (see `risk` in content): fire, sickness, and
+ * disorder (a building only has the first), and thefts since a constable last
+ * passed.
+ */
+export const Risk = Descriptor.ConstructedComponent(Decode.struct({ fire: integer, health: integer, order: integer, thefts: integer }))("Town/Risk")
+/** How well kept it is, 0 → `CONDITION_MAX`; it falls into ruin at nothing. */
+export const Condition = Descriptor.ConstructedComponent(Decode.struct({ value: integer }))("Town/Condition")
+/** On fire: steps until it is lost, and which fire (see `Fires`) it belongs to. */
+export const Burning = Descriptor.ConstructedComponent(Decode.struct({ left: integer, fire: integer }))("Town/Burning")
+/** A sick household: steps until it passes on its own. */
+export const Sick = Descriptor.ConstructedComponent(Decode.struct({ left: integer }))("Town/Sick")
 
 // ── Buildings and their roles ─────────────────────────────────────────────
 
@@ -76,8 +98,11 @@ export const Status = Descriptor.ConstructedComponent(Decode.literal(...statuses
 /** Stopped by the town: no workers, a quarter of its upkeep. */
 export const Paused = Descriptor.Tag("Town/Paused")
 
-/** Workers it needs, and how many the town could spare it this step. */
-export const Staff = Descriptor.ConstructedComponent(Decode.struct({ needed: integer, assigned: integer }))("Town/Staff")
+/**
+ * Workers it needs, how many came (`apprentices` of them settlers standing
+ * in for citizens), and how many of its crew live within a commute.
+ */
+export const Staff = Descriptor.ConstructedComponent(Decode.struct({ needed: integer, assigned: integer, apprentices: integer, nearby: integer }))("Town/Staff")
 
 /** Goods on hand: only the ones it `accepts`, up to `cap` of each. */
 export const Inventory = Descriptor.ConstructedComponent(Decode.struct({ stock: amounts, accepts: Decode.array(good), cap: integer }))("Town/Inventory")
@@ -116,6 +141,8 @@ export const Carriers = Descriptor.ConstructedComponent(Decode.struct({ count: i
 
 /** Sends a walker out every `interval` steps. */
 export const Service = Descriptor.ConstructedComponent(Decode.struct({ service, interval: integer, cooldown: integer, range: integer }))("Town/Service")
+/** The next tour of a service's district. Optional in older saved worlds. */
+export const Patrol = Descriptor.ConstructedComponent(Decode.struct({ next: integer }))("Town/Patrol")
 
 // ── Walkers ───────────────────────────────────────────────────────────────
 
@@ -137,6 +164,9 @@ export const Errand = Descriptor.ConstructedComponent(Decode.struct({
   back: Decode.boolean
 }))("Town/Errand")
 
+/** A firefighter running to a blaze, then walking back. */
+export const Rescue = Descriptor.ConstructedComponent(Decode.struct({ target: Decode.handle(Root, Tile), back: Decode.boolean }))("Town/Rescue")
+
 /** Wandering the roads serving homes, `left` cells more, then walking back with what is left in its basket. */
 export const Roam = Descriptor.ConstructedComponent(Decode.struct({ service, left: integer, basket: amounts, back: Decode.boolean }))("Town/Roam")
 
@@ -156,14 +186,20 @@ export const Ledger = Descriptor.ConstructedResource(Decode.struct({ taxes: inte
 export const Census = Descriptor.ConstructedResource(Decode.struct({
   homes: integer,
   settlers: integer,
+  /** Residents of citizens' homes and townhouses together: the citizens the goals count. */
   citizens: integer,
+  /** Of the citizens, those in townhouses. */
+  burghers: integer,
   jobs: integer,
   employed: integer,
   /** Homes with each need met right now. */
   food: integer,
   bread: integer,
   cloth: integer,
-  faith: integer
+  faith: integer,
+  /** Homes sick, and homes and buildings on fire, right now. */
+  sick: integer,
+  burning: integer
 }))("Town/Census")
 /**
  * The town's tax rates (in percent of the usual, for each tier), what it
@@ -186,7 +222,9 @@ export const Charter = Descriptor.ConstructedResource(Decode.struct({
   term: integer,
   land: Decode.literal(...landIds),
   seed: integer,
-  founded: integer
+  founded: integer,
+  /** Each year's winter, rolled when the town is founded: "none" for the first, then mild, normal, or hard. */
+  winters: Decode.array(Decode.literal("none", "mild", "normal", "hard"))
 }))("Town/Charter")
 /** Which cells are land ("1") and which open water beyond the coast ("0"), by `key`; and how many are land. */
 export const Land = Descriptor.ConstructedResource(Decode.struct({ mask: Decode.string, cells: integer }))("Town/Land")
@@ -250,12 +288,29 @@ export const Fate = Descriptor.ConstructedResource(Decode.struct({
 export const History = Descriptor.ConstructedResource(Decode.struct({
   samples: Decode.array(Decode.struct({ tick: integer, coins: integer, residents: integer, citizens: integer, approval: integer, net: integer }))
 }))("Town/History")
-/** What happened, in a line each. */
-export const Chronicle = Descriptor.ConstructedResource(Decode.struct({ lines: Decode.array(Decode.struct({ tick: integer, text: Decode.string })) }))("Town/Chronicle")
+/** What happened, in a line each; an `alarm` is news the page announces (a fire, a theft, winter coming). */
+export const Chronicle = Descriptor.ConstructedResource(Decode.struct({
+  lines: Decode.array(Decode.struct({ tick: integer, text: Decode.string, alarm: Decode.boolean }))
+}))("Town/Chronicle")
+
+/** How desirable each cell is to live on (by `key`), reckoned every `appeal.every` steps; empty before the first. */
+export const Appeal = Descriptor.ConstructedResource(Decode.struct({ cells: Decode.array(integer) }))("Town/Appeal")
+
+/**
+ * The town's food over the last minute: what walkers handed out and what
+ * rotted, counting now, and the last full minute's totals.
+ */
+export const Pantry = Descriptor.ConstructedResource(Decode.struct({ eaten: integer, rotted: integer, eatenLast: integer, rottedLast: integer, warned: integer }))("Town/Pantry")
+
+/** Fires burning now (each started at a cell, the homes and buildings it took so far), and the next fire's number. */
+export const Fires = Descriptor.ConstructedResource(Decode.struct({
+  fires: Decode.array(Decode.struct({ id: integer, x: integer, y: integer, homes: integer, buildings: integer })),
+  next: integer
+}))("Town/Fires")
 
 /** What stands on each cell, rebuilt every step from the tiles (see `grid.ts`). */
 /** `void`: off the land, past the coast. */
-export type Use = "empty" | "road" | "house" | "building" | "tree" | "rock" | "water" | "field" | "void"
+export type Use = "empty" | "road" | "park" | "house" | "building" | "tree" | "rock" | "water" | "field" | "ruin" | "void"
 export interface GridValue {
   /** Entity id on each cell (by `key`), or 0. */
   readonly owner: ReadonlyArray<number>
@@ -271,6 +326,7 @@ export const Stock = Descriptor.TransientResource<Amounts>()("Town/Stock")
 
 // ── Host services ─────────────────────────────────────────────────────────
 
+export const Rules = Descriptor.Service<RuleInputs>()("Town/Rules")
 export const Ui = Descriptor.Service<UiValue>()("Town/Ui")
 /** The frame's length, for animation only: the simulation runs on `Time`. */
 export const Clock = Descriptor.Service<{ deltaSeconds: number; elapsed: number }>()("Town/Clock")
@@ -281,15 +337,17 @@ export const WalkerNodes = Descriptor.Service<NodeRegistry.NodeRegistry<WalkerVi
 export const TreeNodes = Descriptor.Service<NodeRegistry.NodeRegistry<TreeView>>()("Town/TreeNodes")
 export const RockNodes = Descriptor.Service<NodeRegistry.NodeRegistry<RockView>>()("Town/RockNodes")
 export const FieldNodes = Descriptor.Service<NodeRegistry.NodeRegistry<FieldView>>()("Town/FieldNodes")
+export const RuinNodes = Descriptor.Service<NodeRegistry.NodeRegistry<RuinView>>()("Town/RuinNodes")
 
 export const Game = Schema.bind(
   Schema.fragment({
     components: {
-      Tile, Road, Site, Rising, Tree, Rock, Water, Field, House, Building, TownHall, Status, Paused, Staff, Inventory, Storage,
-      Recipe, Gatherer, Planter, Carriers, Service, Figure, Route, Errand, Roam
+      Tile, Road, Paved, Park, Ruin, Site, Rising, Tree, Rock, Water, Field, House, Risk, Condition, Burning, Sick, Building, TownHall, Status,
+      Paused, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Patrol, Figure, Route, Errand, Rescue, Roam
     },
     resources: {
-      Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Grid, Stock
+      Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Appeal, Pantry, Fires,
+      Grid, Stock
     },
     relations: { WalkerOf, FieldOf }
   }),

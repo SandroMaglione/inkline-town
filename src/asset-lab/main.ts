@@ -12,12 +12,15 @@ import {
   drawSite,
   drawRoads,
   drawWater,
+  drawParkPiece,
   homeVariant,
   plate,
   plateHalf
 } from "../art.ts"
 import { kinds, goods } from "../content.ts"
 import { key } from "../grid.ts"
+import { samplePark } from "./town-props.ts"
+import type { PropId } from "../content.ts"
 import { drawPlot } from "../art.ts"
 import { U, toScreen } from "../iso.ts"
 import { inkAssets, assetCategoryTitles, type InkAsset } from "./assets.ts"
@@ -26,7 +29,7 @@ import "./style.css"
 
 const root = document.querySelector<HTMLDivElement>("#lab")!
 root.innerHTML = `
-  <header><a href="/">Inkline Town</a><span>COMPLETE ASSET STUDY</span></header>
+  <header><a href="/model-review.html">Model review ↗</a><span>COMPLETE ASSET CATALOGUE</span><a href="/effects-lab.html">Animated house effects ↗</a></header>
   <div class="intro"><div><h1>The same ink.<br>A different angle.</h1><p>Original game drawings and complete 3D assets, side by side.</p></div><span class="tag">Procedural · Orthographic · Rotatable</span></div>
   <div class="filters"><label>Collection <select id="category"></select></label><label>Find <input id="search" type="search" placeholder="Name or material"></label><a href="/map-lab.html">See everything on the map ↗</a></div><nav class="assets" aria-label="Choose an asset"></nav>
   <section class="comparison" aria-label="Compare the original drawing with the 3D model">
@@ -35,7 +38,7 @@ root.innerHTML = `
   </section>
   <section class="controls" aria-label="Camera controls"><button id="reset">Match original view</button><label>Rotation <input id="rotation" type="range" min="-180" max="180" value="0" step="1"><output id="rotation-value">0°</output></label><label>Elevation <input id="elevation" type="range" min="10" max="65" value="30" step="1"><output id="elevation-value">30°</output></label><button id="rear">See the back</button></section>
   <section class="caption"><div><h2 id="asset-title"></h2><p id="asset-note"></p></div><div class="downloads"><button id="download-glb">Download GLB</button><button id="download-source">Download geometry</button><button id="download-png">Save comparison</button></div></section>
-  <footer><span>Same palette, dimensions and two ink weights. New faces complete the volume.</span><span>Three.js prototype · PixiJS 3D integration pending</span></footer>
+  <footer><span>Same palette, dimensions and two ink weights. New faces complete the volume.</span><span>These models are used in the live 3D game.</span></footer>
 `
 const viewer = document.querySelector<HTMLDivElement>("#viewer")!
 const reference = document.querySelector<HTMLCanvasElement>("#reference")!
@@ -54,6 +57,12 @@ await pixi.init({ width: 32, height: 32, antialias: true, resolution: 3, backgro
 
 function original(asset: InkAsset) {
   const g = new Graphics()
+  if(asset.id.startsWith("park-")){
+    if(asset.id==="park-sample")for(const c of samplePark){
+      const p=toScreen(c.x-2,c.y-2);g.translateTransform(p.x,p.y);drawParkPiece(g,c.prop==="none"?c.ground:c.prop);g.resetTransform()
+    }else drawParkPiece(g,asset.id.slice(5) as PropId)
+    return g
+  }
   const r = asset.reference
   if (r) {
     switch (r.type) {
@@ -189,6 +198,7 @@ for (const asset of inkAssets) {
 pixi.destroy(true)
 
 const models = new Map<string, ReturnType<typeof buildAsset>>()
+let effectTimeOverride:number|null=null
 let selected = inkAssets[2]!,
   yaw = 0,
   pitch = 30,
@@ -223,7 +233,9 @@ function render() {
     height = viewer.clientHeight
   if (!width || !height) return
   const ref = references.get(selected.id)!
-  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3) / zoom
+  const model = models.get(selected.id)!
+  const effectBounds=selected.smokeEffect||selected.fountains?.length?new THREE.Box3().setFromObject(model.group):null
+  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds?effectBounds.getSize(new THREE.Vector3()).y*1.45:0) / zoom
   renderer.setSize(width, height, false)
   camera.left = (-vertical * width) / height / 2
   camera.right = -camera.left
@@ -231,7 +243,7 @@ function render() {
   camera.bottom = -camera.top
   const heading = ((45 + yaw) * Math.PI) / 180,
     altitude = (pitch * Math.PI) / 180
-  const target = new THREE.Vector3(0, -(ref.y + ref.height / 2) / Math.cos(Math.PI / 6), 0)
+  const target = effectBounds?effectBounds.getCenter(new THREE.Vector3()):new THREE.Vector3(0, -(ref.y + ref.height / 2) / Math.cos(Math.PI / 6), 0)
   camera.position
     .copy(target)
     .add(
@@ -244,7 +256,7 @@ function render() {
   camera.lookAt(target)
   camera.updateProjectionMatrix()
   camera.updateMatrixWorld()
-  const model = models.get(selected.id)!
+  model.updateEffects(effectTimeOverride??performance.now()/1000)
   for (const { material, width: lineWidth } of model.lineMaterials) material.linewidth = lineWidth
   model.updateContours(camera)
   renderer.render(scene, camera)
@@ -400,12 +412,17 @@ Object.assign(window, {
       return { meshes: model.children.length }
     },
     stats: () => ({ selected: selected.id, yaw, pitch, drawCount, triangles: renderer.info.render.triangles }),
-    capture
+    capture,
+    captureEffect: (time:number)=>{effectTimeOverride=time;render();const image=capture("model");effectTimeOverride=null;return image}
   }
 })
 select(new URLSearchParams(location.search).get("asset") ?? selected.id)
+let effectFrame=0
+const animateEffect=()=>{if(selected.smokeEffect||selected.fountains?.length)render();effectFrame=requestAnimationFrame(animateEffect)}
+effectFrame=requestAnimationFrame(animateEffect)
 if (import.meta.hot)
   import.meta.hot.dispose(() => {
+    cancelAnimationFrame(effectFrame)
     resize.disconnect()
     models.forEach((model) => model.dispose())
     renderer.dispose()

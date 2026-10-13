@@ -134,67 +134,33 @@ export function makeTree(
   return d.asset
 }
 
-export function makeRock(ore: boolean, full: boolean) {
-  const x = ore ? 5 : 0,
-    y = ore ? 3 : 0,
-    h = hash(x, y),
-    h2 = hash(x * 7 + 3, y * 5 + 11),
-    h3 = hash(y * 17 + 5, x * 3 + 29)
-  const colors = ore ? { top: 0xe8ebf0, left: 0xd5dae3, right: 0xbcc3d0 } : { top: 0xeeefe9, left: 0xdfe1da, right: 0xcbcfc7 }
-  const d = new Drawing(
-    `${ore ? "ore" : "stone"}-${full ? "full" : "quarried"}`,
-    `${ore ? "Ore" : "Stone"} · ${full ? "full" : "quarried"}`,
-    "Faceted boulders, pebbles and mineral flecks, in both resource states."
-  )
-  d.asset.category = "land"
-  d.asset.reference = { type: "rock", x, y, ore, amount: full ? 40 : 10 }
-  d.asset.footprint = 1
-  const s = (full ? 5 : 4) * U * (0.85 + h2 * 0.3),
-    tall = Math.round((full ? 10 : 7) * (0.8 + h3 * 0.4)),
-    u = (h - 0.5) * 4 * U,
-    v = (h3 - 0.5) * 3 * U
-  const boulder = (u: number, v: number, s: number, H: number, k: number, j: number) => {
-    const base = square(u, v, s),
-      top: Array<Vertex> = [
-        [u - s * j, v - s * j, H],
-        [u + s * k, v - s * j, H],
-        [u + s, v + s * k, H],
-        [u - s * j, v + s * k, H]
-      ]
-    for (let i = 0; i < 4; i++) d.face([base[i]!, base[(i + 1) % 4]!, top[(i + 1) % 4]!, top[i]!], i === 1 ? colors.right : colors.left)
-    d.face(top, colors.top)
-    d.face([...base].reverse(), colors.left, 0)
+/** Layered angular rock, shared by natural deposits and the quarry face. */
+export function rockOutcrop(d: Drawing, u: number, v: number, radius: number, height: number, ore: boolean, variant = 0) {
+  const start=d.asset.faces.length,n=7, turn=variant*0.29
+  const colors=ore?{top:0xe0e5ed,left:0xc6ceda,right:0xa9b5c7}:{top:0xeeefe8,left:0xdcded4,right:0xc1c7b9}
+  const ring=(scale:number,z:number,layer:number)=>Array.from({length:n},(_,i):Vertex=>{
+    const t=i*Math.PI*2/n+turn,rough=0.66+hash(i+variant*7,variant+3)*0.34
+    const shift=layer===3?-radius*0.17:0
+    return [u+Math.cos(t)*radius*scale*rough+shift,v+Math.sin(t)*radius*scale*rough,z===0?0:z*(0.7+hash(i+3,variant+2)*0.3)]
+  })
+  const rings=[ring(1,0,0),ring(0.95,height*0.32,1),ring(0.78,height*0.65,2),ring(0.51,height,3)]
+  for(let j=0;j<3;j++)for(let i=0;i<n;i++){
+    const a=rings[j]![i]!,b=rings[j]![(i+1)%n]!,c=rings[j+1]![(i+1)%n]!,e=rings[j+1]![i]!
+    d.face([a,b,c,e],i<4?colors.right:colors.left,0)
   }
-  if (h2 > 0.35) boulder(u - s * 0.9, v - s * 1.1, s * 0.55, Math.round(tall * 0.6), 0.3 + h * 0.3, 0.5)
-  boulder(u, v, s, tall, 0.3 + h2 * 0.3, 0.5 + h3 * 0.2)
-  if (full && h3 > 0.5) boulder(u + s * 0.9, v + s * 1.2, s * 0.4, Math.round(tall * 0.45), 0.4, 0.6)
-  for (let i = 0; i < 3; i++)
-    d.ellipsoid(u + (hash(x + i, y * 3) - 0.5) * 14 * U, v + s + (hash(y + i, x * 5) * 3 + 1) * U, 0.4, 0.02, 0.02, 0.4, 0xaab1a6, 0)
-  if (ore) {
-    for (const [du, dv, z] of [
-      [-0.3, 1, 3],
-      [0.2, 1, 6],
-      [1, 0.1, 4],
-      [1, -0.5, 7]
-    ]) {
-      const U0 = u + du! * s,
-        V0 = v + dv! * s,
-        H = z! * (tall / 10),
-        w = 1 / 64
-      d.face(
-        [
-          [U0 - w, V0 + 0.003, H - 1],
-          [U0 + w, V0 + 0.003, H - 1],
-          [U0 + w, V0 + 0.003, H + 1],
-          [U0 - w, V0 + 0.003, H + 1]
-        ],
-        0x4a5368,
-        0
-      )
-    }
-    const base = square(u - s * 0.2, v + s * 0.1, 0.035, tall)
-    for (let i = 0; i < 4; i++) d.face([base[i]!, base[(i + 1) % 4]!, [u - s * 0.2, v + s * 0.1, tall + 4]], 0x8fa3c8, 1)
-  }
+  const summit:Vertex=[u-radius*0.19,v+radius*0.09,height*1.06]
+  for(let i=0;i<n;i++)d.face([rings[3]![i]!,rings[3]![(i+1)%n]!,summit],i%3===0?colors.left:colors.top,0)
+  d.face([...rings[0]!].reverse(),colors.left,0)
+  d.volume(start,0.8)
+}
+
+export function makeRock(ore: boolean, full: boolean, variant = 0) {
+  const d=new Drawing(`${ore?"ore":"stone"}-${full?"full":"quarried"}`,`${ore?"Ore":"Stone"} · ${full?"full":"quarried"}`,"A clustered deposit with clean shaded facets and seeded silhouettes. Stone and ore use distinct mineral palettes.")
+  d.asset.category="land";d.asset.reference={type:"rock",x:ore?5:0,y:ore?3:0,ore,amount:full?40:10};d.asset.footprint=1
+  rockOutcrop(d,-2.9*U,-2.2*U,2.8*U,full?10:4,ore,variant+2)
+  rockOutcrop(d,0.3*U,-0.1*U,(full?4.4:4)*U,full?12+(variant%3)*1.5:6,ore,variant)
+  rockOutcrop(d,3.7*U,3.2*U,2.8*U,full?9:3,ore,variant+4)
+  for(const [u,v]of [[-4,4],[-2,5.8],[5,-3.5]] as const)rockOutcrop(d,u*U,v*U,0.7*U,1.8,ore,variant+u)
   return d.asset
 }
 

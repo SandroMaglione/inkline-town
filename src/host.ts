@@ -5,7 +5,7 @@
  */
 import { Application, Graphics } from "pixi.js"
 
-import { drawBuilding, drawHouse, homeVariant, plate, plateHalf } from "./art.ts"
+import { drawBuilding, drawHouse, drawParkPiece, homeVariant, plate, plateHalf } from "./art.ts"
 import {
   categoryColor,
   categoryOrder,
@@ -13,8 +13,16 @@ import {
   defaultCharter,
   goodIds,
   goods,
+  groundIds,
+  grounds,
   home,
   kindOrder,
+  park as parkRules,
+  propIds,
+  props,
+  PAVE_COST,
+  tierHome,
+  winters,
   kinds,
   landIds,
   lands,
@@ -29,14 +37,18 @@ import {
   type Category,
   type CharterValue,
   type GoodId,
+  type GroundId,
   type Kind,
-  type KindId
+  type KindId,
+  type ParkPiece,
+  type PropId,
+  type Tier
 } from "./content.ts"
 import { GRID } from "./iso.ts"
 import { goodIcon, icon, iconEl, type IconName } from "./icons.ts"
 import { generate } from "./mapgen.ts"
 import { askOf, priceOf } from "./sim/index.ts"
-import type { Stats, Tool, TradeMode, UiValue } from "./ui.ts"
+import type { Stats, Tool, TradeMode, UiValue, View } from "./ui.ts"
 import { emptyPreview } from "./ui.ts"
 import { GameScene } from "./render3d/scene.ts"
 import { MapInput } from "./render3d/input.ts"
@@ -76,7 +88,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const stock = el("div", "card stock")
   const groups: ReadonlyArray<ReadonlyArray<GoodId>> = [
     ["wood", "planks", "stone", "tools"],
-    ["fish", "bread"],
+    ["fish", "smoked", "bread"],
     ["wool", "cloth"]
   ]
   const goodCells = new Map<GoodId, HTMLElement>()
@@ -104,7 +116,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   }
   request.append(requestText, send)
   const alarm = el("div", "card alarm")
-  hud.append(bar, stock, request, alarm)
+  // The town ticker: what needs looking at now, and the latest news.
+  const ticker = el("div", "card ticker")
+  hud.append(bar, stock, request, alarm, ticker)
   const people = el("div", "hud right")
   const folk = el("div", "card bar")
   const approval = el("div", "cell")
@@ -125,12 +139,17 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const reckoning = el("div", "dialog")
   const result = el("button", "result", "")
   result.onclick = () => showReckoning(true)
-  document.body.append(hud, people, tooltip, toastBox, toolbar, system, panel, result, dialog, confirmBox, reckoning)
+  // Map views, and the legend of the one shown.
+  const views = el("div", "views")
+  const legend = el("div", "card legend")
+  document.body.append(hud, people, tooltip, toastBox, toolbar, system, panel, result, dialog, confirmBox, reckoning, views, legend)
 
   let toastTimer = 0
   const ui: UiValue = {
     tool: "select",
     placing: null,
+    ground: "lawn",
+    prop: "lamp",
     menu: null,
     pointer: null,
     dragFrom: null,
@@ -145,6 +164,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     stats: null,
     speed: 1,
     founding: true,
+    view: "none",
+    overlay: { key: "", cells: [] },
+    legend: null,
     toast: (message) => {
       toastBox.textContent = message
       toastBox.classList.add("show")
@@ -168,6 +190,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       tip: "Click a building or home to see what it does · drag to pan · wheel to zoom"
     },
     { tool: "road", label: "road", key: "R", icon: "road", tip: `Drag to lay a road · ${ROAD_COST} coins a cell` },
+    {
+      tool: "pave",
+      label: "pave",
+      key: "P",
+      icon: "pave",
+      tip: `Drag along a road to pave it: nicer to live beside · ${PAVE_COST.coins} coins and ${PAVE_COST.stone} stone a cell`
+    },
     { tool: "home", label: "homes", key: "H", icon: "homes", tip: `Drag to lay a row of homes along a road · ${costText(home.cost)} each` },
     { tool: "build", label: "build", key: "B", icon: "build", tip: "Choose a building, then click to place it · Esc to stop" },
     { tool: "bulldoze", label: "bulldoze", key: "X", icon: "bulldoze", tip: "Click a building, home, road, tree, or field to remove it" }
@@ -209,6 +238,29 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     for (const s of speeds) s.button.classList.toggle("on", s.speed === speed)
   }
   setSpeed(1)
+
+  // ── Map views ──
+  const viewButtons: ReadonlyArray<{ readonly view: Exclude<View, "none">; readonly label: string; readonly key: string; readonly icon: IconName }> = [
+    { view: "appeal", label: "desirability", key: "D", icon: "appeal" },
+    { view: "workers", label: "workers", key: "W", icon: "workers" },
+    { view: "fire", label: "fire", key: "F", icon: "fire" },
+    { view: "health", label: "health", key: "A", icon: "health" },
+    { view: "order", label: "order", key: "O", icon: "order" },
+    { view: "condition", label: "condition", key: "C", icon: "condition" }
+  ]
+  views.append(iconEl("view", 16))
+  const viewEls = viewButtons.map((v) => {
+    const button = el("button", "")
+    button.title = `Show ${v.label} over the map (${v.key}); again to hide it`
+    button.append(iconEl(v.icon, 15), document.createTextNode(v.label), el("kbd", "", v.key))
+    button.onclick = () => setView(ui.view === v.view ? "none" : v.view)
+    views.append(button)
+    return { ...v, button }
+  })
+  const setView = (view: View) => {
+    ui.view = view
+    for (const v of viewEls) v.button.classList.toggle("on", v.view === view)
+  }
   // New town, save, and load, out of the way in the bottom right. Founding or
   // loading replaces the town, so each asks first.
   const action = (name: IconName, label: string, tip: string, run: () => void) => {
@@ -267,7 +319,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
 
   const refreshTools = () => {
     for (const { tool, button } of buttons) {
-      const on = tool.tool === "build" ? ui.menu === "build" || ui.tool === "place" : tool.tool === ui.tool
+      const on = tool.tool === "build" ? ui.menu === "build" || ui.tool === "place" || ui.tool === "ground" || ui.tool === "prop" : tool.tool === ui.tool
       button.classList.toggle("on", on)
     }
     townButton.classList.toggle("on", ui.menu === "town")
@@ -289,6 +341,18 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     ui.menu = null
     choose("place")
     ui.toast(`Click to place a ${kinds[kind].title.toLowerCase()} · Esc to stop`)
+  }
+  const layGround = (ground: GroundId) => {
+    ui.ground = ground
+    ui.menu = null
+    choose("ground")
+    ui.toast(`Drag a rectangle to lay ${grounds[ground].title.toLowerCase()} · Esc to stop`)
+  }
+  const furnish = (prop: PropId) => {
+    ui.prop = prop
+    ui.menu = null
+    choose("prop")
+    ui.toast(`Click a cell of park to set a ${props[prop].title.toLowerCase()} · Esc to stop`)
   }
   choose("select")
 
@@ -313,6 +377,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const key = event.key.toLowerCase()
     if (key === "s") choose("select")
     if (key === "r") choose("road")
+    if (key === "p") choose("pave")
+    const viewKey = viewButtons.find((v) => v.key.toLowerCase() === key)
+    if (viewKey) setView(ui.view === viewKey.view ? "none" : viewKey.view)
     if (key === "h") choose("home")
     if (key === "x") choose("bulldoze")
     if (key === "b") toggleMenu("build")
@@ -353,7 +420,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   // ── Pictures of buildings, for the build menu and the panel ──
   const pictures = new Map<string, Promise<string>>()
   /** A building (or a home of a tier) drawn as the town draws it, as an image. */
-  const picture = (what: KindId | 1 | 2): HTMLImageElement => {
+  const picture = (what: KindId | Tier | `park:${GroundId | PropId}`): HTMLImageElement => {
     const img = document.createElement("img")
     img.className = "thumb"
     img.alt = ""
@@ -361,12 +428,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     let url = pictures.get(id)
     if (!url) {
       const g = new Graphics()
-      if (what === 1 || what === 2) {
+      if (typeof what === "string" && what.startsWith("park:")) drawParkPiece(g, what.slice(5) as GroundId | PropId)
+      else if (what === 1 || what === 2 || what === 3) {
         plate(g, plateHalf(1))
         drawHouse(g, what, 1, { right: true, left: false }, homeVariant(0.1))
       } else {
-        plate(g, plateHalf(kinds[what].size))
-        drawBuilding(g, kinds[what], 1, 0, 0.6, { right: true, left: true })
+        const kind = kinds[what as KindId]
+        plate(g, plateHalf(kind.size))
+        drawBuilding(g, kind, 1, 0, 0.6, { right: true, left: true })
       }
       url = app.renderer.extract.base64({ target: g, resolution: 2 })
       void url.finally(() => g.destroy())
@@ -413,7 +482,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     return head
   }
 
-  const lockText = (kind: Kind): string | null => {
+  const lockText = (kind: Pick<Kind, "unlock"> | ParkPiece): string | null => {
     const s = ui.stats
     if (!s) return null
     const residents = s.settlers + s.citizens
@@ -470,10 +539,10 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         const option = el("button", "option")
         const cost = costChips(kind.cost)
         const terms = el("span", "chips")
-        terms.innerHTML = `<span class="chip dim" title="workers">${icon("workers", 14)}${kind.workers}</span><span class="chip dim" title="upkeep, coins a minute">${icon("upkeep", 14)}${kind.upkeep}/min</span>`
+        terms.innerHTML = `${kind.workers > 0 ? `<span class="chip dim" title="workers: ${kind.crew}">${icon(kind.crew === "citizens" ? "citizens" : "settlers", 14)}${kind.workers}</span>` : ""}${kind.appeal ? `<span class="chip dim" title="desirability around it">${icon("appeal", 14)}${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value}</span>` : ""}<span class="chip dim" title="upkeep, coins a minute">${icon("upkeep", 14)}${kind.upkeep}/min</span>`
         const blurb = el("span", "blurb", kind.blurb)
         option.append(picture(id), el("span", "name", kind.title.toLowerCase()), cost.box, blurb)
-        option.title = `${kind.title}: ${kind.blurb} · ${kind.workers} workers · ${kind.upkeep} coins a minute`
+        option.title = `${kind.title}: ${kind.blurb}${kind.workers > 0 ? ` · ${kind.workers} ${kind.crew === "citizens" ? "citizen" : "settler"} workers` : ""}${kind.appeal ? ` · desirability ${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value} out to ${kind.appeal.reach} cells` : ""} · ${kind.upkeep} coins a minute`
         cost.box.append(terms)
         option.onclick = () => place(id)
         live.push(() => {
@@ -487,6 +556,40 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       }
       panel.append(box)
     }
+    // Parks are laid out piece by piece: ground first, then what stands on it.
+    const parks = section(
+      "parks",
+      "decor",
+      `Lay ground, then set furnishings on it. Ground that touches is one park: the more it holds the nicer the streets around it (citizens need 5, townhouses 15). One furnishing counts for every ${parkRules.cellsPerProp} cells.`
+    )
+    parks.style.borderTop = "3px solid #4f9a6a"
+    const pieces: ReadonlyArray<{ readonly id: GroundId | PropId; readonly piece: ParkPiece; readonly pick: () => void; readonly ground: boolean }> = [
+      ...groundIds.map((id) => ({ id, piece: grounds[id], pick: () => layGround(id), ground: true })),
+      ...propIds.map((id) => ({ id, piece: props[id], pick: () => furnish(id), ground: false }))
+    ]
+    for (const { id, piece, pick, ground } of pieces) {
+      if (ground && id === "lawn") parks.append(el("p", "empty", "ground · drag a rectangle"))
+      if (!ground && id === "lamp") parks.append(el("p", "empty", "furnishings · click a cell of park"))
+      const option = el("button", "option")
+      const cost = costChips(piece.cost)
+      const terms = el("span", "chips")
+      terms.innerHTML = `<span class="chip dim" title="beauty it adds to its park">${icon("appeal", 14)}+${piece.beauty}</span><span class="chip dim" title="upkeep, coins a minute">${icon("upkeep", 14)}${piece.upkeep}/min</span>`
+      const blurb = el("span", "blurb", piece.blurb)
+      option.append(picture(`park:${id}`), el("span", "name", piece.title.toLowerCase()), cost.box, blurb)
+      option.title = `${piece.title}: ${piece.blurb} · beauty +${piece.beauty}${ground ? " a cell" : ""} · ${piece.upkeep} coins a minute`
+      cost.box.append(terms)
+      option.onclick = pick
+      live.push(() => {
+        const lock = lockText(piece)
+        const short = cost.refresh()
+        option.disabled = lock !== null
+        option.classList.toggle("short", lock === null && short)
+        option.classList.toggle("on", (ground ? ui.tool === "ground" && ui.ground === id : ui.tool === "prop" && ui.prop === id))
+        blurb.textContent = lock ?? piece.blurb
+      })
+      parks.append(option)
+    }
+    panel.append(parks)
   }
 
   const row = (box: HTMLElement, label: string, glyph?: IconName | GoodId) => {
@@ -585,6 +688,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const town = section("people", "people")
     const settlers = row(town, "settlers", "settlers")
     const citizens = row(town, "citizens", "citizens")
+    const burghers = row(town, "of them, burghers", "burghers")
     const homes = row(town, "homes", "homes")
     const work = row(town, "jobs filled", "jobs")
     const peopleLine = el("div", "spark")
@@ -594,7 +698,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const needs = section(
       "homes supplied",
       "homes",
-      "Settlers need food (fish or bread) from a market; citizens need bread, cloth, and faith."
+      "Settlers need food (fish, smoked fish, or bread) from a market; citizens and burghers need bread, cloth, and faith. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
     )
     const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith", IconName>> = {
       food: "fish",
@@ -616,6 +720,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       return { n, fill, value }
     })
     const larderLine = row(needs, "food in store", "flour")
+    const eatenLine = row(needs, "eaten · rotted last minute", "fish")
+    const troubleLine = row(needs, "sick homes · on fire", "health")
     panel.append(needs)
 
     const crown = section(
@@ -731,6 +837,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       money(net, s.net, " coins")
       settlers.textContent = String(s.settlers)
       citizens.textContent = String(s.citizens)
+      burghers.textContent = String(s.burghers)
       homes.textContent = String(s.homes)
       work.textContent = `${s.employed} of ${s.jobs}`
       for (const b of bars) {
@@ -740,6 +847,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         b.value.textContent = `${s.needs[b.n]}/${s.homes}`
       }
       larderLine.textContent = `${s.larder}`
+      eatenLine.textContent = `${s.eaten} · ${s.rotted}`
+      troubleLine.textContent = `${s.sick} · ${s.burning}`
       crownLine.textContent = `${s.crown.met} · ${s.crown.missed}`
       crownNext.innerHTML = s.crown.open
         ? `Wants <b>${s.crown.amount} ${goods[s.crown.good].title}</b> · ${clockText(s.crown.left)} left · +${s.crown.reward} coins`
@@ -782,6 +891,15 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   /** An icon for a line of a building's or home's description, by what it is about. */
   const lineIcon = (text: string): IconName | GoodId => {
     if (text.startsWith("workers")) return "workers"
+    if (text.startsWith("settlers within")) return "settlers"
+    if (text.startsWith("citizens within")) return "citizens"
+    if (text.startsWith("desirability")) return "appeal"
+    if (text.startsWith("fire")) return "fire"
+    if (text.startsWith("condition")) return "condition"
+    if (text.startsWith("work:")) return "jobs"
+    if (text.startsWith("tools") || text.startsWith("no tools")) return "tools"
+    if (text.startsWith("on fire")) return "fire"
+    if (text.startsWith("sick")) return "health"
     if (text.startsWith("upkeep")) return "upkeep"
     if (text.startsWith("pays")) return "coins"
     if (text.startsWith("needs")) return "homes"
@@ -802,21 +920,27 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     if (p.type === "build") return buildMenu()
     if (p.type === "town") return townPanel()
 
-    const title = p.type === "building" ? kinds[p.kind].title.toLowerCase() : `${home.tiers[p.tier].title}' home`
+    const title = p.type === "building" ? kinds[p.kind].title.toLowerCase() : p.type === "house" ? tierHome[p.tier] : p.type === "park" ? "park" : "ruin"
     const status = el("span", "pill")
     const about = el(
       "p",
       "sub",
       p.type === "building"
         ? kinds[p.kind].blurb
-        : p.tier === 1
-          ? "settlers: fish or bread from a market keeps them"
-          : "citizens: they need bread, cloth, and faith"
+        : p.type === "ruin"
+          ? "bulldoze it to clear the plot"
+          : p.type === "park"
+            ? "every cell of ground that touches this one: lay more, or set furnishings on it, to make the streets around it nicer"
+          : p.tier === 1
+            ? "settlers: fish or bread from a market keeps them; they do the rough work"
+            : p.tier === 2
+              ? "citizens: they need bread, cloth, and faith, and a street with desirability 5; they do the skilled work"
+              : "burghers: a citizens' home on a fine street (desirability 15) that every service calls on"
     )
     const below = el("div", "")
     below.append(status, about)
-    panel.append(header(title, picture(p.type === "building" ? p.kind : p.tier), below))
-    const box = section(p.type === "building" ? "at work" : "household", p.type === "building" ? "jobs" : "homes")
+    panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier), below))
+    const box = section(p.type === "building" ? "at work" : p.type === "ruin" ? "what is left" : p.type === "park" ? "what makes it" : "household", p.type === "building" ? "jobs" : p.type === "park" ? "appeal" : "homes")
     box.classList.add("lines")
     const rows: Array<HTMLElement> = []
     panel.append(box)
@@ -826,9 +950,15 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       if (now.type === "building") {
         status.textContent = now.problem ?? now.status
         status.className = `pill ${now.problem !== null ? "problem" : now.status === "working" ? "working" : ""}`
-      } else {
+      } else if (now.type === "house") {
         status.textContent = `${home.tiers[now.tier].residents} at most`
         status.className = "pill working"
+      } else if (now.type === "park") {
+        status.textContent = `${now.value > 0 ? "+" : ""}${now.value} out to ${now.reach} cells`
+        status.className = "pill working"
+      } else {
+        status.textContent = now.cause
+        status.className = "pill problem"
       }
       while (rows.length < now.lines.length) {
         const line = el("div", "row")
@@ -1148,6 +1278,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     input.reset()
   }
 
+  /** The last chronicle line announced. */
+  let lastNews = ""
   /** Copies the town's numbers and preview into the page, once a frame. */
   const syncPage = () => {
     syncPanel()
@@ -1157,14 +1289,18 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       coins.title = "Coins in the treasury, and what it gains (or loses) a minute"
       coins.classList.toggle("debt", s.coins < 0)
       const left = Math.max(0, s.charter.term * 60 - Math.floor(s.minute * 60))
-      clock.innerHTML = `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}</b><small class="${s.season.winter ? "winter" : ""}">year ${s.season.year} · ${s.season.winter ? `spring in ${clockText(s.season.left)}` : `winter in ${clockText(s.season.left)}`}</small></span>`
-      clock.title = s.season.winter
-        ? "Winter: fields lie still, fishing is slow, and homes eat faster"
-        : `Time left in the term · winter comes in ${clockText(s.season.left)}`
+      const severity = (w: typeof s.season.coming) => (w === null ? "" : ` (${winters[w].title})`)
+      const until = s.season.winter
+        ? `${winters[s.season.severity ?? "normal"].title} winter · spring in ${clockText(s.season.left)}`
+        : s.season.coming === null
+          ? "no more winters this term"
+          : `winter in ${clockText(s.season.left)}${severity(s.season.coming)}`
+      clock.innerHTML = `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}</b><small class="${s.season.winter ? "winter" : s.season.coming === "hard" ? "down" : ""}">year ${s.season.year} · ${until}</small></span>`
+      clock.title = `${s.season.winter ? "Winter: fields lie still, fishing is slow, and homes eat faster" : "Time left in the term"}\nThe almanac: the coming winter is ${s.season.coming === null ? "beyond the term" : winters[s.season.coming].title}, the one after ${s.season.after === null ? "beyond the term" : winters[s.season.after].title}.\nMild: fishing at 75%. Normal: 50%. Hard: half as long again, fishing at 25%, and homes heating are a fire risk.`
       const trend = s.mood.target > s.mood.approval ? "↑" : s.mood.target < s.mood.approval ? "↓" : ""
       approval.innerHTML = `${icon("approval", 18)}<span class="stack"><b class="${s.mood.approval < 0 ? "down" : ""}">${signed(s.mood.approval)} <span class="${s.mood.target >= s.mood.approval ? "up" : "down"}">${trend}</span></b><small>approval</small></span>`
       settlerCell.innerHTML = `${icon("settlers", 18)}<span class="stack"><b>${s.settlers}</b><small>settlers</small></span>`
-      citizenCell.innerHTML = `${icon("citizens", 18)}<span class="stack"><b>${s.citizens}</b><small>citizens</small></span>`
+      citizenCell.innerHTML = `${icon("citizens", 18)}<span class="stack"><b>${s.citizens}</b><small>citizens${s.burghers > 0 ? ` · ${s.burghers} burghers` : ""}</small></span>`
       jobs.innerHTML = `${icon("jobs", 18)}<span class="stack"><b>${s.employed}<span class="of">/${s.jobs}</span></b><small>jobs</small></span>`
       for (const [g, count] of goodCells) {
         count.textContent = String(s.stock[g])
@@ -1200,6 +1336,35 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       }
       alarm.classList.toggle("show", warnings.length > 0)
       alarm.classList.toggle("good", warnings.length === 1 && s.fate.complete !== null)
+      // The ticker: alerts now, and the news of the last minute and a half.
+      const minute = Math.round(s.minute * 3600)
+      const news = s.chronicle.filter((l) => l.alarm && minute - l.tick < 90 * 60).slice(-3).reverse()
+      const tickerHtml = [
+        ...s.alerts.map((a) => `<div class="cell">${icon("warning", 14)}<span>${a}</span></div>`),
+        ...news.map((l) => `<div class="cell news">${icon("chronicle", 14)}<span>${l.text}</span></div>`)
+      ].join("")
+      if (ticker.dataset.html !== tickerHtml) {
+        ticker.dataset.html = tickerHtml
+        ticker.innerHTML = tickerHtml
+      }
+      ticker.classList.toggle("show", tickerHtml !== "" && s.fate.state === "playing")
+      // News as it happens: a toast for each new alarm line.
+      const latest = s.chronicle.at(-1)
+      const seen = `${s.charter.seed}|${latest?.tick ?? -1}|${s.chronicle.length}`
+      if (seen !== lastNews) {
+        if (lastNews !== "" && latest?.alarm && minute - latest.tick < 120) ui.toast(latest.text)
+        lastNews = seen
+      }
+      // The map view's legend.
+      const l = ui.legend
+      const legendHtml = l
+        ? `<b>${l.title}</b>${l.keys.map((k) => `<span class="key"><i style="background:${hex(k.color)}"></i>${k.label}</span>`).join("")}<small>${l.note}</small>`
+        : ""
+      if (legend.dataset.html !== legendHtml) {
+        legend.dataset.html = legendHtml
+        legend.innerHTML = legendHtml
+      }
+      legend.classList.toggle("show", l !== null)
       syncReckoning(s)
     }
     input.sync()

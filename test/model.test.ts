@@ -15,7 +15,7 @@ import { test } from "node:test"
 import { Arbitrary, Data, Effect, Schema } from "effect"
 
 import {
-  crown, goodIds, home, kindOrder, kinds, landIds, market, RESERVES, TAX_STEPS, type CharterValue
+  CONDITION_MAX, crown, goodIds, groundIds, home, kindOrder, kinds, landIds, market, propIds, RESERVES, RISK_MAX, TAX_STEPS, type CharterValue
 } from "../src/content.ts"
 import { canPlace, cellsOf, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/grid.ts"
 import { GRID, inside, type Point } from "../src/iso.ts"
@@ -47,6 +47,11 @@ const Command = Schema.Union([
   Schema.TaggedStruct("Season", { minutes: between(1, 6) }),
   // A road out from one of the town's road cells.
   Schema.TaggedStruct("Road", { pick: Pick, toward: Direction, length: between(1, 10) }),
+  // Paving a stretch of road (or whatever lies along it).
+  Schema.TaggedStruct("Pave", { pick: Pick, toward: Direction, length: between(1, 8) }),
+  // A patch of park ground from a free cell, and a furnishing anywhere at all (on park or not).
+  Schema.TaggedStruct("Park", { pick: Pick, ground: Schema.Literals(groundIds), width: between(1, 4), depth: between(1, 4) }),
+  Schema.TaggedStruct("Furnish", { prop: Schema.Literals(propIds), x: Cell, y: Cell }),
   // A row of homes from a free cell beside a road.
   Schema.TaggedStruct("Homes", { pick: Pick, toward: Direction, length: between(1, 6) }),
   // A building on a spot with room and a road at one of its doors.
@@ -54,7 +59,7 @@ const Command = Schema.Union([
   // Anywhere at all, valid or not.
   Schema.TaggedStruct("BuildAnywhere", { kind: Schema.Literals(kindOrder), x: Cell, y: Cell }),
   // One of the buildings, homes, or roads that stand.
-  Schema.TaggedStruct("Remove", { pick: Pick, what: Schema.Literals(["building", "house", "road"]) }),
+  Schema.TaggedStruct("Remove", { pick: Pick, what: Schema.Literals(["building", "house", "road", "park"]) }),
   Schema.TaggedStruct("Tax", { tier: Schema.Literals(["settlers", "citizens"]), rate: Schema.Literals(TAX_STEPS) }),
   Schema.TaggedStruct("Trade", { good: Schema.Literals(goodIds), mode: Schema.Literals(["sell", "buy", "none"]) }),
   Schema.TaggedStruct("Reserve", { amount: Schema.Literals(RESERVES) }),
@@ -74,7 +79,7 @@ type Command = typeof Command.Type
  * policy levers now and then; running the term out rarely.
  */
 const weights: Readonly<Record<Command["_tag"], number>> = {
-  Build: 20, Homes: 15, Road: 12, Season: 10, Wait: 8, Trade: 5, Tax: 4, Remove: 4, Pause: 4, Deliver: 4, SaveAndLoad: 3,
+  Build: 20, Homes: 15, Road: 12, Pave: 3, Park: 4, Furnish: 4, Season: 10, Wait: 8, Trade: 5, Tax: 4, Remove: 4, Pause: 4, Deliver: 4, SaveAndLoad: 3,
   Windfall: 3, Reserve: 2, BuildAnywhere: 2, Govern: 2, ToTheEnd: 1
 }
 const table = Object.entries(weights).flatMap(([tag, n]) => Array.from({ length: n }, () => tag as Command["_tag"]))
@@ -101,14 +106,16 @@ const line = (from: Point, length: number, toward: keyof typeof steps) =>
 /** The town as the commands see it: what stands where, and the places each could go. */
 const look = (s: Snapshot) => {
   const builder = new GridBuilder(s.resources["Town/Land"].mask)
-  const standing: Array<{ id: number; what: "building" | "house" | "road"; tile: Point & { size: number } }> = []
+  const standing: Array<{ id: number; what: "building" | "house" | "road" | "park"; tile: Point & { size: number } }> = []
   for (const e of s.entities) {
     const tile = e.components["Town/Tile"]
     if (!tile) continue
     const c = e.components
-    const use: Use = c["Town/Road"] ? "road" : c["Town/House"] ? "house" : c["Town/Tree"] ? "tree" : c["Town/Rock"] ? "rock" : c["Town/Water"] ? "water" : c["Town/Field"] ? "field" : "building"
+    const use: Use = c["Town/Road"] ? "road" : c["Town/Park"] ? "park" : c["Town/House"] ? "house" : c["Town/Tree"] ? "tree" : c["Town/Rock"] ? "rock" : c["Town/Water"] ? "water" : c["Town/Field"] ? "field" : c["Town/Ruin"] ? "ruin" : "building"
     builder.claim(tile, e.id, use)
-    if (use === "building" || use === "house" || use === "road") standing.push({ id: e.id, what: use, tile })
+    if (use === "building" || use === "house" || use === "road" || use === "park") standing.push({ id: e.id, what: use, tile })
+    // A ruin is cleared like a building.
+    if (use === "ruin") standing.push({ id: e.id, what: "building", tile })
   }
   const grid = builder.value()
   const cells = (f: (x: number, y: number) => boolean) => {
@@ -147,6 +154,21 @@ const apply = (town: Headless, command: Command): string | null => {
       if (from) edit({ type: "roads", cells: line(from, command.length + 1, command.toward).slice(1) })
       break
     }
+    case "Pave": {
+      const from = pick(look(town.snapshot()).roads(), command.pick)
+      if (from) edit({ type: "pave", cells: line(from, command.length, command.toward) })
+      break
+    }
+    case "Park": {
+      const from = pick(look(town.snapshot()).free(), command.pick)
+      const cells: Array<Point> = []
+      if (from) for (let dy = 0; dy < command.depth; dy++) for (let dx = 0; dx < command.width; dx++) if (inside(from.x + dx, from.y + dy)) cells.push({ x: from.x + dx, y: from.y + dy })
+      if (from) edit({ type: "ground", ground: command.ground, cells })
+      break
+    }
+    case "Furnish":
+      edit({ type: "prop", prop: command.prop, cell: { x: command.x, y: command.y } })
+      break
     case "Homes": {
       const from = pick(look(town.snapshot()).free(), command.pick)
       if (from) edit({ type: "homes", cells: line(from, command.length, command.toward) })
@@ -275,7 +297,8 @@ const broken = (s: Snapshot, before: Memory | null, last: Command): Array<string
   for (const e of s.entities) {
     const h = e.components["Town/House"]
     if (!h) continue
-    if (h.residents < 0 || h.residents > home.tiers[h.tier as 1 | 2].residents) fail(`home ${e.id} has ${h.residents} residents at tier ${h.tier}`)
+    if (![1, 2, 3].includes(h.tier)) fail(`home ${e.id} is of tier ${h.tier}`)
+    if (h.residents < 0 || h.residents > home.tiers[h.tier as 1 | 2 | 3].residents) fail(`home ${e.id} has ${h.residents} residents at tier ${h.tier}`)
     residents += h.residents
     if (h.tier === 1) settlers += h.residents
     else citizens += h.residents
@@ -285,11 +308,30 @@ const broken = (s: Snapshot, before: Memory | null, last: Command): Array<string
     const staff = e.components["Town/Staff"]
     if (!staff) continue
     if (staff.assigned < 0 || staff.assigned > staff.needed) fail(`building ${e.id} has ${staff.assigned} of ${staff.needed} workers`)
+    if (staff.apprentices < 0 || staff.apprentices > staff.assigned) fail(`building ${e.id} has ${staff.apprentices} apprentices of ${staff.assigned} workers`)
+    // Citizens never do settlers' work: only a citizens' workplace takes apprentices.
+    const kind = e.components["Town/Building"]?.kind as keyof typeof kinds | undefined
+    if (kind && kinds[kind].crew === "settlers" && staff.apprentices > 0) fail(`${kind} ${e.id} has apprentices`)
     assigned += staff.assigned
   }
+  // Risks and wear stay within their bounds; ruins and parks neither burn nor wear.
+  for (const e of s.entities) {
+    const r = e.components["Town/Risk"]
+    if (r) for (const k of ["fire", "health", "order"] as const) if (r[k] < 0 || r[k] > RISK_MAX) fail(`entity ${e.id} has ${k} risk ${r[k]}`)
+    const c = e.components["Town/Condition"]
+    if (c && (c.value < 0 || c.value > CONDITION_MAX)) fail(`entity ${e.id} is in condition ${c.value}`)
+    if (e.components["Town/Sick"] && !e.components["Town/House"]) fail(`entity ${e.id} is sick but no home`)
+    if (e.components["Town/Ruin"] && (e.components["Town/House"] || e.components["Town/Building"])) fail(`ruin ${e.id} still stands`)
+    // A cell of park is only park: nothing else stands on it, and nothing burns or wears there.
+    if (e.components["Town/Park"] && (e.components["Town/Road"] || e.components["Town/House"] || e.components["Town/Building"] || e.components["Town/Risk"])) fail(`park ${e.id} is something else too`)
+  }
+  const cells = r["Town/Appeal"].cells as Array<number>
+  if (cells.length !== 0 && cells.length !== GRID * GRID) fail(`desirability for ${cells.length} cells`)
   if (assigned > residents) fail(`${assigned} at work but only ${residents} residents`)
   const census = r["Town/Census"]
   if (census.settlers !== settlers || census.citizens !== citizens) fail(`census says ${census.settlers}/${census.citizens}, homes ${settlers}/${citizens}`)
+  const burning = s.entities.filter((e) => e.components["Town/Burning"]).length
+  if (census.burning !== burning) fail(`census says ${census.burning} on fire, ${burning} are`)
 
   // Walkers belong to a building that still stands.
   for (const [target, sources] of s.relations["Town/WalkerOf"] ?? []) {

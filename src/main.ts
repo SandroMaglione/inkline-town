@@ -1,3 +1,4 @@
+import { resolveRules } from "./rules/config.ts"
 /**
  * A town simulation of line-drawn buildings, homes, roads, and land, on the
  * bevy-ts ECS with a 3D view. The simulation runs on a fixed step;
@@ -7,12 +8,12 @@ import { Result } from "@typeonce/bevy-ts"
 import { Effect } from "effect"
 import { FixedLoop } from "@typeonce/bevy-ts-browser"
 
-import type { BuildingView, FieldView, HouseView, RockView, TreeView, WalkerView } from "./render3d/views.ts"
+import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
 import { lands, sizes, STEP_SECONDS } from "./content.ts"
 import { createHost, type Persistence } from "./host.ts"
 import { present } from "./present.ts"
 import { browserStorage, describe, loadLatest, save, Storage, World } from "./save.ts"
-import { BuildingNodes, Clock, FieldNodes, Game, HouseNodes, RockNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
+import { BuildingNodes, Clock, FieldNodes, Game, Rules, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
 import { blankResources, simulate } from "./sim/index.ts"
 
 /** Minutes of game time between autosaves. */
@@ -29,15 +30,17 @@ const start = async () => {
     walkerNodes = stage.registry<WalkerView>(),
     treeNodes = stage.registry<TreeView>(),
     rockNodes = stage.registry<RockView>(),
-    fieldNodes = stage.registry<FieldView>()
+    fieldNodes = stage.registry<FieldView>(),
+    ruinNodes = stage.registry<RuinView>()
   const resetPresentation = () => {
-    for (const registry of [buildingNodes, houseNodes, walkerNodes, treeNodes, rockNodes, fieldNodes]) registry.clear()
+    for (const registry of [buildingNodes, houseNodes, walkerNodes, treeNodes, rockNodes, fieldNodes, ruinNodes]) registry.clear()
     stage.resetPresentation()
     resetPage()
   }
   const made = Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(Ui, ui),
+      Game.Runtime.service(Rules, resolveRules()),
       Game.Runtime.service(Clock, clock),
       Game.Runtime.service(StageService, stage),
       Game.Runtime.service(BuildingNodes, buildingNodes),
@@ -45,7 +48,8 @@ const start = async () => {
       Game.Runtime.service(WalkerNodes, walkerNodes),
       Game.Runtime.service(TreeNodes, treeNodes),
       Game.Runtime.service(RockNodes, rockNodes),
-      Game.Runtime.service(FieldNodes, fieldNodes)
+      Game.Runtime.service(FieldNodes, fieldNodes),
+      Game.Runtime.service(RuinNodes, ruinNodes)
     ),
     resources: blankResources()
   })
