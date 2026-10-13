@@ -251,6 +251,38 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   .dialog .sheet { padding: 16px; }
 }
 
+/* ── Sharing: the card, and the link once it is made ── */
+.dialog.share .sheet { width: 680px; }
+.dialog .card-preview { display: block; width: 100%; aspect-ratio: 1200 / 630; margin: 8px 0 12px; border: 1px solid #c9cec4; border-radius: 4px; background: #e2e9e6; }
+.dialog .frame { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; color: inherit; }
+.dialog .frame.primary .glyph { background: #f7f8f4; border-radius: 3px; padding: 1px; margin: -1px; }
+.dialog .frame:disabled { opacity: 0.6; cursor: progress; }
+.dialog .link-row { display: none; gap: 8px; margin-top: 12px; }
+.dialog .link-row.show { display: flex; }
+.dialog .link-row input { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: #3d4943; background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 2px; padding: 6px 10px; -webkit-user-select: text; user-select: text; }
+
+/* ── Visiting a shared town: the banner, and the tools put away ── */
+.visit {
+  position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: none; z-index: 4;
+  max-width: calc(100vw - 32px); box-sizing: border-box; font-size: 12px;
+}
+.visit.show { display: flex; }
+.visit .stack { display: flex; flex-direction: column; line-height: 1.25; }
+.visit .stack b { font-size: 14px; }
+.visit .stack small { color: #77817a; white-space: normal; }
+.visit .cell { white-space: normal; }
+.visit button { font: inherit; color: inherit; cursor: pointer; border: 1px solid #3d4943; border-radius: 2px; padding: 7px 12px; background: transparent; white-space: nowrap; }
+.visit button:hover { background: #e6e9e2; }
+.visit button.primary { background: #3d4943; color: #f7f8f4; }
+.visiting .toolbar, .visiting .system, .visiting .views { display: none; }
+@media (max-width: 600px) {
+  .visit { flex-direction: column; align-items: stretch; width: calc(100vw - 32px); }
+  .visit .cell + .cell { border-left: 0; border-top: 1px solid #e0e3db; }
+  .visit .cell:last-child button { flex: 1; }
+  .dialog .link-row { flex-wrap: wrap; }
+  .dialog .link-row input { flex-basis: 100%; }
+}
+
 .result {
   position: fixed; top: 12px; left: 50%; transform: translateX(-50%); display: none; font: inherit; font-size: 12px; padding: 7px 12px; z-index: 5;
   background: #3d4943; color: #f7f8f4; border: 0; border-radius: 4px; cursor: pointer; box-shadow: 0 2px 0 #c9cec4;

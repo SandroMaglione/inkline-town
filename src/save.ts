@@ -124,10 +124,9 @@ export const memoryStorage = (files = new Map<string, string>()): Storage["Servi
 
 // ── Saving and loading ────────────────────────────────────────────────────
 
-/** Writes the town to a slot. */
-export const save = (slot: Slot) =>
+/** The town as a save file, written nowhere: what a slot keeps, and what a shared town carries. */
+export const fileOf = (slot: Slot) =>
   Effect.gen(function* () {
-    const storage = yield* Storage
     const world = yield* World
     const file: SaveFile = {
       format: SAVE_FORMAT,
@@ -137,6 +136,14 @@ export const save = (slot: Slot) =>
       title: world.title(),
       world: world.snapshot()
     }
+    return file
+  })
+
+/** Writes the town to a slot. */
+export const save = (slot: Slot) =>
+  Effect.gen(function* () {
+    const storage = yield* Storage
+    const file = yield* fileOf(slot)
     yield* Effect.try({
       try: () => storage.set(keyOf(slot), JSON.stringify(file)),
       catch: (cause) => new StorageFailed({ slot, reason: cause instanceof Error ? cause.message : String(cause) })
@@ -186,3 +193,10 @@ export const loadLatest = Effect.gen(function* () {
     .sort((a, b) => b.savedAt - a.savedAt)[0]
   return yield* load(newest?.slot ?? "manual")
 })
+
+/**
+ * Loads a save file handed over as text (a shared town), checked and
+ * carried forward as a load from a slot is, without touching the slots.
+ */
+export const loadText = (text: string) =>
+  load("manual").pipe(Effect.provideService(Storage, memoryStorage(new Map([[keyOf("manual"), text]]))))
