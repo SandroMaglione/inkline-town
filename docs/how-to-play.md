@@ -55,8 +55,10 @@ New town and load ask before they replace the town you have.
     each home holds. Taxes above 125% also leave a *grudge* that builds
     for as long as they stay high and fades over ten minutes or so, so a
     term of squeezing cannot be undone by cutting taxes at the end.
-- **The levers**: taxes per tier; for each good, sell beyond the reserve,
-  buy up to it (at half again the price), or neither; the reserve itself;
+- **The levers**, each a slider: taxes per tier (50% to 200%); for each
+  good, sell beyond the reserve or buy up to it (at half again the price),
+  and how much each time the traders call, or neither (a new town trades
+  nothing until told to); the reserve itself;
   pausing a building (no workers, a quarter of its upkeep); answering the
   crown; and the speed of time (space pauses, 1, 2, 3 for 1×, 2×, 4×).
 - **The end**: the town is *complete* once it holds every goal for two

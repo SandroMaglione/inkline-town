@@ -1,4 +1,5 @@
 /** This is the only layer that imports the ECS runtime. Model inputs stay plain data. */
+import { goodIds } from "../../../src/content.ts"
 import { GRID } from "../../../src/iso.ts"
 import { ownerAt } from "../../../src/grid.ts"
 import { rolesOf, wearOf } from "../../../src/archetypes.ts"
@@ -46,7 +47,7 @@ export const fixture = (scenario: Scenario, rules: Rules): Headless => {
     s.resources["Town/Charter"] = { ...scenario.charter, founded: 1, winters: scenario.charter.winters ?? s.resources["Town/Charter"].winters }
     s.resources["Town/Treasury"] = { coins: scenario.coins }
     s.resources["Town/Mood"] = { ...s.resources["Town/Mood"], approval: scenario.approval }
-    s.resources["Town/Policy"] = { settlers: scenario.policy.settlers, citizens: scenario.policy.citizens, sells: scenario.trade?.sells ?? [], buys: scenario.trade?.buys ?? [], reserve: scenario.trade?.reserve ?? rules.trade.reserve }
+    s.resources["Town/Policy"] = { settlers: scenario.policy.settlers, citizens: scenario.policy.citizens, sells: scenario.trade?.sells ?? [], buys: scenario.trade?.buys ?? [], reserve: scenario.trade?.reserve ?? rules.trade.reserve, loads: Object.fromEntries(goodIds.map((g) => [g, scenario.trade?.loads?.[g] ?? rules.tradeLoad])) }
     if (scenario.trade?.prices) s.resources["Town/Market"] = { prices: scenario.trade.prices }
     s.resources["Town/Appeal"] = { cells: [] }
   })

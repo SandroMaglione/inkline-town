@@ -10,24 +10,31 @@
  */
 import { Clock, Context, Effect, Schema } from "effect"
 
+import { goodIds, TRADE_LOAD } from "./content.ts"
+
 export const SAVE_FORMAT = "inkline-town/save"
 /**
  * 2: the charter's towns. 3: neighbourhoods and their dangers (desirability, crews, risks, wear, ruins,
  * winters). 4: parks and patrols. 5: the grudge over taxes, and where each piece of news happened.
- * A version 4 save is carried forward (see `carry`); older ones cannot be loaded.
+ * 6: how much of each good may be traded at a collection.
+ * Version 4 and 5 saves are carried forward (see `carry`); older ones cannot be loaded.
  */
-export const SAVE_VERSION = 5
+export const SAVE_VERSION = 6
 
 /**
- * Fills in what a save from the version before lacks, so a town in progress
- * survives an update: the mood's grudge (none yet) and the news's places
- * (unknown). Anything else is left to the world's own validation.
+ * Fills in what a save from an earlier version lacks, so a town in progress
+ * survives an update: from 4, the mood's grudge (none yet) and the news's
+ * places (unknown); from 5, trade at full loads, as it was. Anything else is
+ * left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
-  if (version !== 4 || typeof world !== "object" || world === null) return null
+  if ((version !== 4 && version !== 5) || typeof world !== "object" || world === null) return null
   const w = world as { resources?: Record<string, unknown> }
   const r = w.resources
   if (!r || typeof r !== "object") return null
+  const policy = r["Town/Policy"]
+  if (policy && typeof policy === "object" && !("loads" in policy)) r["Town/Policy"] = { ...policy, loads: Object.fromEntries(goodIds.map((g) => [g, TRADE_LOAD])) }
+  if (version === 5) return w
   const mood = r["Town/Mood"]
   if (mood && typeof mood === "object" && !("grudge" in mood)) r["Town/Mood"] = { ...mood, grudge: 0, memory: 0 }
   const chronicle = r["Town/Chronicle"] as { lines?: Array<Record<string, unknown>> } | undefined

@@ -28,6 +28,8 @@ export interface Line {
 
 /** Something that needs looking at now, and where (when it is somewhere). */
 export interface Alert {
+  /** A next step to take, something going wrong, or something that costs the town now. */
+  readonly tone: "hint" | "warn" | "bad"
   readonly text: string
   readonly at: Point | null
   /** The footprint there, cells a side, for the outline. */
@@ -58,8 +60,8 @@ export type Edit =
   | { readonly type: "remove"; readonly cell: Point }
   /** Sets a tier's tax rate, in percent of the usual. */
   | { readonly type: "tax"; readonly tier: "settlers" | "citizens"; readonly rate: number }
-  /** Sells a good to traders beyond the reserve, buys it up to the reserve, or neither. */
-  | { readonly type: "trade"; readonly good: GoodId; readonly mode: TradeMode }
+  /** Sells a good to traders beyond the reserve, buys it up to the reserve, or neither; `amount`, up to how much a collection. */
+  | { readonly type: "trade"; readonly good: GoodId; readonly mode: TradeMode; readonly amount?: number }
   /** How much of each good the town keeps before selling, and buys up to. */
   | { readonly type: "reserve"; readonly amount: number }
   /** Pauses the building on a cell, or sets it back to work. */
@@ -174,6 +176,7 @@ export interface Stats {
     readonly sells: ReadonlyArray<GoodId>
     readonly buys: ReadonlyArray<GoodId>
     readonly reserve: number
+    readonly loads: Amounts
   }
   readonly stock: Amounts
   /** Each good's price with traders, in percent of the usual. */

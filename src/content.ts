@@ -36,9 +36,10 @@ export const goods: Readonly<Record<GoodId, { readonly title: string; readonly c
  * reserve it keeps, up to `TRADE_LOAD` of each good.
  */
 export const TRADE_LOAD = 12
-export const RESERVES = [10, 25, 50, 100] as const
-/** A new town sells its surplus wood, wheat, and wool. Stone is finite: it is not sold until the town says so. */
-export const trade = { sells: ["wood", "wheat", "wool"] as ReadonlyArray<GoodId>, reserve: 25 }
+/** The most the town can choose to keep of each good before selling it. */
+export const RESERVE_MAX = 200
+/** A new town neither sells nor buys: what leaves the town, and what it pays for, is the mayor's to decide. */
+export const trade = { sells: [] as ReadonlyArray<GoodId>, reserve: 25 }
 
 export type Amounts = Readonly<Record<GoodId, number>>
 export const none: Amounts = { wood: 0, planks: 0, stone: 0, ore: 0, tools: 0, fish: 0, smoked: 0, wheat: 0, flour: 0, bread: 0, wool: 0, cloth: 0 }

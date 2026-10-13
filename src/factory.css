@@ -117,8 +117,17 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 11px; font-weight: 700;
   letter-spacing: 0.1em; text-transform: uppercase; color: #5d6861;
 }
-.panel h3 .help { margin-left: auto; opacity: 0.55; cursor: help; }
-.panel h3 .help:hover { opacity: 1; }
+.panel h3 .help {
+  margin: -4px -6px -4px auto; padding: 4px; display: inline-flex; background: none; border: 1px solid transparent; border-radius: 6px;
+  opacity: 0.55; cursor: pointer;
+}
+.panel h3 .help:hover { opacity: 1; background: #eceee8; border-color: #d3d7ce; }
+.panel h3 .help[aria-expanded=true] { opacity: 1; background: #e3eaf5; border-color: #c9d6ee; }
+.panel .help-text {
+  display: none; margin: -2px 0 12px; padding: 9px 12px; font-size: 12px; line-height: 1.5; color: #4f5a53;
+  background: #f1f4f8; border: 1px solid #d5dde8; border-radius: 6px; letter-spacing: 0; text-transform: none; font-weight: 400;
+}
+.panel .help-text.open { display: block; }
 .panel .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; }
 .panel .row + .row { border-top: 1px dashed #e3e6df; }
 .panel .label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
@@ -169,8 +178,6 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel .need .fill.low { background: #c98a3a; }
 .panel .need .fill.none { background: #b04a39; }
 .panel .need .count { text-align: right; }
-.panel .good-row { cursor: default; }
-.panel .good-row .price { color: #8a938c; font-size: 11px; }
 .panel .lines .row { justify-content: flex-start; }
 
 /* ── The term: season, approval, the crown, dangers ── */
@@ -194,9 +201,6 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel .goal .mark { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; border: 1px solid #c9cec4; border-radius: 50%; font-size: 10px; color: transparent; }
 .panel .goal.met .mark { color: #f7f8f4; background: #4f8a3e; border-color: #4f8a3e; font-weight: 700; }
 .panel .goal.met { color: #4f8a3e; }
-.panel .frame.mode { padding: 1px 0; width: 5ch; font-size: 11px; text-align: center; color: #8a938c; border-color: #c9cec4; }
-.panel .frame.mode.sell { color: #4f8a3e; border-color: #4f8a3e; background: #e8f0e2; font-weight: 700; }
-.panel .frame.mode.buy { color: #3d6db5; border-color: #3d6db5; background: #e3eaf5; font-weight: 700; }
 .chronicle p { margin: 0 0 6px; font-size: 12px; color: #4f5a53; line-height: 1.45; }
 .chronicle p b { display: inline-block; min-width: 5ch; color: #8a938c; font-weight: 400; }
 
@@ -270,24 +274,21 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 }
 
 /* ── The town ticker, map views and their legend ── */
-.hud .ticker { display: none; flex-direction: column; max-width: 420px; }
+.hud .ticker { display: none; flex-direction: column; width: 440px; max-width: 100%; }
 .hud .ticker.show { display: flex; }
-.hud .ticker .cell { white-space: normal; padding: 5px 12px; font-size: 11px; line-height: 1.35; }
-.hud .ticker .cell + .cell { border-left: none; border-top: 1px dashed #e3e6df; }
-.hud .ticker .news { color: #5d6861; }
 .views {
   position: fixed; right: 16px; top: 64px; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 5px;
   background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db; z-index: 2;
   transition: right 240ms cubic-bezier(.2,.8,.2,1);
 }
-.views > .glyph { align-self: center; opacity: 0.6; padding: 2px 0 4px; }
+.views-title { padding: 4px 8px 5px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #9aa29b; cursor: help; }
 .views button {
   font: inherit; font-size: 11px; color: #3d4943; background: transparent; border: 1px solid transparent; border-radius: 5px;
-  padding: 4px 8px; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;
+  padding: 5px 8px; display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
 }
 .views button:hover { background: #eceee8; }
 .views button.on { background: #3d4943; color: #f7f8f4; }
-.views button kbd { font: inherit; font-size: 10px; opacity: 0.55; margin-left: auto; }
+.views button kbd { font: inherit; font-size: 10px; opacity: 0.55; margin-left: auto; padding-left: 18px; }
 .panel-open .views { right: 376px; }
 .legend {
   position: fixed; right: 16px; top: 300px; display: none; flex-direction: column; gap: 4px; padding: 10px 12px; max-width: 220px;
@@ -302,22 +303,30 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   .views { top: auto; bottom: calc(130px + env(safe-area-inset-bottom)); flex-direction: row; flex-wrap: wrap; max-width: calc(100vw - 32px); }
   .views button { font-size: 0; gap: 0; }
   .views button kbd { display: none; }
+  .views-title { display: none; }
   .legend { top: auto; bottom: calc(176px + env(safe-area-inset-bottom)); }
 }
 
 /* ── Descriptions as rows: what, how much, and why underneath ── */
-.panel .lines .line { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; padding: 6px 0; }
+/* Icon, what, and value on one line; chips and the note underneath, aligned with what. */
+.panel .lines .line {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; column-gap: 10px; row-gap: 5px; align-items: baseline; padding: 11px 0;
+}
+.panel .lines .line:first-of-type { padding-top: 2px; }
+.panel .lines .line:last-child { padding-bottom: 2px; }
 .panel .lines .line + .line { border-top: 1px dashed #e3e6df; }
-.panel .lines .line .label { font-weight: 600; color: #3d4943; flex: none; max-width: 100%; }
-.panel .lines .line .count { text-align: right; white-space: normal; margin-left: auto; line-height: 1.35; }
-.panel .lines .line .chips { flex-basis: 100%; margin-top: 3px; }
-.panel .lines .line .note { flex-basis: 100%; margin-top: 1px; font-size: 11px; line-height: 1.4; color: #6c766f; }
+.panel .lines .line .mark { grid-column: 1; align-self: start; padding-top: 1px; }
+.panel .lines .line .what { grid-column: 2; font-weight: 600; color: #3d4943; line-height: 1.35; }
+.panel .lines .line .count { grid-column: 3; max-width: 200px; text-align: right; white-space: normal; line-height: 1.35; }
+.panel .lines .line .chips { grid-column: 2 / -1; gap: 6px; }
+.panel .lines .line.long .count { grid-column: 2 / -1; max-width: none; text-align: left; }
+.panel .lines .line .note { grid-column: 2 / -1; font-size: 11px; line-height: 1.5; color: #6c766f; }
 .panel .lines .line.ok .count { color: #4f8a3e; }
 .panel .lines .line.warn .count { color: #b8782e; }
 .panel .lines .line.bad .count { color: #b04a39; font-weight: 700; }
 .panel .lines .line.bad .note { color: #8f3f31; }
 .panel .lines .line.warn .note { color: #8a5a22; }
-.panel .lines .line.dim .count, .panel .lines .line.dim .label { color: #8a938c; font-weight: 400; }
+.panel .lines .line.dim .count, .panel .lines .line.dim .what { color: #8a938c; font-weight: 400; }
 .panel .lines .line .chip { background: #eef0ea; border-radius: 4px; padding: 1px 6px 1px 4px; }
 
 /* ── The build menu: cost and what it does, in labelled rows ── */
@@ -329,12 +338,89 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel .chip i { font-style: normal; color: #9aa29b; }
 
 /* ── The ticker: now and lately, each line a place to go ── */
-.hud .ticker .head { padding: 5px 12px 1px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #9aa29b; }
-.hud .ticker button.cell { font: inherit; color: inherit; background: none; border: 0; text-align: left; cursor: default; width: 100%; }
-.hud .ticker button.cell.place { cursor: pointer; }
-.hud .ticker button.cell.place:hover { background: #eef0ea; }
-.hud .ticker .cell kbd { margin-left: auto; font: inherit; font-size: 10px; color: #3d6db5; border: 1px solid #c9d6ee; border-radius: 3px; padding: 0 5px; }
-.hud .ticker .cell em { font-style: normal; color: #9aa29b; }
-.hud .ticker .cell span { flex: 1; }
+.hud .ticker .head { padding: 10px 16px 4px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #9aa29b; }
+.hud .ticker .head + .cell { border-top: 0; }
+.hud .ticker .cell {
+  align-items: flex-start; gap: 11px; padding: 9px 8px 9px 16px; white-space: normal; font-size: 12px; line-height: 1.55;
+  box-shadow: inset 3px 0 0 transparent;
+}
+.hud .ticker .cell + .cell { border-left: none; border-top: 1px dashed #e3e6df; }
+.hud .ticker .cell .mark { margin-top: 2px; }
+.hud .ticker .cell .text { flex: 1; min-width: 0; }
+.hud .ticker .cell em { font-style: normal; color: #9aa29b; white-space: nowrap; }
+.hud .ticker .cell.place { cursor: pointer; }
+.hud .ticker .cell.place:hover { background: #eef0ea; }
+.hud .ticker .alert.hint { box-shadow: inset 3px 0 0 #8fa9d6; }
+.hud .ticker .alert.warn { box-shadow: inset 3px 0 0 #d9a24e; }
+.hud .ticker .alert.bad { box-shadow: inset 3px 0 0 #b04a39; }
+.hud .ticker .alert.bad .text { color: #8f3f31; }
+.hud .ticker .news .text { color: #5d6861; }
+.hud .ticker .acts { display: flex; align-items: center; gap: 2px; margin-top: -1px; }
+.hud .ticker .act {
+  display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;
+  border: 1px solid transparent; border-radius: 6px; background: none; color: #3d4943; cursor: pointer; opacity: 0.4;
+}
+.hud .ticker .cell:hover .act { opacity: 0.75; }
+.hud .ticker .act:hover { opacity: 1 !important; background: #e2e5de; border-color: #c9cec4; }
+/* What a message names: a building to click and build, a good with its icon, a key to press. */
+.ref {
+  display: inline-block; padding: 0 5px 0 4px; margin: 0 1px; border: 1px solid transparent; border-radius: 4px;
+  font: inherit; font-weight: 600; line-height: 1.4; vertical-align: baseline; white-space: nowrap;
+}
+.ref .icon { display: inline-block; width: 13px; height: 13px; margin-right: 3px; vertical-align: -2px; }
+.ref.ware { background: #eef0ea; color: #3d4943; }
+.ref.kind { background: #eef3fb; border: 1px solid #c9d6ee; color: #2f5a9c; }
+button.ref.kind { cursor: pointer; }
+button.ref.kind:hover { background: #dce6f5; border-color: #3d6db5; }
+kbd.key {
+  display: inline-block; min-width: 1.6ch; padding: 0 4px; font: inherit; font-size: 10px; line-height: 1.5; text-align: center;
+  color: #3d4943; background: #fbfcf9; border: 1px solid #c9cec4; border-bottom-width: 2px; border-radius: 4px; vertical-align: 1px;
+}
 .hud .cell.jobs { cursor: pointer; }
 .hud .cell.jobs:hover { background: #eef0ea; }
+
+/* ── Sliders for the town's levers: taxes, what it keeps, what it trades ── */
+.panel .slider {
+  --at: 50%; --fill: #3d4943; --rail: #dfe2db;
+  -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 20px; margin: 2px 0 0; background: transparent; cursor: pointer;
+}
+.panel .slider:focus-visible { outline: 2px solid #8fa9d6; outline-offset: 2px; border-radius: 4px; }
+.panel .slider::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--fill) var(--at), var(--rail) var(--at)); }
+.panel .slider::-moz-range-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--fill) var(--at), var(--rail) var(--at)); }
+.panel .slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px; margin-top: -5px; border-radius: 50%;
+  background: #f7f8f4; border: 1.5px solid #3d4943; box-shadow: 0 1px 0 #c9cec4;
+}
+.panel .slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #f7f8f4; border: 1.5px solid #3d4943; }
+.panel .slider:hover::-webkit-slider-thumb { background: #e6e9e2; }
+/* Taxes: a notch at the usual 100% (a third of the way from 50% to 200%). */
+.panel .slider.tax::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, transparent calc(33.33% - 1px), #77817a calc(33.33% - 1px), #77817a calc(33.33% + 1px), transparent calc(33.33% + 1px)) no-repeat center / 100% 12px,
+    linear-gradient(to right, var(--fill) var(--at), var(--rail) var(--at));
+}
+.panel .lever .rate { font-variant-numeric: tabular-nums; }
+.panel .lever + .slider { margin-top: -2px; }
+/* Trade: the middle neither sells nor buys; the bar grows out from it, green to sell, blue to buy. */
+.panel .trade-row { padding: 7px 0 5px; }
+.panel .trade-row + .trade-row, .panel .effect + .trade-row { border-top: 1px dashed #e3e6df; }
+.panel .trade-row .row { padding: 0; }
+.panel .trade-row .price { color: #8a938c; font-size: 11px; min-width: 5ch; text-align: right; }
+.panel .trade-row .count { min-width: 3ch; text-align: right; }
+.panel .trade-row .change { font-size: 10px; color: #8a938c; }
+.panel .trade-row .change.up { color: #4f8a3e; }
+.panel .trade-row .change.down { color: #b04a39; }
+.panel .deal-line { display: flex; align-items: center; gap: 12px; }
+.panel .deal-line .slider { flex: 1; }
+.panel .slider.deal { --fill: #9aa29b; }
+.panel .sell .slider.deal { --fill: #4f8a3e; }
+.panel .buy .slider.deal { --fill: #3d6db5; }
+.panel .slider.deal::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, transparent calc(50% - 1px), #77817a calc(50% - 1px), #77817a calc(50% + 1px), transparent calc(50% + 1px)) no-repeat center / 100% 12px,
+    linear-gradient(to right, var(--rail) min(var(--at), 50%), var(--fill) min(var(--at), 50%), var(--fill) max(var(--at), 50%), var(--rail) max(var(--at), 50%));
+}
+.panel .slider.deal::-moz-range-track {
+  background: linear-gradient(to right, var(--rail) min(var(--at), 50%), var(--fill) min(var(--at), 50%), var(--fill) max(var(--at), 50%), var(--rail) max(var(--at), 50%));
+}
+.panel .deal-line .mode { width: 12ch; text-align: right; font-size: 11px; color: #9aa29b; white-space: nowrap; }
+.panel .deal-line .mode.sell { color: #4f8a3e; font-weight: 700; }
+.panel .deal-line .mode.buy { color: #3d6db5; font-weight: 700; }
