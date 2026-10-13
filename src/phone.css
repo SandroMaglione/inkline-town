@@ -22,8 +22,10 @@
   .hud .good { gap: 4px; padding: 3px 7px 3px 4px; }
   .hud .good .count { font-size: 12px; }
 
-  /* The ticker: only what needs looking at now, in at most two lines. */
-  .hud .ticker .head, .hud .ticker .cell ~ .cell { display: none; }
+  /* The ticker: only what needs looking at now (the guide's step first, with its one-line heading), in at most two lines. */
+  .hud .ticker .head:not(.guide), .hud .ticker .cell ~ .cell, .hud .ticker .cell ~ .head { display: none; }
+  .hud .ticker .head.guide { padding: 6px 10px 0 12px; }
+  .hud .ticker .head.guide .progress { display: none; }
   .hud .ticker .cell { padding: 6px 4px 6px 12px; font-size: 11px; line-height: 1.45; }
   .hud .ticker .cell .text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 
@@ -75,6 +77,7 @@
   .toolbar button, .toolbar .town-button { min-width: 38px; }
   .camera-controls button { padding: 6px; min-width: 34px; }
   .toolbar .speed button { min-width: 32px; padding: 6px 4px; }
+  .system button { min-width: 32px; padding: 4px; }
 }
 
 /* ── Landscape phone: short, so the bars stay low and the panel keeps to the side ── */

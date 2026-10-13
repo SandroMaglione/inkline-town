@@ -258,8 +258,6 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 }
 .result.show { display: block; }
 
-}
-
 /* ── The town ticker, map views and their legend ── */
 .hud .ticker { display: none; flex-direction: column; width: 440px; max-width: 100%; }
 .hud .ticker.show { display: flex; }
