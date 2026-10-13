@@ -382,8 +382,9 @@ const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: b
     { kind: "lumberjack", when: w.stock.planks < 20 && w.buildings.filter((b) => b.kind === "lumberjack" && b.status !== "starved").length < 1 + Math.floor(homes / 40) && count(w, "lumberjack") < 2 + Math.floor(homes / 30) },
     // Food: a fishery more while homes go hungry (fish rots, so the larder alone is no guide), and a
     // market for every eighteen homes or so, or what is caught is never handed out.
-    { kind: "fishery", when: (larder(w.stock) < homes / 2 || w.census.food! < w.homes.length * 0.6) && count(w, "fishery") < 1 + Math.floor(homes / 7) },
-    { kind: "market", when: count(w, "market") < 1 + Math.floor(homes / 18) && w.census.food! < w.homes.length * 0.7 }
+    // Each bakery feeds the homes two fisheries would.
+    { kind: "fishery", when: w.census.food! < w.homes.length * 0.6 && count(w, "fishery") < Math.max(2, 1 + Math.floor(homes / 7) - 2 * count(w, "bakery")) },
+    { kind: "market", when: count(w, "market") < 1 + Math.floor(homes / 20) && w.census.food! < w.homes.length * 0.7 }
   ]
   if (bot === "idle") return basics
   // The citizens' chains, in proportion to the homes: a bakery bakes for about
