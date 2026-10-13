@@ -72,8 +72,8 @@ export function makeDecor(id: KindId) {
   d.face(square(0, 0, p, -0.15), id === "plaza" || id === "statue" || id === "fountain" ? stone : green)
   if (id === "garden") {
     d.box(0, 0, p, U, 0, 0.3, 0xeee9de, 0xe3ddcf, 0xd5d0c4, 0.75)
-    tree(d, -p / 2, -p / 2, 0.7)
-    tree(d, p / 2, p / 2, 0.8)
+    tree(d, -2*U, -2*U, 0.6)
+    tree(d, 2*U, 2*U, 0.6)
     flowerBed(d, p / 2, -p / 2, 2, 0xc78374)
     flowerBed(d, -p / 2, p / 2, 2, 0xd6ba69)
   } else if (id === "park") {
@@ -100,8 +100,8 @@ export function makeDecor(id: KindId) {
   } else if (id === "plaza") {
     setts(d, 0, 0, p - 0.02, 0)
     figure(d, 0, 0, 6)
-    tree(d, -p * 0.75, -p * 0.75, 0.7)
-    tree(d, p * 0.75, p * 0.75, 0.7)
+    tree(d, -p * 0.65, -p * 0.65, 0.65)
+    tree(d, p * 0.65, p * 0.65, 0.65)
     bench(d, p * 0.6, -p * 0.7)
     bench(d, -p * 0.6, p * 0.7)
   }

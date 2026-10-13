@@ -33,6 +33,7 @@ export type AssetReference =
   | { type: "roads" | "water" }
   | { type: "none" }
 export interface InkAsset {
+  smokeEffect?: { origin: Vertex }
   effects?: { half: number; height: number; state: SurfaceState }
   appearance?: "fine" | "poor" | "worn" | "winter"
   category?: AssetCategory
@@ -266,6 +267,18 @@ export class Drawing {
     this.line([...upper, upper[0]!], width)
     if (h > 1) this.line([...bottom, bottom[0]!], width)
   }
+  barrel(u: number, v: number, r = 1.2 * U, z = 0, height = 8, contents?: number) {
+    const start = this.asset.faces.length, n = 12
+    const ring = (h: number, radius: number) => Array.from({ length: n }, (_, i): Vertex => [u + Math.cos(i * Math.PI * 2 / n) * radius, v + Math.sin(i * Math.PI * 2 / n) * radius, z + h])
+    const rings = [ring(0, r * 0.85), ring(height * 0.25, r), ring(height * 0.75, r), ring(height, r * 0.85)]
+    for (let j = 0; j < 3; j++) for (let i = 0; i < n; i++) this.face([rings[j]![i]!, rings[j]![(i + 1) % n]!, rings[j + 1]![(i + 1) % n]!, rings[j + 1]![i]!], i % 3 === 0 ? 0xcbb18a : 0xd9bd95, 0)
+    this.face([...rings[0]!].reverse(), 0xb59b75, 0)
+    this.face(rings[3]!, contents ?? 0xe9d2a8, 0)
+    this.volume(start, 1)
+    for (const points of [rings[1]!, rings[2]!]) this.line([...points, points[0]!], 1.2, 0x7d877d)
+    this.line([...rings[3]!, rings[3]![0]!], 1)
+    if (contents === undefined) for (const x of [-0.35, 0.35]) this.line([[u + x * r, v - r * 0.75, z + height + 0.04], [u + x * r, v + r * 0.75, z + height + 0.04]], 0.5, 0xa98c66)
+  }
   ellipsoid(u: number, v: number, z: number, ru: number, rv: number, rz: number, color: number, width = 1, light?: number, segments = 16) {
     const start = this.asset.faces.length,
       n = segments,
@@ -324,16 +337,13 @@ export class Drawing {
     this.line([...small, small[0]!], 1, palette.ink, 0.45)
   }
   sack(u: number, v: number, z = 0, color = 0xf2ecdc) {
-    this.ellipsoid(u, v, z + 3.5, 3 / 45.2548, 3 / 45.2548, 3.15, color, 1)
-    this.line(
-      [
-        [u - 0.03, v + 0.055, z + 5.5],
-        [u + 0.03, v + 0.055, z + 5.5]
-      ],
-      1,
-      palette.ink,
-      0.6
-    )
+    const start = this.asset.faces.length, n = 8
+    const ring = (radius: number, h: number) => Array.from({length:n},(_,i):Vertex=>[u+Math.cos(i*Math.PI*2/n)*radius,v+Math.sin(i*Math.PI*2/n)*radius*0.8,z+h])
+    const rings = [ring(0.045,0),ring(0.064,2),ring(0.05,6),ring(0.016,7),ring(0.028,8)]
+    for(let j=0;j<4;j++)for(let i=0;i<n;i++)this.face([rings[j]![i]!,rings[j]![(i+1)%n]!,rings[j+1]![(i+1)%n]!,rings[j+1]![i]!],i%3===0?mix(color,0xb8aa8c,0.16):color,0)
+    this.face([...rings[0]!].reverse(),color,0);this.face(rings[4]!,color,0);this.volume(start,1)
+    this.line([...rings[3]!,rings[3]![0]!],1,0x9f8b69)
+    this.line([[u-0.025,v+0.053,z+1],[u-0.015,v+0.04,z+5.5]],0.6,0xb7ab95)
   }
   fir(u: number, v: number, z = 0, size = 1, tiers = 2) {
     const step = (24 * size) / (tiers + 1)

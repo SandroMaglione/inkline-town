@@ -4,6 +4,7 @@ import { buildAsset, exportAsset } from "../asset-lab/renderer.ts"
 import "./style.css"
 
 const families = {
+  fixes: { title: "Review fixes", ids: ["mill","bakery","weaver","warehouse","mine","farm","chapel","hospital","smokehouse","builder","townhouse","quarry","stone-full","stone-quarried","ore-full","problem-marker","smoke","firewatch"] },
   buildings: { title: "Buildings", ids: ["granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder"] },
   ornaments: { title: "Gardens & squares", ids: ["garden", "park", "fountain", "statue", "plaza", "paved-street"] },
   homes: { title: "Homes & neighbourhoods", ids: ["cottage", "citizen", "townhouse", "cottage-fine", "citizen-fine", "townhouse-fine", "cottage-poor", "citizen-worn", "townhouse-worn"] },
@@ -39,6 +40,7 @@ function render() {
     camera.position.copy(model.center).add(new THREE.Vector3(Math.sin(heading) * Math.cos(angle), Math.sin(angle), Math.cos(heading) * Math.cos(angle)).multiplyScalar(1000))
     camera.lookAt(model.center); camera.updateProjectionMatrix(); camera.updateMatrixWorld()
     model.built.updateContours(camera)
+    model.built.updateEffects(performance.now()/1000)
     renderer.setViewport(r.left, innerHeight - r.bottom, r.width, r.height)
     renderer.setScissor(Math.max(0, r.left), Math.max(0, innerHeight - r.bottom), Math.min(innerWidth, r.right) - Math.max(0, r.left), Math.min(innerHeight, r.bottom) - Math.max(0, r.top))
     renderer.render(model.scene, camera)
@@ -87,6 +89,7 @@ root.querySelector<HTMLButtonElement>("#sheet")!.onclick = () => {
     camera.top = vertical / 2; camera.bottom = -camera.top; camera.left = -vertical * width / 270 / 2; camera.right = -camera.left
     camera.position.copy(model.center).add(new THREE.Vector3(Math.sin(heading) * Math.cos(angle), Math.sin(angle), Math.cos(heading) * Math.cos(angle)).multiplyScalar(1000))
     camera.lookAt(model.center); camera.updateProjectionMatrix(); camera.updateMatrixWorld(); model.built.updateContours(camera)
+    model.built.updateEffects(performance.now()/1000)
     renderer.setViewport(0, 0, width, 270); renderer.render(model.scene, camera)
     const x = (i % columns) * width, y = 100 + Math.floor(i / columns) * height
     ctx.drawImage(renderer.domElement, x, y, width, 270)
@@ -111,5 +114,8 @@ const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFr
 addEventListener("scroll", schedule, {passive: true}); addEventListener("resize", schedule)
 const query = new URLSearchParams(location.search).get("collection")
 select(query && query in families ? query as Family : "buildings")
+let effectFrame=0
+const animateEffects=()=>{if(families[family].ids.some(id=>assetById.get(id)?.smokeEffect))render();effectFrame=requestAnimationFrame(animateEffects)}
+effectFrame=requestAnimationFrame(animateEffects)
 Object.assign(window, { townModelReview: { stats: () => ({ family, models: models.length, renders, yaw, pitch }) } })
-if (import.meta.hot) import.meta.hot.dispose(() => { models.forEach(m => m.built.dispose()); renderer.dispose(); renderer.domElement.remove(); removeEventListener("scroll", schedule); removeEventListener("resize", schedule) })
+if (import.meta.hot) import.meta.hot.dispose(() => { cancelAnimationFrame(effectFrame);models.forEach(m => m.built.dispose()); renderer.dispose(); renderer.domElement.remove(); removeEventListener("scroll", schedule); removeEventListener("resize", schedule) })

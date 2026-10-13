@@ -2,7 +2,7 @@ import { kinds, type KindId } from "../content.ts"
 import { U } from "../iso.ts"
 import { Drawing, palette, pale, square, sides, type Vertex, type Side } from "./primitives.ts"
 import { makeDecor } from "./town-props.ts"
-import { finishTownBuilding, townBuildingNotes } from "./services.ts"
+import { finishTownBuilding, townBuildingNotes, institutionDoor, makeQuarry } from "./services.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
   townhall: { accent: 0x8a58a8, glass: 0xf3dca6 },
@@ -45,6 +45,7 @@ export interface BuildingOptions {
 }
 export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
   if (kinds[id].decor) return makeDecor(id)
+  if (id === "quarry") return makeQuarry(options)
   const fit = options.fit ?? 1
   const kind = kinds[id],
     a = kind.half * U,
@@ -56,7 +57,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
     id,
     kind.title,
     townBuildingNotes[id] ?? (id === "mill"
-      ? "The lattice sails sit on a real upright plane. Flour sacks remain softly rounded."
+      ? "Upright lattice sails, a tapered roof and coopered flour barrels in the mill yard."
       : id === "market"
         ? "Striped canopy, coloured goods crates and roof flag, all built as geometry."
         : id === "townhall"
@@ -88,22 +89,23 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
             d.line([p(s - w - 0.5 / 16, z), p(s + w + 0.5 / 16, z)])
           } else d.window(side, a, s, floor * 32 + 12, 8, glass, true)
         }
-    if (door && fit > 0.15)
-      d.door(side, a, Math.max(2, Math.round(Math.min(16, H - 8) * fit)), 5 * U, 6 * U, 3 * U, accent, true, options.open ?? 0)
+    if (door && fit > 0.15) {
+      if (id === "chapel" || id === "hospital") institutionDoor(d,side,a,id,fit)
+      else d.door(side, a, Math.max(2, Math.round(Math.min(16, H - 8) * fit)), 5 * U, 6 * U, 2.5 * U, accent, true, options.open ?? 0)
+    }
     if (kind.roof === "gable" && !door && fit > 0.4) d.window(side, a, 0, 6)
     if (id === "townhall" && fit > 0.8) d.circle(side, a, 50, 5)
   }
   if (id === "mill") {
     if (fit > 0) d.pyramid(a, H, 16 * fit, pale(0x8a6a45, 0.7), pale(0x8a6a45, 0.52))
     if (options.motion !== false && fit > 0.6) drawSails(d, a, H, 1.2)
-    // Sacks are complete faceted solids, rather than a fixed screen drawing.
     const c = (a + p) / 2
     for (const [u, v] of [
-      [c - U, c + U],
-      [c + 1.5 * U, c - U],
-      [c + 0.5 * U, c + 2.5 * U]
+      [c - 1.5 * U, c - 1.5 * U],
+      [c + 1.2 * U, c - 1.5 * U],
+      [c, c + 1.5 * U]
     ])
-      d.sack(u!, v!)
+      d.barrel(u!, v!, 1.1 * U, 0, 8, 0xf1e9d5)
   } else if (kind.roof === "gable") {
     const roof = dresses[id].roof ?? 0x8a6a45
     if(fit>0)d.gable(a, H, 14 * fit, "x", pale(roof, 0.7), pale(roof, 0.52), false)
@@ -180,13 +182,13 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
         [
           [u0, s, 12],
           [u0, e, 12],
-          [u1 + U, e, 9],
-          [u1 + U, s, 9]
+            [u1, e, 9],
+            [u1, s, 9]
         ],
         i % 2 === 0 ? 0xc4523f : 0xf7f3ea
       )
     }
-    d.crate(-a - 2 * U, c, 0, 0x2f8c87)
+    d.crate(-a - 1.7 * U, c, 0, 0x2f8c87)
     d.crate(-a + 1.5 * U, c, 0, 0xc4523f)
     d.crate(-a - 0.2 * U, c, 5, 0x8a58a8)
   }
@@ -251,9 +253,9 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
   finishTownBuilding(d, id, a, p, H)
   switch (id) {
     case "warehouse":
-      d.crate(c, c - 1.5 * U, 0, 0x2f8c87, 1.6 * U, 6)
-      d.crate(c, c + 1.5 * U, 0, 0xd27a34, 1.6 * U, 6)
-      d.cylinder(c, -a - 2 * U, 1.5 * U, 0, 8, 0xc79a5b, 0xe9c48a, 1.5)
+      d.crate(c, c - 1.3 * U, 0, 0x2f8c87, 1.1 * U, 6)
+      d.crate(c, c + 1.3 * U, 0, 0xd27a34, 1.1 * U, 6)
+      d.barrel(c, -a - 2 * U, 1.5 * U)
       break
     case "lumberjack": {
       for (const [du, z] of [
@@ -330,7 +332,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
       ])
         d.ellipsoid(c + du! * U, c + dv! * U, 7.5, 0.035, 0.035, 1.5, 0x5a6479, 0.75)
       for (const dv of [-1.2, 1.2]) d.cylinder(c + 1.6 * U, c + dv * U, 0.026, 0, 3, palette.ink, palette.ink, 0.75)
-      pyramid(c, -a - 2 * U, 3 * U, 0, 6, 0x5a6479)
+      pyramid(c - U, -a - 2 * U, 2 * U, 0, 6, 0x5a6479)
       break
     }
     case "fishery": {
@@ -369,7 +371,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
     case "smithy":
       d.cylinder(c, c, U, 0, 3, 0xb08a5e, 0xe9d2a8, 1.5)
       d.box(c, c, 0.6 * U, 1.4 * U, 3, 3, 0x6d7671, 0x5a625e, 0x4b524e)
-      pyramid(c, -a - 2 * U, 2.5 * U, 0, 5, 0x3d4943)
+      pyramid(c, -a - 1.5 * U, 1.2 * U, 0, 5, 0x3d4943)
       break
     case "farm":
       d.cylinder(c + U, -a - 3 * U, 3.5 * U, 0, 28, 0xeeeae0, pale(0xc4523f, 0.6), 1.5)
@@ -388,15 +390,15 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
         d.line([...ring, ring[0]!], 1.5)
       }
       for (const [y, z] of [
-        [c - 2.5 * U, 0],
-        [c + 2.5 * U, 0],
-        [c, 5]
+        [c - 1.2 * U, 0],
+        [c + 1.2 * U, 0],
+        [c, 5.3]
       ])
         d.log("u", y!, a + 2 * U, a + 7 * U, z!, 3, 0xe9cf7c, 0xf3e3a8)
       break
     case "bakery": {
-      d.sack(c, -a - U)
-      d.sack(c, -a + 2 * U)
+      d.barrel(c, -a - U, U, 0, 8, 0xf1e9d5)
+      d.barrel(c, -a + 2 * U, U, 0, 7)
       post(c, c, 12)
       const p = (x: number, z: number): Vertex => [c + x / 64, c - x / 64, z]
       d.face([p(-4, 11), p(4, 11), p(4, 17), p(-4, 17)], 0xfaf3e3, 1)
@@ -463,11 +465,12 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
           color
         )
       }
-      d.sack(c, c, 0, 0xeceee8)
+      d.barrel(c, c, U, 0, 7, 0xeceee8)
+      d.face([[c-U,c,7.04],[c+U,c,7.04],[c+U,c+U,6],[c-U,c+U,6]],0xb7a4ca,0.75)
       break
     }
     case "chapel":
-      bush(c, c, 4.5)
+      bush(c, c, 3.5)
       bush(c, -a - U, 4, 0xbccfa8, 0xdde8cf)
       bush(-a - U, c, 4, 0xccd5ae, 0xe8ecd2)
       break

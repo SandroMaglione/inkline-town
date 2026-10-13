@@ -30,6 +30,7 @@ for (const asset of inkAssets) {
   await writeFile(path.join(output, "models", `${asset.id}.json`), JSON.stringify(asset, null, 2))
   const imported = await loader.parseAsync(glb, "")
   if(asset.effects&&!imported.scene.getObjectByName(asset.id)?.userData.inklineSurfaceEffects)throw new Error(`${asset.id}: surface state metadata lost on export`)
+  if(asset.smokeEffect&&!imported.scene.getObjectByName(asset.id)?.userData.inklineSmokeEffect)throw new Error(`${asset.id}: smoke emitter metadata lost on export`)
   let meshes = 0,
     vertices = 0
   imported.scene.traverse((object) => {
@@ -52,6 +53,7 @@ for (const asset of inkAssets) {
     title: asset.title,
     category: asset.category,
     effects: asset.effects,
+    smokeEffect: asset.smokeEffect,
     glb: `models/${asset.id}.glb`,
     geometry: `models/${asset.id}.json`,
     bytes: glb.byteLength,

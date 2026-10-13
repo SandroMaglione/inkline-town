@@ -13,6 +13,7 @@
     "check:browser": "node scripts/check-browser.ts",
     "check:models": "node scripts/check-town-models.ts",
     "check:effects": "node scripts/check-house-effects.ts",
+    "check:revisions": "node scripts/check-model-revisions.ts",
     "test": "node --test \"test/*.test.ts\"",
     "release": "pnpm --dir deploy release"
   },

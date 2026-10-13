@@ -40,8 +40,9 @@ void main(){
    float core=(1.0-body)*pow(1.0-y,0.7);
    color=mix(vec3(0.87,0.33,0.12),vec3(1.0,0.83,0.38),smoothstep(0.0,0.8,core));
  }else if(mode<1.5){
-   float d=length((p-0.5)*2.0); float cloud=noise(p*5.0+vec2(seed*9.0,time*0.12));
-   alpha=(1.0-smoothstep(0.3,1.0,d+cloud*0.2))*sin(age*3.14159)*0.20*power;
+   float d=length((p-0.5)*vec2(2.0,1.8));
+   float cloud=noise(p*3.0+vec2(seed*9.0,time*0.12))*0.65+noise(p*7.0+seed*11.0)*0.35;
+   alpha=(1.0-smoothstep(0.3,1.0,d+cloud*0.24))*sin(age*3.14159)*0.24*power;
    color=mix(vec3(0.35,0.39,0.33),vec3(0.64,0.66,0.58),age);
  }else{
    alpha=(1.0-smoothstep(0.05,0.5,length(p-0.5)))*sin(age*3.14159)*power;

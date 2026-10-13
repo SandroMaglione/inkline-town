@@ -189,6 +189,7 @@ for (const asset of inkAssets) {
 pixi.destroy(true)
 
 const models = new Map<string, ReturnType<typeof buildAsset>>()
+let effectTimeOverride:number|null=null
 let selected = inkAssets[2]!,
   yaw = 0,
   pitch = 30,
@@ -223,7 +224,9 @@ function render() {
     height = viewer.clientHeight
   if (!width || !height) return
   const ref = references.get(selected.id)!
-  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3) / zoom
+  const model = models.get(selected.id)!
+  const effectBounds=selected.smokeEffect?new THREE.Box3().setFromObject(model.group):null
+  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds?effectBounds.getSize(new THREE.Vector3()).y*1.45:0) / zoom
   renderer.setSize(width, height, false)
   camera.left = (-vertical * width) / height / 2
   camera.right = -camera.left
@@ -231,7 +234,7 @@ function render() {
   camera.bottom = -camera.top
   const heading = ((45 + yaw) * Math.PI) / 180,
     altitude = (pitch * Math.PI) / 180
-  const target = new THREE.Vector3(0, -(ref.y + ref.height / 2) / Math.cos(Math.PI / 6), 0)
+  const target = effectBounds?effectBounds.getCenter(new THREE.Vector3()):new THREE.Vector3(0, -(ref.y + ref.height / 2) / Math.cos(Math.PI / 6), 0)
   camera.position
     .copy(target)
     .add(
@@ -244,7 +247,7 @@ function render() {
   camera.lookAt(target)
   camera.updateProjectionMatrix()
   camera.updateMatrixWorld()
-  const model = models.get(selected.id)!
+  model.updateEffects(effectTimeOverride??performance.now()/1000)
   for (const { material, width: lineWidth } of model.lineMaterials) material.linewidth = lineWidth
   model.updateContours(camera)
   renderer.render(scene, camera)
@@ -400,12 +403,17 @@ Object.assign(window, {
       return { meshes: model.children.length }
     },
     stats: () => ({ selected: selected.id, yaw, pitch, drawCount, triangles: renderer.info.render.triangles }),
-    capture
+    capture,
+    captureEffect: (time:number)=>{effectTimeOverride=time;render();const image=capture("model");effectTimeOverride=null;return image}
   }
 })
 select(new URLSearchParams(location.search).get("asset") ?? selected.id)
+let effectFrame=0
+const animateEffect=()=>{if(selected.smokeEffect)render();effectFrame=requestAnimationFrame(animateEffect)}
+effectFrame=requestAnimationFrame(animateEffect)
 if (import.meta.hot)
   import.meta.hot.dispose(() => {
+    cancelAnimationFrame(effectFrame)
     resize.disconnect()
     models.forEach((model) => model.dispose())
     renderer.dispose()

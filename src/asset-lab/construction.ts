@@ -79,28 +79,23 @@ export function makeMarker() {
   d.asset.category = "construction"
   d.asset.reference = { type: "none" }
   d.asset.footprint = 1
-  const p = (x: number, z: number): Vertex => [x / 64, -x / 64, z]
+  const p = (x: number, z: number, out = 0): Vertex => [x / 64+out, -x / 64+out, z]
   d.face([p(-7.5, 0), p(7.5, 0), p(7.5, 15), p(-7.5, 15)], 0xf6f7f3, 1, 0xc4523f)
-  d.face([p(-1, 6), p(1, 6), p(1, 12), p(-1, 12)], 0xc4523f, 0)
-  d.face([p(-1, 3), p(1, 3), p(1, 5), p(-1, 5)], 0xc4523f, 0)
+  for(const out of [-0.008,0.008]){
+    d.face([p(-1.2, 6,out), p(1.2, 6,out), p(1.2, 12,out), p(-1.2, 12,out)], 0xc4523f, 0)
+    d.face([p(-1.2, 3,out), p(1.2, 3,out), p(1.2, 5,out), p(-1.2, 5,out)], 0xc4523f, 0)
+  }
   return d.asset
 }
 export function makeSmoke() {
-  const d = new Drawing("smoke", "Chimney smoke", "The original fine smoke rings, on upright planes above the chimney.")
+  const d = new Drawing("smoke", "Chimney smoke", "Animated soft smoke rises and disperses from a flue. The plume uses the same particle shader as the live game.")
   d.asset.category = "construction"
   d.asset.reference = { type: "none" }
   d.asset.footprint = 1
-  for (const t of [0.1, 0.4, 0.7]) {
-    const r = 4 + t * 7,
-      dx = Math.sin(t * 5) * 1.5,
-      h = t * 34
-    const ring = Array.from({ length: 25 }, (_, i): Vertex => [
-      (dx + Math.cos((i / 24) * Math.PI * 2) * r) / 64,
-      -(dx + Math.cos((i / 24) * Math.PI * 2) * r) / 64,
-      h + Math.sin((i / 24) * Math.PI * 2) * r
-    ])
-    d.line(ring, 1, palette.ink, (1 - t) * 0.55)
-  }
+  d.box(0,0,2*U,2*U,0,12)
+  d.box(0,0,2.4*U,2.4*U,10,2,0xb7c0af,0xa2ad99,0x8f9d85,1)
+  d.face(square(0,0,1.5*U,12.03),0x687363,0)
+  d.asset.smokeEffect={origin:[0,0,12.2]}
   return d.asset
 }
 export function makePlot(look: "hover" | "picked" | "blocked" | "reach") {

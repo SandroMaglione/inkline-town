@@ -19,6 +19,7 @@ import { makeSails, makeFlag } from "../asset-lab/buildings.ts"
 import { makeMarker } from "../asset-lab/construction.ts"
 import { makeRuin } from "../asset-lab/town-props.ts"
 import { StructureEffects } from "./structure-effects.ts"
+import { SmokePlume } from "./smoke-effects.ts"
 import { surfaceState, type SurfaceState } from "./surface-state.ts"
 import { makePerson, serviceCostume, type ServiceRole } from "../asset-lab/people.ts"
 import { makeTree, makeRock, makeField, hash } from "../asset-lab/land.ts"
@@ -87,9 +88,7 @@ export class BuildingView extends WorldView {
   private plate: ModelHandle
   private marker: ModelHandle
   private motion: ModelHandle
-  private smokes: Array<ModelHandle>
-  private rings: Array<number> = []
-  private puff = 0
+  private smoke: SmokePlume | null = null
   private wave = 0
   private opening = 0
   private beat = -1
@@ -104,8 +103,7 @@ export class BuildingView extends WorldView {
     this.marker.use("problem-marker", makeMarker)
     this.marker.root.visible = false
     this.body.root.add(this.motion.root)
-    this.smokes = [this.model(false), this.model(false), this.model(false)]
-    for (const s of this.smokes) s.root.visible = false
+
   }
   place(x: number, y: number) {
     const size = kinds[this.kindId].size
@@ -163,45 +161,21 @@ export class BuildingView extends WorldView {
       this.motion.root.position.copy(vertex3([kind.half * U + 3 * U, 0, H - 6]))
       this.motion.root.rotation.x = this.wave
     }
-    this.puff -= dt
-    if (look.working && kind.topper === "chimney" && look.build >= 1 && this.puff <= 0) {
-      this.rings.push(0)
-      if (this.rings.length > 3) this.rings.shift()
-      this.puff = 0.7
+    const smoking=look.working&&kind.topper==="chimney"&&look.build>=1&&!look.burning
+    if(smoking&&!this.smoke){
+      this.smoke=new SmokePlume()
+      const a=kind.half*U,pitch=2*a/kind.bays
+      this.smoke.group.position.copy(vertex3([-a+pitch*0.5,-a+pitch*0.5,H+24.3]))
+      this.group.add(this.smoke.group)
     }
-    this.rings = this.rings.map((age) => age + dt / 1.8).filter((age) => age < 1)
-    const a = kind.half * U,
-      pitch = (2 * a) / kind.bays,
-      u = -a + pitch * 0.5,
-      v = -a + pitch * 0.5
-    this.smokes.forEach((smoke, i) => {
-      const t = this.rings[i]
-      smoke.root.visible = t !== undefined
-      if (t === undefined) return
-      const r = Math.round(4 + t * 7)
-      smoke.use("smoke-ring/" + r, () => {
-        const d = new Drawing("smoke-ring", "Smoke", "")
-        d.line(
-          Array.from({ length: 25 }, (_, j): Vertex => [
-            (Math.cos((j / 24) * Math.PI * 2) * r) / 64,
-            (-Math.cos((j / 24) * Math.PI * 2) * r) / 64,
-            Math.sin((j / 24) * Math.PI * 2) * r
-          ]),
-          1,
-          0x3d4943,
-          0.55
-        )
-        return d.asset
-      })
-      smoke.alpha = 1 - t
-      smoke.root.position.copy(vertex3([u + (Math.sin(t * 5) * 1.5) / 64, v - (Math.sin(t * 5) * 1.5) / 64, H + 24 + t * 34]))
-    })
+    this.smoke?.update(performance.now()/1000,Number(smoking))
     this.emphasis(emphasis)
   }
   override orient() {
     this.marker.root.rotation.y = this.stage.heading - Math.PI / 4
-    for (const smoke of this.smokes) smoke.root.rotation.y = this.stage.heading - Math.PI / 4
   }
+  override destroy() { this.smoke?.dispose();this.smoke=null;super.destroy() }
+
 }
 
 export class HouseView extends WorldView {
@@ -286,18 +260,20 @@ export class TreeView extends WorldView {
 }
 export class RockView extends WorldView {
   private body: ModelHandle
+  private variant = 0
   constructor(stage: GameScene, entity: number) {
     super(stage, entity)
     this.body = this.model()
   }
   place(x: number, y: number) {
+    this.variant = Math.floor(hash(x,y)*6)
     this.anchor.x = x + 0.5
     this.anchor.y = y + 0.5
     this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
   }
   update(ore: boolean, amount: number) {
     const full = amount > ROCK_AMOUNT / 2
-    this.body.use(`rock/${ore}/${full}`, () => makeRock(ore, full))
+    this.body.use(`rock/${ore}/${full}/${this.variant}`, () => makeRock(ore, full, this.variant))
   }
 }
 export class FieldView extends WorldView {

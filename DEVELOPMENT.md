@@ -175,6 +175,15 @@ condition. Drag any model or use the rotation slider to turn the collection.
 `pnpm check:models` checks every collection, camera controls, sheet exports
 and phone layout, and saves PNGs to `output/inkline-3d/town-review/`.
 
+The **Review fixes** collection groups the revised storage props, entrances,
+hay stack, townhouse, quarry, stone deposits, markers and emitters. All building
+and house geometry is checked against its plate bounds. Natural rock deposits
+use six seeded silhouettes while retaining their simulation cell footprints.
+`pnpm check:revisions` renders every catalogue entry, checks the exclamation
+mark from both sides and verifies animated smoke through rendered pixels.
+The chimney plume uses `render3d/smoke-effects.ts` in both the catalogue and
+working buildings. Smoke's GLB stores emitter metadata; particles run at runtime.
+
 Open [`/effects-lab.html`](http://localhost:5232/effects-lab.html) to inspect
 eight conditions on the same house geometry. Select any home tier, rotate,
 adjust effect strength or pause animation. Dirt, masonry, cracks, snow,
