@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "assets:build": "node scripts/ink-assets.ts",
     "typecheck": "tsc -p tsconfig.json --pretty false",
     "balance": "node scripts/balance.ts",
     "check": "node scripts/check.ts",
+    "check:browser": "node scripts/check-browser.ts",
     "test": "node --test \"test/*.test.ts\"",
     "release": "pnpm --dir deploy release"
   },
@@ -19,10 +21,13 @@
     "@typeonce/bevy-ts-pixi": "^0.5.0",
     "@typeonce/bevy-ts-render": "^0.5.0",
     "effect": "4.0.3",
-    "pixi.js": "^8.22.0"
+    "pixi.js": "^8.22.0",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@types/node": "25.5.0",
+    "@types/three": "^0.186.0",
+    "playwright": "^1.64.0",
     "typescript": "7.0.2",
     "vite": "8.3.1"
   }

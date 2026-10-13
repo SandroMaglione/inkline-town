@@ -4,3 +4,4 @@ dist
 .env
 .env.*
 snapshots/
+output/inkline-3d/

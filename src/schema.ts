@@ -15,7 +15,8 @@ import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
 import type { OptionalReadCell } from "@typeonce/bevy-ts/Query"
 import type { NodeRegistry } from "@typeonce/bevy-ts-render"
 
-import type { BuildingView, FieldView, HouseView, RockView, Stage, TreeView, WalkerView } from "./art.ts"
+import type { BuildingView, FieldView, HouseView, RockView, TreeView, WalkerView } from "./render3d/views.ts"
+import type { GameScene } from "./render3d/scene.ts"
 import { goodIds, kindIds, landIds, sizeIds, type Amounts } from "./content.ts"
 import type { UiValue } from "./ui.ts"
 
@@ -273,7 +274,7 @@ export const Stock = Descriptor.TransientResource<Amounts>()("Town/Stock")
 export const Ui = Descriptor.Service<UiValue>()("Town/Ui")
 /** The frame's length, for animation only: the simulation runs on `Time`. */
 export const Clock = Descriptor.Service<{ deltaSeconds: number; elapsed: number }>()("Town/Clock")
-export const StageService = Descriptor.Service<Stage>()("Town/Stage")
+export const StageService = Descriptor.Service<GameScene>()("Town/Stage")
 export const BuildingNodes = Descriptor.Service<NodeRegistry.NodeRegistry<BuildingView>>()("Town/BuildingNodes")
 export const HouseNodes = Descriptor.Service<NodeRegistry.NodeRegistry<HouseView>>()("Town/HouseNodes")
 export const WalkerNodes = Descriptor.Service<NodeRegistry.NodeRegistry<WalkerView>>()("Town/WalkerNodes")

@@ -8,7 +8,8 @@ your time runs out. Or watch it go bankrupt, revolt, or empty out.
 ![A complete town at the end of its fifth year: hundreds of homes, farms, mills, and workshops on a pale island](docs/screenshots/town-complete.webp)
 
 Inkline Town plays like a small Anno in a small box. Every building, cart, and
-person is drawn live in thin isometric line art, every map is new, and every
+person is drawn live in thin 3D line art. Pan, zoom and rotate the island;
+every map is new, and every
 term ends with a verdict and the story of how you got there.
 
 ## A new charter, a new land

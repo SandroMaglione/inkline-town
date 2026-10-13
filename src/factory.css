@@ -2,6 +2,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #f0f2ec; tou
 body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace; color: #3d4943; -webkit-user-select: none; user-select: none; }
 #app { position: fixed; inset: 0; }
 #app canvas { display: block; }
+#app .world-canvas { width:100%; height:100%; touch-action:none; outline:none; }
+.camera-controls { position:fixed;left:16px;bottom:calc(74px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:3px;padding:5px;background:#f7f8f4;border:1px solid #c9cec4;border-radius:8px;box-shadow:0 2px 0 #dfe2db;z-index:2; }
+.camera-controls button { font:inherit;font-size:12px;color:#3d4943;border:1px solid transparent;background:transparent;border-radius:5px;padding:6px 9px;cursor:pointer;min-height:32px; }
+.camera-controls button:hover {background:#eceee8}
+.camera-controls button[aria-pressed=true] {background:#3d4943;color:#f7f8f4}
+.camera-controls output {font-size:11px;color:#77817a;min-width:33px;text-align:center}
 
 .icon { display: block; flex: none; }
 .glyph { display: inline-flex; align-items: center; justify-content: center; flex: none; }
@@ -246,3 +252,19 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   background: #3d4943; color: #f7f8f4; border: 0; border-radius: 4px; cursor: pointer; box-shadow: 0 2px 0 #c9cec4;
 }
 .result.show { display: block; }
+
+@media(max-width:760px){
+  .hud.left {left:10px;right:10px;max-width:none}
+  .hud.right,.panel-open .hud.right {top:64px;left:10px;right:10px;max-width:none;align-items:flex-start}
+  .hud .card .cell {padding:7px 9px}
+  .hud.left .stock {margin-top:48px;max-width:100%;overflow-x:auto;flex:none}
+  .hud .stock .group {flex:none}
+  .hud.right .card {max-width:100%;overflow-x:auto}
+  .toolbar {left:10px;right:10px;bottom:calc(64px + env(safe-area-inset-bottom))}
+  .toolbar .group,.toolbar .town-button {flex:none}
+  .system,.panel-open .system {right:10px;bottom:calc(12px + env(safe-area-inset-bottom))}
+  .camera-controls {left:10px;max-width:calc(100vw - 20px);bottom:calc(118px + env(safe-area-inset-bottom))}
+  .camera-controls button {padding:6px 7px;min-height:34px}
+  .panel {width:calc(100vw - 24px);max-width:360px}
+  .toast {bottom:calc(165px + env(safe-area-inset-bottom));max-width:calc(100vw - 28px)}
+}

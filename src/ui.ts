@@ -35,10 +35,10 @@ export type Edit =
 
 export type TradeMode = "sell" | "buy" | "none"
 
-/** What the pointer did, in world pixels. */
+/** What the pointer did, in grid coordinates. */
 export type Gesture =
   | { readonly type: "press"; readonly at: Point }
-  | { readonly type: "release"; readonly at: Point; readonly panned: boolean }
+  | { readonly type: "release"; readonly at: Point; readonly panned: boolean; readonly hit?: number | null }
 
 export type Look = "hover" | "picked" | "blocked" | "reach"
 
@@ -64,25 +64,25 @@ export type Panel =
   | { readonly type: "build" }
   | { readonly type: "town" }
   | {
-    readonly type: "building"
-    readonly id: number
-    readonly cell: Point
-    readonly kind: KindId
-    readonly status: Status
-    /** Why it is not working, when it is not. */
-    readonly problem: string | null
-    /** Whether it can be paused (not the town hall, not a site), and whether it is. */
-    readonly pausable: boolean
-    readonly paused: boolean
-    readonly lines: ReadonlyArray<string>
-  }
+      readonly type: "building"
+      readonly id: number
+      readonly cell: Point
+      readonly kind: KindId
+      readonly status: Status
+      /** Why it is not working, when it is not. */
+      readonly problem: string | null
+      /** Whether it can be paused (not the town hall, not a site), and whether it is. */
+      readonly pausable: boolean
+      readonly paused: boolean
+      readonly lines: ReadonlyArray<string>
+    }
   | {
-    readonly type: "house"
-    readonly id: number
-    readonly cell: Point
-    readonly tier: Tier
-    readonly lines: ReadonlyArray<string>
-  }
+      readonly type: "house"
+      readonly id: number
+      readonly cell: Point
+      readonly tier: Tier
+      readonly lines: ReadonlyArray<string>
+    }
 
 /** A thing's hit area for the pointer, nearest first. */
 export interface HitBox {
@@ -157,7 +157,14 @@ export interface Stats {
   }
   readonly goals: ReadonlyArray<{ readonly text: string; readonly value: string; readonly met: boolean }>
   readonly larder: number
-  readonly history: ReadonlyArray<{ readonly tick: number; readonly coins: number; readonly residents: number; readonly citizens: number; readonly approval: number; readonly net: number }>
+  readonly history: ReadonlyArray<{
+    readonly tick: number
+    readonly coins: number
+    readonly residents: number
+    readonly citizens: number
+    readonly approval: number
+    readonly net: number
+  }>
   readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly text: string }>
 }
 
@@ -167,8 +174,10 @@ export interface UiValue {
   placing: KindId | null
   /** Which side panel the toolbar opened, when nothing is selected. */
   menu: "build" | "town" | null
-  /** The pointer in world pixels, or `null` off the canvas. */
+  /** The pointer on the grid, or `null` off the canvas. */
   pointer: Point | null
+  /** Camera-ray entity hit. Undefined allows grid-only headless interaction. */
+  pointerHit?: number | null
   /** Where a road or a row of homes being dragged started. */
   dragFrom: Point | null
   selected: number | null
@@ -177,7 +186,7 @@ export interface UiValue {
   preview: Preview
   hits: ReadonlyArray<HitBox>
   panel: Panel | null
-  /** Where each building and home stands (world pixels), for the camera to look at. */
+  /** Where each building and home stands on the grid, for the camera to look at. */
   centres: ReadonlyMap<number, Point>
   stats: Stats | null
   /** Steps of the simulation a fixed step: 0 (paused), 1, 2, or 4. */
