@@ -21,6 +21,7 @@ import {
   propIds,
   props,
   PAVE_COST,
+  PAVED_PACE,
   tierHome,
   winters,
   kinds,
@@ -48,7 +49,7 @@ import { GRID } from "./iso.ts"
 import { goodIcon, icon, iconEl, type IconName } from "./icons.ts"
 import { generate } from "./mapgen.ts"
 import { askOf, priceOf } from "./sim/index.ts"
-import type { Stats, Tool, TradeMode, UiValue, View } from "./ui.ts"
+import type { Line, Stats, Tool, TradeMode, UiValue, View } from "./ui.ts"
 import { emptyPreview } from "./ui.ts"
 import { GameScene } from "./render3d/scene.ts"
 import { MapInput } from "./render3d/input.ts"
@@ -86,17 +87,34 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const coins = el("div", "cell coins")
   bar.append(clock, coins)
   const stock = el("div", "card stock")
+  /** What each good is for, for the stock bar's tooltips: who makes it, who takes it. */
+  const goodHelp: Readonly<Record<GoodId, string>> = {
+    wood: "lumberjacks fell it; a sawmill saws it into planks",
+    planks: "what homes and buildings are built from: a sawmill makes them from wood",
+    stone: "for building and paving: quarries cut it from rocks, which run out",
+    ore: "mines dig it; a smithy forges it into tools",
+    tools: "for building, and workshops wear one out every 50 or 60 jobs: a smithy forges them, or buy them",
+    fish: "food for settlers: fisheries catch it by the water; it rots in about three minutes",
+    smoked: "fish that keeps all winter: a smokehouse smokes it",
+    wheat: "farms grow it; a mill grinds it into flour (not in winter)",
+    flour: "a mill's; a bakery bakes it into bread",
+    bread: "food that citizens need, and a cottage with bread pays half again: it rots in about five minutes",
+    wool: "sheep farms shear it; a weaver weaves it into cloth",
+    cloth: "citizens need it: only brought to streets with desirability 5 or more"
+  }
   const groups: ReadonlyArray<ReadonlyArray<GoodId>> = [
-    ["wood", "planks", "stone", "tools"],
-    ["fish", "smoked", "bread"],
+    ["wood", "planks", "stone", "ore", "tools"],
+    ["fish", "smoked", "wheat", "flour", "bread"],
     ["wool", "cloth"]
   ]
+  stock.title = "Goods in the town's storage · hover one for what it is for"
   const goodCells = new Map<GoodId, HTMLElement>()
   for (const group of groups) {
     const cell = el("div", "group")
     for (const g of group) {
       const item = el("span", "good")
-      item.title = goods[g].title
+      item.title = `${goods[g].title}: ${goodHelp[g]}`
+      item.setAttribute("aria-label", goods[g].title)
       const glyph = el("span", "glyph")
       glyph.innerHTML = goodIcon(g, 18)
       const count = el("span", "count", "0")
@@ -124,11 +142,30 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const approval = el("div", "cell")
   const settlerCell = el("div", "cell")
   const citizenCell = el("div", "cell")
-  const jobs = el("div", "cell")
+  const jobs = el("div", "cell jobs")
   folk.append(approval, settlerCell, citizenCell, jobs)
   people.append(folk)
   people.title = "Open the town's numbers, goals, and levers (T)"
   people.onclick = () => toggleMenu("town")
+  /** Points the page at a place: the camera goes there, it is outlined for a moment, and (when it is a thing) it is selected. */
+  const goTo = (at: { readonly x: number; readonly y: number }, size: number, id: number | null) => {
+    stage.focus(at.x + size / 2, at.y + size / 2)
+    ui.flash = { cell: { x: at.x, y: at.y }, size, until: Date.now() + 4000 }
+    if (id !== null) {
+      ui.selected = id
+      ui.menu = null
+      refreshTools()
+    }
+  }
+  let shortCursor = 0
+  jobs.onclick = (event) => {
+    event.stopPropagation()
+    const short = ui.stats?.shortStaffed ?? []
+    if (short.length === 0) return toggleMenu("town")
+    const next = short[shortCursor % short.length]!
+    shortCursor += 1
+    goTo(next.cell, next.size, next.id)
+  }
   const tooltip = el("div", "tooltip")
   const toastBox = el("div", "toast")
   const toolbar = el("div", "toolbar")
@@ -166,7 +203,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     founding: true,
     view: "none",
     overlay: { key: "", cells: [] },
+    tints: new Map(),
     legend: null,
+    flash: null,
     toast: (message) => {
       toastBox.textContent = message
       toastBox.classList.add("show")
@@ -195,7 +234,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       label: "pave",
       key: "P",
       icon: "pave",
-      tip: `Drag along a road to pave it: nicer to live beside · ${PAVE_COST.coins} coins and ${PAVE_COST.stone} stone a cell`
+      tip: `Drag along a road to pave it: carriers and walkers go ${PAVED_PACE}× as fast on it, and homes beside it like it · ${PAVE_COST.coins} coins and ${PAVE_COST.stone} stone a cell`
     },
     { tool: "home", label: "homes", key: "H", icon: "homes", tip: `Drag to lay a row of homes along a road · ${costText(home.cost)} each` },
     { tool: "build", label: "build", key: "B", icon: "build", tip: "Choose a building, then click to place it · Esc to stop" },
@@ -538,12 +577,21 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         const kind = kinds[id]
         const option = el("button", "option")
         const cost = costChips(kind.cost)
+        cost.box.prepend(el("span", "cap", "cost"))
         const terms = el("span", "chips")
-        terms.innerHTML = `${kind.workers > 0 ? `<span class="chip dim" title="workers: ${kind.crew}">${icon(kind.crew === "citizens" ? "citizens" : "settlers", 14)}${kind.workers}</span>` : ""}${kind.appeal ? `<span class="chip dim" title="desirability around it">${icon("appeal", 14)}${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value}</span>` : ""}<span class="chip dim" title="upkeep, coins a minute">${icon("upkeep", 14)}${kind.upkeep}/min</span>`
+        const r = kind.recipe
+        const does = [
+          r ? `<span class="chip" title="${r.input ? `turns ${r.inputs} ${goods[r.input].title} into ${r.batch} ${goods[r.output].title}` : `makes ${r.batch} ${goods[r.output].title}`} every ${r.seconds} s">${r.input ? `${goodIcon(r.input, 14)}<i>→</i>` : ""}${goodIcon(r.output, 14)}${r.batch > 1 ? r.batch : ""}</span>` : "",
+          kind.service ? `<span class="chip" title="its walkers serve the homes within ${kind.service.range} road cells of its door">${icon(kind.service.service === "goods" ? "trade" : kind.service.service === "faith" ? "faith" : kind.service.service === "repair" ? "repair" : kind.service.service, 14)}${kind.service.range}</span>` : "",
+          kind.holds && !kind.recipe && !kind.service ? `<span class="chip" title="holds up to ${kind.holds.cap} of each good${kind.keeps ? `, and keeps food ${kind.keeps} times as long` : ""}">${icon("jobs", 14)}${kind.holds.cap}</span>` : "",
+          kind.workers > 0 ? `<span class="chip dim" title="${kind.workers} ${kind.crew} to work it, from homes within 15 road cells">${icon(kind.crew === "citizens" ? "citizens" : "settlers", 14)}${kind.workers}</span>` : "",
+          kind.appeal ? `<span class="chip ${kind.appeal.value < 0 ? "bad" : "good"}" title="desirability ${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value} beside it, out to ${kind.appeal.reach} cells${kind.appeal.value < 0 ? ": keep homes away" : ": homes like it"}">${icon("appeal", 14)}${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value}</span>` : "",
+          `<span class="chip dim" title="upkeep: coins a minute while it stands (a quarter when paused)">${icon("upkeep", 14)}${kind.upkeep}/min</span>`
+        ].join("")
+        terms.innerHTML = `<span class="cap">does</span>${does}`
         const blurb = el("span", "blurb", kind.blurb)
-        option.append(picture(id), el("span", "name", kind.title.toLowerCase()), cost.box, blurb)
-        option.title = `${kind.title}: ${kind.blurb}${kind.workers > 0 ? ` · ${kind.workers} ${kind.crew === "citizens" ? "citizen" : "settler"} workers` : ""}${kind.appeal ? ` · desirability ${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value} out to ${kind.appeal.reach} cells` : ""} · ${kind.upkeep} coins a minute`
-        cost.box.append(terms)
+        option.append(picture(id), el("span", "name", kind.title.toLowerCase()), cost.box, terms, blurb)
+        option.title = `${kind.title}: ${kind.blurb}${kind.workers > 0 ? ` · ${kind.workers} ${kind.crew === "citizens" ? "citizen" : "settler"} workers from within 15 road cells` : ""}${kind.service ? ` · walkers reach ${kind.service.range} road cells` : ""}${kind.appeal ? ` · desirability ${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value} out to ${kind.appeal.reach} cells` : ""} · ${kind.upkeep} coins a minute`
         option.onclick = () => place(id)
         live.push(() => {
           const lock = lockText(kind)
@@ -572,12 +620,12 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       if (!ground && id === "lamp") parks.append(el("p", "empty", "furnishings · click a cell of park"))
       const option = el("button", "option")
       const cost = costChips(piece.cost)
+      cost.box.prepend(el("span", "cap", "cost"))
       const terms = el("span", "chips")
-      terms.innerHTML = `<span class="chip dim" title="beauty it adds to its park">${icon("appeal", 14)}+${piece.beauty}</span><span class="chip dim" title="upkeep, coins a minute">${icon("upkeep", 14)}${piece.upkeep}/min</span>`
+      terms.innerHTML = `<span class="cap">does</span><span class="chip good" title="beauty it adds to its park">${icon("appeal", 14)}+${piece.beauty}</span><span class="chip dim" title="upkeep, coins a minute">${icon("upkeep", 14)}${piece.upkeep}/min</span>`
       const blurb = el("span", "blurb", piece.blurb)
-      option.append(picture(`park:${id}`), el("span", "name", piece.title.toLowerCase()), cost.box, blurb)
+      option.append(picture(`park:${id}`), el("span", "name", piece.title.toLowerCase()), cost.box, terms, blurb)
       option.title = `${piece.title}: ${piece.blurb} · beauty +${piece.beauty}${ground ? " a cell" : ""} · ${piece.upkeep} coins a minute`
-      cost.box.append(terms)
       option.onclick = pick
       live.push(() => {
         const lock = lockText(piece)
@@ -637,9 +685,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const treasury = section(
       "treasury",
       "treasury",
-      "Coins a minute. Administration grows faster than the town. Three minutes in debt and the town is bankrupt."
+      "Coins a minute. Taxes come only from homes that are fed, in proportion to the needs they have met. Administration grows faster than the town. Three minutes in debt and the town is bankrupt."
     )
     const taxes = row(treasury, "taxes", "taxes")
+    const supplied = row(treasury, "if every home were supplied", "homes")
+    supplied.classList.add("dim")
+    const suppliedNote = el("p", "empty")
+    treasury.append(suppliedNote)
     const traded = row(treasury, "trade", "trade")
     const upkeep = row(treasury, "upkeep", "upkeep")
     const admin = row(treasury, "administration", "town")
@@ -652,7 +704,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const levers = section(
       "tax rates",
       "taxes",
-      "Lower taxes raise approval, higher ones lower it, weighed by how many of each tier there are."
+      `Lower taxes raise approval, higher ones lower it, weighed by how many of each tier there are. Above ${moodRules.grudge.above}% the town also keeps a grudge that outlasts the rate: cutting taxes at the end does not undo a term of squeezing.`
     )
     for (const tier of ["settlers", "citizens"] as const) {
       const line = el("div", "row lever")
@@ -679,7 +731,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         const rate = ui.stats?.policy[tier] ?? 100
         value.textContent = `${rate}%`
         const sway = Math.round((100 - rate) * moodRules.perTaxPoint)
-        effect.textContent = sway === 0 ? "the usual rate" : `${signed(sway)} approval`
+        const grudge = rate > moodRules.grudge.above ? " · a grudge builds while it stays this high, and fades slowly" : ""
+        effect.textContent = (sway === 0 ? "the usual rate" : `${signed(sway)} approval`) + grudge
         effect.className = `effect ${sway > 0 ? "up" : sway < 0 ? "down" : ""}`
       })
     }
@@ -691,6 +744,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const burghers = row(town, "of them, burghers", "burghers")
     const homes = row(town, "homes", "homes")
     const work = row(town, "jobs filled", "jobs")
+    const workNote = el("p", "empty")
+    town.append(workNote)
     const peopleLine = el("div", "spark")
     town.append(peopleLine)
     panel.append(town)
@@ -698,7 +753,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const needs = section(
       "homes supplied",
       "homes",
-      "Settlers need food (fish, smoked fish, or bread) from a market; citizens and burghers need bread, cloth, and faith. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
+      "A hungry home pays no taxes. Settlers need food (fish, smoked fish, or bread) from a market, and a cottage with bread besides pays half again; citizens and burghers need bread, cloth, and faith. Cloth is only brought to streets with desirability 5 or more. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
     )
     const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith", IconName>> = {
       food: "fish",
@@ -831,6 +886,10 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         moodParts.innerHTML = parts
       }
       money(taxes, s.taxes)
+      supplied.textContent = `+${s.suppliedTaxes}`
+      const gap = s.suppliedTaxes - s.taxes
+      suppliedNote.textContent = gap > Math.max(10, s.taxes * 0.1) ? `${gap} coins a minute left on the table: a hungry home pays nothing, a cottage with bread pays half again, a fine street a quarter more` : ""
+      suppliedNote.style.display = suppliedNote.textContent ? "" : "none"
       money(traded, s.trade)
       money(upkeep, -s.upkeep)
       money(admin, -s.admin)
@@ -840,6 +899,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       burghers.textContent = String(s.burghers)
       homes.textContent = String(s.homes)
       work.textContent = `${s.employed} of ${s.jobs}`
+      workNote.textContent = s.shortStaffed.length === 0
+        ? "every workplace has its crew"
+        : `${s.shortStaffed.length} short of workers: ${s.shortStaffed.slice(0, 4).map((w) => `${w.title} ${w.assigned}/${w.needed}${w.nobodyNear ? " (nobody within reach)" : ""}`).join(", ")}${s.shortStaffed.length > 4 ? ", …" : ""} · click the jobs counter to visit them`
       for (const b of bars) {
         const share = s.homes > 0 ? s.needs[b.n] / s.homes : 0
         b.fill.style.width = `${Math.round(share * 100)}%`
@@ -888,28 +950,30 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     })
   }
 
-  /** An icon for a line of a building's or home's description, by what it is about. */
-  const lineIcon = (text: string): IconName | GoodId => {
-    if (text.startsWith("workers")) return "workers"
-    if (text.startsWith("settlers within")) return "settlers"
-    if (text.startsWith("citizens within")) return "citizens"
-    if (text.startsWith("desirability")) return "appeal"
-    if (text.startsWith("fire")) return "fire"
-    if (text.startsWith("condition")) return "condition"
-    if (text.startsWith("work:")) return "jobs"
-    if (text.startsWith("tools") || text.startsWith("no tools")) return "tools"
-    if (text.startsWith("on fire")) return "fire"
-    if (text.startsWith("sick")) return "health"
-    if (text.startsWith("upkeep")) return "upkeep"
-    if (text.startsWith("pays")) return "coins"
-    if (text.startsWith("needs")) return "homes"
-    if (text.startsWith("to become")) return "citizens"
-    if (text.startsWith("waiting")) return "planks"
-    if (text.includes("residents")) return "people"
-    if (text.includes("out on the roads")) return "settlers"
-    if (text.startsWith("holds")) return "jobs"
-    const made = goodIds.find((g) => text.includes(`${goods[g].title} ·`))
-    return made ?? "info"
+  /** A line of a description as a row: its icon and what it is about, its value, any goods as chips, and a note underneath saying why. */
+  const renderLine = (row: HTMLElement, l: Line) => {
+    row.className = `line ${l.tone ?? ""}`
+    const chips = l.goods ? `<span class="chips">${l.goods.map((g) => `<span class="chip" title="${goods[g.good].title}">${goodIcon(g.good, 14)}${g.count}</span>`).join("")}</span>` : ""
+    row.innerHTML = `<span class="label">${icon(l.icon, 16)}<span class="what"></span></span><span class="count"></span>${chips}${l.note ? `<small class="note"></small>` : ""}`
+    row.querySelector<HTMLElement>(".what")!.textContent = l.label
+    row.querySelector<HTMLElement>(".count")!.textContent = l.value ?? ""
+    if (l.note) row.querySelector<HTMLElement>(".note")!.textContent = l.note
+  }
+  /** Keeps a box of rows in step with its lines, touching only the rows that changed. */
+  const syncLines = (box: HTMLElement, rows: Array<HTMLElement>, lines: ReadonlyArray<Line>) => {
+    while (rows.length < lines.length) {
+      const line = el("div", "line")
+      rows.push(line)
+      box.append(line)
+    }
+    rows.forEach((row, i) => {
+      const l = lines[i]
+      const text = l ? JSON.stringify(l) : ""
+      if (row.dataset.text === text) return
+      row.dataset.text = text
+      row.style.display = l ? "" : "none"
+      if (l) renderLine(row, l)
+    })
   }
 
   const buildPanel = () => {
@@ -944,6 +1008,15 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     box.classList.add("lines")
     const rows: Array<HTMLElement> = []
     panel.append(box)
+    // A home: what keeps it from the next tier, in its own box, so the cause is never a word in a longer line.
+    const nextBox = p.type === "house" && p.tier < 3 ? section(`to become ${home.tiers[(p.tier + 1) as Tier].title}`, "citizens", "Every line here must clear before the home grows. Needs come from walkers; the street from what stands around it.") : null
+    const nextRows: Array<HTMLElement> = []
+    const nextNote = el("p", "empty")
+    if (nextBox) {
+      nextBox.classList.add("lines")
+      nextBox.append(nextNote)
+      panel.append(nextBox)
+    }
     live.push(() => {
       const now = ui.panel
       if (!now || now.type === "build" || now.type === "town" || now.type !== p.type) return
@@ -960,18 +1033,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         status.textContent = now.cause
         status.className = "pill problem"
       }
-      while (rows.length < now.lines.length) {
-        const line = el("div", "row")
-        rows.push(line)
-        box.append(line)
+      syncLines(box, rows, now.lines)
+      if (nextBox && now.type === "house") {
+        syncLines(nextBox, nextRows, now.blockers)
+        nextNote.textContent = now.blockers.length === 0 ? "nothing stands in the way: it grows when the next resident settles in" : ""
+        nextNote.style.display = now.blockers.length === 0 ? "" : "none"
+        nextBox.append(nextNote)
       }
-      rows.forEach((row, i) => {
-        const text = now.lines[i] ?? ""
-        if (row.dataset.text === text) return
-        row.dataset.text = text
-        row.innerHTML = `<span class="label">${icon(lineIcon(text), 16)}<span></span></span>`
-        row.querySelector(".label > span")!.textContent = text
-      })
     })
     if (!(p.type === "building" && p.kind === "townhall")) {
       const actions = el("div", "actions")
@@ -1301,7 +1369,11 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       approval.innerHTML = `${icon("approval", 18)}<span class="stack"><b class="${s.mood.approval < 0 ? "down" : ""}">${signed(s.mood.approval)} <span class="${s.mood.target >= s.mood.approval ? "up" : "down"}">${trend}</span></b><small>approval</small></span>`
       settlerCell.innerHTML = `${icon("settlers", 18)}<span class="stack"><b>${s.settlers}</b><small>settlers</small></span>`
       citizenCell.innerHTML = `${icon("citizens", 18)}<span class="stack"><b>${s.citizens}</b><small>citizens${s.burghers > 0 ? ` · ${s.burghers} burghers` : ""}</small></span>`
-      jobs.innerHTML = `${icon("jobs", 18)}<span class="stack"><b>${s.employed}<span class="of">/${s.jobs}</span></b><small>jobs</small></span>`
+      const short = s.shortStaffed.length
+      jobs.innerHTML = `${icon("jobs", 18)}<span class="stack"><b>${s.employed}<span class="of">/${s.jobs}</span></b><small class="${short > 0 ? "down" : ""}">${short > 0 ? `${short} short · click` : "jobs filled"}</small></span>`
+      jobs.title = short > 0
+        ? `Workers at work over workers needed. ${short} workplace${short > 1 ? "s are" : " is"} short: ${s.shortStaffed.slice(0, 5).map((w) => `${w.title} ${w.assigned}/${w.needed}${w.nobodyNear ? " (no homes within 15 road cells)" : ""}`).join(", ")}. Click to visit them in turn.`
+        : "Workers at work over workers needed: every workplace has its crew. Residents walk at most 15 road cells to work."
       for (const [g, count] of goodCells) {
         count.textContent = String(s.stock[g])
         count.parentElement!.classList.toggle("empty", s.stock[g] === 0)
@@ -1336,16 +1408,32 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       }
       alarm.classList.toggle("show", warnings.length > 0)
       alarm.classList.toggle("good", warnings.length === 1 && s.fate.complete !== null)
-      // The ticker: alerts now, and the news of the last minute and a half.
+      // The ticker: what needs looking at now, then the news of the last minute and a half; click a line to go there.
       const minute = Math.round(s.minute * 3600)
       const news = s.chronicle.filter((l) => l.alarm && minute - l.tick < 90 * 60).slice(-3).reverse()
+      const ago = (tick: number) => {
+        const sec = Math.max(0, Math.round((minute - tick) / 60))
+        return sec < 5 ? "just now" : sec < 60 ? `${sec} s ago` : `${Math.round(sec / 60)} min ago`
+      }
       const tickerHtml = [
-        ...s.alerts.map((a) => `<div class="cell">${icon("warning", 14)}<span>${a}</span></div>`),
-        ...news.map((l) => `<div class="cell news">${icon("chronicle", 14)}<span>${l.text}</span></div>`)
+        ...(s.alerts.length > 0 ? [`<div class="head">now</div>`] : []),
+        ...s.alerts.map((a, i) => `<button class="cell${a.at ? " place" : ""}" data-alert="${i}" title="${a.at ? "Click to go there" : ""}">${icon("warning", 14)}<span>${a.text}</span>${a.at ? `<kbd>go</kbd>` : ""}</button>`),
+        ...(news.length > 0 ? [`<div class="head">lately</div>`] : []),
+        ...news.map((l, i) => `<button class="cell news${l.at ? " place" : ""}" data-news="${i}" title="${l.at ? "Click to go there" : ""}">${icon("chronicle", 14)}<span>${l.text} <em>${ago(l.tick)}</em></span>${l.at ? `<kbd>go</kbd>` : ""}</button>`)
       ].join("")
       if (ticker.dataset.html !== tickerHtml) {
         ticker.dataset.html = tickerHtml
         ticker.innerHTML = tickerHtml
+        for (const b of ticker.querySelectorAll<HTMLButtonElement>("button.place")) {
+          b.onclick = (event) => {
+            event.stopPropagation()
+            const alertIndex = b.dataset.alert
+            const target = alertIndex !== undefined ? s.alerts[Number(alertIndex)] : null
+            if (target?.at) return goTo(target.at, target.size, target.id)
+            const line = news[Number(b.dataset.news)]
+            if (line?.at) goTo(line.at, 1, null)
+          }
+        }
       }
       ticker.classList.toggle("show", tickerHtml !== "" && s.fate.state === "playing")
       // News as it happens: a toast for each new alarm line.

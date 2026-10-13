@@ -5,9 +5,36 @@
  * None of it is saved: it is host state, handed to systems as a service.
  */
 import type { Amounts, CharterValue, GoodId, GroundId, KindId, PropId, Tier, WinterId } from "./content.ts"
+import type { IconName } from "./icons.ts"
 import type { Point } from "./iso.ts"
 import type { Status } from "./schema.ts"
 import type { OverlayCell } from "./render3d/models.ts"
+
+/** How a line of a panel reads: fine, worth a look, wrong, or an aside. */
+export type Tone = "ok" | "warn" | "bad" | "dim"
+/**
+ * A line of a building's or home's description: an icon, what it is about,
+ * its value, and (when something is wrong, or worth knowing) a note
+ * underneath saying why and what to do. `goods` are shown as icon chips.
+ */
+export interface Line {
+  readonly icon: IconName | GoodId
+  readonly label: string
+  readonly value?: string | undefined
+  readonly note?: string | undefined
+  readonly tone?: Tone | undefined
+  readonly goods?: ReadonlyArray<{ readonly good: GoodId; readonly count: number }> | undefined
+}
+
+/** Something that needs looking at now, and where (when it is somewhere). */
+export interface Alert {
+  readonly text: string
+  readonly at: Point | null
+  /** The footprint there, cells a side, for the outline. */
+  readonly size: number
+  /** The entity to select on the way there, if there is one. */
+  readonly id: number | null
+}
 
 export type Tool = "select" | "road" | "pave" | "home" | "bulldoze" | "place" | "ground" | "prop"
 
@@ -61,6 +88,10 @@ export interface Preview {
   ghosts: Array<{ readonly what: KindId | "home"; readonly cell: Point }>
   /** Road cells about to be laid. */
   roads: Array<Point>
+  /** Road cells a thing being placed would reach: a service's walkers, or the commute its workers (or a home's residents) make. */
+  range: Array<Point>
+  /** What `range` shows, for the tooltip. */
+  rangeNote: string | null
   /** Park cells about to be laid or furnished, as they will look. */
   parks: Array<{ readonly x: number; readonly y: number; readonly ground: GroundId; readonly prop: PropId | "none" }>
   /** The entity under the pointer. */
@@ -70,7 +101,7 @@ export interface Preview {
   tooltip: string | null
 }
 
-export const emptyPreview = (): Preview => ({ plots: [], ghosts: [], roads: [], parks: [], hover: null, danger: false, tooltip: null })
+export const emptyPreview = (): Preview => ({ plots: [], ghosts: [], roads: [], range: [], rangeNote: null, parks: [], hover: null, danger: false, tooltip: null })
 
 /** The side panel: the build menu, the town's numbers and taxes, a building, or a home. */
 export type Panel =
@@ -87,14 +118,16 @@ export type Panel =
       /** Whether it can be paused (not the town hall, not a site), and whether it is. */
       readonly pausable: boolean
       readonly paused: boolean
-      readonly lines: ReadonlyArray<string>
+      readonly lines: ReadonlyArray<Line>
     }
   | {
       readonly type: "house"
       readonly id: number
       readonly cell: Point
       readonly tier: Tier
-      readonly lines: ReadonlyArray<string>
+      readonly lines: ReadonlyArray<Line>
+      /** What keeps it from the next tier, a line each; empty when nothing does (or there is no next tier). */
+      readonly blockers: ReadonlyArray<Line>
     }
   | {
       readonly type: "park"
@@ -104,14 +137,14 @@ export type Panel =
       readonly cells: number
       readonly value: number
       readonly reach: number
-      readonly lines: ReadonlyArray<string>
+      readonly lines: ReadonlyArray<Line>
     }
   | {
       readonly type: "ruin"
       readonly id: number
       readonly cell: Point
       readonly cause: "burnt" | "collapsed" | "derelict"
-      readonly lines: ReadonlyArray<string>
+      readonly lines: ReadonlyArray<Line>
     }
 
 /** A thing's hit area for the pointer, nearest first. */
@@ -125,6 +158,8 @@ export interface HitBox {
 export interface Stats {
   readonly coins: number
   readonly taxes: number
+  /** What the same homes would pay a minute with every need met: taxes left on the table when it is more. */
+  readonly suppliedTaxes: number
   readonly trade: number
   readonly upkeep: number
   readonly admin: number
@@ -149,6 +184,8 @@ export interface Stats {
   readonly burghers: number
   readonly jobs: number
   readonly employed: number
+  /** Workplaces short of workers, to step through from the jobs counter. */
+  readonly shortStaffed: ReadonlyArray<{ readonly id: number; readonly title: string; readonly cell: Point; readonly size: number; readonly assigned: number; readonly needed: number; readonly nobodyNear: boolean }>
   readonly charter: CharterValue
   /** Minutes into the term. */
   readonly minute: number
@@ -211,9 +248,9 @@ export interface Stats {
     readonly approval: number
     readonly net: number
   }>
-  readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly text: string; readonly alarm: boolean }>
+  readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly text: string; readonly alarm: boolean; readonly at: Point | null }>
   /** What needs looking at right now, a line each: workshops waiting, workplaces no one can reach, food running out. */
-  readonly alerts: ReadonlyArray<string>
+  readonly alerts: ReadonlyArray<Alert>
 }
 
 /** A map view's legend: what each colour means. */
@@ -254,6 +291,10 @@ export interface UiValue {
   /** The map view shown over the town, its cells (rebuilt as the town changes), and its legend. */
   view: View
   overlay: { readonly key: string; readonly cells: ReadonlyArray<OverlayCell> }
+  /** The view's colour for each building and home, washed over the model itself so it reads from above. */
+  tints: ReadonlyMap<number, number>
   legend: Legend | null
+  /** A place the page points at (from the ticker): outlined until `until`, in the clock's seconds. */
+  flash: { readonly cell: Point; readonly size: number; readonly until: number } | null
   toast: (message: string) => void
 }

@@ -8,9 +8,9 @@ import { spoilExpectation } from "../rules/decay.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { ruinDraft } from "../archetypes.ts"
-import { goodIds, ticks } from "../content.ts"
+import { foods, goodIds, ticks } from "../content.ts"
 import { counted, placeName } from "../places.ts"
-import { Building, Burning, Charter, Chronicle, Condition, Game, Rules, House, Inventory, Pantry, Rising, Rng, Site, Tile, Time, maybe } from "../schema.ts"
+import { Building, Burning, Charter, Chronicle, Condition, Game, Rules, House, Inventory, Pantry, Recipe, Rising, Rng, Site, Staff, Tile, Time, maybe } from "../schema.ts"
 import { elapsed, write } from "./shared.ts"
 
 /** The pantry warns of rotting food at most this often. */
@@ -25,7 +25,9 @@ export const Decay = Game.System(
         without: [Site, Rising, Burning]
       }),
       landmarks: Game.Query({ selection: { tile: Game.Query.read(Tile), building: Game.Query.read(Building) }, without: [Site, Rising] }),
-      shelves: Game.Query({ selection: { inventory: Game.Query.write(Inventory), building: Game.Query.optional(Building) }, without: [Site, Rising] })
+      shelves: Game.Query({ selection: { inventory: Game.Query.write(Inventory), building: Game.Query.optional(Building) }, without: [Site, Rising] }),
+      /** Who makes food, and whether anyone is at work there: for the rot warning's reckoning of what the town makes. */
+      makers: Game.Query({ selection: { recipe: Game.Query.read(Recipe), staff: Game.Query.read(Staff) }, with: [Building], without: [Site, Rising, Burning] })
     },
     resources: {
       time: Game.System.readResource(Time),
@@ -60,7 +62,8 @@ export const Decay = Game.System(
           resources.chronicle,
           t,
           b ? `The ${kinds[b.kind].title.toLowerCase()} on ${placeName(landmarks, tile)} fell down: nobody mended it.` : `A home on ${placeName(landmarks, tile)} fell down: nobody mended it.`,
-          true
+          true,
+          tile
         )
       }
     }
@@ -91,8 +94,19 @@ export const Decay = Game.System(
     // The pantry's minute.
     if (t > 0 && t % 3600 === 0) {
       const p = resources.pantry.get()
-      const warn = p.rotted >= 6 && t - p.warned >= ROT_WARNING
-      if (warn) write(resources.chronicle, t, `${counted(p.rotted, "fish or loaf", "fish and loaves")} rotted in store this minute: a granary keeps them five times as long, and smoked fish keeps.`, true)
+      const warn = p.rotted >= 6 && p.rotted * 4 >= p.eaten && t - p.warned >= ROT_WARNING
+      if (warn) {
+        // What the town could make of food a minute with the crews it has, against what it ate: rot is the difference, not a want of granaries.
+        let made = 0
+        for (const { data } of queries.makers.each()) {
+          const r = data.recipe.get()
+          if (data.staff.get().assigned > 0 && (foods as ReadonlyArray<string>).includes(r.output)) made += (r.batch * 3600) / r.period
+        }
+        const cause = made > p.eaten * 1.5
+          ? `the town makes about ${Math.round(made)} food a minute and eats ${p.eaten}: fewer fisheries, a smokehouse, or selling fish would stop the waste`
+          : `a granary keeps fish and bread five times as long, and smoked fish keeps`
+        write(resources.chronicle, t, `${counted(p.rotted, "fish or loaf", "fish and loaves")} rotted in store this minute: ${cause}.`, true)
+      }
       resources.pantry.set({ eaten: 0, rotted: 0, eatenLast: p.eaten, rottedLast: p.rotted, warned: warn ? t : p.warned })
     }
   }

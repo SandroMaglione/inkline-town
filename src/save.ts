@@ -13,9 +13,27 @@ import { Clock, Context, Effect, Schema } from "effect"
 export const SAVE_FORMAT = "inkline-town/save"
 /**
  * 2: the charter's towns. 3: neighbourhoods and their dangers (desirability, crews, risks, wear, ruins,
- * winters). Older saves cannot be loaded.
+ * winters). 4: parks and patrols. 5: the grudge over taxes, and where each piece of news happened.
+ * A version 4 save is carried forward (see `carry`); older ones cannot be loaded.
  */
-export const SAVE_VERSION = 4
+export const SAVE_VERSION = 5
+
+/**
+ * Fills in what a save from the version before lacks, so a town in progress
+ * survives an update: the mood's grudge (none yet) and the news's places
+ * (unknown). Anything else is left to the world's own validation.
+ */
+const carry = (version: number, world: unknown): unknown | null => {
+  if (version !== 4 || typeof world !== "object" || world === null) return null
+  const w = world as { resources?: Record<string, unknown> }
+  const r = w.resources
+  if (!r || typeof r !== "object") return null
+  const mood = r["Town/Mood"]
+  if (mood && typeof mood === "object" && !("grudge" in mood)) r["Town/Mood"] = { ...mood, grudge: 0, memory: 0 }
+  const chronicle = r["Town/Chronicle"] as { lines?: Array<Record<string, unknown>> } | undefined
+  if (chronicle && Array.isArray(chronicle.lines)) r["Town/Chronicle"] = { ...chronicle, lines: chronicle.lines.map((l) => ({ at: null, ...l })) }
+  return w
+}
 
 export type Slot = "manual" | "auto"
 export const slots: ReadonlyArray<Slot> = ["manual", "auto"]
@@ -134,7 +152,12 @@ export const read = (slot: Slot) =>
       return { format: SAVE_FORMAT, version: SAVE_VERSION, slot, savedAt: 0, title: "an earlier save", world: parsed } satisfies SaveFile
     }
     const version = (parsed as { version?: unknown } | null)?.version
-    if (typeof version === "number" && version !== SAVE_VERSION) return yield* new WrongVersion({ slot, version })
+    if (typeof version === "number" && version !== SAVE_VERSION) {
+      const carried = carry(version, (parsed as { world?: unknown }).world)
+      if (carried === null) return yield* new WrongVersion({ slot, version })
+      const file = yield* decodeEnvelope({ ...(parsed as object), version: SAVE_VERSION, world: carried }).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
+      return file
+    }
     return yield* decodeEnvelope(parsed).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
   })
 

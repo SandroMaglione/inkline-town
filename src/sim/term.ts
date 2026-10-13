@@ -164,9 +164,10 @@ export const Approve = Game.System(
     const t = elapsed(resources.time.get(), resources.charter.get())
     if (t % ticks(10) !== 0) return
     const policy = resources.policy.get()
+    const m = resources.mood.get()
     const parts = approvalTarget(queries.homes.each().map(({ data }) => data.house.get()), policy,
-      resources.treasury.get().coins, resources.crown.get().snubs.length, seasonAt(t, resources.charter.get(), rules).winter, rules)
-    resources.mood.update((m) => ({ approval: nextApproval(m.approval, parts.target, rules), ...parts }))
+      resources.treasury.get().coins, resources.crown.get().snubs.length, seasonAt(t, resources.charter.get(), rules).winter, rules, m.memory)
+    resources.mood.set({ approval: nextApproval(m.approval, parts.target, rules), ...parts })
 
   }
 )
@@ -187,8 +188,8 @@ export const foundedFate = () => ({
   score: 0
 })
 
-import { goalsOf, larder, scoreOf } from "../rules/goals.ts"
-export { goalsOf, larder, scoreOf } from "../rules/goals.ts"
+import { goalsOf, larder, scoreOf, steadyNet } from "../rules/goals.ts"
+export { goalsOf, larder, scoreOf, steadyNet } from "../rules/goals.ts"
 
 /**
  * Once a second: does the term end? It is lost to bankruptcy (in debt too
@@ -208,6 +209,7 @@ export const Judge = Game.System(
       ledger: Game.System.readResource(Ledger),
       mood: Game.System.readResource(Mood),
       crown: Game.System.readResource(Crown),
+      history: Game.System.readResource(History),
       fate: Game.System.writeResource(Fate),
       chronicle: Game.System.writeResource(Chronicle)
     },
@@ -228,7 +230,7 @@ export const Judge = Game.System(
     const approval = resources.mood.get().approval
     const crownNow = resources.crown.get()
     const residents = census.settlers + census.citizens
-    const net = ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin
+    const net = steadyNet(resources.history.get().samples, ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin)
     const note = (text: string, alarm = false) => write(resources.chronicle, t, text, alarm)
     const minutes = (n: number) => ticks(n * 60)
     const left = Math.max(0, Math.round((termTicks(charter, rules) - t) / 3600))

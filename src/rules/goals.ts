@@ -3,6 +3,16 @@ import { shippedRules, type Rules } from "./config.ts"
 /** Food in storage: what would carry the town through a winter. */
 export const larder = (stock: { readonly fish: number; readonly smoked: number; readonly bread: number }) => stock.fish + stock.smoked + stock.bread
 
+/**
+ * Coins a minute as the goals judge it: the last minute of the town's
+ * history averaged with the ledger now, so one bulk purchase does not flip
+ * "not losing any" off for ten seconds. With no history yet, the ledger.
+ */
+export const steadyNet = (samples: ReadonlyArray<{ readonly net: number }>, now: number, last = 4): number => {
+  const recent = samples.slice(-last).map((s) => s.net)
+  return Math.round(recent.concat(now).reduce((n, v) => n + v, 0) / (recent.length + 1))
+}
+
 /** Each goal the town must hold to be complete, met or not. */
 export const goalsOf = (
   charter: { readonly size: keyof Rules["sizes"] },

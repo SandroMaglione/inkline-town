@@ -94,7 +94,7 @@ export const analyze = ({ rules, scenario: s }: Inputs, options: AnalysisOptions
   if (foodCeiling < needBounds.food.min) findings.push({ code: "food-impossible", confidence: "upper-bound", detail: `Even pooled food capacity ${foodCeiling.toFixed(2)}/min before spoilage is below the no-waste minimum ${needBounds.food.min.toFixed(2)}/min; existing reserves may bridge a finite interval` })
   if (net.cloth < needBounds.cloth.min) findings.push({ code: "cloth-capacity", confidence: "upper-bound", detail: `Cloth capacity ${net.cloth.toFixed(2)}/min cannot keep ${clothHomes} eligible homes supplied` })
   const hall = s.buildings.find((b) => b.kind === "townhall"), hallRoads = hall ? reach(g, doors(g, hall.tile)) : null
-  const taxes = s.homes.reduce((sum, h) => sum + (hallRoads && nearest(hallRoads, doors(g, h.tile)) ? taxOf(h, s.policy, rules) : 0), 0)
+  const taxes = s.homes.reduce((sum, h) => sum + (hallRoads && nearest(hallRoads, doors(g, h.tile)) ? taxOf(h, s.policy, rules, appealAt(appeal, h.tile.x, h.tile.y)) : 0), 0)
   const upkeep = s.buildings.filter((b) => !b.site).reduce((sum, b) => sum + rules.kinds[b.kind].upkeep * (b.paused ? rules.pausedUpkeep : 1), 0)
   const parkCost = (s.parks ?? []).reduce((n, p) => n + parkUpkeep(p, rules), 0)
   const collection = baseCollection(taxes, upkeep + parkCost, s.homes.length, rules), cashPerMinute = collection.delta * 60 / (rules.ledgerTicks * rules.stepSeconds)

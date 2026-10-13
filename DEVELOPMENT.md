@@ -251,6 +251,11 @@ pnpm balance -- --snapshot 40                   # save each seed's town at minut
 The simulation has no renderer in it: it runs headless (`src/sim/headless.ts`),
 about 60 to 80 times faster than real time, so the tests play real towns.
 
+`pnpm test` also runs `test/legibility.test.ts`: when a home is stuck, the
+panel's reasons (`src/rules/explain.ts`) must name the cause in words,
+checked against the usual dead ends and a real town with cottages beside a
+quarry. The bots know the thresholds; the player only has the panel.
+
 `pnpm test` runs model-based tests built on Effect's `Schema` and
 `Arbitrary`. They generate sequences of what a mayor can do (roads, homes,
 buildings where they fit, bulldozing, taxes, trade, pausing, answering the

@@ -388,7 +388,7 @@ export const home = {
   half: 5,
   cost: { coins: 10, materials: { planks: 1 } } as Kind["cost"],
   tiers: {
-    1: { title: "settlers", residents: 4, tax: 3, height: 14, needs: ["food"], appeal: -100 },
+    1: { title: "settlers", residents: 4, tax: 2.5, height: 14, needs: ["food"], appeal: -100 },
     2: { title: "citizens", residents: 8, tax: 5, height: 26, needs: ["bread", "cloth", "faith"], appeal: 5 },
     3: { title: "burghers", residents: 12, tax: 6.5, height: 38, needs: ["bread", "cloth", "faith"], appeal: 15 }
   } as Readonly<Record<Tier, {
@@ -404,9 +404,18 @@ export const home = {
   settle: ticks(3),
   /** How long each need stays met after a walker's visit: cloth and faith last longer than a meal. */
   lasts: { food: ticks(90), bread: ticks(120), cloth: ticks(240), faith: ticks(180) } as Readonly<Record<Need, number>>,
-  /** Where nobody wants to live: homes at this desirability or less hold `crowded` as many. */
+  /** Where nobody wants to live: the desirability the map's legend calls squalid. */
   squalid: -5,
-  crowded: 0.6
+  /**
+   * What a street does to a home, point by point of desirability (see
+   * `streetRoom` and `streetTax`): a home holds (1 + d / `room`) of its
+   * residents, never fewer than `roomLeast`; and pays (1 + d / `tax`),
+   * within `taxMost` either way. So a cottage beside a quarry empties a
+   * little and pays less, long before anything is squalid.
+   */
+  street: { room: 12, roomLeast: 0.5, tax: 40, taxMost: 0.25 },
+  /** A settlers' cottage with bread on the table pays this much more: bread is worth baking before anyone is a citizen. */
+  breadBonus: 0.5
 }
 
 /** What a tier's homes are called, and what its residents are. */
@@ -444,6 +453,8 @@ export const appeal = {
 
 /** Paving a road cell: coins and stone, the stone taken from storage at once. */
 export const PAVE_COST = { coins: 3, stone: 1 }
+/** Carriers and walkers move this much faster along a paved street (see `Walk`). */
+export const PAVED_PACE = 1.5
 
 // ── Risks ─────────────────────────────────────────────────────────────────
 
@@ -455,7 +466,8 @@ export const PAVE_COST = { coins: 3, stone: 1 }
  */
 export const RISK_MAX = 10_000
 export const risk = {
-  warn: 7000,
+  /** Past this, a sign goes up and the map views turn red: half way, so there is time to act. */
+  warn: 5000,
   /** The three services' walkers keep a burghers' home: its meters must stay under this. */
   kept: 5000,
   /** Each home and building rises at its own pace, between these shares of the usual (fixed by where it stands), so a street does not all go up at once. */
@@ -641,7 +653,7 @@ export const WINTER_WARNING = ticks(60)
  * (homes / `growth`) a home, so a large town of poor homes cannot pay
  * its way.
  */
-export const admin = { perHome: 0.4, growth: 200 }
+export const admin = { perHome: 0.4, growth: 120 }
 
 /**
  * Approval, -100 → +100: where the town's mood is heading, and how fast it
@@ -658,7 +670,15 @@ export const mood = {
   /** Per unanswered crown request, while the crown remembers it. */
   snub: -20,
   winterHunger: -10,
-  step: 2
+  step: 2,
+  /**
+   * A grudge: taxes above `above` percent are remembered. Every collection
+   * adds (rate − above) × `perPoint` tenths of a point to the town's memory,
+   * up to `most`; at or below it the memory fades by `decay` tenths. The
+   * grudge takes that many points off approval, so a term of 200% cannot be
+   * undone by cutting taxes in the last three minutes.
+   */
+  grudge: { above: 125, perPoint: 0.05, decay: 5, most: 300 }
 }
 
 /**

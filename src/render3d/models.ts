@@ -292,6 +292,8 @@ export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<numbe
 }
 export function previewAsset(preview: Preview, time: number) {
   const d = new Drawing("preview", "Preview", "")
+  // The roads a thing being placed would reach: a faint wash along them.
+  for (const c of preview.range) d.face(square(c.x + 0.5, c.y + 0.5, 0.5, 0.11), 0x3d6db5, 0, palette.ink, 0.24)
   for (const { x, y, size, look } of preview.plots) {
     const color = look === "blocked" ? 0xc4523f : look === "picked" ? 0x3d6db5 : palette.ink,
       half = size / 2,

@@ -26,17 +26,23 @@ const rateOf = (rates: Rates, tier: Tier) => (tier === 1 ? rates.settlers : rate
 /** How approval (-100 → 100) sits with a home: a third as many residents at its worst, half again at its best. */
 export const appealOf = (approval: number): number => (approval < 0 ? 1 + approval / 150 : 1 + approval / 200)
 
+/** The share of its residents a home keeps on a street of this desirability: all at 0 and above, fewer below, point by point. */
+export const streetRoom = (desirability: number, rules: Rules = shippedRules): number =>
+  Math.max(rules.home.street.roomLeast, Math.min(1, 1 + desirability / rules.home.street.room))
+/** What a street does to a home's taxes: more on a fine street, less on a poor one, within a quarter either way. */
+export const streetTax = (desirability: number, rules: Rules = shippedRules): number =>
+  Math.max(1 - rules.home.street.taxMost, Math.min(1 + rules.home.street.taxMost, 1 + desirability / rules.home.street.tax))
+
 /**
  * Residents a home holds at its tier and satisfaction: half when nothing is
  * met, all when everything is; fewer when the town disapproves of its
- * mayor, and up to all of them when it approves, needs or not. Nobody
- * wants to live where it is squalid (desirability `rules.home.squalid` or less):
- * such a home holds fewer.
+ * mayor, and up to all of them when it approves, needs or not. A poor
+ * street (desirability below 0) holds fewer, point by point (see
+ * `streetRoom`): a cottage beside a quarry loses a resident at once.
  */
 export const capacity = (h: Needs, approval: number, desirability = 0, rules: Rules = shippedRules): number => {
   const max = rules.home.tiers[h.tier].residents
-  const squalor = desirability <= rules.home.squalid ? rules.home.crowded : 1
-  return Math.max(1, Math.min(max, Math.round(max * (0.5 + 0.5 * satisfaction(h, h.tier, rules)) * appealOf(approval) * squalor)))
+  return Math.max(1, Math.min(max, Math.round(max * (0.5 + 0.5 * satisfaction(h, h.tier, rules)) * appealOf(approval) * streetRoom(desirability, rules))))
 }
 
 /** Whether every risk meter of a home is kept low: a service walker of each kind passes it. */
@@ -65,9 +71,21 @@ export const adminOf = (homes: number, rules: Rules = shippedRules): number => M
 export const priceOf = (good: GoodId, percent: number, rules: Rules = shippedRules) => (rules.goods[good].price * percent) / 100
 export const askOf = (good: GoodId, percent: number, rules: Rules = shippedRules) => Math.ceil(priceOf(good, percent, rules) * rules.market.markup)
 
-/** Coins a home pays a minute. */
-export const taxOf = (h: Needs & { readonly residents: number }, rates: Rates, rules: Rules = shippedRules): number =>
-  h.residents * rules.home.tiers[h.tier].tax * (rateOf(rates, h.tier) / 100) * (0.25 + 0.75 * satisfaction(h, h.tier, rules))
+/** A settlers' cottage with bread on the table pays `home.breadBonus` more. */
+export const breadBonus = (h: Needs, rules: Rules = shippedRules): number => (h.tier === 1 && met(h, "bread") ? 1 + rules.home.breadBonus : 1)
+
+/**
+ * Coins a home pays a minute: by its tier, the rate, the share of its needs
+ * met, its street, and (for settlers) bread. A hungry home pays nothing:
+ * no food, no taxes.
+ */
+export const taxOf = (h: Needs & { readonly residents: number }, rates: Rates, rules: Rules = shippedRules, desirability = 0): number =>
+  h.food > 0
+    ? h.residents * rules.home.tiers[h.tier].tax * (rateOf(rates, h.tier) / 100) * satisfaction(h, h.tier, rules) * streetTax(desirability, rules) * breadBonus(h, rules)
+    : 0
+/** What the same home would pay with every need met and bread on the table: the money a town leaves on the table. */
+export const suppliedTaxOf = (h: Needs & { readonly residents: number }, rates: Rates, rules: Rules = shippedRules, desirability = 0): number =>
+  taxOf({ ...h, food: 1, bread: 1, cloth: 1, faith: 1 }, rates, rules, desirability)
 
 export const refreshLevel = (need: Need, rules: Rules = shippedRules) => rules.home.lasts[need] / 2
 export const lowNeed = (left: number, need: Need, rules: Rules = shippedRules) => left < refreshLevel(need, rules)
@@ -84,7 +102,15 @@ export const ageNeeds = <T extends Needs & { readonly clock: number }>(h: T, eat
 export const wantsCitizenGoods = (house: Needs, desirability: number, rules: Rules = shippedRules) =>
   house.tier >= 2 || desirability >= rules.home.tiers[2].appeal
 
-/** Eligible settlers request bread independently of food; other settlers use fish first. */
+/**
+ * What a walker hands a home from its basket, one thing to eat at most:
+ * citizens (and settlers on a street fit for citizens) take bread first;
+ * other settlers eat fish, or bread when there is no fish, and take a loaf
+ * besides when their bread has run out, since a cottage with bread pays
+ * more (see `breadBonus`), but only from the basket's surplus (more than
+ * half of it left), so the citizens further along the walk are not left
+ * without. Cloth goes only where citizens could live.
+ */
 export const serveGoods = <T extends Needs>(house: T, available: Readonly<Record<GoodId, number>>, rules: Rules = shippedRules, desirability = 0) => {
   const h = { ...house } as Mutable<T>, basket = { ...available }
   const citizens = wantsCitizenGoods(h, desirability, rules)
@@ -94,7 +120,7 @@ export const serveGoods = <T extends Needs>(house: T, available: Readonly<Record
   } else if (lowNeed(h.food, "food", rules) && (basket.fish > 0 || basket.smoked > 0)) {
     const g = basket.fish > 0 ? "fish" : "smoked"
     basket[g] -= 1; h.food = rules.home.lasts.food; eaten += 1
-  } else if (lowNeed(h.food, "food", rules) && basket.bread > 0) {
+  } else if ((lowNeed(h.food, "food", rules) || (!citizens && lowNeed(h.bread, "bread", rules) && basket.bread > rules.transport.basket / 2)) && basket.bread > 0) {
     basket.bread -= 1; h.food = rules.home.lasts.food; h.bread = rules.home.lasts.bread; eaten += 1
   }
   if (citizens && lowNeed(h.cloth, "cloth", rules) && basket.cloth > 0) {
