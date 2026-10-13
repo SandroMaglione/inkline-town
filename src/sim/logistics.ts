@@ -1,3 +1,5 @@
+import { transport } from "../rules/config.ts"
+import { preferDelivery } from "../rules/transport.ts"
 /**
  * Carriers: every good that moves walks along the roads in a carrier's
  * crate. What a building wants — a site's materials, a workshop's input, a
@@ -6,19 +8,16 @@
  * storage sends what it holds to the nearest demands it can meet. Crates
  * already on their way count against a demand, so no one is sent twice.
  */
-import { goods, goodIds, provisions, spoils, TOOL_STOCK, type GoodId } from "../content.ts"
+import { goodIds, provisions, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, type Reach } from "../grid.ts"
 import type { Point } from "../iso.ts"
-import {
-  Building, Burning, Carriers, Errand, Figure, Game, Grid, Inventory, Recipe, Rising, Route, Service, Site, Storage, Tile, Time, WalkerOf, maybe
-} from "../schema.ts"
-import { kinds } from "../content.ts"
+import { Building, Burning, Carriers, Errand, Figure, Game, Rules, Grid, Inventory, Recipe, Rising, Route, Service, Site, Storage, Tile, Time, WalkerOf, maybe } from "../schema.ts"
 import { CELL_STEPS } from "./shared.ts"
 
 /** The most a carrier takes at once. */
-const LOAD = 4
+const LOAD = transport.load
 /** Carriers are sent out this often: ten times a second, a delay no one sees, at a sixth of the work. */
-const DISPATCH_TICKS = 6
+const DISPATCH_TICKS = transport.dispatchTicks
 
 export const Dispatch = Game.System(
   "Town/Dispatch",
@@ -49,9 +48,13 @@ export const Dispatch = Game.System(
       sites: Game.Query({ selection: { tile: Game.Query.read(Tile), site: Game.Query.read(Site) } }),
       errands: Game.Query({ selection: { errand: Game.Query.read(Errand), home: Game.Query.readRelation(WalkerOf) } })
     },
-    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) }
+    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, commands }) => {
+  ({ queries, resources, commands, services }) => {
+    const rules = services.rules
+    const { kinds, goods, spoils, toolStock: TOOL_STOCK } = rules
+
     if (resources.time.get().tick % DISPATCH_TICKS !== 0) return
     const grid = resources.grid.get()
     const out = new Map<number, number>()
@@ -141,7 +144,7 @@ export const Dispatch = Game.System(
           if (count <= 0) continue
           const found = nearest(roads, w.doors)
           // Sites come first, then whoever is nearest.
-          if (found && (best === null || (w.site && !best.site) || (w.site === best.site && found.distance < best.distance))) best = { id: w.id, ...found, count, site: w.site }
+          if (found && preferDelivery({ site: w.site, distance: found.distance }, best)) best = { id: w.id, ...found, count, site: w.site }
         }
         // Food that spoils goes to a granary if there is one in reach, before the nearest storage; a
         // storage that does not keep food sends it on to a granary that does.
@@ -195,9 +198,13 @@ export const Deliver = Game.System(
       carriers: Game.Query({ selection: { route: Game.Query.write(Route), errand: Game.Query.write(Errand), home: Game.Query.readRelation(WalkerOf) } }),
       inventories: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, without: [Site] }),
       sites: Game.Query({ selection: { site: Game.Query.write(Site) } })
-    }
+    },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, commands, lookup }) => {
+  ({ queries, commands, lookup, services }) => {
+    const rules = services.rules
+    const {  } = rules
+
     for (const { entity, data } of queries.carriers.each()) {
       const route = data.route.get()
       const errand = data.errand.get()

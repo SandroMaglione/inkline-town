@@ -1,3 +1,4 @@
+import { shippedRules, type Rules } from "./rules/config.ts"
 /**
  * Content to components: how each thing in `content.ts` is assembled from
  * the schema's components. A building is a `Tile`, a `Building`, a `Status`,
@@ -5,12 +6,9 @@
  * costs materials starts as a `Site`, anything else starts `Rising`; the
  * land is a `Tile` and its own marker.
  */
-import { amounts, CONDITION_MAX, goodIds, home, total, type GroundId, type Kind } from "./content.ts"
+import { amounts, goodIds, total, type GroundId, type Kind } from "./content.ts"
 import type { Point } from "./iso.ts"
-import {
-  Building, Carriers, Condition, Field, Game, Gatherer, House, Inventory, Park, Planter, Recipe, Rising, Risk, Road, Rock, Ruin, Service, Site,
-  Staff, Status, Storage, Tile, Tree, Water
-} from "./schema.ts"
+import { Building, Carriers, Condition, Field, Game, Gatherer, House, Inventory, Park, Planter, Recipe, Rising, Risk, Road, Rock, Ruin, Service, Site, Staff, Status, Storage, Tile, Tree, Water } from "./schema.ts"
 import { ticks } from "./content.ts"
 
 const site = (cost: Kind["cost"]) => {
@@ -28,16 +26,16 @@ export const buildingDraft = (kind: Kind, cell: Point) =>
   )
 
 /** What every home and every working building carries: its risks, and how well kept it is. */
-export const wearOf = () => [
+export const wearOf = (rules: Rules = shippedRules) => [
   Game.Command.entry(Risk, { fire: 0, health: 0, order: 0, thefts: 0 }),
-  Game.Command.entry(Condition, { value: CONDITION_MAX })
+  Game.Command.entry(Condition, { value: rules.conditionMax })
 ]
 
 /** How a new building starts: owed its materials, or rising straight away. */
 export const startOf = (kind: Kind) => site(kind.cost)
 
 /** The role components a kind's buildings carry, inserted after the building is spawned. */
-export const rolesOf = (kind: Kind) => {
+export const rolesOf = (kind: Kind, rules: Rules = shippedRules) => {
   const roles = []
   if (kind.recipe) {
     const r = kind.recipe
@@ -66,7 +64,7 @@ export const rolesOf = (kind: Kind) => {
     roles.push(Game.Command.entry(Service, { service: s.service, interval: ticks(s.seconds), cooldown: 0, range: s.range }))
   }
   // The town hall neither burns nor wears.
-  if (kind.id !== "townhall") roles.push(...wearOf())
+  if (kind.id !== "townhall") roles.push(...wearOf(rules))
   return roles
 }
 
@@ -75,7 +73,7 @@ export const houseDraft = (cell: Point) =>
     [Tile, { x: cell.x, y: cell.y, size: 1 }],
     [House, { tier: 1, residents: 0, food: 0, bread: 0, cloth: 0, faith: 0, clock: 0 }]
   )
-export const houseStart = () => [site(home.cost), ...wearOf()]
+export const houseStart = (rules: Rules = shippedRules) => [site(rules.home.cost), ...wearOf(rules)]
 export const ruinDraft = (tile: { readonly x: number; readonly y: number; readonly size: number }, cause: "burnt" | "collapsed" | "derelict") =>
   Game.Command.spawn([Tile, { x: tile.x, y: tile.y, size: tile.size }], [Ruin, { cause }])
 

@@ -1,3 +1,4 @@
+import { resolveRules } from "./rules/config.ts"
 /**
  * A town simulation of line-drawn buildings, homes, roads, and land, on the
  * bevy-ts ECS with a 3D view. The simulation runs on a fixed step;
@@ -12,7 +13,7 @@ import { lands, sizes, STEP_SECONDS } from "./content.ts"
 import { createHost, type Persistence } from "./host.ts"
 import { present } from "./present.ts"
 import { browserStorage, describe, loadLatest, save, Storage, World } from "./save.ts"
-import { BuildingNodes, Clock, FieldNodes, Game, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
+import { BuildingNodes, Clock, FieldNodes, Game, Rules, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
 import { blankResources, simulate } from "./sim/index.ts"
 
 /** Minutes of game time between autosaves. */
@@ -39,6 +40,7 @@ const start = async () => {
   const made = Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(Ui, ui),
+      Game.Runtime.service(Rules, resolveRules()),
       Game.Runtime.service(Clock, clock),
       Game.Runtime.service(StageService, stage),
       Game.Runtime.service(BuildingNodes, buildingNodes),

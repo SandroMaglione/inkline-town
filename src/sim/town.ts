@@ -1,86 +1,16 @@
+import { tradeCollection } from "../rules/trade.ts"
 /**
  * The town: homes grow, level up, or empty depending on what reaches them;
  * taxes are collected from homes connected to the town hall and upkeep paid
  * for every standing building and park; and the census counts it all.
  */
-import { appealAt } from "../appeal.ts"
-import {
-  admin, goodIds, goods, grounds, home, kinds, LEDGER_TICKS, market, PAUSED_UPKEEP, props, risk, TRADE_LOAD, type GoodId, type Need, type Tier
-} from "../content.ts"
+import { appealAt, parkUpkeep } from "../appeal.ts"
 import { doors, key, reach } from "../grid.ts"
-import {
-  Appeal, Building, Burning, Census, Charter, Game, Grid, House, Inventory, Ledger, Market, Mood, Park, Paused, Policy, Rising, Risk, Sick, Site,
-  Staff, Storage, Tile, Time, TownHall, Treasury, maybe
-} from "../schema.ts"
+import { Appeal, Building, Burning, Census, Charter, Game, Rules, Grid, House, Inventory, Ledger, Market, Mood, Park, Paused, Policy, Rising, Risk, Sick, Site, Staff, Storage, Tile, Time, TownHall, Treasury, maybe } from "../schema.ts"
 import { connected, elapsed, seasonAt } from "./shared.ts"
 
-interface Needs {
-  readonly tier: Tier
-  readonly food: number
-  readonly bread: number
-  readonly cloth: number
-  readonly faith: number
-}
-
-export const met = (h: Needs, need: Need): boolean => h[need] > 0
-
-/** The share of its tier's needs a home has met, 0 → 1. */
-export const satisfaction = (h: Needs, tier: Tier = h.tier): number => {
-  const needs = home.tiers[tier].needs
-  return needs.filter((n) => met(h, n)).length / needs.length
-}
-
-export interface Rates {
-  readonly settlers: number
-  readonly citizens: number
-}
-const rateOf = (rates: Rates, tier: Tier) => (tier === 1 ? rates.settlers : rates.citizens)
-
-/** How approval (-100 → 100) sits with a home: a third as many residents at its worst, half again at its best. */
-export const appealOf = (approval: number): number => (approval < 0 ? 1 + approval / 150 : 1 + approval / 200)
-
-/**
- * Residents a home holds at its tier and satisfaction: half when nothing is
- * met, all when everything is; fewer when the town disapproves of its
- * mayor, and up to all of them when it approves, needs or not. Nobody
- * wants to live where it is squalid (desirability `home.squalid` or less):
- * such a home holds fewer.
- */
-export const capacity = (h: Needs, approval: number, desirability = 0): number => {
-  const max = home.tiers[h.tier].residents
-  const squalor = desirability <= home.squalid ? home.crowded : 1
-  return Math.max(1, Math.min(max, Math.round(max * (0.5 + 0.5 * satisfaction(h)) * appealOf(approval) * squalor)))
-}
-
-/** Whether every risk meter of a home is kept low: a service walker of each kind passes it. */
-export const kept = (r: { readonly fire: number; readonly health: number; readonly order: number }) =>
-  r.fire < risk.kept && r.health < risk.kept && r.order < risk.kept
-
-/**
- * The tier a home settles into: settlers whose every citizens' need is met,
- * on a street desirable enough, become citizens; citizens with a street
- * nicer still and all three services calling become burghers in a
- * townhouse. A home that loses more than one of its needs, or whose street
- * falls below its tier, steps back down.
- */
-export const tierFor = (h: Needs, desirability: number, r: { readonly fire: number; readonly health: number; readonly order: number }): Tier => {
-  const fits = (tier: Tier) => desirability >= home.tiers[tier].appeal
-  if (h.tier === 1) return satisfaction(h, 2) === 1 && fits(2) ? 2 : 1
-  if (satisfaction(h) < 2 / 3 || !fits(2)) return 1
-  if (h.tier === 2) return satisfaction(h, 3) === 1 && fits(3) && kept(r) ? 3 : 2
-  return fits(3) && kept(r) ? 3 : 2
-}
-
-/** Coins a minute the town hall's administration costs for `homes` homes. */
-export const adminOf = (homes: number): number => Math.round(homes * (admin.perHome + homes / admin.growth))
-
-/** What traders pay for one of a good now, and what they ask for one. */
-export const priceOf = (good: GoodId, percent: number) => (goods[good].price * percent) / 100
-export const askOf = (good: GoodId, percent: number) => Math.ceil(priceOf(good, percent) * market.markup)
-
-/** Coins a home pays a minute. */
-export const taxOf = (h: Needs & { readonly residents: number }, rates: Rates): number =>
-  h.residents * home.tiers[h.tier].tax * (rateOf(rates, h.tier) / 100) * (0.25 + 0.75 * satisfaction(h))
+import { ageNeeds, baseCollection, mealDecay, adminOf, capacity, met, taxOf, tierFor } from "../rules/households.ts"
+export { adminOf, appealOf, askOf, capacity, kept, met, priceOf, satisfaction, taxOf, tierFor, type Rates } from "../rules/households.ts"
 
 /**
  * Needs wear off, food faster in winter. Every so often a home settles
@@ -109,31 +39,28 @@ export const Households = Game.System(
       appeal: Game.System.readResource(Appeal),
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter)
-    }
+    },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources }) => {
+  ({ queries, resources, services }) => {
+    const rules = services.rules
+    const { home, risk } = rules
+
     const grid = resources.grid.get()
     const approval = resources.mood.get().approval
     const cells = resources.appeal.get().cells
     const t = elapsed(resources.time.get(), resources.charter.get())
     // In winter a meal lasts two thirds as long.
-    const eat = seasonAt(t, resources.charter.get()).winter && t % 2 === 0 ? 2 : 1
+    const eat = mealDecay(t, seasonAt(t, resources.charter.get(), rules).winter)
     for (const { data } of queries.homes.each()) {
       const h = data.house.get()
-      const next = {
-        ...h,
-        clock: h.clock + 1,
-        food: Math.max(0, h.food - eat),
-        bread: Math.max(0, h.bread - eat),
-        cloth: Math.max(0, h.cloth - 1),
-        faith: Math.max(0, h.faith - 1)
-      }
+      const next = ageNeeds(h, eat)
       if (data.burning.present) next.residents = 0
       else if (next.clock % home.settle === 0) {
         const tile = data.tile.get()
         const desirability = appealAt(cells, tile.x, tile.y)
-        next.tier = tierFor(next, desirability, maybe(data.risk) ?? { fire: 0, health: 0, order: 0 })
-        const well = connected(grid, tile) ? capacity(next, approval, desirability) : 0
+        next.tier = tierFor(next, desirability, maybe(data.risk) ?? { fire: 0, health: 0, order: 0 }, rules)
+        const well = connected(grid, tile) ? capacity(next, approval, desirability, rules) : 0
         const cap = data.sick.present ? Math.floor(well * risk.health.sickly) : well
         next.residents = Math.min(next.residents, home.tiers[next.tier].residents)
         next.residents += Math.sign(cap - next.residents)
@@ -169,9 +96,13 @@ export const Collect = Game.System(
       market: Game.System.writeResource(Market),
       treasury: Game.System.writeResource(Treasury),
       ledger: Game.System.writeResource(Ledger)
-    }
+    },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources }) => {
+  ({ queries, resources, services }) => {
+    const rules = services.rules
+    const { kinds, ledgerTicks: LEDGER_TICKS, pausedUpkeep: PAUSED_UPKEEP } = rules
+
     if (resources.time.get().tick % LEDGER_TICKS !== 0) return
     const grid = resources.grid.get()
     const policy = resources.policy.get()
@@ -183,67 +114,20 @@ export const Collect = Game.System(
     for (const { data } of queries.homes.each()) {
       homes += 1
       const reached = roads !== null && doors(grid, data.tile.get()).some((c) => roads.distance[key(c.x, c.y)]! >= 0)
-      if (reached) taxes += taxOf(data.house.get(), policy)
+      if (reached) taxes += taxOf(data.house.get(), policy, rules)
     }
     let upkeep = 0
     for (const { data } of queries.buildings.each()) upkeep += kinds[data.building.get().kind].upkeep * (data.paused.present ? PAUSED_UPKEEP : 1)
-    for (const { data } of queries.parks.each()) {
-      const p = data.park.get()
-      upkeep += grounds[p.ground].upkeep + (p.prop === "none" ? 0 : props[p.prop].upkeep)
-    }
-    const admin = adminOf(homes)
+    for (const { data } of queries.parks.each()) upkeep += parkUpkeep(data.park.get(), rules)
+    const admin = adminOf(homes, rules)
 
-    // Trade.
     const stores = queries.stores.each()
-    const prices: Record<GoodId, number> = { ...resources.market.get().prices }
-    let coins = resources.treasury.get().coins + Math.round(taxes * share) - Math.round((upkeep + admin) * share)
-    let traded = 0
-    for (const good of goodIds) {
-      const held = stores.reduce((sum, { data }) => sum + data.inventory.get().stock[good], 0)
-      if (policy.sells.includes(good)) {
-        let surplus = Math.min(TRADE_LOAD, held - policy.reserve)
-        if (surplus > 0) {
-          const earned = Math.round(surplus * priceOf(good, prices[good]))
-          coins += earned
-          traded += earned
-          prices[good] = Math.max(market.floor, prices[good] - surplus * market.perUnit)
-          for (const { data } of [...stores].sort((a, b) => b.data.inventory.get().stock[good] - a.data.inventory.get().stock[good])) {
-            if (surplus <= 0) break
-            const inv = data.inventory.get()
-            const take = Math.min(surplus, inv.stock[good])
-            data.inventory.set({ ...inv, stock: { ...inv.stock, [good]: inv.stock[good] - take } })
-            surplus -= take
-          }
-        }
-      } else if (policy.buys.includes(good)) {
-        const ask = askOf(good, prices[good])
-        let wanted = Math.min(TRADE_LOAD, policy.reserve - held, Math.floor(coins / ask))
-        if (wanted > 0) {
-          coins -= wanted * ask
-          traded -= wanted * ask
-          prices[good] = Math.min(market.ceiling, prices[good] + wanted * market.perUnit)
-          for (const { data } of [...stores].sort((a, b) => a.data.inventory.get().stock[good] - b.data.inventory.get().stock[good])) {
-            if (wanted <= 0) break
-            const inv = data.inventory.get()
-            const put = inv.accepts.includes(good) ? Math.min(wanted, inv.cap - inv.stock[good]) : 0
-            if (put <= 0) continue
-            data.inventory.set({ ...inv, stock: { ...inv.stock, [good]: inv.stock[good] + put } })
-            wanted -= put
-          }
-          // What found no room is refunded.
-          if (wanted > 0) {
-            coins += wanted * ask
-            traded += wanted * ask
-          }
-        }
-      }
-      // Prices drift back towards the usual.
-      const gap = 100 - prices[good]
-      prices[good] += gap === 0 ? 0 : Math.sign(gap) * Math.max(1, Math.round(Math.abs(gap) / 10))
-    }
-    resources.market.set({ prices })
-    resources.treasury.set({ coins })
-    resources.ledger.set({ taxes: Math.round(taxes), trade: Math.round(traded / share), upkeep: Math.round(upkeep), admin })
+    const traded = tradeCollection(stores.map(({ data }) => data.inventory.get()), policy, resources.market.get().prices,
+      resources.treasury.get().coins + baseCollection(taxes, upkeep, homes, rules).delta, rules)
+    for (const [i, row] of stores.entries()) row.data.inventory.set(traded.stores[i]!)
+    resources.market.set({ prices: traded.prices })
+    resources.treasury.set({ coins: traded.coins })
+    resources.ledger.set({ taxes: Math.round(taxes), trade: Math.round(traded.traded / share), upkeep: Math.round(upkeep), admin })
   }
 )
 

@@ -1,3 +1,4 @@
+import { shippedRules, type Rules } from "./rules/config.ts"
 /**
  * Desirability: how pleasant each cell is to live on. Buildings and the land
  * add to it or take from it, fading with distance (see `Kind.appeal` and
@@ -8,7 +9,7 @@
  * shared by the simulation (which keeps the whole grid, see `Appraise`) and
  * the page (which explains one cell).
  */
-import { appeal, grounds, kinds, park, props, type GroundId, type KindId, type PropId } from "./content.ts"
+import { type GroundId, type KindId, type PropId } from "./content.ts"
 import { cellOf, DIRS, key } from "./grid.ts"
 import { GRID, inside, type Point } from "./iso.ts"
 
@@ -46,24 +47,24 @@ export const effectAt = (source: { readonly value: number; readonly reach: numbe
 }
 
 /** A building of a kind as a source, if it has any effect. */
-export const buildingSource = (kind: KindId, tile: { readonly x: number; readonly y: number; readonly size: number }): AppealSource | null => {
-  const a = kinds[kind].appeal
-  return a ? { ...tile, value: a.value, reach: a.reach, label: kinds[kind].title.toLowerCase(), mode: "sum" } : null
+export const buildingSource = (kind: KindId, tile: { readonly x: number; readonly y: number; readonly size: number }, rules: Rules = shippedRules): AppealSource | null => {
+  const a = rules.kinds[kind].appeal
+  return a ? { ...tile, value: a.value, reach: a.reach, label: rules.kinds[kind].title.toLowerCase(), mode: "sum" } : null
 }
 
-export const landSource = (what: "water" | "forest" | "paved" | "ruin" | "worn", cell: { readonly x: number; readonly y: number; readonly size?: number }): AppealSource => ({
+export const landSource = (what: "water" | "forest" | "paved" | "ruin" | "worn", cell: { readonly x: number; readonly y: number; readonly size?: number }, rules: Rules = shippedRules): AppealSource => ({
   x: cell.x,
   y: cell.y,
   size: cell.size ?? 1,
-  ...appeal[what],
+  ...rules.appeal[what],
   label: what === "forest" ? "woods" : what === "paved" ? "paved street" : what === "worn" ? "a run-down home" : what,
   mode: what === "water" || what === "forest" ? "nature" : what === "paved" ? "paved" : "sum"
 })
 
-const clamp = (n: number) => Math.max(appeal.floor, Math.min(appeal.ceiling, n))
+const clamp = (n: number, rules: Rules) => Math.max(rules.appeal.floor, Math.min(rules.appeal.ceiling, n))
 
 /** Every cell's desirability, by `key`. */
-export const appealGrid = (sources: ReadonlyArray<AppealSource>): Array<number> => {
+export const appealGrid = (sources: ReadonlyArray<AppealSource>, rules: Rules = shippedRules): Array<number> => {
   const sum = new Int32Array(GRID * GRID)
   const nature = new Int32Array(GRID * GRID)
   const paved = new Int32Array(GRID * GRID)
@@ -79,11 +80,11 @@ export const appealGrid = (sources: ReadonlyArray<AppealSource>): Array<number> 
       }
     }
   }
-  return Array.from({ length: GRID * GRID }, (_, k) => clamp(sum[k]! + nature[k]! + paved[k]!))
+  return Array.from({ length: GRID * GRID }, (_, k) => clamp(sum[k]! + nature[k]! + paved[k]!, rules))
 }
 
 /** One cell's desirability and what makes it, strongest first: "park +6", "bakery −4". */
-export const appealParts = (sources: ReadonlyArray<AppealSource>, cell: { readonly x: number; readonly y: number }) => {
+export const appealParts = (sources: ReadonlyArray<AppealSource>, cell: { readonly x: number; readonly y: number }, rules: Rules = shippedRules) => {
   const parts = new Map<string, number>()
   const best = { nature: { label: "", value: 0 }, paved: { label: "", value: 0 } }
   for (const s of sources) {
@@ -95,7 +96,7 @@ export const appealParts = (sources: ReadonlyArray<AppealSource>, cell: { readon
   for (const b of [best.nature, best.paved]) if (b.value !== 0) parts.set(b.label, (parts.get(b.label) ?? 0) + b.value)
   const list = [...parts].map(([label, value]) => ({ label, value })).filter((p) => p.value !== 0)
   list.sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
-  return { value: clamp(list.reduce((n, p) => n + p.value, 0)), parts: list }
+  return { value: clamp(list.reduce((n, p) => n + p.value, 0), rules), parts: list }
 }
 
 /** A cell's desirability from a reckoned grid (0 before the first reckoning). */
@@ -135,7 +136,8 @@ const tenth = (n: number) => Math.round(n * 10) / 10
  * pleasant; a lawn with walks in from the street, lamps, and a statue is a
  * park.
  */
-export const parkValue = (cells: ReadonlyArray<ParkCell>, road: (x: number, y: number) => boolean = () => false): ParkValue => {
+export const parkValue = (cells: ReadonlyArray<ParkCell>, road: (x: number, y: number) => boolean = () => false, rules: Rules = shippedRules): ParkValue => {
+  const { grounds, props, park } = rules
   const groundRaw = cells.reduce((n, c) => n + grounds[c.ground].beauty, 0)
   const ground = Math.min(park.groundMost, groundRaw)
   const room = Math.ceil(cells.length / park.cellsPerProp)
@@ -173,7 +175,7 @@ export const parkValue = (cells: ReadonlyArray<ParkCell>, road: (x: number, y: n
 }
 
 /** The town's parks: cells of park that touch (side by side) are one park. */
-export const parksOf = (cells: ReadonlyArray<ParkCell>, road?: (x: number, y: number) => boolean): Array<ParkValue> => {
+export const parksOf = (cells: ReadonlyArray<ParkCell>, road?: (x: number, y: number) => boolean, rules: Rules = shippedRules): Array<ParkValue> => {
   const at = new Map<number, ParkCell>()
   for (const c of cells) at.set(key(c.x, c.y), c)
   const seen = new Set<number>()
@@ -195,14 +197,14 @@ export const parksOf = (cells: ReadonlyArray<ParkCell>, road?: (x: number, y: nu
         queue.push(n)
       }
     }
-    out.push(parkValue(members, road))
+    out.push(parkValue(members, road, rules))
   }
   return out
 }
 
 /** Each park as a desirability source, measured from its nearest cell. */
-export const parkSources = (cells: ReadonlyArray<ParkCell>, road?: (x: number, y: number) => boolean): Array<AppealSource> =>
-  parksOf(cells, road)
+export const parkSources = (cells: ReadonlyArray<ParkCell>, road?: (x: number, y: number) => boolean, rules: Rules = shippedRules): Array<AppealSource> =>
+  parksOf(cells, road, rules)
     .filter((p) => p.value > 0)
     .map((p) => {
       const xs = p.cells.map((c) => c.x)
@@ -212,3 +214,7 @@ export const parkSources = (cells: ReadonlyArray<ParkCell>, road?: (x: number, y
       const size = Math.max(Math.max(...xs) - x, Math.max(...ys) - y) + 1
       return { x, y, size, value: p.value, reach: p.reach, label: "park", mode: "sum", cells: p.cells }
     })
+
+/** Per-minute upkeep paid for a park cell, including its furnishing. */
+export const parkUpkeep = (cell: Pick<ParkCell, "ground" | "prop">, rules: Rules = shippedRules) =>
+  rules.grounds[cell.ground].upkeep + (cell.prop === "none" ? 0 : rules.props[cell.prop].upkeep)

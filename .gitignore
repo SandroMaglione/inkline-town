@@ -5,3 +5,4 @@ dist
 .env.*
 snapshots/
 output/inkline-3d/
+output/balance-model/

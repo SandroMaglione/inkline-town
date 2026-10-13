@@ -6,19 +6,13 @@
  * carried to the site afterwards. Once the term has ended, only a new town
  * (or carrying on after completing this one) is taken.
  */
-import {
-  buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft
-} from "../archetypes.ts"
+import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft } from "../archetypes.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
-
-import { amounts, goodIds, goods, grounds, home, kinds, lands, PAVE_COST, props, ROAD_COST, sizes, trade, type Amounts, type Kind, type ParkPiece } from "../content.ts"
+import { amounts, goodIds, type Amounts, type Kind, type ParkPiece } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
-import {
-  Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, History, Inventory, Land, Ledger, Market, Mood, Pantry, Park, Paved, Paused,
-  Policy, Rng, Status, Stock, Storage, Time, TownHall, Treasury, Ui
-} from "../schema.ts"
+import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Rules, History, Inventory, Land, Ledger, Market, Mood, Pantry, Park, Paved, Paused, Policy, Rng, Status, Stock, Storage, Time, TownHall, Treasury, Ui } from "../schema.ts"
 import { elapsed, rollWinters, TileRead, useOf, write } from "./shared.ts"
 import { crownGap, foundedFate } from "./term.ts"
 
@@ -56,9 +50,12 @@ export const ApplyEdits = Game.System(
       pantry: Game.System.writeResource(Pantry),
       fires: Game.System.writeResource(Fires)
     },
-    services: { ui: Game.System.service(Ui) }
+    services: { ui: Game.System.service(Ui), rules: Game.System.service(Rules) }
   },
   ({ queries, resources, services, commands }) => {
+    const rules = services.rules
+    const { kinds, home, goods, grounds, props, lands, sizes, trade, roadCost: ROAD_COST, paveCost: PAVE_COST } = rules
+
     const ui = services.ui
     if (ui.edits.length === 0) return
     const grid = new GridBuilder(resources.land.get().mask)
@@ -137,7 +134,7 @@ export const ApplyEdits = Game.System(
           }
           pay(kind.cost)
           const id = spawn(buildingDraft(kind, edit.cell), tile, "building")
-          commands.insert(id, startOf(kind), ...rolesOf(kind))
+          commands.insert(id, startOf(kind), ...rolesOf(kind, rules))
           if (edit.open) ui.selected = id
           break
         }
@@ -150,7 +147,7 @@ export const ApplyEdits = Game.System(
             if (short) break
             pay(home.cost)
             const id = spawn(houseDraft(cell), tile, "house")
-            commands.insert(id, ...houseStart())
+            commands.insert(id, ...houseStart(rules))
           }
           if (short) ui.toast(short)
           break
@@ -318,21 +315,21 @@ export const ApplyEdits = Game.System(
           entities.clear()
           const charter = edit.charter
           const richness = lands[charter.land]
-          const land = generate(charter)
+          const land = generate(charter, rules)
           for (const c of land.water) commands.spawn(waterDraft(c))
           for (const tree of land.trees) commands.spawn(treeDraft(tree.cell, tree.growth))
           for (const r of land.rocks) commands.spawn(rockDraft(r.cell, r.ore, r.amount))
           for (const c of land.roads) commands.spawn(roadDraft(c))
           const hall = kinds.townhall
           const id = commands.spawn(buildingDraft(hall, land.hall))
-          commands.insert(id, ...rolesOf(hall))
+          commands.insert(id, ...rolesOf(hall, rules))
           const stock: Amounts = amounts(richness.stock)
           commands.insert(id, Game.Command.entry(TownHall, {}), Game.Command.entry(Status, "idle"), Game.Command.entry(Inventory, { stock, accepts: goodIds, cap: hall.holds?.cap ?? 60 }))
           coins = richness.coins
           const founded = resources.time.get().tick
           // The almanac: each year's winter, from the seed (on its own stream, so the land's randomness is untouched).
           const almanac = Random.make((charter.seed ^ 0x5a17c3) >>> 0)
-          resources.charter.set({ ...charter, founded, winters: rollWinters(() => almanac.next()) })
+          resources.charter.set({ ...charter, founded, winters: rollWinters(() => almanac.next(), rules) })
           resources.appeal.set({ cells: [] })
           resources.pantry.set({ eaten: 0, rotted: 0, eatenLast: 0, rottedLast: 0, warned: -1_000_000 })
           resources.fires.set({ fires: [], next: 1 })
@@ -341,7 +338,7 @@ export const ApplyEdits = Game.System(
           resources.policy.set({ settlers: 100, citizens: 100, sells: trade.sells, buys: [], reserve: trade.reserve })
           resources.market.set({ prices: amounts(Object.fromEntries(goodIds.map((g) => [g, 100]))) })
           resources.mood.set({ approval: 10, target: 10, base: 0, needs: 0, taxes: 0, debt: 0, crown: 0, winter: 0 })
-          resources.crown.set({ open: false, good: "wood", amount: 0, issued: 0, due: 0, reward: 0, next: crownGap(charter), met: 0, missed: 0, streak: 0, snubs: [] })
+          resources.crown.set({ open: false, good: "wood", amount: 0, issued: 0, due: 0, reward: 0, next: crownGap(charter, rules), met: 0, missed: 0, streak: 0, snubs: [] })
           resources.fate.set(foundedFate())
           resources.history.set({ samples: [] })
           resources.chronicle.set({

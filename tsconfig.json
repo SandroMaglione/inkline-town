@@ -1,5 +1,5 @@
 {
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "vite.config.ts"],
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tools/**/*.ts", "test/**/*.ts", "vite.config.ts"],
   "compilerOptions": {
     "noEmit": true,
     "target": "ES2022",
