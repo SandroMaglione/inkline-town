@@ -139,9 +139,10 @@ export function parkAsset(cells: ReadonlyMap<number, ParkCell>, roads: ReadonlyS
         const joined = walk(x + dx, y + dy) || roads.has(key(x + dx, y + dy))
         const q = (along: number, across: number): Vertex => [u + dx * along - dy * across, v + dy * along + dx * across, z + 0.03]
         if (joined) {
-          d.face([q(w, -w), q(0.5, -w), q(0.5, w), q(w, w)], gravel, 0)
-          d.line([q(w, -w), q(0.5, -w)], 1, 0xc2b79f)
-          d.line([q(w, w), q(0.5, w)], 1, 0xc2b79f)
+          const end=roads.has(key(x+dx,y+dy))?0.625:0.5
+          d.face([q(w, -w), q(end, -w), q(end, w), q(w, w)], gravel, 0)
+          d.line([q(w, -w), q(end, -w)], 1, 0xc2b79f)
+          d.line([q(w, w), q(end, w)], 1, 0xc2b79f)
         } else d.line([q(w, -w), q(w, w)], 1, 0xc2b79f)
         out.push(q(0.1 + hash(x * 3 + dx, y * 3 + dy) * 0.08, 0.05))
       }
