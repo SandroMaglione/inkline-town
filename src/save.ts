@@ -16,22 +16,25 @@ export const SAVE_FORMAT = "inkline-town/save"
 /**
  * 2: the charter's towns. 3: neighbourhoods and their dangers (desirability, crews, risks, wear, ruins,
  * winters). 4: parks and patrols. 5: the grudge over taxes, and where each piece of news happened.
- * 6: how much of each good may be traded at a collection.
- * Version 4 and 5 saves are carried forward (see `carry`); older ones cannot be loaded.
+ * 6: how much of each good may be traded at a collection. 7: the mayor's guide.
+ * Version 4, 5, and 6 saves are carried forward (see `carry`); older ones cannot be loaded.
  */
-export const SAVE_VERSION = 6
+export const SAVE_VERSION = 7
 
 /**
  * Fills in what a save from an earlier version lacks, so a town in progress
  * survives an update: from 4, the mood's grudge (none yet) and the news's
- * places (unknown); from 5, trade at full loads, as it was. Anything else is
- * left to the world's own validation.
+ * places (unknown); from 5, trade at full loads, as it was; from 6, the
+ * guide from its start (it puts away at once what the town has already
+ * done). Anything else is left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
-  if ((version !== 4 && version !== 5) || typeof world !== "object" || world === null) return null
+  if ((version !== 4 && version !== 5 && version !== 6) || typeof world !== "object" || world === null) return null
   const w = world as { resources?: Record<string, unknown> }
   const r = w.resources
   if (!r || typeof r !== "object") return null
+  if (!("Town/Guide" in r)) r["Town/Guide"] = { done: [], off: false }
+  if (version === 6) return w
   const policy = r["Town/Policy"]
   if (policy && typeof policy === "object" && !("loads" in policy)) r["Town/Policy"] = { ...policy, loads: Object.fromEntries(goodIds.map((g) => [g, TRADE_LOAD])) }
   if (version === 5) return w

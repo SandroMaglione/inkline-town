@@ -132,3 +132,14 @@ test("loading takes the newer of the mayor's save and the autosave", () => {
   assert.equal((run(loadLatest) as { success: { slot: string } }).success.slot, "manual")
   assert.equal(run(read("auto"))._tag, "Success")
 })
+
+test("a town saved before the guide loads, with the guide from its start", () => {
+  const { town, storage, run } = setup()
+  town.run(10)
+  run(save("manual"))
+  const file = JSON.parse(storage.get("inkline-town/save/manual")!)
+  delete file.world.resources["Town/Guide"]
+  storage.set("inkline-town/save/manual", JSON.stringify({ ...file, version: 6 }))
+  assert.equal(run(load("manual"))._tag, "Success")
+  assert.deepEqual(town.snapshot().resources["Town/Guide"], { done: [], off: false })
+})

@@ -145,6 +145,16 @@ workshops that have waited half a minute for inputs, workplaces nobody can
 walk to, no food in store) and, under *lately*, the news of the last minute
 and a half, which also pops up as it happens. Click a line to go there.
 
+Above them, the **guide** tells a new mayor the next step to take and why,
+one at a time: homes and food first, then planks and stone, then fire,
+winter, wear, and the services, then the chains that turn settlers into
+citizens, and last the crown, trade, and taxes. Each building it names is a
+chip that starts placing one, and "show me where" goes to the water, woods,
+or rocks it means. A step is put away for good once the town has done it
+(shown or not), or when the ✕ skips it; *hide guide* turns it off, and the
+**guide** button in the bottom right turns it back on. The guide is saved
+with the town, and starts over with a new one.
+
 ## Wear, spoilage, and winters
 
 - **Food spoils in store**: fish keeps about three minutes, bread about

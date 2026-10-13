@@ -65,6 +65,7 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .toolbar .pause { padding: 6px 9px; }
 .toolbar .pause.on .glyph { background: none; }
 .system button { color: #5d6861; }
+.system .guide-toggle.on { color: #2f5a9c; background: #eef3fb; border-color: #c9d6ee; }
 .toolbar .town-button {
   padding: 8px 18px 8px 12px; gap: 10px; font-size: 14px; font-weight: 700; letter-spacing: 0.02em;
   background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db;
@@ -351,6 +352,17 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .hud .ticker .cell.place { cursor: pointer; }
 .hud .ticker .cell.place:hover { background: #eef0ea; }
 .hud .ticker .alert.hint { box-shadow: inset 3px 0 0 #8fa9d6; }
+/* The guide's step: a chapter and progress over it, and a quiet way to turn it off. */
+.hud .ticker .head.guide { display: flex; align-items: baseline; gap: 8px; padding-right: 10px; color: #3d6db5; }
+.hud .ticker .head.guide .progress { color: #9aa29b; }
+.hud .ticker .head.guide .quiet {
+  margin-left: auto; padding: 0; border: 0; background: none; font: inherit; letter-spacing: inherit; text-transform: inherit;
+  color: #9aa29b; cursor: pointer;
+}
+.hud .ticker .head.guide .quiet:hover { color: #3d4943; text-decoration: underline; }
+.hud .ticker .cell.guide { background: #f6f8fc; }
+.hud .ticker .cell.guide.place:hover { background: #eef3fb; }
+.hud .ticker .cell.guide + .head { border-top: 1px dashed #e3e6df; }
 .hud .ticker .alert.warn { box-shadow: inset 3px 0 0 #d9a24e; }
 .hud .ticker .alert.bad { box-shadow: inset 3px 0 0 #b04a39; }
 .hud .ticker .alert.bad .text { color: #8f3f31; }
