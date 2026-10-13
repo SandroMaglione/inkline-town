@@ -5,7 +5,7 @@ import { LineMaterial } from "three/addons/lines/LineMaterial.js"
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js"
-import { palette, type Face, type InkAsset, type Vertex } from "./assets.ts"
+import { palette, type Face, type InkAsset, type Vertex } from "./primitives.ts"
 
 /** A 30° elevation and 45° heading reproduce the game's 64×32 projection.
  * The vertical conversion preserves pixel-authored building heights exactly. */
@@ -73,22 +73,26 @@ function silhouetteMesh(asset: InkAsset, faces: ReadonlyArray<Face>) {
   return mesh
 }
 
-const materialCache = new Map<number, THREE.MeshBasicMaterial>()
-function fillMaterial(color: number) {
-  let material = materialCache.get(color)
+const materialCache = new Map<string, THREE.MeshBasicMaterial>()
+function fillMaterial(color: number, opacity = 1) {
+  const key = `${color}/${opacity}`
+  let material = materialCache.get(key)
   if (!material) {
     material = new THREE.MeshBasicMaterial({
       color,
+      opacity,
+      transparent: opacity < 1,
+      depthWrite: opacity >= 1,
       side: THREE.DoubleSide,
       polygonOffset: true,
       polygonOffsetFactor: 6,
       polygonOffsetUnits: 2
     })
-    materialCache.set(color, material)
+    materialCache.set(key, material)
   }
   return material
 }
-function faceMesh(points: ReadonlyArray<Vertex>, color: number) {
+function faceMesh(points: ReadonlyArray<Vertex>, color: number, opacity = 1) {
   const coordinates = points.map(vertex3)
   const positions: Array<number> = []
   for (let i = 1; i < coordinates.length - 1; i++)
@@ -96,7 +100,7 @@ function faceMesh(points: ReadonlyArray<Vertex>, color: number) {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
   geometry.computeVertexNormals()
-  return new THREE.Mesh(geometry, fillMaterial(color))
+  return new THREE.Mesh(geometry, fillMaterial(color, opacity))
 }
 
 export interface BuiltAsset {
@@ -105,24 +109,25 @@ export interface BuiltAsset {
   updateContours: (camera: THREE.Camera) => void
   dispose: () => void
 }
-export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean } = {}): BuiltAsset {
+export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean; meshInk?: boolean; hullContours?: boolean; meshContours?:boolean } = {}): BuiltAsset {
   const group = new THREE.Group()
   group.name = asset.id
   if (options.batchFaces) {
-    const batches = new Map<number, Array<THREE.BufferGeometry>>()
+    const batches = new Map<string, { color: number; opacity: number; geometries: Array<THREE.BufferGeometry> }>()
     for (const face of asset.faces) {
-      const geometries = batches.get(face.color) ?? []
-      geometries.push(faceMesh(face.points, face.color).geometry)
-      batches.set(face.color, geometries)
+      const key = `${face.color}/${face.opacity ?? 1}`,
+        batch = batches.get(key) ?? { color: face.color, opacity: face.opacity ?? 1, geometries: [] }
+      batch.geometries.push(faceMesh(face.points, face.color, face.opacity ?? 1).geometry)
+      batches.set(key, batch)
     }
-    for (const [color, geometries] of batches) {
+    for (const { color, opacity, geometries } of batches.values()) {
       const geometry = mergeGeometries(geometries)
       if (!geometry) throw new Error("Could not batch map faces")
       geometries.forEach((g) => g.dispose())
-      group.add(new THREE.Mesh(geometry, fillMaterial(color)))
+      group.add(new THREE.Mesh(geometry, fillMaterial(color, opacity)))
     }
   } else {
-    for (const face of asset.faces) group.add(faceMesh(face.points, face.color))
+    for (const face of asset.faces) group.add(faceMesh(face.points, face.color, face.opacity ?? 1))
   }
   const lineMaterials: Array<{ material: LineMaterial; width: number }> = []
   const curveMaterials: Array<THREE.MeshBasicMaterial> = []
@@ -130,6 +135,22 @@ export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean } = 
   const batches = new Map<string, { positions: Array<number>; width: number; color: number; opacity: number }>()
   for (const stroke of asset.strokes) {
     const key = `${stroke.width}/${stroke.color}/${stroke.opacity}`
+    if (options.meshInk && stroke.width > 0 && stroke.points.length <= 8) {
+      const batch = curves.get(key) ?? { geometries: [], color: stroke.color, opacity: stroke.opacity }
+      for (let i = 1; i < stroke.points.length; i++) {
+        const a = vertex3(stroke.points[i - 1]!),
+          b = vertex3(stroke.points[i]!),
+          delta = b.clone().sub(a),
+          length = delta.length()
+        if (length < 0.0001) continue
+        const g = new THREE.CylinderGeometry(stroke.width / 2, stroke.width / 2, length, 6)
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize()))
+        g.translate(...a.add(b).multiplyScalar(0.5).toArray())
+        batch.geometries.push(g)
+      }
+      if (batch.geometries.length) curves.set(key, batch)
+      continue
+    }
     // Continuous tubes keep small circle joins clean at high magnification.
     const first = stroke.points[0]!,
       last = stroke.points.at(-1)!
@@ -180,7 +201,7 @@ export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean } = 
   // drawing their hidden edges or the internal triangulation.
   const counts = new Map<number, number>()
   for (const face of asset.faces) if (face.contour) counts.set(face.contour, (counts.get(face.contour) ?? 0) + 1)
-  const smooth = new Set([...counts].filter(([, count]) => count > 6).map(([id]) => id))
+  const smooth = new Set([...counts].filter(([, count]) => options.hullContours || count > 6).map(([id]) => id))
   const smoothFaces = asset.faces.filter((f) => f.contour && smooth.has(f.contour) && (f.contourWidth ?? 1) > 0)
   const hull = smoothFaces.length ? silhouetteMesh(asset, smoothFaces) : null
   if (hull) group.add(hull)
@@ -208,8 +229,34 @@ export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean } = 
       edges.set(key, edge)
     }
   }
+  // GPU silhouette masks let sharp foliage share instances at every camera
+  // angle, without a wireframe or an expanded hull crossing the canopy.
+  if (options.meshContours) {
+    const batches = new Map<number, Array<THREE.BufferGeometry>>()
+    for (const { a, b, normals, width } of edges.values()) {
+      const delta = b.clone().sub(a), length = delta.length()
+      if (length < 0.0001 || width <= 0) continue
+      const geometry = new THREE.CylinderGeometry(width / 2, width / 2, length, 6)
+      geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize()))
+      geometry.translate(...a.clone().add(b).multiplyScalar(0.5).toArray())
+      const n1 = normals[0]!, n2 = normals[1] ?? n1.clone().negate(), count = geometry.getAttribute("position").count
+      geometry.setAttribute("inkNormalA", new THREE.Float32BufferAttribute(Array.from({ length: count }, () => n1.toArray()).flat(), 3))
+      geometry.setAttribute("inkNormalB", new THREE.Float32BufferAttribute(Array.from({ length: count }, () => n2.toArray()).flat(), 3))
+      const batch = batches.get(width) ?? []
+      batch.push(geometry)
+      batches.set(width, batch)
+    }
+    for (const geometries of batches.values()) {
+      const material = new THREE.MeshBasicMaterial({ color: palette.ink, depthWrite: false })
+      const mesh = new THREE.Mesh(mergeGeometries(geometries)!, material)
+      mesh.renderOrder = 2
+      group.add(mesh)
+      curveMaterials.push(material)
+      geometries.forEach(g => g.dispose())
+    }
+  }
   const contours = new Map(
-    [...new Set([...edges.values()].map((e) => e.width))].map((width) => [width, addLines([0, 0, 0, 0, 0, 0], width, palette.ink, 1)])
+    (options.meshContours ? [] : [...new Set([...edges.values()].map((e) => e.width))]).map((width) => [width, addLines([0, 0, 0, 0, 0, 0], width, palette.ink, 1)])
   )
   const lastDirection = new THREE.Vector3()
   const updateContours = (camera: THREE.Camera) => {
@@ -254,7 +301,7 @@ export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean } = 
 export async function exportAsset(asset: InkAsset) {
   const group = new THREE.Group()
   group.name = asset.id
-  for (const face of asset.faces) group.add(faceMesh(face.points, face.color))
+  for (const face of asset.faces) group.add(faceMesh(face.points, face.color, face.opacity ?? 1))
   const contourFaces = asset.faces.filter((face) => face.contour)
   const hull = contourFaces.length ? silhouetteMesh(asset, contourFaces) : null
   if (hull) group.add(hull)

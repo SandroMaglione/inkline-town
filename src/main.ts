@@ -1,14 +1,13 @@
 /**
  * A town simulation of line-drawn buildings, homes, roads, and land, on the
- * bevy-ts ECS with Pixi drawing it. The simulation runs on a fixed step;
+ * bevy-ts ECS with a 3D view. The simulation runs on a fixed step;
  * the views follow once a frame.
  */
 import { Result } from "@typeonce/bevy-ts"
 import { Effect } from "effect"
 import { FixedLoop } from "@typeonce/bevy-ts-browser"
-import { PixiNodeRegistry } from "@typeonce/bevy-ts-pixi"
 
-import type { BuildingView, FieldView, HouseView, RockView, TreeView, WalkerView } from "./art.ts"
+import type { BuildingView, FieldView, HouseView, RockView, TreeView, WalkerView } from "./render3d/views.ts"
 import { lands, sizes, STEP_SECONDS } from "./content.ts"
 import { createHost, type Persistence } from "./host.ts"
 import { present } from "./present.ts"
@@ -22,20 +21,31 @@ const AUTOSAVE_MINUTES = 2
 const start = async () => {
   const mount = document.getElementById("app")!
   let persistence: Persistence = { save: () => "Not ready", load: () => "Not ready" }
-  const { app, stage, ui, syncPage } = await createHost(mount, () => persistence)
+  const { stage, ui, syncPage, resetPage } = await createHost(mount, () => persistence)
   const clock = { deltaSeconds: STEP_SECONDS, elapsed: 0 }
 
+  const buildingNodes = stage.registry<BuildingView>(),
+    houseNodes = stage.registry<HouseView>(),
+    walkerNodes = stage.registry<WalkerView>(),
+    treeNodes = stage.registry<TreeView>(),
+    rockNodes = stage.registry<RockView>(),
+    fieldNodes = stage.registry<FieldView>()
+  const resetPresentation = () => {
+    for (const registry of [buildingNodes, houseNodes, walkerNodes, treeNodes, rockNodes, fieldNodes]) registry.clear()
+    stage.resetPresentation()
+    resetPage()
+  }
   const made = Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(Ui, ui),
       Game.Runtime.service(Clock, clock),
       Game.Runtime.service(StageService, stage),
-      Game.Runtime.service(BuildingNodes, PixiNodeRegistry.make<BuildingView>(stage.objects)),
-      Game.Runtime.service(HouseNodes, PixiNodeRegistry.make<HouseView>(stage.objects)),
-      Game.Runtime.service(WalkerNodes, PixiNodeRegistry.make<WalkerView>(stage.objects)),
-      Game.Runtime.service(TreeNodes, PixiNodeRegistry.make<TreeView>(stage.objects)),
-      Game.Runtime.service(RockNodes, PixiNodeRegistry.make<RockView>(stage.objects)),
-      Game.Runtime.service(FieldNodes, PixiNodeRegistry.make<FieldView>(stage.plates))
+      Game.Runtime.service(BuildingNodes, buildingNodes),
+      Game.Runtime.service(HouseNodes, houseNodes),
+      Game.Runtime.service(WalkerNodes, walkerNodes),
+      Game.Runtime.service(TreeNodes, treeNodes),
+      Game.Runtime.service(RockNodes, rockNodes),
+      Game.Runtime.service(FieldNodes, fieldNodes)
     ),
     resources: blankResources()
   })
@@ -50,7 +60,7 @@ const start = async () => {
     const advance = (seconds: number) => {
       for (let i = 0; i < Math.round(seconds / STEP_SECONDS); i++) runtime.tick(simulate)
     }
-    Object.assign(window, { town: { ui, runtime, advance } })
+    Object.assign(window, { town: { ui, runtime, advance, view: stage } })
   }
 
   // Saves are Effect programs over the browser's storage and this town (see `save.ts`);
@@ -59,15 +69,20 @@ const start = async () => {
     snapshot: () => runtime.snapshot(),
     restore: (data) => {
       const restored = runtime.restore(data as never)
+      if (restored.ok) resetPresentation()
       return restored.ok ? null : restored.error._tag
     },
     title: () => {
       const s = ui.stats
-      return s ? `${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · year ${s.season.year} · ${Math.floor(s.minute)} min in` : "a town"
+      return s
+        ? `${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · year ${s.season.year} · ${Math.floor(s.minute)} min in`
+        : "a town"
     }
   }
   const run = <A, E>(program: Effect.Effect<A, E, Storage | World>) =>
-    Effect.runSync(Effect.result(program.pipe(Effect.provideService(Storage, browserStorage(localStorage)), Effect.provideService(World, world))))
+    Effect.runSync(
+      Effect.result(program.pipe(Effect.provideService(Storage, browserStorage(localStorage)), Effect.provideService(World, world)))
+    )
   persistence = {
     save: () => {
       const saved = run(save("manual"))
@@ -92,11 +107,7 @@ const start = async () => {
   }
 
   const loop = FixedLoop.start({
-    source: FixedLoop.source((onTick) => {
-      const tick = (ticker: { readonly deltaMS: number }) => onTick(ticker)
-      app.ticker.add(tick)
-      return { stop: () => app.ticker.remove(tick) }
-    }),
+    source: FixedLoop.source((onTick) => stage.subscribe(onTick)),
     stepSeconds: STEP_SECONDS,
     maxFrameSeconds: 0.25,
     maxStepsPerFrame: 4,
@@ -104,6 +115,10 @@ const start = async () => {
     // new-town dialog is open, and once the term has ended (an edit, such as
     // founding a new town, still gets its step).
     update: () => {
+      if (ui.edits.some((edit) => edit.type === "newTown")) {
+        resetPresentation()
+        stage.resetCamera()
+      }
       const waiting = ui.speed === 0 || ui.founding || (ui.stats !== null && ui.stats.fate.state !== "playing")
       const steps = waiting ? (ui.edits.length > 0 ? 1 : 0) : ui.speed
       for (let i = 0; i < steps; i++) {
@@ -115,15 +130,19 @@ const start = async () => {
     render: ({ elapsedSeconds }) => {
       clock.deltaSeconds = elapsedSeconds
       clock.elapsed += elapsedSeconds
-      runtime.tick(present)
+      const shown = runtime.tick(present)
+      if (!shown.ok) throw new Error(`The town view stopped: ${JSON.stringify(shown.error)}`)
       syncPage()
       autosave()
     },
     onFailure: (failure) => {
-      mount.textContent = failure.kind === "InvalidTickDelta" ? `Invalid frame delta: ${failure.deltaMS}` : "The town stopped after a system failure."
+      mount.textContent =
+        failure.kind === "InvalidTickDelta" ? `Invalid frame delta: ${failure.deltaMS}` : "The town stopped after a system failure."
     }
   })
   if (!loop.ok) mount.textContent = `Invalid fixed-loop option: ${loop.error.field}`
 }
 
 void start()
+
+if (import.meta.hot) import.meta.hot.accept(() => location.reload())

@@ -13,7 +13,12 @@ const leaves = [
   { light: 0xdbe6d4, shade: 0xb8cbb2 },
   { light: 0xefe7c9, shade: 0xd7c99c }
 ]
-export function makeTree(type: "fir" | "broadleaf" | "poplar", grown: number, id: string) {
+export function makeTree(
+  type: "fir" | "broadleaf" | "poplar",
+  grown: number,
+  id: string,
+  options?: { x: number; y: number; segments?: number }
+) {
   let x = 0,
     y = 0
   for (let i = 0; i < 1000; i++) {
@@ -24,6 +29,10 @@ export function makeTree(type: "fir" | "broadleaf" | "poplar", grown: number, id
       y = i * 7
       break
     }
+  }
+  if (options) {
+    x = options.x
+    y = options.y
   }
   const h = hash(x, y),
     h2 = hash(y * 3 + 17, x * 5 + 7),
@@ -54,6 +63,10 @@ export function makeTree(type: "fir" | "broadleaf" | "poplar", grown: number, id
   )
   if (type === "fir") {
     d.fir(u, v, 0, s, h2 < 0.5 ? 2 : 3)
+    if (h3 >= 0.5) for (const face of d.asset.faces) {
+      if (face.color === 0xd9e5d7) face.color = 0xd3e0d3
+      else if (face.color === 0xb3c7b4) face.color = 0xa9bfab
+    }
     return d.asset
   }
   d.line(
@@ -79,7 +92,7 @@ export function makeTree(type: "fir" | "broadleaf" | "poplar", grown: number, id
       color.shade,
       1.5,
       color.light,
-      48
+      options?.segments ?? 48
     )
   }
   if (type === "poplar") lobe(ox, oy - trunk - 10 * s, 4.5 * s, 11 * s)

@@ -4,9 +4,9 @@
  * `residentDress`). They are only for looking at: not part of the
  * simulation, not saved, and they do nothing to the town.
  */
-import type { Container } from "pixi.js"
-
-import { homeAt, residentDress, WalkerView } from "./art.ts"
+import { homeAt, residentDress } from "./art.ts"
+import { WalkerView } from "./render3d/views.ts"
+import type { GameScene } from "./render3d/scene.ts"
 import type { Tier } from "./content.ts"
 import { DIRS, doors, isRoad } from "./grid.ts"
 import { U, type Point } from "./iso.ts"
@@ -43,11 +43,11 @@ const MOST = 40
 const PACE = 0.7
 
 export class Townsfolk {
-  private readonly layer: Container
+  private readonly layer: GameScene
   private folk: Array<Stroller> = []
   private wait = 0
 
-  constructor(layer: Container) {
+  constructor(layer: GameScene) {
     this.layer = layer
   }
 
@@ -98,13 +98,20 @@ export class Townsfolk {
     if (out.length === 0) return
     const start = out[Math.floor(Math.random() * out.length)]!
     const n = Math.random()
-    const view = new WalkerView(residentDress(homeAt(h.x, h.y).cloth, h.tier, n), null)
+    const view = new WalkerView(this.layer, 0, residentDress(homeAt(h.x, h.y).cloth, h.tier, n), null)
     view.alpha = 0
-    this.layer.addChild(view)
+    this.layer.add(view)
     const cell = { x: start.x, y: start.y }
     this.folk.push({
-      view, cell, prev: null, next: this.onward(cell, null, grid), t: 0, left: 6 + Math.floor(Math.random() * 14),
-      pace: PACE * (h.tier === 2 ? 0.85 : 1) * (0.85 + n * 0.3), side: (4 + Math.round(n)) * U, fade: 0
+      view,
+      cell,
+      prev: null,
+      next: this.onward(cell, null, grid),
+      t: 0,
+      left: 6 + Math.floor(Math.random() * 14),
+      pace: PACE * (h.tier === 2 ? 0.85 : 1) * (0.85 + n * 0.3),
+      side: (4 + Math.round(n)) * U,
+      fade: 0
     })
   }
 

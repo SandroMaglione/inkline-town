@@ -5,6 +5,7 @@ import type { CartLook, Load, PersonDress } from "../art.ts"
 
 export type Vertex = readonly [u: number, v: number, height: number]
 export interface Face {
+  opacity?: number
   points: ReadonlyArray<Vertex>
   color: number
   contour?: number
@@ -62,8 +63,8 @@ export class Drawing {
   line(points: ReadonlyArray<Vertex>, width = 1, color = palette.ink, opacity = 1) {
     this.asset.strokes.push({ points, width, color, opacity })
   }
-  face(points: ReadonlyArray<Vertex>, color: number, width = 1.5, edge = palette.ink) {
-    this.asset.faces.push({ points, color })
+  face(points: ReadonlyArray<Vertex>, color: number, width = 1.5, edge = palette.ink, opacity = 1) {
+    this.asset.faces.push({ points, color, opacity })
     if (width) this.line([...points, points[0]!], width, edge)
   }
   plate(size: number) {
@@ -155,10 +156,13 @@ export class Drawing {
     this.face([p(along - U, z), p(along + U, z), p(along + U, z + height), p(along - U, z + height)], glass, 1)
     if (sill) this.line([p(along - 1.5 * U, z), p(along + 1.5 * U, z)])
   }
-  door(side: Side, a: number, h: number, half: number, awning: number, depth: number, color: number, industrial = false) {
+  door(side: Side, a: number, h: number, half: number, awning: number, depth: number, color: number, industrial = false, open = 0) {
     const p = (s: number, z: number, out = 0.004) => this.wall(side, a, s, z, out)
     this.face([p(-half, 0), p(half, 0), p(half, h), p(-half, h)], industrial ? 0xeef0ea : 0x8f9891, 1.5)
-    if (industrial) for (let z = h - 3; z > 0; z -= 3) this.line([p(-half, z, 0.008), p(half, z, 0.008)], 1, 0x9aa29b)
+    const opening = Math.round(h * open * 0.75)
+    if (industrial && opening > 0)
+      this.face([p(-half, 0, 0.01), p(half, 0, 0.01), p(half, opening, 0.01), p(-half, opening, 0.01)], 0x68726c, 0)
+    if (industrial) for (let z = h - 3; z > opening; z -= 3) this.line([p(-half, z, 0.008), p(half, z, 0.008)], 1, 0x9aa29b)
     this.face([p(-awning, h + 3), p(awning, h + 3), p(awning, h + 1, depth), p(-awning, h + 1, depth)], color)
   }
   gable(a: number, H: number, rise: number, ridge: "x" | "y", face: number, shade: number, chimney: boolean) {

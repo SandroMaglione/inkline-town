@@ -9,8 +9,12 @@ town, the levers you hold, how a term ends, and how the town works underneath.
 
 | | |
 |---|---|
-| drag | pan the map |
-| mouse wheel, pinch | zoom |
+| drag, arrow keys | pan the map (road/home tools drag to build) |
+| right-drag, or drag with **Rotate** selected | rotate and tilt the 3D map |
+| **Q**, **E** | rotate left/right |
+| mouse wheel, **+** / **−** | zoom |
+| two fingers | pan, pinch to zoom, twist to rotate |
+| **Home**, camera reset button | restore the original view |
 | **S** | select: click a building or a home to see what it does |
 | **R** | road: drag to lay one |
 | **H** | homes: drag to lay a row along a road |

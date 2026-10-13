@@ -1,22 +1,45 @@
 /**
- * The page around the town: the Pixi stage and its layers, the camera (drag
- * to pan, wheel or pinch to zoom), the pointer turned into gestures, and the
+ * The page around the town: the 3D scene, camera and pointer gestures, and the
  * top bar, toolbar, build menu, panel, tooltip, and toasts; the dialog a new
  * town is founded from, and the reckoning at the end of its term.
  */
-import { Application, Container, Graphics } from "pixi.js"
+import { Application, Graphics } from "pixi.js"
 
-import { drawBuilding, drawHouse, homeVariant, plate, plateHalf, seaFill, type Stage } from "./art.ts"
+import { drawBuilding, drawHouse, homeVariant, plate, plateHalf } from "./art.ts"
 import {
-  categoryColor, categoryOrder, costText, defaultCharter, goodIds, goods, home, kindOrder, kinds, landIds, lands, mood as moodRules, needTitle,
-  RESERVES, ROAD_COST, sizeIds, sizes, TAX_STEPS, TERMS, type Category, type CharterValue, type GoodId, type Kind, type KindId
+  categoryColor,
+  categoryOrder,
+  costText,
+  defaultCharter,
+  goodIds,
+  goods,
+  home,
+  kindOrder,
+  kinds,
+  landIds,
+  lands,
+  mood as moodRules,
+  needTitle,
+  RESERVES,
+  ROAD_COST,
+  sizeIds,
+  sizes,
+  TAX_STEPS,
+  TERMS,
+  type Category,
+  type CharterValue,
+  type GoodId,
+  type Kind,
+  type KindId
 } from "./content.ts"
-import { GRID, toScreen, type Point } from "./iso.ts"
+import { GRID } from "./iso.ts"
 import { goodIcon, icon, iconEl, type IconName } from "./icons.ts"
 import { generate } from "./mapgen.ts"
 import { askOf, priceOf } from "./sim/index.ts"
 import type { Stats, Tool, TradeMode, UiValue } from "./ui.ts"
 import { emptyPreview } from "./ui.ts"
+import { GameScene } from "./render3d/scene.ts"
+import { MapInput } from "./render3d/input.ts"
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
   const node = document.createElement(tag)
@@ -37,58 +60,10 @@ export interface Persistence {
 
 export const createHost = async (mount: HTMLElement, persistence: () => Persistence) => {
   const app = new Application()
-  await app.init({
-    resizeTo: window,
-    antialias: true,
-    background: seaFill,
-    resolution: Math.min(window.devicePixelRatio || 1, 2),
-    autoDensity: true
-  })
-  mount.appendChild(app.canvas)
-
-  // ── Layers ──
-  const world = new Container()
-  const floor = new Graphics()
-  const ground = new Graphics()
-  const plates = new Container()
-  const roads = new Graphics()
-  const preview = new Container()
-  const overlay = new Graphics()
-  preview.addChild(overlay)
-  const objects = new Container({ sortableChildren: true })
-  const ghost = new Graphics()
-  ghost.zIndex = 1e6
-  objects.addChild(ghost)
-  const labels = new Container()
-  world.addChild(floor, ground, plates, roads, preview, objects, labels)
-  app.stage.addChild(world)
-  const stage: Stage = { world, floor, ground, plates, roads, preview, objects, labels, overlay, ghost }
-
-  // ── Camera ──
-  const centre = toScreen(GRID / 2, GRID / 2)
-  // Zoom steps at which a unit (2 × 1 px at 1×) is still a whole number of
-  // device pixels on a 2× screen, so the drawing stays on its lattice.
-  const zooms = [0.5, 1, 1.5, 2] as const
-  let zoom: number = window.innerWidth >= 1200 && window.innerHeight >= 800 ? 1 : 0.5
-  const look = { x: centre.x, y: centre.y }
-  const placeCamera = () => {
-    world.scale.set(zoom)
-    const dpr = app.renderer.resolution
-    world.position.set(
-      Math.round((app.screen.width / 2 - look.x * zoom) * dpr) / dpr,
-      Math.round((app.screen.height / 2 - look.y * zoom) * dpr) / dpr
-    )
-  }
-  placeCamera()
-  app.renderer.on("resize", placeCamera)
-  const toWorld = (sx: number, sy: number): Point => ({ x: (sx - world.position.x) / zoom, y: (sy - world.position.y) / zoom })
-  const zoomTo = (sx: number, sy: number, next: number) => {
-    const before = toWorld(sx, sy)
-    zoom = Math.min(2, Math.max(0.5, next))
-    look.x = before.x - (sx - app.screen.width / 2) / zoom
-    look.y = before.y - (sy - app.screen.height / 2) / zoom
-    placeCamera()
-  }
+  // Pixi remains an offscreen thumbnail renderer for the unchanged menus.
+  await app.init({ width: 64, height: 64, antialias: true, resolution: 2, autoStart: false, backgroundAlpha: 0 })
+  app.stop()
+  const stage = new GameScene(mount)
 
   // ── DOM ──
   // Top left: the term's clock and the treasury, the goods in stock below, then the crown's request and any alarm.
@@ -99,7 +74,11 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const coins = el("div", "cell coins")
   bar.append(clock, coins)
   const stock = el("div", "card stock")
-  const groups: ReadonlyArray<ReadonlyArray<GoodId>> = [["wood", "planks", "stone", "tools"], ["fish", "bread"], ["wool", "cloth"]]
+  const groups: ReadonlyArray<ReadonlyArray<GoodId>> = [
+    ["wood", "planks", "stone", "tools"],
+    ["fish", "bread"],
+    ["wool", "cloth"]
+  ]
   const goodCells = new Map<GoodId, HTMLElement>()
   for (const group of groups) {
     const cell = el("div", "group")
@@ -174,8 +153,20 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     }
   }
 
-  const tools: ReadonlyArray<{ readonly tool: Tool | "build"; readonly label: string; readonly key: string; readonly icon: IconName; readonly tip: string }> = [
-    { tool: "select", label: "select", key: "S", icon: "select", tip: "Click a building or home to see what it does · drag to pan · wheel to zoom" },
+  const tools: ReadonlyArray<{
+    readonly tool: Tool | "build"
+    readonly label: string
+    readonly key: string
+    readonly icon: IconName
+    readonly tip: string
+  }> = [
+    {
+      tool: "select",
+      label: "select",
+      key: "S",
+      icon: "select",
+      tip: "Click a building or home to see what it does · drag to pan · wheel to zoom"
+    },
     { tool: "road", label: "road", key: "R", icon: "road", tip: `Drag to lay a road · ${ROAD_COST} coins a cell` },
     { tool: "home", label: "homes", key: "H", icon: "homes", tip: `Drag to lay a row of homes along a road · ${costText(home.cost)} each` },
     { tool: "build", label: "build", key: "B", icon: "build", tip: "Choose a building, then click to place it · Esc to stop" },
@@ -227,11 +218,19 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     button.onclick = run
     system.append(button)
   }
-  action("save", "save", "Save the town in this browser (it also autosaves every two minutes)", () => ui.toast(persistence().save() ?? "Saved"))
+  action("save", "save", "Save the town in this browser (it also autosaves every two minutes)", () =>
+    ui.toast(persistence().save() ?? "Saved")
+  )
   action("load", "load", "Load the latest save: yours or the autosave, whichever is newer", () =>
-    confirmLeave("load the latest save?", "The town as it is now is replaced by the latest save (yours or the autosave).", "Load", () => ui.toast(persistence().load() ?? "Loaded")))
+    confirmLeave("load the latest save?", "The town as it is now is replaced by the latest save (yours or the autosave).", "Load", () =>
+      ui.toast(persistence().load() ?? "Loaded")
+    )
+  )
   action("newTown", "new town", "Found a new town on new land", () =>
-    confirmLeave("found a new town?", "This town is left behind for good unless it is saved first.", "Choose new land", () => openCharter(true)))
+    confirmLeave("found a new town?", "This town is left behind for good unless it is saved first.", "Choose new land", () =>
+      openCharter(true)
+    )
+  )
 
   /** Asks before something that replaces the town: save first, go ahead, or stay. */
   const confirmLeave = (title: string, text: string, go: string, run: () => void) => {
@@ -294,6 +293,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   choose("select")
 
   window.addEventListener("keydown", (event) => {
+    if (event.target instanceof HTMLElement && event.target.closest("input,select,textarea,[contenteditable=true]")) return
+    if (event.key === " " && event.target instanceof HTMLButtonElement) return
     if (confirmBox.classList.contains("open") && event.key === "Escape") confirmBox.querySelector<HTMLButtonElement>(".primary")?.click()
     if (ui.founding || reckoning.classList.contains("open") || confirmBox.classList.contains("open")) return
     if (event.key === " ") {
@@ -343,7 +344,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const lo = Math.min(...values)
     const hi = Math.max(...values)
     const span = hi - lo || 1
-    const points = values.map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - 2 - ((v - lo) / span) * (h - 4)).toFixed(1)}`).join(" ")
+    const points = values
+      .map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - 2 - ((v - lo) / span) * (h - 4)).toFixed(1)}`)
+      .join(" ")
     return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="#3d4943" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`
   }
 
@@ -447,7 +450,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     return { box, refresh }
   }
 
-  const categoryIcon: Readonly<Record<Category, IconName>> = { storage: "jobs", gathering: "wood", crafts: "tools", food: "bread", services: "faith" }
+  const categoryIcon: Readonly<Record<Category, IconName>> = {
+    storage: "jobs",
+    gathering: "wood",
+    crafts: "tools",
+    food: "bread",
+    services: "faith"
+  }
 
   const buildMenu = () => {
     panel.append(header("build", iconEl("build", 30), el("p", "sub", "Pick one, then click the map · Esc to stop")))
@@ -507,7 +516,11 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const goalNote = el("p", "empty")
     panel.append(goals)
 
-    const mood = section("approval", "approval", `Homes hold more residents when approval is high and fewer when it is low. At −50 for two minutes, the town turns the mayor out.`)
+    const mood = section(
+      "approval",
+      "approval",
+      `Homes hold more residents when approval is high and fewer when it is low. At −50 for two minutes, the town turns the mayor out.`
+    )
     const moodLine = el("div", "row")
     const moodValue = el("span", "count total")
     moodLine.append(el("span", "label", "now → heading for"), moodValue)
@@ -518,7 +531,11 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     mood.append(moodLine, moodTrack, moodParts)
     panel.append(mood)
 
-    const treasury = section("treasury", "treasury", "Coins a minute. Administration grows faster than the town. Three minutes in debt and the town is bankrupt.")
+    const treasury = section(
+      "treasury",
+      "treasury",
+      "Coins a minute. Administration grows faster than the town. Three minutes in debt and the town is bankrupt."
+    )
     const taxes = row(treasury, "taxes", "taxes")
     const traded = row(treasury, "trade", "trade")
     const upkeep = row(treasury, "upkeep", "upkeep")
@@ -529,7 +546,11 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     treasury.append(coinLine)
     panel.append(treasury)
 
-    const levers = section("tax rates", "taxes", "Lower taxes raise approval, higher ones lower it, weighed by how many of each tier there are.")
+    const levers = section(
+      "tax rates",
+      "taxes",
+      "Lower taxes raise approval, higher ones lower it, weighed by how many of each tier there are."
+    )
     for (const tier of ["settlers", "citizens"] as const) {
       const line = el("div", "row lever")
       const minus = el("button", "frame step", "−")
@@ -570,8 +591,17 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     town.append(peopleLine)
     panel.append(town)
 
-    const needs = section("homes supplied", "homes", "Settlers need food (fish or bread) from a market; citizens need bread, cloth, and faith.")
-    const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith", IconName>> = { food: "fish", bread: "bread", cloth: "cloth", faith: "faith" }
+    const needs = section(
+      "homes supplied",
+      "homes",
+      "Settlers need food (fish or bread) from a market; citizens need bread, cloth, and faith."
+    )
+    const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith", IconName>> = {
+      food: "fish",
+      bread: "bread",
+      cloth: "cloth",
+      faith: "faith"
+    }
     const bars = (["food", "bread", "cloth", "faith"] as const).map((n) => {
       const line = el("div", "need")
       const label = el("span", "label")
@@ -588,13 +618,21 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const larderLine = row(needs, "food in store", "flour")
     panel.append(needs)
 
-    const crown = section("the crown", "crown", `Sending what the crown asks for earns coins. A missed request is a fine, and the town remembers the snub for a while; too many missed in a row and the crown dismisses the mayor.`)
+    const crown = section(
+      "the crown",
+      "crown",
+      `Sending what the crown asks for earns coins. A missed request is a fine, and the town remembers the snub for a while; too many missed in a row and the crown dismisses the mayor.`
+    )
     const crownLine = row(crown, "requests met · missed", "goal")
     const crownNext = el("p", "empty")
     crown.append(crownNext)
     panel.append(crown)
 
-    const store = section("goods and trade", "trade", "Traders buy what the town sells beyond what it keeps, and sell it what it buys up to that, at half again the price. Prices fall as the town sells and rise as it buys. Click sell / buy / — to change a good.")
+    const store = section(
+      "goods and trade",
+      "trade",
+      "Traders buy what the town sells beyond what it keeps, and sell it what it buys up to that, at half again the price. Prices fall as the town sells and rise as it buys. Click sell / buy / — to change a good."
+    )
     const reserveLine = el("div", "row lever")
     const reserveControls = el("span", "controls")
     const fewer = el("button", "frame step", "−")
@@ -667,8 +705,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       goalNote.textContent = s.fate.governing
         ? "Complete: the mayor governs on to the end of the term."
         : s.fate.complete !== null
-        ? `All met: hold them ${clockText(s.fate.complete)} more.`
-        : ""
+          ? `All met: hold them ${clockText(s.fate.complete)} more.`
+          : ""
       goalNote.style.display = goalNote.textContent ? "" : "none"
       // Approval.
       moodValue.textContent = `${signed(s.mood.approval)} → ${signed(s.mood.target)}`
@@ -676,7 +714,12 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       moodFill.style.left = `${Math.min(50, 50 + s.mood.approval / 2)}%`
       moodFill.style.width = `${Math.abs(s.mood.approval) / 2}%`
       moodFill.classList.toggle("low", s.mood.approval < 0)
-      const parts = s.mood.parts.map((p) => `<div class="row"><span class="label">${p.label}</span><span class="count ${p.value > 0 ? "up" : p.value < 0 ? "down" : ""}">${signed(p.value)}</span></div>`).join("")
+      const parts = s.mood.parts
+        .map(
+          (p) =>
+            `<div class="row"><span class="label">${p.label}</span><span class="count ${p.value > 0 ? "up" : p.value < 0 ? "down" : ""}">${signed(p.value)}</span></div>`
+        )
+        .join("")
       if (moodParts.dataset.html !== parts) {
         moodParts.dataset.html = parts
         moodParts.innerHTML = parts
@@ -724,7 +767,11 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         peopleLine.dataset.svg = peopleSvg
         peopleLine.innerHTML = peopleSvg
       }
-      const recent = s.chronicle.slice(-10).reverse().map((l) => `<p><b>${clockText(Math.round(l.tick / 60))}</b> ${l.text}</p>`).join("")
+      const recent = s.chronicle
+        .slice(-10)
+        .reverse()
+        .map((l) => `<p><b>${clockText(Math.round(l.tick / 60))}</b> ${l.text}</p>`)
+        .join("")
       if (lines.dataset.html !== recent) {
         lines.dataset.html = recent
         lines.innerHTML = recent
@@ -757,7 +804,15 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
 
     const title = p.type === "building" ? kinds[p.kind].title.toLowerCase() : `${home.tiers[p.tier].title}' home`
     const status = el("span", "pill")
-    const about = el("p", "sub", p.type === "building" ? kinds[p.kind].blurb : p.tier === 1 ? "settlers: fish or bread from a market keeps them" : "citizens: they need bread, cloth, and faith")
+    const about = el(
+      "p",
+      "sub",
+      p.type === "building"
+        ? kinds[p.kind].blurb
+        : p.tier === 1
+          ? "settlers: fish or bread from a market keeps them"
+          : "citizens: they need bread, cloth, and faith"
+    )
     const below = el("div", "")
     below.append(status, about)
     panel.append(header(title, picture(p.type === "building" ? p.kind : p.tier), below))
@@ -815,7 +870,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   /** Rebuilds the panel when what it shows changes, and refreshes its numbers every frame. */
   const syncPanel = () => {
     const p = ui.panel
-    const next = p === null ? "" : p.type === "build" || p.type === "town" ? p.type : `${p.type}|${p.id}|${p.type === "house" ? p.tier : ""}`
+    const next =
+      p === null ? "" : p.type === "build" || p.type === "town" ? p.type : `${p.type}|${p.id}|${p.type === "house" ? p.tier : ""}`
     if (next !== shape) {
       shape = next
       // Keep the old contents while the closed panel slides away.
@@ -844,7 +900,15 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       for (let x = 0; x < GRID; x++) {
         const k = y * GRID + x
         if (land.mask[k] !== "1") continue
-        g.fillStyle = water.has(k) ? "#b9cfcb" : trees.has(k) ? "#9bb08a" : rocks.has(k) ? (rocks.get(k) ? "#5a6479" : "#8f9891") : "#f7f8f4"
+        g.fillStyle = water.has(k)
+          ? "#b9cfcb"
+          : trees.has(k)
+            ? "#9bb08a"
+            : rocks.has(k)
+              ? rocks.get(k)
+                ? "#5a6479"
+                : "#8f9891"
+              : "#f7f8f4"
         g.fillRect(x * scale, y * scale, scale, scale)
       }
     }
@@ -854,7 +918,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     ui.founding = true
     dialog.replaceChildren()
     const card = el("div", "sheet")
-    card.append(el("h2", "", "found a town"), el("p", "sub", "Choose the land and how long the term runs. Grow the town until it is complete, or keep it from bankruptcy, revolt, and ruin until the term is out."))
+    card.append(
+      el("h2", "", "found a town"),
+      el(
+        "p",
+        "sub",
+        "Choose the land and how long the term runs. Grow the town until it is complete, or keep it from bankruptcy, revolt, and ruin until the term is out."
+      )
+    )
     const body = el("div", "charter")
     const options = el("div", "")
     const preview = el("div", "preview")
@@ -862,7 +933,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const facts = el("p", "sub")
     preview.append(map, facts)
     body.append(options, preview)
-    const group = <T extends string | number>(title: string, values: ReadonlyArray<T>, label: (v: T) => string, blurb: (v: T) => string, get: () => T, set: (v: T) => void) => {
+    const group = <T extends string | number>(
+      title: string,
+      values: ReadonlyArray<T>,
+      label: (v: T) => string,
+      blurb: (v: T) => string,
+      get: () => T,
+      set: (v: T) => void
+    ) => {
       const box = section(title)
       const row = el("div", "choices")
       const note = el("p", "empty")
@@ -883,9 +961,30 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       }
     }
     const refreshers = [
-      group("land", sizeIds, (v) => sizes[v].title, (v) => `${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins to complete it`, () => choice.size, (v) => (choice.size = v)),
-      group("term", TERMS, (v) => `${v} min`, (v) => `${v} minutes of the town at 1×: six years, a winter at the end of each after the first`, () => choice.term, (v) => (choice.term = v)),
-      group("richness", landIds, (v) => lands[v].title, (v) => lands[v].blurb, () => choice.land, (v) => (choice.land = v))
+      group(
+        "land",
+        sizeIds,
+        (v) => sizes[v].title,
+        (v) => `${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins to complete it`,
+        () => choice.size,
+        (v) => (choice.size = v)
+      ),
+      group(
+        "term",
+        TERMS,
+        (v) => `${v} min`,
+        (v) => `${v} minutes of the town at 1×: six years, a winter at the end of each after the first`,
+        () => choice.term,
+        (v) => (choice.term = v)
+      ),
+      group(
+        "richness",
+        landIds,
+        (v) => lands[v].title,
+        (v) => lands[v].blurb,
+        () => choice.land,
+        (v) => (choice.land = v)
+      )
     ]
     const seedLine = el("div", "row")
     const seedText = el("span", "")
@@ -940,7 +1039,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const line = (values: ReadonlyArray<number>, lo: number, hi: number, color: string, dash = "") => {
       if (values.length < 2) return ""
       const span = hi - lo || 1
-      const points = s.history.map((p, i) => `${((p.tick / end) * w).toFixed(1)},${(h - 4 - ((values[i]! - lo) / span) * (h - 8)).toFixed(1)}`).join(" ")
+      const points = s.history
+        .map((p, i) => `${((p.tick / end) * w).toFixed(1)},${(h - 4 - ((values[i]! - lo) / span) * (h - 8)).toFixed(1)}`)
+        .join(" ")
       return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="${dash}" vector-effect="non-scaling-stroke"/>`
     }
     const residents = s.history.map((p) => p.residents)
@@ -951,7 +1052,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const winters = Array.from({ length: 5 }, (_, i) => {
       const y = i + 1
       const from = ((y + 0.7) / 6) * w
-      return `<rect x="${from.toFixed(1)}" y="0" width="${(w * 0.3 / 6).toFixed(1)}" height="${h}" fill="#3d6db5" opacity="0.06"/>`
+      return `<rect x="${from.toFixed(1)}" y="0" width="${((w * 0.3) / 6).toFixed(1)}" height="${h}" fill="#3d6db5" opacity="0.06"/>`
     }).join("")
     return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${winters}<line x1="0" x2="${w}" y1="${goal}" y2="${goal}" stroke="#77817a" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>${line(coinsLine, Math.min(0, ...coinsLine), Math.max(1, ...coinsLine), "#d6ae2e")}${line(approvalLine, -100, 100, "#3d6db5", "4 3")}${line(residents, 0, top, "#3d4943")}</svg>`
   }
@@ -979,10 +1080,20 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       return
     }
     const id = `${s.charter.seed}|${s.fate.state}|${s.fate.at}`
-    result.textContent = s.fate.state === "won" ? "the town is complete · see how" : s.fate.state === "lost" ? "the term is lost · see how" : "the term is over · see how"
+    result.textContent =
+      s.fate.state === "won"
+        ? "the town is complete · see how"
+        : s.fate.state === "lost"
+          ? "the term is lost · see how"
+          : "the term is over · see how"
     if (id === reckoned) return
     reckoned = id
-    const title = s.fate.state === "won" ? "the town is complete" : s.fate.state === "lost" ? s.fate.reason.split(":")[0]!.toLowerCase() : `the term is over: ${verdictOf(s)}`
+    const title =
+      s.fate.state === "won"
+        ? "the town is complete"
+        : s.fate.state === "lost"
+          ? s.fate.reason.split(":")[0]!.toLowerCase()
+          : `the term is over: ${verdictOf(s)}`
     reckoning.replaceChildren()
     const card = el("div", "sheet wide")
     card.append(el("h2", "", title), el("p", "sub", s.fate.reason))
@@ -1029,94 +1140,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     showReckoning(true)
   }
 
-  // ── Pointer ──
-  const canvas = app.canvas
-  const pointers = new Map<number, Point>()
-  let press: { id: number; start: Point; last: Point; pan: boolean; panned: boolean } | null = null
-  let pinch: { distance: number } | null = null
-  let screenPointer: Point | null = null
-  let wheel = 0
-
-  const spread = () => {
-    const [a, b] = [...pointers.values()]
-    return a && b ? { distance: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } } : null
+  const input = new MapInput(stage, ui)
+  const resetPage = () => {
+    choose("select")
+    ui.menu = null
+    ui.selected = null
+    input.reset()
   }
-
-  canvas.addEventListener("pointerdown", (event) => {
-    canvas.setPointerCapture(event.pointerId)
-    const at = { x: event.clientX, y: event.clientY }
-    pointers.set(event.pointerId, at)
-    screenPointer = at
-    ui.pointer = toWorld(at.x, at.y)
-    if (pointers.size === 2) {
-      pinch = { distance: spread()!.distance }
-      press = null
-      ui.dragFrom = null
-      return
-    }
-    // Roads and homes are laid by dragging; with any other tool a drag pans.
-    const pan = event.button !== 0 || (ui.tool !== "road" && ui.tool !== "home")
-    press = { id: event.pointerId, start: at, last: at, pan, panned: false }
-    if (event.button === 0) ui.gestures.push({ type: "press", at: toWorld(at.x, at.y) })
-  })
-
-  canvas.addEventListener("pointermove", (event) => {
-    const at = { x: event.clientX, y: event.clientY }
-    if (pointers.has(event.pointerId)) pointers.set(event.pointerId, at)
-    if (pinch && pointers.size === 2) {
-      const now = spread()!
-      zoomTo(now.mid.x, now.mid.y, zoom * (now.distance / pinch.distance))
-      pinch.distance = now.distance
-      return
-    }
-    screenPointer = at
-    ui.pointer = toWorld(at.x, at.y)
-    if (press && press.id === event.pointerId && press.pan) {
-      if (!press.panned && Math.hypot(at.x - press.start.x, at.y - press.start.y) > 6) press.panned = true
-      if (press.panned) {
-        look.x -= (at.x - press.last.x) / zoom
-        look.y -= (at.y - press.last.y) / zoom
-        placeCamera()
-      }
-    }
-    if (press) press.last = at
-  })
-
-  const release = (event: PointerEvent, cancelled: boolean) => {
-    pointers.delete(event.pointerId)
-    if (pinch && pointers.size < 2) {
-      pinch = null
-      const nearest = zooms.reduce((best, z) => (Math.abs(z - zoom) < Math.abs(best - zoom) ? z : best), zooms[0])
-      zoomTo(event.clientX, event.clientY, nearest)
-    }
-    if (press && press.id === event.pointerId) {
-      const at = toWorld(event.clientX, event.clientY)
-      ui.gestures.push({ type: "release", at, panned: press.panned || cancelled || event.button !== 0 })
-      press = null
-    }
-    if (event.pointerType !== "mouse") {
-      ui.pointer = null
-      screenPointer = null
-    }
-  }
-  canvas.addEventListener("pointerup", (event) => release(event, false))
-  canvas.addEventListener("pointercancel", (event) => release(event, true))
-  canvas.addEventListener("pointerleave", (event) => {
-    if (event.pointerType === "mouse" && !press) {
-      ui.pointer = null
-      screenPointer = null
-    }
-  })
-  canvas.addEventListener("contextmenu", (event) => event.preventDefault())
-  canvas.addEventListener("wheel", (event) => {
-    event.preventDefault()
-    wheel += event.deltaY
-    if (Math.abs(wheel) < 40) return
-    const index = zooms.findIndex((z) => z >= zoom - 1e-6)
-    const next = zooms[Math.min(zooms.length - 1, Math.max(0, index + (wheel > 0 ? -1 : 1)))]!
-    wheel = 0
-    zoomTo(event.clientX, event.clientY, next)
-  }, { passive: false })
 
   /** Copies the town's numbers and preview into the page, once a frame. */
   const syncPage = () => {
@@ -1128,7 +1158,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       coins.classList.toggle("debt", s.coins < 0)
       const left = Math.max(0, s.charter.term * 60 - Math.floor(s.minute * 60))
       clock.innerHTML = `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}</b><small class="${s.season.winter ? "winter" : ""}">year ${s.season.year} · ${s.season.winter ? `spring in ${clockText(s.season.left)}` : `winter in ${clockText(s.season.left)}`}</small></span>`
-      clock.title = s.season.winter ? "Winter: fields lie still, fishing is slow, and homes eat faster" : `Time left in the term · winter comes in ${clockText(s.season.left)}`
+      clock.title = s.season.winter
+        ? "Winter: fields lie still, fishing is slow, and homes eat faster"
+        : `Time left in the term · winter comes in ${clockText(s.season.left)}`
       const trend = s.mood.target > s.mood.approval ? "↑" : s.mood.target < s.mood.approval ? "↓" : ""
       approval.innerHTML = `${icon("approval", 18)}<span class="stack"><b class="${s.mood.approval < 0 ? "down" : ""}">${signed(s.mood.approval)} <span class="${s.mood.target >= s.mood.approval ? "up" : "down"}">${trend}</span></b><small>approval</small></span>`
       settlerCell.innerHTML = `${icon("settlers", 18)}<span class="stack"><b>${s.settlers}</b><small>settlers</small></span>`
@@ -1148,7 +1180,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       // What threatens the term, or is about to complete it.
       const warnings: Array<string> = []
       if (s.fate.state === "playing") {
-        if (s.fate.bankrupt !== null) warnings.push(`<b>In debt:</b> bankrupt in ${clockText(s.fate.bankrupt)} unless the treasury recovers`)
+        if (s.fate.bankrupt !== null)
+          warnings.push(`<b>In debt:</b> bankrupt in ${clockText(s.fate.bankrupt)} unless the treasury recovers`)
         else if (s.coins < 0) warnings.push("<b>In debt:</b> wages are going unpaid")
         if (s.fate.revolt !== null) warnings.push(`<b>Uproar:</b> the town turns the mayor out in ${clockText(s.fate.revolt)}`)
         else if (s.mood.approval < -30) warnings.push("<b>Restless:</b> approval is falling towards revolt")
@@ -1158,7 +1191,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         }
         if (s.fate.complete !== null) warnings.push(`<b>Every goal met:</b> the town is complete in ${clockText(s.fate.complete)}`)
       }
-      const html = warnings.map((w) => `<div class="cell">${icon(w.startsWith("<b>Every goal") ? "goal" : "warning", 16)}<span>${w}</span></div>`).join("")
+      const html = warnings
+        .map((w) => `<div class="cell">${icon(w.startsWith("<b>Every goal") ? "goal" : "warning", 16)}<span>${w}</span></div>`)
+        .join("")
       if (alarm.dataset.html !== html) {
         alarm.dataset.html = html
         alarm.innerHTML = html
@@ -1167,6 +1202,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       alarm.classList.toggle("good", warnings.length === 1 && s.fate.complete !== null)
       syncReckoning(s)
     }
+    input.sync()
+    const screenPointer = input.pointer
     const text = ui.preview.tooltip
     if (text && screenPointer) {
       tooltip.textContent = text
@@ -1174,8 +1211,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       tooltip.style.left = `${Math.min(screenPointer.x, window.innerWidth - tooltip.offsetWidth - 20)}px`
       tooltip.style.top = `${screenPointer.y}px`
     } else tooltip.style.display = "none"
-    canvas.style.cursor = press?.panned ? "grabbing" : ui.preview.hover !== null || ui.tool !== "select" ? "pointer" : "default"
   }
 
-  return { app, stage, ui, syncPage }
+  return { app, stage, ui, syncPage, resetPage, input }
 }

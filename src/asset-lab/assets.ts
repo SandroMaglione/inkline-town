@@ -1,8 +1,8 @@
 /** Portable polygon-and-stroke assets. Floor coordinates remain in cells;
  * heights remain in the original drawing's pixels. No renderer types here. */
-import { home, kinds, kindIds, goodIds } from "../content.ts"
+import { kindIds, goodIds } from "../content.ts"
 import { makeBuilding } from "./buildings.ts"
-import { homeVariant } from "../art.ts"
+import { house } from "./homes.ts"
 import { U } from "../iso.ts"
 import { makeTree, makeRock, makeField, makeRoadPatch, makeWater } from "./land.ts"
 import { personCatalogue, makeCarrier, makeGoods, makeCrate } from "./people.ts"
@@ -11,33 +11,7 @@ import { makeSite, makeConstruction, makeMarker, makeSmoke, makePlot } from "./c
 import { Drawing, mix, pale, square, sides, palette, type InkAsset, type Vertex } from "./primitives.ts"
 export * from "./primitives.ts"
 
-export function house(tier: 1 | 2, variantN = tier === 1 ? 0.03 : 0.28, id = tier === 1 ? "cottage" : "citizen") {
-  const d = new Drawing(
-    id,
-    tier === 1 ? "Settler cottage" : "Citizen home",
-    "Original roof palette, footprint, chimney, windows and awnings. Rear walls completed for rotation."
-  )
-  const variant = homeVariant(variantN)
-  const a = (home.half + (tier === 2 ? 1 : 0)) * U,
-    H = home.tiers[tier].height
-  d.asset.category = "homes"
-  d.asset.reference = { type: "house", tier, variant: variantN }
-  d.asset.footprint = 1
-  d.plate(1)
-  d.box(0, 0, a, a, 0, H)
-  for (const side of sides) {
-    const door = side === "right"
-    if (tier === 2) d.line([d.wall(side, a, -a, 13), d.wall(side, a, a, 13)], 1, palette.ink, 0.7)
-    if (door) d.door(side, a, 9, 2 * U, 3 * U, 2 * U, variant.roof.shade)
-    for (const floor of tier === 2 ? [0, 12] : [0]) {
-      if (tier === 2) {
-        for (const along of [-3 * U, 3 * U]) if (!(door && floor === 0)) d.window(side, a, along, floor + 5)
-      } else if (!door) d.window(side, a, 0, 5)
-    }
-  }
-  d.gable(a, H, tier === 2 ? 10 : 8, variant.ridge, variant.roof.face, variant.roof.shade, variant.chimney || tier === 2)
-  return d.asset
-}
+export { house } from "./homes.ts"
 
 function firTree() {
   const hash = (x: number, y: number) => {

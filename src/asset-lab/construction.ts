@@ -3,7 +3,7 @@ import { buildStages } from "../art.ts"
 import { kinds, type KindId } from "../content.ts"
 import { U } from "../iso.ts"
 
-export function makeSite(share: number) {
+export function makeSite(share: number, size = 2) {
   const d = new Drawing(
     `site-${share === 0 ? "empty" : "supplied"}`,
     share === 0 ? "Marked construction site" : "Supplied construction site",
@@ -11,10 +11,10 @@ export function makeSite(share: number) {
   )
   d.asset.category = "construction"
   d.asset.reference = { type: "site", share }
-  d.asset.footprint = 2
-  const p = 15 * U,
+  d.asset.footprint = size
+  const p = (size * 8 - 1) * U,
     s = p - U
-  d.plate(2)
+  d.plate(size)
   d.line([...square(0, 0, s, 6), [-s, -s, 6]], 1, palette.ink, 0.45)
   for (const [u, v] of [
     [-s, -s],
@@ -54,7 +54,7 @@ export function makeConstruction(kindId: KindId, progress: number) {
   d.asset.reference = { type: "building", kind: kindId, build: progress }
   d.asset.footprint = kind.size
   d.plate(kind.size)
-  if (stage.frame > 0) {
+  if (stage.frame > 0 && stage.walls < 1) {
     const top = Math.round(H * stage.frame)
     d.line([...square(0, 0, a, top), [-a, -a, top]], 1)
     for (const [u, v] of [

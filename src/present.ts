@@ -5,56 +5,95 @@
  */
 import { RenderSync } from "@typeonce/bevy-ts-render"
 
-import {
-  BuildingView, drawFloor, drawGhost, drawPlot, drawRoads, drawWater, FieldView, homeHeight, HouseView, RockView, topOf, TreeView, WalkerView, type Load,
-  type Doors, type Emphasis
-} from "./art.ts"
+import { homeHeight, topOf, type Load, type Emphasis } from "./art.ts"
+import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView } from "./render3d/views.ts"
+import type { DoorSet } from "./render3d/models.ts"
 import { BUILD_TICKS, crown as crownRules, fate, goodIds, goods, home, kinds, needTitle, total, type Kind } from "./content.ts"
 import { around, canPlace, entrances, isRoad, key, lPath, useAt, type TileLike } from "./grid.ts"
-import { inside, TILE_H, TILE_W, toGrid, toScreen, U, type Point } from "./iso.ts"
+import { inside, U, type Point } from "./iso.ts"
 import {
-  Building, BuildingNodes, Census, Charter, Chronicle, Clock, Crown, Errand, Fate, Field, FieldNodes, Figure, Game, Grid, History, House,
-  HouseNodes, Inventory, Land, Ledger, Market, Mood, Paused, Policy, Recipe, Rising, Road, Roam, Rock, RockNodes, Route, Service, Site,
-  Staff, StageService, Status, Stock, Tile, Time, TownHall, Treasury, Tree, TreeNodes, Ui, WalkerNodes, WalkerOf, Water, maybe,
-  type GridValue, type Status as StatusValue
+  Building,
+  BuildingNodes,
+  Census,
+  Charter,
+  Chronicle,
+  Clock,
+  Crown,
+  Errand,
+  Fate,
+  Field,
+  FieldNodes,
+  Figure,
+  Game,
+  Grid,
+  History,
+  House,
+  HouseNodes,
+  Inventory,
+  Land,
+  Ledger,
+  Market,
+  Mood,
+  Paused,
+  Policy,
+  Recipe,
+  Rising,
+  Road,
+  Roam,
+  Rock,
+  RockNodes,
+  Route,
+  Service,
+  Site,
+  Staff,
+  StageService,
+  Status,
+  Stock,
+  Tile,
+  Time,
+  TownHall,
+  Treasury,
+  Tree,
+  TreeNodes,
+  Ui,
+  WalkerNodes,
+  WalkerOf,
+  Water,
+  maybe,
+  type GridValue,
+  type Status as StatusValue
 } from "./schema.ts"
 import { capacity, CELL_STEPS, elapsed, goalsOf, larder, met, seasonAt, SITE_SHARE, taxOf, termTicks } from "./sim/index.ts"
 import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type HitBox } from "./ui.ts"
 
 const cellAt = (at: Point): Point => {
-  const g = toGrid(at.x, at.y)
-  return { x: Math.floor(g.x), y: Math.floor(g.y) }
+  return { x: Math.floor(at.x), y: Math.floor(at.y) }
 }
 
 /** The footprint `size` cells a side centred on a point, by its top cell. */
 const footprintAt = (at: Point, size: number): Point => {
-  const g = toGrid(at.x, at.y)
-  return { x: Math.floor(g.x - (size - 1) / 2), y: Math.floor(g.y - (size - 1) / 2) }
+  return { x: Math.floor(at.x - (size - 1) / 2), y: Math.floor(at.y - (size - 1) / 2) }
 }
 
 /** A thing's hit area: its footprint on the floor, or its body as drawn. */
-const hitBox = (id: number, tile: TileLike, half: number, height: number): HitBox => {
-  const centre = toScreen(tile.x + tile.size / 2, tile.y + tile.size / 2)
-  const a = half * U
-  const top = centre.y - a * TILE_H - height
-  return {
-    id,
-    depth: tile.x + tile.y + tile.size,
-    contains: (at) => {
-      const g = toGrid(at.x, at.y)
-      if (g.x >= tile.x && g.x <= tile.x + tile.size && g.y >= tile.y && g.y <= tile.y + tile.size) return true
-      return Math.abs(at.x - centre.x) <= a * TILE_W && at.y >= top && at.y <= centre.y
-    }
-  }
-}
+const hitBox = (id: number, tile: TileLike, _half: number, _height: number): HitBox => ({
+  id,
+  depth: tile.x + tile.y + tile.size,
+  contains: (at) => at.x >= tile.x && at.x <= tile.x + tile.size && at.y >= tile.y && at.y <= tile.y + tile.size
+})
+const hitAt = (hits: ReadonlyArray<HitBox>, at: Point, entity?: number | null) =>
+  entity === undefined ? (hits.find((h) => h.contains(at))?.id ?? null) : entity
 
-const hitAt = (hits: ReadonlyArray<HitBox>, at: Point): number | null => hits.find((h) => h.contains(at))?.id ?? null
-
-/** The walls facing the viewer a road meets: the +x side's entrances and the +y side's. */
-const doorsOf = (grid: GridValue, tile: TileLike): Doors => {
+/** Doors follow road entrances on all four sides as the camera turns. */
+const doorsOf = (grid: GridValue, tile: TileLike): DoorSet => {
   const open = entrances(tile).filter((c) => isRoad(grid, c.x, c.y))
-  return { right: open.some((c) => c.side === 0), left: open.some((c) => c.side === 1) }
+  return {
+    right: open.some((c) => c.side === 0),
+    left: open.some((c) => c.side === 1),
+    backRight: open.some((c) => c.side === 2),
+    backLeft: open.some((c) => c.side === 3)
+  }
 }
 
 /** How far a kind's work reaches, if it works the land around it. */
@@ -75,7 +114,8 @@ const problemOf = (kind: Kind, status: StatusValue, growing = false): string | n
       return "paused: no workers, a quarter of its upkeep"
     case "starved":
       if (kind.gathers && growing) return `the ${kind.gathers.source === "tree" ? "trees" : "fields"} in reach are still growing`
-      if (kind.gathers) return `no ${sourceTitle[kind.gathers.source]} within ${kind.gathers.radius} cells${kind.gathers.source === "tree" ? ": a forester nearby replants" : ""}`
+      if (kind.gathers)
+        return `no ${sourceTitle[kind.gathers.source]} within ${kind.gathers.radius} cells${kind.gathers.source === "tree" ? ": a forester nearby replants" : ""}`
       if (kind.recipe?.input) return `waiting for ${kind.recipe.input}`
       if (kind.service?.service === "goods") return "nothing to hand out: no fish, bread, or cloth here"
       return "waiting"
@@ -108,19 +148,28 @@ const BuildingRead = Game.Query({
   }
 })
 const HouseRead = Game.Query({
-  selection: { tile: Game.Query.read(Tile), house: Game.Query.read(House), site: Game.Query.optional(Site), rising: Game.Query.optional(Rising) }
+  selection: {
+    tile: Game.Query.read(Tile),
+    house: Game.Query.read(House),
+    site: Game.Query.optional(Site),
+    rising: Game.Query.optional(Rising)
+  }
 })
 
 /** How far up a building or home is: a site rises to its frame as materials come in, then the rest of the way. */
-const buildOf = (site: { readonly owed: Parameters<typeof total>[0]; readonly total: number } | undefined, rising: { readonly ticks: number } | undefined) =>
-  site ? PLATE_SHARE + (SITE_SHARE - PLATE_SHARE) * delivered(site) : rising ? rising.ticks / BUILD_TICKS : 1
+const buildOf = (
+  site: { readonly owed: Parameters<typeof total>[0]; readonly total: number } | undefined,
+  rising: { readonly ticks: number } | undefined
+) => (site ? PLATE_SHARE + (SITE_SHARE - PLATE_SHARE) * delivered(site) : rising ? rising.ticks / BUILD_TICKS : 1)
 
-const siteShare = (site: { readonly owed: Parameters<typeof total>[0]; readonly total: number } | undefined) => (site ? delivered(site) : null)
+const siteShare = (site: { readonly owed: Parameters<typeof total>[0]; readonly total: number } | undefined) =>
+  site ? delivered(site) : null
 
 /** A site's plate is marked out the moment it is placed. */
 const PLATE_SHARE = 0.12
 /** The share of a site's materials that has arrived. */
-const delivered = (site: { readonly owed: Parameters<typeof total>[0]; readonly total: number }) => 1 - total(site.owed) / Math.max(1, site.total)
+const delivered = (site: { readonly owed: Parameters<typeof total>[0]; readonly total: number }) =>
+  1 - total(site.owed) / Math.max(1, site.total)
 
 export const Interact = Game.System(
   "Town/Interact",
@@ -186,13 +235,13 @@ export const Interact = Game.System(
         }
         case "bulldoze": {
           if (gesture.panned) break
-          const hit = hitAt(hits, gesture.at)
+          const hit = hitAt(hits, gesture.at, gesture.hit)
           ui.edits.push({ type: "remove", cell: (hit !== null ? tileOf(hit) : undefined) ?? cell })
           break
         }
         case "select": {
           if (gesture.panned) break
-          ui.selected = hitAt(hits, gesture.at)
+          ui.selected = hitAt(hits, gesture.at, gesture.hit)
           if (ui.selected !== null) ui.menu = null
           break
         }
@@ -204,7 +253,7 @@ export const Interact = Game.System(
     const preview = emptyPreview()
     const pointer = ui.pointer
     const cell = pointer ? cellAt(pointer) : null
-    preview.hover = pointer && (ui.tool === "select" || ui.tool === "bulldoze") ? hitAt(hits, pointer) : null
+    preview.hover = pointer && (ui.tool === "select" || ui.tool === "bulldoze") ? hitAt(hits, pointer, ui.pointerHit) : null
     const showReach = (tile: TileLike, kind: Kind) => {
       const r = reachOf(kind)
       if (r !== null) preview.plots.push({ x: tile.x - r, y: tile.y - r, size: tile.size + 2 * r, look: "reach" })
@@ -230,7 +279,8 @@ export const Interact = Game.System(
       else preview.plots.push({ ...tile, look: "blocked" })
     } else if (ui.tool === "bulldoze") {
       preview.danger = true
-      if (preview.hover === null && cell && ["road", "tree", "field"].includes(useAt(grid, cell.x, cell.y))) preview.plots.push({ ...cell, size: 1, look: "blocked" })
+      if (preview.hover === null && cell && ["road", "tree", "field"].includes(useAt(grid, cell.x, cell.y)))
+        preview.plots.push({ ...cell, size: 1, look: "blocked" })
     }
     if (ui.selected !== null) {
       const row = buildings.find((b) => b.entity.id === ui.selected)
@@ -246,7 +296,9 @@ export const Interact = Game.System(
       const site = maybe(row.data.site)
       const lines: Array<string> = []
       if (site) {
-        const owed = Object.entries(site.owed).filter(([, n]) => n > 0).map(([g, n]) => `${n} ${g}`)
+        const owed = Object.entries(site.owed)
+          .filter(([, n]) => n > 0)
+          .map(([g, n]) => `${n} ${g}`)
         lines.push(owed.length > 0 ? `waiting for ${owed.join(", ")}` : "going up")
         return { kind, status, problem: null, lines }
       }
@@ -254,7 +306,10 @@ export const Interact = Game.System(
       if (staff.needed > 0) lines.push(`workers ${staff.assigned} of ${staff.needed}`)
       const recipe = maybe(row.data.recipe)
       const inventory = maybe(row.data.inventory)
-      if (recipe) lines.push(`${recipe.input ? `${recipe.inputs} ${recipe.input} → ` : ""}${recipe.batch} ${goods[recipe.output].title} · ${recipe.made} made`)
+      if (recipe)
+        lines.push(
+          `${recipe.input ? `${recipe.inputs} ${recipe.input} → ` : ""}${recipe.batch} ${goods[recipe.output].title} · ${recipe.made} made`
+        )
       if (inventory && !maybe(row.data.hall)) {
         const held = inventory.accepts.filter((g) => inventory.stock[g] > 0).map((g) => `${inventory.stock[g]} ${g}`)
         lines.push(held.length > 0 ? `holds ${held.join(", ")}` : "holds nothing yet")
@@ -304,8 +359,15 @@ export const Interact = Game.System(
       const { kind, status, problem, lines } = describeBuilding(pickedBuilding)
       const pausable = kind.id !== "townhall" && !pickedBuilding.data.site.present && !pickedBuilding.data.rising.present
       ui.panel = {
-        type: "building", id: pickedBuilding.entity.id, cell: pickedBuilding.data.tile.get(), kind: kind.id, status, problem, lines,
-        pausable, paused: pickedBuilding.data.paused.present
+        type: "building",
+        id: pickedBuilding.entity.id,
+        cell: pickedBuilding.data.tile.get(),
+        kind: kind.id,
+        status,
+        problem,
+        lines,
+        pausable,
+        paused: pickedBuilding.data.paused.present
       }
     } else if (pickedHouse) {
       const { h, lines } = describeHouse(pickedHouse)
@@ -315,7 +377,7 @@ export const Interact = Game.System(
     const centres = new Map<number, Point>()
     for (const { entity, data } of [...buildings, ...houses]) {
       const t = data.tile.get()
-      centres.set(entity.id, toScreen(t.x + t.size / 2, t.y + t.size / 2))
+      centres.set(entity.id, { x: t.x + t.size / 2, y: t.y + t.size / 2 })
     }
     ui.centres = centres
 
@@ -364,8 +426,16 @@ export const Interact = Game.System(
         ].filter((p) => p.value !== 0)
       },
       crown: {
-        open: crown.open, good: crown.good, amount: crown.amount, left: seconds(crown.due - t), reward: crown.reward, met: crown.met,
-        missed: crown.missed, streak: crown.streak, patience: crownRules.patience, next: seconds(crown.next - t)
+        open: crown.open,
+        good: crown.good,
+        amount: crown.amount,
+        left: seconds(crown.due - t),
+        reward: crown.reward,
+        met: crown.met,
+        missed: crown.missed,
+        streak: crown.streak,
+        patience: crownRules.patience,
+        next: seconds(crown.next - t)
       },
       fate: {
         state: f.state,
@@ -394,7 +464,7 @@ export const RenderBuildings = RenderSync.system(Game, {
   transform: Tile,
   registry: BuildingNodes,
   services: { stage: StageService },
-  create: ({ renderable, services }) => new BuildingView(renderable.kind, services.stage),
+  create: ({ renderable, services, entity }) => new BuildingView(renderable.kind, services.stage, entity),
   apply: (node, { transform }) => node.place(transform.x, transform.y)
 })
 
@@ -404,7 +474,7 @@ export const RenderHouses = RenderSync.system(Game, {
   transform: Tile,
   registry: HouseNodes,
   services: { stage: StageService },
-  create: ({ services }) => new HouseView(services.stage),
+  create: ({ services, entity }) => new HouseView(services.stage, entity),
   apply: (node, { transform }) => node.place(transform.x, transform.y)
 })
 
@@ -412,7 +482,8 @@ export const RenderWalkers = RenderSync.system(Game, {
   name: "Town/RenderWalkers",
   renderable: Figure,
   registry: WalkerNodes,
-  create: ({ renderable }) => WalkerView.forFigure(renderable.role, renderable.color),
+  services: { stage: StageService },
+  create: ({ renderable, services, entity }) => WalkerView.forFigure(renderable.role, renderable.color, services.stage, entity),
   apply: () => {}
 })
 
@@ -421,7 +492,8 @@ export const RenderTrees = RenderSync.system(Game, {
   renderable: Tree,
   transform: Tile,
   registry: TreeNodes,
-  create: () => new TreeView(),
+  services: { stage: StageService },
+  create: ({ services, entity }) => new TreeView(services.stage, entity),
   apply: (node, { transform }) => node.place(transform.x, transform.y)
 })
 
@@ -430,7 +502,8 @@ export const RenderRocks = RenderSync.system(Game, {
   renderable: Rock,
   transform: Tile,
   registry: RockNodes,
-  create: () => new RockView(),
+  services: { stage: StageService },
+  create: ({ services, entity }) => new RockView(services.stage, entity),
   apply: (node, { transform }) => node.place(transform.x, transform.y)
 })
 
@@ -439,21 +512,18 @@ export const RenderFields = RenderSync.system(Game, {
   renderable: Field,
   transform: Tile,
   registry: FieldNodes,
-  create: () => new FieldView(),
+  services: { stage: StageService },
+  create: ({ services, entity }) => new FieldView(services.stage, entity),
   apply: (node, { transform }) => node.place(transform.x, transform.y)
 })
 
 /** The land, redrawn when a new town is founded (or one loaded). */
-let floorFor = ""
 export const DrawLand = Game.System(
   "Town/DrawLand",
   { resources: { land: Game.System.readResource(Land) }, services: { stage: Game.System.service(StageService) } },
   ({ resources, services }) => {
     const mask = resources.land.get().mask
-    if (mask === floorFor) return
-    floorFor = mask
-    services.stage.floor.clear()
-    drawFloor(services.stage.floor, mask)
+    services.stage.setLand(mask)
   }
 )
 
@@ -470,13 +540,10 @@ export const DrawGround = Game.System(
     services: { stage: Game.System.service(StageService) }
   },
   ({ queries, despawned, services }) => {
-    if (queries.laid.each().length === 0 && despawned.entities.all().length === 0) return
+    if (!services.stage.groundDirty && queries.laid.each().length === 0 && despawned.entities.all().length === 0) return
     const cellsOf = (rows: ReadonlyArray<{ readonly data: { readonly tile: { get(): TileLike } } }>) =>
       new Set(rows.map(({ data }) => key(data.tile.get().x, data.tile.get().y)))
-    services.stage.roads.clear()
-    drawRoads(services.stage.roads, cellsOf(queries.roads.each()))
-    services.stage.ground.clear()
-    drawWater(services.stage.ground, cellsOf(queries.water.each()))
+    services.stage.setGround(cellsOf(queries.roads.each()), cellsOf(queries.water.each()))
   }
 )
 
@@ -506,7 +573,9 @@ export const Animate = Game.System(
     queries: {
       buildings: BuildingRead,
       houses: HouseRead,
-      walkers: Game.Query({ selection: { route: Game.Query.read(Route), errand: Game.Query.optional(Errand), roam: Game.Query.optional(Roam) } }),
+      walkers: Game.Query({
+        selection: { route: Game.Query.read(Route), errand: Game.Query.optional(Errand), roam: Game.Query.optional(Roam) }
+      }),
       trees: Game.Query({ selection: { tree: Game.Query.read(Tree) } }),
       rocks: Game.Query({ selection: { rock: Game.Query.read(Rock) } }),
       fields: Game.Query({ selection: { field: Game.Query.read(Field) } })
@@ -548,10 +617,17 @@ export const Animate = Game.System(
       )
     }
     for (const { entity, data } of queries.houses.each()) {
-      services.houseNodes.get(entity.id)?.update(
-        { tier: data.house.get().tier, build: buildOf(maybe(data.site), maybe(data.rising)), doors: doorsOf(grid, data.tile.get()), site: siteShare(maybe(data.site)) },
-        emphasis(entity.id)
-      )
+      services.houseNodes
+        .get(entity.id)
+        ?.update(
+          {
+            tier: data.house.get().tier,
+            build: buildOf(maybe(data.site), maybe(data.rising)),
+            doors: doorsOf(grid, data.tile.get()),
+            site: siteShare(maybe(data.site))
+          },
+          emphasis(entity.id)
+        )
     }
     for (const { entity, data } of queries.walkers.each()) {
       const p = walkerAt(data.route.get())
@@ -560,13 +636,14 @@ export const Animate = Game.System(
       const load: Load = errand
         ? { kind: "cart", good: errand.good, count: !errand.back || errand.count > 0 ? errand.count : 0 }
         : roam?.service === "faith"
-        ? { kind: "bell" }
-        : roam && total(roam.basket) > 0
-        ? { kind: "basket", goods: goodIds.filter((g) => roam.basket[g] > 0) }
-        : { kind: "none" }
+          ? { kind: "bell" }
+          : roam && total(roam.basket) > 0
+            ? { kind: "basket", goods: goodIds.filter((g) => roam.basket[g] > 0) }
+            : { kind: "none" }
       services.walkerNodes.get(entity.id)?.update(p.x, p.y, p.dir, p.phase, load)
     }
-    for (const { entity, data } of queries.trees.each()) services.treeNodes.get(entity.id)?.update(data.tree.get().growth, emphasis(entity.id))
+    for (const { entity, data } of queries.trees.each())
+      services.treeNodes.get(entity.id)?.update(data.tree.get().growth, emphasis(entity.id))
     for (const { entity, data } of queries.rocks.each()) {
       const r = data.rock.get()
       services.rockNodes.get(entity.id)?.update(r.ore, r.amount)
@@ -580,19 +657,12 @@ export const DrawPreview = Game.System(
   "Town/DrawPreview",
   { services: { ui: Game.System.service(Ui), stage: Game.System.service(StageService), clock: Game.System.service(Clock) } },
   ({ services }) => {
-    const { plots, ghosts, roads } = services.ui.preview
-    const { overlay, ghost } = services.stage
-    overlay.clear()
-    ghost.clear()
-    for (const plot of plots) drawPlot(overlay, plot.x, plot.y, plot.size, plot.look, services.clock.elapsed)
-    if (roads.length > 0) drawRoads(overlay, new Set(roads.map((c) => key(c.x, c.y))), 0.6, 0x8f9891)
-    for (const g of ghosts) drawGhost(ghost, g.what, g.cell.x, g.cell.y)
-    ghost.alpha = 0.5
+    services.stage.setPreview(services.ui.preview, services.clock.elapsed)
   }
 )
 
 /** Residents out walking (see `townsfolk.ts`), on the town's time: still while it waits. */
-let townsfolk: { readonly folk: Townsfolk; land: string } | null = null
+let townsfolk: { readonly folk: Townsfolk; land: string; generation: number; stage: unknown } | null = null
 export const Stroll = Game.System(
   "Town/Stroll",
   {
@@ -602,14 +672,19 @@ export const Stroll = Game.System(
   },
   ({ queries, resources, services }) => {
     const ui = services.ui
-    townsfolk ??= { folk: new Townsfolk(services.stage.objects), land: "" }
+    if (townsfolk?.stage !== services.stage) {
+      townsfolk?.folk.clear()
+      townsfolk = { folk: new Townsfolk(services.stage), land: "", generation: -1, stage: services.stage }
+    }
     const mask = resources.land.get().mask
-    if (mask !== townsfolk.land) {
+    if (mask !== townsfolk.land || townsfolk.generation !== services.stage.generation) {
+      townsfolk.generation = services.stage.generation
       townsfolk.land = mask
       townsfolk.folk.clear()
     }
     const waiting = ui.founding || (ui.stats !== null && ui.stats.fate.state !== "playing")
-    const homes = queries.houses.each()
+    const homes = queries.houses
+      .each()
       .filter(({ data }) => !maybe(data.site) && !maybe(data.rising))
       .map(({ data }) => ({ ...data.tile.get(), tier: data.house.get().tier, residents: data.house.get().residents }))
     townsfolk.folk.step(waiting ? 0 : services.clock.deltaSeconds * ui.speed, homes, resources.grid.get())

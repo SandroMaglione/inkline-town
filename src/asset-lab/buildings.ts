@@ -1,6 +1,6 @@
 import { kinds, type KindId } from "../content.ts"
 import { U } from "../iso.ts"
-import { Drawing, palette, pale, square, sides, type Vertex } from "./primitives.ts"
+import { Drawing, palette, pale, square, sides, type Vertex, type Side } from "./primitives.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
   townhall: { accent: 0x8a58a8, glass: 0xf3dca6 },
@@ -21,7 +21,15 @@ const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }>
   chapel: { accent: 0x3d6db5, glass: 0xc9d6ee }
 }
 
-export function makeBuilding(id: KindId) {
+export interface BuildingOptions {
+  doors?: Partial<Record<Side, boolean>>
+  fit?: number
+  open?: number
+  plate?: boolean
+  motion?: boolean
+}
+export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
+  const fit = options.fit ?? 1
   const kind = kinds[id],
     a = kind.half * U,
     H = kind.roof === "gable" ? 20 : kind.stories * 32,
@@ -42,18 +50,18 @@ export function makeBuilding(id: KindId) {
   d.asset.category = "buildings"
   d.asset.reference = { type: "building", kind: id }
   d.asset.footprint = kind.size
-  d.plate(kind.size)
+  if (options.plate !== false) d.plate(kind.size)
   d.box(0, 0, a, a, 0, H)
   for (const side of sides) {
-    const door = side === "right" || side === "left"
+    const door = options.doors ? !!options.doors[side] : side === "right" || side === "left"
     const pt = (s: number, z: number) => d.wall(side, a, s, z, 0.007)
     if (kind.stories === 2) d.line([pt(-a, 32), pt(a, 32)], 1, palette.ink, 0.7)
-    if (kind.roof === "flat") {
+    if (kind.roof === "flat" && fit > 0.3) {
       d.face([pt(-a, H - 3), pt(a, H - 3), pt(a, H), pt(-a, H)], pale(accent, 0.35), 0)
       d.line([pt(-a, H - 3), pt(a, H - 3)], 1, palette.ink, 0.6)
     }
     const positions = door ? (a >= 12 * U ? [-(a - 3 * U), a - 3 * U] : []) : [-Math.round(a / U / 2) * U, Math.round(a / U / 2) * U]
-    if (kind.roof === "flat")
+    if (kind.roof === "flat" && fit > 0.4)
       for (let floor = 0; floor < kind.stories; floor++)
         for (const s of positions) {
           if (id === "chapel") {
@@ -64,39 +72,14 @@ export function makeBuilding(id: KindId) {
             d.line([p(s - w - 0.5 / 16, z), p(s + w + 0.5 / 16, z)])
           } else d.window(side, a, s, floor * 32 + 12, 8, glass, true)
         }
-    if (door) d.door(side, a, Math.min(16, H - 8), 5 * U, 6 * U, 3 * U, accent, true)
-    if (id === "townhall") d.circle(side, a, 50, 5)
+    if (door && fit > 0.15)
+      d.door(side, a, Math.max(2, Math.round(Math.min(16, H - 8) * fit)), 5 * U, 6 * U, 3 * U, accent, true, options.open ?? 0)
+    if (kind.roof === "gable" && !door && fit > 0.4) d.window(side, a, 0, 6)
+    if (id === "townhall" && fit > 0.8) d.circle(side, a, 50, 5)
   }
   if (id === "mill") {
-    d.pyramid(a, H, 16, pale(0x8a6a45, 0.7), pale(0x8a6a45, 0.52))
-    const out = a + 3 * U,
-      hubZ = H - 6
-    d.line(
-      [
-        [a, 0, hubZ],
-        [out, 0, hubZ]
-      ],
-      1.5
-    )
-    const upright = (s: number, t: number): Vertex => [out, (s / Math.sqrt(5)) * U, hubZ + t]
-    for (let i = 0; i < 4; i++) {
-      const turn = 1.2 * 0.6 + (i * Math.PI) / 2,
-        c = Math.cos(turn),
-        s = Math.sin(turn)
-      const along = (r: number, w: number) => upright(c * r - s * w, s * r + c * w)
-      d.line([along(0, 0), along(26, 0)], 1.5)
-      d.face([along(8, 0.5), along(26, 0.5), along(26, 6), along(8, 6)], 0xf6f1e4, 1)
-      for (const r of [14, 20]) d.line([along(r, 0.5), along(r, 6)], 1, palette.ink, 0.6)
-      d.line([along(8, 3.2), along(26, 3.2)], 1, palette.ink, 0.4)
-    }
-    d.face(
-      Array.from({ length: 24 }, (_, i): Vertex => {
-        const [u, v, z] = upright(Math.cos((i * Math.PI) / 12) * 2.2, Math.sin((i * Math.PI) / 12) * 2.2)
-        return [u + 0.006, v, z]
-      }),
-      palette.roof,
-      1
-    )
+    if (fit > 0) d.pyramid(a, H, 16 * fit, pale(0x8a6a45, 0.7), pale(0x8a6a45, 0.52))
+    if (options.motion !== false && fit > 0.6) drawSails(d, a, H, 1.2)
     // Sacks are complete faceted solids, rather than a fixed screen drawing.
     const c = (a + p) / 2
     for (const [u, v] of [
@@ -107,15 +90,15 @@ export function makeBuilding(id: KindId) {
       d.sack(u!, v!)
   } else if (kind.roof === "gable") {
     const roof = dresses[id].roof ?? 0x8a6a45
-    d.gable(a, H, 14, "x", pale(roof, 0.7), pale(roof, 0.52), false)
+    if(fit>0)d.gable(a, H, 14 * fit, "x", pale(roof, 0.7), pale(roof, 0.52), false)
     for (const side of ["right", "left"] as const) {
-      for (const seam of [-(a - 4 * U), a - 4 * U]) d.line([d.wall(side, a, seam, 0), d.wall(side, a, seam, H)], 1, palette.ink, 0.5)
+      for (const seam of (options.doors?.[side] ?? true) ? [-(a - 4 * U), a - 4 * U] : [0])
+        d.line([d.wall(side, a, seam, 0), d.wall(side, a, seam, H)], 1, palette.ink, 0.5)
     }
     for (const side of ["backRight", "backLeft"] as const) {
-      d.window(side, a, 0, 6)
       d.line([d.wall(side, a, 0, 0), d.wall(side, a, 0, H)], 1, palette.ink, 0.5)
     }
-  } else {
+  } else if (fit > 0.4) {
     const pitch = (2 * a) / kind.bays
     for (let row = 0; row < kind.bays; row++)
       for (let col = 0; col < kind.bays; col++) {
@@ -142,18 +125,19 @@ export function makeBuilding(id: KindId) {
       )
       // A flag hanging in a vertical world plane, matching the original at 45°.
       const delta = 11 / 64
-      d.face(
-        [
-          [u, v, H + 24],
-          [u - delta, v + delta, H + 24 - 6],
-          [u, v, H + 16]
-        ],
-        id === "townhall" ? 0xc4523f : 0x3d6db5,
-        1
-      )
+      if (options.motion !== false)
+        d.face(
+          [
+            [u, v, H + 24],
+            [u - delta, v + delta, H + 24 - 6],
+            [u, v, H + 16]
+          ],
+          id === "townhall" ? 0xc4523f : 0x3d6db5,
+          1
+        )
     }
   }
-  if (id === "market") {
+  if (id === "market" && fit > 0.75) {
     const c = (a + p) / 2,
       u0 = c - 1.2 * U,
       u1 = c + 1.2 * U,
@@ -190,24 +174,24 @@ export function makeBuilding(id: KindId) {
     d.crate(-a + 1.5 * U, c, 0, 0xc4523f)
     d.crate(-a - 0.2 * U, c, 5, 0x8a58a8)
   }
-  finishBuilding(d, id, a, p, H)
+  finishBuilding(d, id, a, p, H, fit)
   return d.asset
 }
 
-function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number) {
+function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number, fit = 1) {
   const kind = kinds[id],
     c = (a + p) / 2,
     pitch = (2 * a) / kind.bays,
     u = -a + pitch * 0.5,
     v = -a + pitch * 0.5
-  if (kind.topper === "chimney") {
-    d.box(u, v, 2 * U, 2 * U, H, 24)
-    d.face(square(u, v, 1.5 * U, H + 24.035), 0x8b938c, 0)
-  } else if (kind.topper === "cupola") {
+  if (kind.topper === "chimney" && fit > 0) {
+    d.box(u, v, 2 * U, 2 * U, H, 24 * fit)
+    d.face(square(u, v, 1.5 * U, H + 24 * fit + 0.035), 0x8b938c, 0)
+  } else if (kind.topper === "cupola" && fit > 0) {
     const half = 3 * U,
-      top = H + 10,
+      top = H + 10 * fit,
       base = square(u, v, half, top)
-    d.box(u, v, half, half, H, 10)
+    d.box(u, v, half, half, H, 10 * fit)
     for (const side of ["right", "left"] as const) {
       const pts = (along: number, z: number): Vertex =>
         side === "right" ? [u + half + 0.003, v + along, z] : [u + along, v + half + 0.003, z]
@@ -228,7 +212,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number)
       ],
       1.5
     )
-  } else if (kind.topper === "crates") {
+  } else if (kind.topper === "crates" && fit > 0.5) {
     d.crate(u, v, H, 0xd27a34, 3 * U, 12)
     d.crate(u + 7 * U, v, H, 0x2f8c87, 3 * U, 12)
     d.crate(u + 3 * U, v, H + 12, 0x8a58a8, 3 * U, 12)
@@ -247,6 +231,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number)
     const base = square(x, y, half, z)
     for (let i = 0; i < 4; i++) d.face([base[i]!, base[(i + 1) % 4]!, [x, y, z + rise]], pale(color, i >= 2 ? 0.7 : 0.52))
   }
+  if (fit <= 0.75) return
   switch (id) {
     case "warehouse":
       d.crate(c, c - 1.5 * U, 0, 0x2f8c87, 1.6 * U, 6)
@@ -470,4 +455,63 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number)
       bush(-a - U, c, 4, 0xccd5ae, 0xe8ecd2)
       break
   }
+}
+
+function drawSails(d: Drawing, a: number, H: number, wave: number) {
+  const out = a + 3 * U,
+    hubZ = H - 6
+  d.line(
+    [
+      [a, 0, hubZ],
+      [out, 0, hubZ]
+    ],
+    1.5
+  )
+  const upright = (s: number, t: number): Vertex => [out, (s / Math.sqrt(5)) * U, hubZ + t]
+  for (let i = 0; i < 4; i++) {
+    const turn = wave * 0.6 + (i * Math.PI) / 2,
+      c = Math.cos(turn),
+      s = Math.sin(turn)
+    const along = (r: number, w: number) => upright(c * r - s * w, s * r + c * w)
+    d.line([along(0, 0), along(26, 0)], 1.5)
+    d.face([along(8, 0.5), along(26, 0.5), along(26, 6), along(8, 6)], 0xf6f1e4, 1)
+    for (const r of [14, 20]) d.line([along(r, 0.5), along(r, 6)], 1, palette.ink, 0.6)
+    d.line([along(8, 3.2), along(26, 3.2)], 1, palette.ink, 0.4)
+  }
+  d.face(
+    Array.from({ length: 24 }, (_, i): Vertex => {
+      const [u, v, z] = upright(Math.cos((i * Math.PI) / 12) * 2.2, Math.sin((i * Math.PI) / 12) * 2.2)
+      return [u + 0.006, v, z]
+    }),
+    palette.roof,
+    1
+  )
+}
+export function makeSails() {
+  const d = new Drawing("mill-sails", "Mill sails", "")
+  const a = kinds.mill.half * U,
+    H = kinds.mill.stories * 32
+  drawSails(d, a, H, 1.2)
+  const shift = ([u, v, z]: Vertex): Vertex => [u - a - 3 * U, v, z - H + 6]
+  d.asset.faces.forEach((f) => {
+    f.points = f.points.map(shift)
+  })
+  d.asset.strokes.forEach((s) => {
+    s.points = s.points.map(shift)
+  })
+  return d.asset
+}
+export function makeFlag(id: KindId) {
+  const d = new Drawing("flag-" + id, "Flag", ""),
+    delta = 11 / 64
+  d.face(
+    [
+      [0, 0, 0],
+      [-delta, delta, -6],
+      [0, 0, -8]
+    ],
+    id === "townhall" ? 0xc4523f : 0x3d6db5,
+    1
+  )
+  return d.asset
 }
