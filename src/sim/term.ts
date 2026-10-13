@@ -4,39 +4,59 @@
  * and the term ends: complete, lost, or run out.
  */
 import {
-  crown, fate, goods, HISTORY_TICKS, mood, sizes, ticks, type GoodId
+  crown, fate, goods, HISTORY_TICKS, mood, sizes, spoils, ticks, WINTER_WARNING, winters, type GoodId
 } from "../content.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
 import {
-  Building, Census, Charter, Chronicle, Crown, Fate, Game, History, House, Inventory, Ledger, Mood, Policy, Recipe, Rising, Rng, Site,
-  Storage, Time, Treasury
+  Building, Census, Charter, Chronicle, Crown, Fate, Game, History, House, Inventory, Ledger, Mood, Pantry, Policy, Recipe, Rising, Rng, Site,
+  Stock, Storage, Time, Treasury
 } from "../schema.ts"
-import { elapsed, seasonAt, termTicks } from "./shared.ts"
+import { elapsed, seasonAt, termTicks, write } from "./shared.ts"
 import { satisfaction } from "./town.ts"
 
 // ── Time ──────────────────────────────────────────────────────────────────
 
-/** A line in the chronicle. */
-const write = (chronicle: { update: (f: (c: { readonly lines: ReadonlyArray<{ tick: number; text: string }> }) => { lines: ReadonlyArray<{ tick: number; text: string }> }) => void }, tick: number, text: string) =>
-  chronicle.update((c) => ({ lines: [...c.lines, { tick, text }].slice(-200) }))
-
-/** Winter comes and goes, and the chronicle says so. */
+/**
+ * Winter comes and goes, and the chronicle says so. A minute before it
+ * comes, the almanac warns the town how hard it will be, and how long the
+ * food in store would last.
+ */
 export const Seasons = Game.System(
   "Town/Seasons",
   {
     resources: {
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter),
+      stock: Game.System.readResource(Stock),
+      pantry: Game.System.readResource(Pantry),
       chronicle: Game.System.writeResource(Chronicle)
     }
   },
   ({ resources }) => {
-    const t = elapsed(resources.time.get(), resources.charter.get())
+    const charter = resources.charter.get()
+    const t = elapsed(resources.time.get(), charter)
     if (t <= 0) return
-    const now = seasonAt(t, resources.charter.get())
-    const before = seasonAt(t - 1, resources.charter.get())
-    if (now.winter && !before.winter) write(resources.chronicle, t, `Winter of year ${now.year}: the fields lie still and the fish are few.`)
+    const now = seasonAt(t, charter)
+    const before = seasonAt(t - 1, charter)
+    if (now.winter && !before.winter) {
+      const w = now.severity ?? "normal"
+      write(
+        resources.chronicle,
+        t,
+        `A ${winters[w].title} winter, year ${now.year}: the fields lie still and fisheries catch ${Math.round(winters[w].fishing * 100)}%${winters[w].heating ? "; homes burn fires to keep warm" : ""}.`
+      )
+    }
     if (!now.winter && before.winter) write(resources.chronicle, t, `Spring of year ${now.year}.`)
+    if (!now.winter && now.coming !== null && now.left === WINTER_WARNING) {
+      const w = winters[now.coming]
+      const eats = resources.pantry.get().eatenLast
+      write(
+        resources.chronicle,
+        t,
+        `Winter in a minute, and the almanac says it will be ${w.title}: ${larder(resources.stock.get())} food in store; the town eats ${eats} a minute.`,
+        true
+      )
+    }
   }
 )
 
@@ -46,7 +66,8 @@ export const Seasons = Game.System(
 export const crownGap = (charter: { readonly term: number }) => Math.round(termTicks(charter) / (crown.perTerm + 1))
 
 /**
- * Every so often the crown asks for something the town makes: a share of
+ * Every so often the crown asks for something the town makes, and that
+ * keeps (never fish or bread): a share of
  * what its workshops and gatherers could make in the time given, larger the
  * later in the term it is. A request not sent in time is a fine and a snub
  * the town's approval remembers.
@@ -80,7 +101,7 @@ export const Requests = Game.System(
       const fine = Math.round(((c.reward - crown.bonus) / crown.reward) * crown.fine) + crown.bonus
       resources.treasury.update((tr) => ({ coins: tr.coins - fine }))
       resources.crown.set({ ...c, open: false, missed: c.missed + 1, streak: c.streak + 1, snubs: [...remembered, t] })
-      write(resources.chronicle, t, `The crown's request for ${c.amount} ${goods[c.good].title} went unanswered: a fine of ${fine} coins.`)
+      write(resources.chronicle, t, `The crown's request for ${c.amount} ${goods[c.good].title} went unanswered: a fine of ${fine} coins.`, true)
       return
     }
     if (c.open || t < c.next) return
@@ -92,7 +113,8 @@ export const Requests = Game.System(
       const r = data.recipe.get()
       rates.set(r.output, (rates.get(r.output) ?? 0) + (r.batch * 3600) / r.period)
     }
-    const options = [...rates.keys()].sort()
+    // Only what keeps: fish and bread would rot on the way.
+    const options = [...rates.keys()].filter((g) => spoils[g] === undefined).sort()
     if (options.length === 0) return
     const random = Random.make(resources.rng.get())
     const good = random.pick(options)!
@@ -107,7 +129,7 @@ export const Requests = Game.System(
     const gap = crownGap(charter)
     const due = t + Math.round(gap * crown.window)
     resources.crown.set({ ...c, snubs: remembered, open: true, good, amount, issued: t, due, reward, next: t + gap })
-    write(resources.chronicle, t, `The crown asks for ${amount} ${goods[good].title} within ${Math.round(((due - t) / 3600) * 10) / 10} minutes, for ${reward} coins.`)
+    write(resources.chronicle, t, `The crown asks for ${amount} ${goods[good].title} within ${Math.round(((due - t) / 3600) * 10) / 10} minutes, for ${reward} coins.`, true)
   }
 )
 
@@ -180,7 +202,7 @@ export const foundedFate = () => ({
 })
 
 /** Food in storage: what would carry the town through a winter. */
-export const larder = (stock: { readonly fish: number; readonly bread: number }) => stock.fish + stock.bread
+export const larder = (stock: { readonly fish: number; readonly smoked: number; readonly bread: number }) => stock.fish + stock.smoked + stock.bread
 
 /** Each goal the town must hold to be complete, met or not. */
 export const goalsOf = (
@@ -236,7 +258,7 @@ export const Judge = Game.System(
     const crownNow = resources.crown.get()
     const residents = census.settlers + census.citizens
     const net = ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin
-    const note = (text: string) => write(resources.chronicle, t, text)
+    const note = (text: string, alarm = false) => write(resources.chronicle, t, text, alarm)
     const minutes = (n: number) => ticks(n * 60)
     const left = Math.max(0, Math.round((termTicks(charter) - t) / 3600))
     const score = (won: boolean) => scoreOf({ ...census, coins, approval, met: crownNow.met, missed: crownNow.missed }, won, left)
@@ -246,11 +268,11 @@ export const Judge = Game.System(
 
     // Dangers.
     if (coins < 0) {
-      if (f.debtSince < 0) note("The treasury is empty: wages go unpaid.")
+      if (f.debtSince < 0) note("The treasury is empty: wages go unpaid.", true)
       next.debtSince = f.debtSince < 0 ? t : f.debtSince
     } else next.debtSince = -1
     if (approval <= fate.revoltAt) {
-      if (f.revoltSince < 0) note("The town is in uproar.")
+      if (f.revoltSince < 0) note("The town is in uproar.", true)
       next.revoltSince = f.revoltSince < 0 ? t : f.revoltSince
     } else next.revoltSince = -1
 

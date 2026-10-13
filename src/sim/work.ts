@@ -7,13 +7,22 @@
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { fieldDraft, treeDraft } from "../archetypes.ts"
-import { amounts, BUILD_TICKS, goodIds, GROWN, ticks, total, type Amounts } from "../content.ts"
-import { around, DIRS, GridBuilder, key, ownerAt, roadPrint, useAt } from "../grid.ts"
 import {
-  Charter, Field, FieldOf, Game, Gatherer, Grid, House, Inventory, Land, Paused, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status,
-  Stock, Storage, Tile, Time, Tree, maybe, type Status as StatusValue
+  amounts, APPRENTICE, BUILD_TICKS, COMMUTE, condition, crewOf, goodIds, GROWN, kinds, ticks, total, winters, type Amounts, type Crew
+} from "../content.ts"
+import { around, DIRS, doors, GridBuilder, key, ownerAt, reach, roadPrint, useAt } from "../grid.ts"
+import {
+  Building, Burning, Charter, Condition, Field, FieldOf, Game, Gatherer, Grid, House, Inventory, Land, Paused, Planter, Recipe, Rising, Rng,
+  Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Tree, maybe, type Status as StatusValue
 } from "../schema.ts"
 import { connected, elapsed, seasonAt, TileRead, useOf } from "./shared.ts"
+
+/**
+ * Whether a building working at `pace` (a share of full speed, a sum of
+ * halves and quarters) gets its step in on step `tick`: at a half, every
+ * other step; at a quarter, every fourth.
+ */
+export const paced = (pace: number, tick: number): boolean => pace >= 1 || Math.floor((tick + 1) * pace) > Math.floor(tick * pace)
 
 /**
  * What stands where on the land, for every system after it this step.
@@ -93,34 +102,98 @@ export const Raise = Game.System(
 // ── Workers ───────────────────────────────────────────────────────────────
 
 /** Workers are reassigned this often: residents move in and out every few seconds, no faster. */
-const STAFF_TICKS = ticks(0.5)
+export const STAFF_TICKS = ticks(0.5)
 
 /**
- * Residents go to work in the order buildings were placed, as many as each
- * needs while any are left; a paused building gets nobody.
+ * Residents go to work at the workplaces within a commute of their home
+ * (`COMMUTE` road cells), nearest homes first; the workplaces with the
+ * fewest of their crew within reach are staffed first (in the order they
+ * were placed, among equals), so a mine with its own cottages is not robbed
+ * of them by a workshop in town. Settlers do the rough work and citizens the skilled; citizens
+ * never take a settlers' job, and settlers fill a citizens' job only once
+ * every workplace has had its own crew, as apprentices at a slower pace. A
+ * paused or burning building gets nobody.
  */
 export const AssignStaff = Game.System(
   "Town/AssignStaff",
   {
     queries: {
-      homes: Game.Query({ selection: { house: Game.Query.read(House) }, without: [Site, Rising] }),
-      workplaces: Game.Query({ selection: { tile: Game.Query.read(Tile), staff: Game.Query.write(Staff), paused: Game.Query.optional(Paused) }, without: [Site, Rising] })
+      homes: Game.Query({ selection: { tile: Game.Query.read(Tile), house: Game.Query.read(House) }, without: [Site, Rising, Burning] }),
+      workplaces: Game.Query({
+        selection: {
+          tile: Game.Query.read(Tile),
+          building: Game.Query.read(Building),
+          staff: Game.Query.write(Staff),
+          paused: Game.Query.optional(Paused),
+          burning: Game.Query.optional(Burning)
+        },
+        without: [Site, Rising]
+      })
     },
     resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) }
   },
   ({ queries, resources }) => {
     if (resources.time.get().tick % STAFF_TICKS !== 0) return
     const grid = resources.grid.get()
-    let pool = 0
-    for (const { data } of queries.homes.each()) pool += data.house.get().residents
+    const homes: Array<{ readonly crew: Crew; left: number; readonly doors: ReadonlyArray<{ readonly x: number; readonly y: number }> }> = []
+    for (const { data } of queries.homes.each()) {
+      const h = data.house.get()
+      const ds = doors(grid, data.tile.get())
+      if (h.residents > 0 && ds.length > 0) homes.push({ crew: crewOf(h.tier), left: h.residents, doors: ds })
+    }
+    type Row = ReturnType<typeof queries.workplaces.each>[number]
+    const places: Array<{
+      readonly data: Row["data"]
+      readonly staff: { readonly needed: number; readonly assigned: number; readonly apprentices: number; readonly nearby: number }
+      readonly crew: Crew
+      readonly within: ReadonlyArray<{ readonly home: (typeof homes)[number]; readonly distance: number }>
+      assigned: number
+      apprentices: number
+      readonly nearby: number
+    }> = []
     for (const { data } of queries.workplaces.each()) {
       const staff = data.staff.get()
-      const assigned = connected(grid, data.tile.get()) && !data.paused.present ? Math.min(staff.needed, pool) : 0
-      pool -= assigned
-      if (assigned !== staff.assigned) data.staff.set({ ...staff, assigned })
+      if (staff.needed === 0) continue
+      const crew = kinds[data.building.get().kind].crew
+      const starts = doors(grid, data.tile.get())
+      const within: Array<{ readonly home: (typeof homes)[number]; readonly distance: number }> = []
+      if (starts.length > 0 && !data.paused.present && !data.burning.present) {
+        const roads = reach(grid, starts)
+        for (const home of homes) {
+          let distance = -1
+          for (const d of home.doors) {
+            const n = roads.distance[key(d.x, d.y)]!
+            if (n >= 0 && (distance < 0 || n < distance)) distance = n
+          }
+          if (distance >= 0 && distance <= COMMUTE) within.push({ home, distance })
+        }
+        within.sort((a, b) => a.distance - b.distance)
+      }
+      const nearby = within.reduce((n, w) => n + (w.home.crew === crew ? w.home.left : 0), 0)
+      places.push({ data, staff, crew, within, assigned: 0, apprentices: 0, nearby })
+    }
+    const fill = (place: (typeof places)[number], from: Crew) => {
+      for (const { home } of place.within) {
+        if (place.assigned >= place.staff.needed) return
+        if (home.crew !== from || home.left === 0) continue
+        const take = Math.min(place.staff.needed - place.assigned, home.left)
+        home.left -= take
+        place.assigned += take
+        if (from !== place.crew) place.apprentices += take
+      }
+    }
+    const order = places.map((place, index) => ({ place, index })).sort((a, b) => a.place.nearby - b.place.nearby || a.index - b.index)
+    for (const { place } of order) fill(place, place.crew)
+    for (const { place } of order) if (place.crew === "citizens") fill(place, "settlers")
+    for (const { data, staff, assigned, apprentices, nearby } of places) {
+      if (staff.assigned !== assigned || staff.apprentices !== apprentices || staff.nearby !== nearby) data.staff.set({ ...staff, assigned, apprentices, nearby })
     }
   }
 )
+
+/** Worker-steps a crew puts in this step: apprentices only on their share of the steps (see `APPRENTICE`). */
+export const effort = (staff: { readonly assigned: number; readonly apprentices: number }, tick: number) =>
+  staff.assigned - staff.apprentices + (paced(APPRENTICE, tick) ? staff.apprentices : 0)
 
 // ── Recipes ───────────────────────────────────────────────────────────────
 
@@ -129,7 +202,9 @@ export const AssignStaff = Game.System(
  * makes, its input is in, and (for a gatherer) the land has what it needs
  * within reach: a grown tree is felled, a rock chipped, a ripe field
  * reaped. Then the crew puts its worker-steps in; a full crew finishes in
- * `period` steps. In winter, fishing goes at half pace.
+ * `period` steps. It goes at half pace without the tools it wears out, and
+ * at half pace again once it is run down; in winter, fishing goes at the
+ * winter's pace (a hard winter's is a quarter).
  */
 export const Work = Game.System(
   "Town/Work",
@@ -138,12 +213,14 @@ export const Work = Game.System(
       workshops: Game.Query({
         selection: {
           tile: Game.Query.read(Tile),
+          building: Game.Query.read(Building),
           staff: Game.Query.read(Staff),
           recipe: Game.Query.write(Recipe),
           inventory: Game.Query.write(Inventory),
           status: Game.Query.write(Status),
           gatherer: Game.Query.optional(Gatherer),
-          paused: Game.Query.optional(Paused)
+          paused: Game.Query.optional(Paused),
+          condition: Game.Query.optional(Condition)
         },
         without: [Site, Rising]
       }),
@@ -155,8 +232,10 @@ export const Work = Game.System(
   },
   ({ queries, resources, commands }) => {
     const grid = resources.grid.get()
+    const tick = resources.time.get().tick
     const t = elapsed(resources.time.get(), resources.charter.get())
-    const slowFishing = seasonAt(t, resources.charter.get()).winter && t % 2 === 1
+    const season = seasonAt(t, resources.charter.get())
+    const fishing = season.severity ? winters[season.severity].fishing : 1
     // The land by entity, looked up only once some gatherer starts a job this step.
     const lazy = <T>(make: () => T) => {
       let value: T | undefined
@@ -205,6 +284,7 @@ export const Work = Game.System(
 
     for (const { data } of queries.workshops.each()) {
       const tile = data.tile.get()
+      const kind = kinds[data.building.get().kind]
       const staff = data.staff.get()
       const gatherer = maybe(data.gatherer)
       let recipe = data.recipe.get()
@@ -222,11 +302,16 @@ export const Work = Game.System(
           recipe = { ...recipe, progress: 1 }
         }
       }
-      if (open && recipe.progress > 0 && staff.assigned > 0 && !(slowFishing && gatherer?.source === "water")) {
-        const progress = recipe.progress + staff.assigned
+      const worn = (maybe(data.condition)?.value ?? Infinity) < condition.worn
+      const pace = (kind.wear && stock.tools === 0 ? 0.5 : 1) * (worn ? 0.5 : 1) * (gatherer?.source === "water" ? fishing : 1)
+      const put = effort(staff, tick)
+      if (open && recipe.progress > 0 && put > 0 && paced(pace, tick)) {
+        const progress = recipe.progress + put
         if (progress > recipe.period * staff.needed) {
           recipe = { ...recipe, progress: 0, made: recipe.made + 1 }
           stock = { ...stock, [recipe.output]: stock[recipe.output] + recipe.batch }
+          // Every so many jobs wear out a tool.
+          if (kind.wear && recipe.made % kind.wear === 0 && stock.tools > 0) stock = { ...stock, tools: stock.tools - 1 }
         } else recipe = { ...recipe, progress }
       }
       const status: StatusValue = data.paused.present

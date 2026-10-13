@@ -268,3 +268,39 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   .panel {width:calc(100vw - 24px);max-width:360px}
   .toast {bottom:calc(165px + env(safe-area-inset-bottom));max-width:calc(100vw - 28px)}
 }
+
+/* ── The town ticker, map views and their legend ── */
+.hud .ticker { display: none; flex-direction: column; max-width: 420px; }
+.hud .ticker.show { display: flex; }
+.hud .ticker .cell { white-space: normal; padding: 5px 12px; font-size: 11px; line-height: 1.35; }
+.hud .ticker .cell + .cell { border-left: none; border-top: 1px dashed #e3e6df; }
+.hud .ticker .news { color: #5d6861; }
+.views {
+  position: fixed; right: 16px; top: 64px; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 5px;
+  background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db; z-index: 2;
+  transition: right 240ms cubic-bezier(.2,.8,.2,1);
+}
+.views > .glyph { align-self: center; opacity: 0.6; padding: 2px 0 4px; }
+.views button {
+  font: inherit; font-size: 11px; color: #3d4943; background: transparent; border: 1px solid transparent; border-radius: 5px;
+  padding: 4px 8px; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;
+}
+.views button:hover { background: #eceee8; }
+.views button.on { background: #3d4943; color: #f7f8f4; }
+.views button kbd { font: inherit; font-size: 10px; opacity: 0.55; margin-left: auto; }
+.panel-open .views { right: 376px; }
+.legend {
+  position: fixed; right: 16px; top: 300px; display: none; flex-direction: column; gap: 4px; padding: 10px 12px; max-width: 220px;
+  font-size: 11px; z-index: 2; transition: right 240ms cubic-bezier(.2,.8,.2,1);
+}
+.legend.show { display: flex; }
+.legend .key { display: flex; align-items: center; gap: 7px; }
+.legend .key i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; opacity: 0.8; }
+.legend small { color: #77817a; line-height: 1.35; margin-top: 3px; }
+.panel-open .legend { right: 376px; }
+@media (max-width: 1000px) {
+  .views { top: auto; bottom: calc(130px + env(safe-area-inset-bottom)); flex-direction: row; flex-wrap: wrap; max-width: calc(100vw - 32px); }
+  .views button { font-size: 0; gap: 0; }
+  .views button kbd { display: none; }
+  .legend { top: auto; bottom: calc(176px + env(safe-area-inset-bottom)); }
+}

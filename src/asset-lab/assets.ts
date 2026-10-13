@@ -7,6 +7,7 @@ import { U } from "../iso.ts"
 import { makeTree, makeRock, makeField, makeRoadPatch, makeWater } from "./land.ts"
 import { personCatalogue, makeCarrier, makeGoods, makeCrate } from "./people.ts"
 import { makeSite, makeConstruction, makeMarker, makeSmoke, makePlot } from "./construction.ts"
+import { makeFlames, makeRuin, makeWarning } from "./placeholders.ts"
 
 import { Drawing, mix, pale, square, sides, palette, type InkAsset, type Vertex } from "./primitives.ts"
 export * from "./primitives.ts"
@@ -114,6 +115,7 @@ for (const tier of [1, 2] as const)
     asset.title = `${tier === 1 ? "Cottage" : "Citizen home"} · ${names[i]}`
     additional.push(asset)
   }
+additional.push(house(3))
 for (const type of ["fir", "broadleaf", "poplar"] as const)
   for (const grown of [0.3, 0.6, 1]) {
     if (type === "fir" && grown === 1) continue
@@ -134,6 +136,10 @@ additional.push(
   makeConstruction("warehouse", 0.65),
   makeMarker(),
   makeSmoke(),
+  ...(["burnt", "collapsed", "derelict"] as const).map((cause) => makeRuin(1, cause)),
+  makeRuin(2, "burnt"),
+  ...(["fire", "health", "order", "sick", "worn"] as const).map((kind) => makeWarning(kind)),
+  makeFlames(0),
   ...["hover", "picked", "blocked", "reach"].map((look) => makePlot(look as "hover" | "picked" | "blocked" | "reach"))
 )
 export const inkAssets: ReadonlyArray<InkAsset> = [...approvedAssets, ...additional]

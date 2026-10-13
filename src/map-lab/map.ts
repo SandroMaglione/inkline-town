@@ -121,6 +121,22 @@ const layout: Array<[string, number, number]> = [
   ["fishery", 13, 1]
 ]
 for (const [id, x, y] of layout) place(id, x, y)
+// The newer quarter: services, food stores, and ornaments (placeholder models), along the south-west street.
+const quarter: Array<[string, number, number]> = [
+  ["firewatch", -17, -2],
+  ["healer", -17, 1],
+  ["watchhouse", -10.5, -8],
+  ["builder", -17, -5],
+  ["granary", -9.5, 1],
+  ["smokehouse", 10, 1],
+  ["hospital", 9.5, -11],
+  ["garden", -15, -8],
+  ["park", -16.5, -8],
+  ["fountain", 0.5, -8],
+  ["statue", 4.5, -8],
+  ["plaza", 9, -8]
+]
+for (const [id, x, y] of quarter) place(id, x, y)
 const homes = inkAssets.filter((a) => a.category === "homes")
 homes.forEach((a, i) => place(a.id, -7 + (i % 4) * 1.8, 6 + Math.floor(i / 4) * 2))
 const trees = inkAssets.filter((a) => a.reference?.type === "tree")

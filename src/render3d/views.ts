@@ -2,7 +2,9 @@ import * as THREE from "three"
 import {
   carrierDress,
   cartLook,
+  homeHeight,
   serviceDress,
+  type Alert,
   type BuildingLook,
   type HouseLook,
   type PersonDress,
@@ -16,11 +18,49 @@ import { vertex3 } from "../asset-lab/renderer.ts"
 import { Drawing, type Vertex } from "../asset-lab/primitives.ts"
 import { makeSails, makeFlag } from "../asset-lab/buildings.ts"
 import { makeMarker } from "../asset-lab/construction.ts"
+import { makeFlames, makeRuin, makeWarning } from "../asset-lab/placeholders.ts"
 import { makePerson } from "../asset-lab/people.ts"
 import { makeTree, makeRock, makeField, hash } from "../asset-lab/land.ts"
 import { ModelHandle } from "./pool.ts"
 import { buildingAsset, homeAsset, homeKey, doorKey, noDoors, quantizeBuild, plateAsset, treeVariant } from "./models.ts"
 import type { GameScene, SceneNode } from "./scene.ts"
+
+/** Winter's cold tint over everything that stands (a placeholder for snowy roofs). */
+const FROST = 0xe4ecf6
+/** Run down, and a poor street: duller, browner. */
+const WORN = 0xe2d9c8
+const POOR = 0xeee8dc
+const multiply = (a: number, b: number) => {
+  const c = (shift: number) => Math.round((((a >> shift) & 0xff) * ((b >> shift) & 0xff)) / 255)
+  return (c(16) << 16) | (c(8) << 8) | c(0)
+}
+
+/** A sign over a home or building at risk, and flames when it burns: both face the camera. */
+class Signs {
+  private readonly sign: ModelHandle
+  private readonly flames: ModelHandle
+  constructor(make: (pickable?: boolean) => ModelHandle) {
+    this.sign = make(false)
+    this.flames = make(false)
+    this.sign.root.visible = false
+    this.flames.root.visible = false
+  }
+  update(alert: Alert | null | undefined, burning: boolean, height: number) {
+    this.sign.root.visible = !burning && alert !== null && alert !== undefined
+    if (alert && !burning) this.sign.use("warning-" + alert, () => makeWarning(alert))
+    this.sign.root.position.set(0, (height + 10) / Math.cos(Math.PI / 6), 0)
+    this.flames.root.visible = burning
+    if (burning) {
+      const phase = Math.floor(performance.now() / 160) % 2
+      this.flames.use("flames-" + phase, () => makeFlames(phase))
+      this.flames.root.position.set(0, (height * 0.6) / Math.cos(Math.PI / 6), 0)
+    }
+  }
+  orient(heading: number) {
+    this.sign.root.rotation.y = heading - Math.PI / 4
+    this.flames.root.rotation.y = heading - Math.PI / 4
+  }
+}
 
 export class WorldView implements SceneNode {
   readonly group = new THREE.Group()
@@ -48,8 +88,11 @@ export class WorldView implements SceneNode {
     for (const m of this.models) m.alpha = value
   }
   orient() {}
+  /** A tint for what it is like now (run down, a poor street), before winter's frost. */
+  protected shade = 0xffffff
   protected emphasis(emphasis: Emphasis) {
-    for (const m of this.models) m.tint.setHex(emphasis === "danger" ? 0xf3b5aa : 0xffffff)
+    const tint = emphasis === "danger" ? 0xf3b5aa : multiply(this.shade, this.stage.frost ? FROST : 0xffffff)
+    for (const m of this.models) m.tint.setHex(tint)
   }
   destroy() {
     if (this.disposed) return
@@ -73,12 +116,14 @@ export class BuildingView extends WorldView {
   private opening = 0
   private beat = -1
   private pulse = 0
+  private signs: Signs
   constructor(kindId: KindId, stage: GameScene, entity: number) {
     super(stage, entity)
     this.kindId = kindId
     this.body = this.model()
     this.plate = this.model()
     this.marker = this.model()
+    this.signs = new Signs((pickable) => this.model(pickable))
     this.motion = this.model()
     this.marker.use("problem-marker", makeMarker)
     this.marker.root.visible = false
@@ -116,7 +161,10 @@ export class BuildingView extends WorldView {
         Math.cos(Math.PI / 6),
       0
     )
-    this.marker.root.visible = look.problem && look.build >= 1
+    const signed = !!look.burning || (look.alert !== null && look.alert !== undefined)
+    this.marker.root.visible = look.problem && look.build >= 1 && !signed
+    this.signs.update(look.alert, !!look.burning, H + (kind.topper === "none" ? 0 : 16))
+    this.shade = look.worn ? WORN : 0xffffff
     this.motion.root.visible = look.build >= 1 && (kind.topper === "flag" || kind.topper === "sails")
     if (kind.topper === "flag") {
       this.wave += dt * (look.working ? 6 : 3)
@@ -170,17 +218,23 @@ export class BuildingView extends WorldView {
   override orient() {
     this.marker.root.rotation.y = this.stage.heading - Math.PI / 4
     for (const smoke of this.smokes) smoke.root.rotation.y = this.stage.heading - Math.PI / 4
+    this.signs.orient(this.stage.heading)
   }
 }
 
 export class HouseView extends WorldView {
   private body: ModelHandle
   private plate: ModelHandle
+  private signs: Signs
   private n = 0.03
   constructor(stage: GameScene, entity: number) {
     super(stage, entity)
     this.body = this.model()
     this.plate = this.model()
+    this.signs = new Signs((pickable) => this.model(pickable))
+  }
+  override orient() {
+    this.signs.orient(this.stage.heading)
   }
   place(x: number, y: number) {
     this.n = hash(x, y)
@@ -196,6 +250,29 @@ export class HouseView extends WorldView {
       homeAsset(look.tier, this.n, build, share, doors)
     )
     this.plate.use(`plate/1/${build}`, () => plateAsset(1, build))
+    this.signs.update(look.alert, !!look.burning, homeHeight(look.tier))
+    // Placeholder for homes that look like their street: fences and gardens on a fine one, a patched roof on a poor one.
+    this.shade = look.worn ? WORN : look.band === "poor" ? POOR : 0xffffff
+    this.emphasis(emphasis)
+  }
+}
+
+/** What is left of a home or building, until it is cleared. */
+export class RuinView extends WorldView {
+  private body: ModelHandle
+  private cause: "burnt" | "collapsed" | "derelict"
+  constructor(cause: "burnt" | "collapsed" | "derelict", stage: GameScene, entity: number) {
+    super(stage, entity)
+    this.cause = cause
+    this.body = this.model()
+  }
+  place(x: number, y: number, size: number) {
+    this.anchor.x = x + size / 2
+    this.anchor.y = y + size / 2
+    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
+    this.body.use(`ruin/${this.cause}/${size}`, () => makeRuin(size, this.cause))
+  }
+  update(emphasis: Emphasis) {
     this.emphasis(emphasis)
   }
 }

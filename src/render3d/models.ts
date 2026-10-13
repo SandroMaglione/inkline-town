@@ -63,11 +63,13 @@ export function constructionAsset(size: number, half: number, height: number, bu
 export function buildingAsset(id: KindId, build: number, share: number | null, doors: DoorSet, open: number) {
   const kind = kinds[id],
     stage = buildStages(build)
+  // An ornament is laid out at once.
+  if (kind.decor) return makeBuilding(id)
   if (build < 0.78) return constructionAsset(kind.size, kind.half, kind.roof === "gable" ? 20 : kind.stories * 32, build, share)
   return makeBuilding(id, { doors, open, fit: stage.fit, plate: false, motion: false } satisfies BuildingOptions)
 }
 export function homeAsset(tier: Tier, n: number, build: number, share: number | null, doors: DoorSet) {
-  if (build < 0.78) return constructionAsset(1, home.half + (tier === 2 ? 1 : 0), home.tiers[tier].height, build, share)
+  if (build < 0.78) return constructionAsset(1, home.half + (tier >= 2 ? 1 : 0), home.tiers[tier].height, build, share)
   return house(tier, n, "home", { doors, fit: buildStages(build).fit, plate: false })
 }
 export function homeKey(n: number) {
@@ -114,7 +116,7 @@ export function treeVariant(x: number, y: number) {
   return { id, type, seed, scale, offset: [dx / 64 + dy / 32, -dx / 64 + dy / 32, 0] as Vertex }
 }
 
-export function landAsset(mask: string) {
+export function landAsset(mask: string, frost = false) {
   const d = new Drawing("land", "Land", ""),
     land = (x: number, y: number) => x >= 0 && y >= 0 && x < GRID && y < GRID && mask[key(x, y)] === "1"
   for (let y = 0; y < GRID; y++)
@@ -127,9 +129,15 @@ export function landAsset(mask: string) {
           [x + 1, y + 1, -0.3],
           [x, y + 1, -0.3]
         ],
-        0xf0f2ec,
+        frost ? 0xf7f9fb : 0xf0f2ec,
         0
       )
+      // Frost: a few pale flecks of snow (a placeholder for a proper winter look).
+      if (frost && hash(x * 7 + 3, y * 5 + 1) < 0.18) {
+        const u = x + 0.2 + hash(x, y * 3) * 0.6,
+          v = y + 0.2 + hash(y, x * 3) * 0.6
+        d.line([[u - 0.05, v, -0.26], [u + 0.05, v, -0.26]], 1, 0xc9d6e4)
+      }
       if (land(x + 1, y))
         d.line(
           [
@@ -180,7 +188,7 @@ export function landAsset(mask: string) {
     }
   return d.asset
 }
-export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<number>, preview = false) {
+export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<number>, preview = false, paved: ReadonlySet<number> = new Set()) {
   const d = new Drawing("ground", "Ground", ""),
     z = preview ? 0.16 : -0.14
   for (const k of roads) {
@@ -188,7 +196,14 @@ export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<numbe
       x = cell.x + 0.5,
       y = cell.y + 0.5,
       half = 0.375,
-      color = hash(cell.x, cell.y) < 0.25 ? 0xe2e4dd : 0xe6e8e2
+      stone = paved.has(k),
+      color = stone ? (hash(cell.x, cell.y) < 0.25 ? 0xd3d6cf : 0xd8dbd4) : hash(cell.x, cell.y) < 0.25 ? 0xe2e4dd : 0xe6e8e2
+    // Paved: setts in rows across the street (a placeholder for a proper paved road).
+    if (stone)
+      for (const t of [-0.22, 0, 0.22]) {
+        d.line([[x - 0.3, y + t, z + 0.015], [x + 0.3, y + t, z + 0.015]], 1, 0xb4b9b1, 0.8)
+        d.line([[x + t, y - 0.3, z + 0.015], [x + t, y + 0.3, z + 0.015]], 1, 0xb4b9b1, 0.5)
+      }
     d.face(square(x, y, half, z), color, 0)
     for (const { x: dx, y: dy } of DIRS) {
       const q = (along: number, across: number, height = z + 0.02): Vertex => [
@@ -306,3 +321,24 @@ export function previewAsset(preview: Preview, time: number) {
   return d.asset
 }
 export const quantizeBuild = (build: number) => Math.min(1, Math.round(build * 32) / 32)
+
+/** A footprint washed in a colour, for a map view. */
+export interface OverlayCell {
+  readonly x: number
+  readonly y: number
+  readonly size: number
+  readonly color: number
+  readonly alpha: number
+  /** Outlined, for what the view is about (a workplace and its homes). */
+  readonly ring?: boolean
+}
+export function overlayAsset(cells: ReadonlyArray<OverlayCell>) {
+  const d = new Drawing("overlay", "Map view", "")
+  for (const c of cells) {
+    const half = c.size / 2,
+      ring = square(c.x + half, c.y + half, half - 0.03, 0.12)
+    d.face(ring, c.color, 0, palette.ink, c.alpha)
+    if (c.ring) d.line([...ring, ring[0]!], 1.5, c.color, 0.95)
+  }
+  return d.asset
+}

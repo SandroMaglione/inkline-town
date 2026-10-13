@@ -11,8 +11,11 @@
 import { Clock, Context, Effect, Schema } from "effect"
 
 export const SAVE_FORMAT = "inkline-town/save"
-/** 2: the charter's towns. Older saves (a square map, no term) cannot be loaded. */
-export const SAVE_VERSION = 2
+/**
+ * 2: the charter's towns. 3: neighbourhoods and their dangers (desirability, crews, risks, wear, ruins,
+ * winters). Older saves cannot be loaded.
+ */
+export const SAVE_VERSION = 3
 
 export type Slot = "manual" | "auto"
 export const slots: ReadonlyArray<Slot> = ["manual", "auto"]

@@ -68,21 +68,21 @@ and elevation controls also work with a keyboard. The original view uses a
 
 | Collection | Models | Coverage |
 | --- | ---: | --- |
-| Buildings | 16 | Every building kind, with its roof, topper and yard |
-| Homes | 8 | Both tiers in all four roof palettes |
+| Buildings | 28 | Every building kind, with its roof, topper and yard (the twelve added with the neighbourhood are placeholders, see below) |
+| Homes | 9 | Settlers' and citizens' homes in all four roof palettes, and the placeholder townhouse |
 | Land | 19 | Three tree shapes at three growth stages, stone and ore in both resource states, four crop stages, roads and water |
 | People | 27 | Carriers, settlers, citizens, market and chapel walkers, all six hats and the sixteen reference-gallery residents |
-| Cargo and vehicles | 69 | Eleven distinct goods and labelled crates; empty handcart/barrow and small/full loads of each good; the approved mixed goods plate |
-| Construction and effects | 10 | Empty/supplied sites, frame/walls, problem sign, smoke and four placement/reach outlines |
+| Cargo and vehicles | 75 | Twelve distinct goods and labelled crates; empty handcart/barrow and small/full loads of each good; the approved mixed goods plate |
+| Construction and effects | 20 | Empty/supplied sites, frame/walls, problem sign, smoke, four placement/reach outlines, and the placeholder ruins, warning signs, and flames |
 
-The 149 entries cover object families and representative seeded variants.
+The 178 entries cover object families and representative seeded variants.
 Continuous growth, construction progress, walk poses and colours can be
 generated; this is not a list of every possible random seed. Page icons
 remain the game's original 2D UI art.
 
 ![Complete 3D world catalogue at a rotated angle](screenshots/3d-catalogue.webp)
 
-`pnpm assets:build` exports 149 GLBs and editable geometry descriptions,
+`pnpm assets:build` exports 178 GLBs and editable geometry descriptions,
 a manifest, and two standalone viewers to `output/inkline-3d/`:
 `inkline-3d-study.html` and `inkline-3d-map.html`. It reimports every GLB and
 checks geometry and unlit materials. The viewers work without a dev server;
@@ -113,7 +113,7 @@ Double-click the ground to focus the camera there.
 ![Every model together on the review island](screenshots/3d-map-complete.webp)
 
 District shortcuts focus the town, workshops, homes, people, cargo yard or
-forest. Inspect selects any of the 149 models and links to its original
+forest. Inspect selects any of the 178 models and links to its original
 drawing comparison. Eight additional people walk along the street using two
 procedural poses; pause them for review. Smoke and the problem sign face
 the camera so they stay readable when the map turns.
@@ -142,12 +142,31 @@ That is how the README's screenshots of grown towns were made.
 - `src/archetypes.ts`: content to components.
 - `src/mapgen.ts`: the land of a new town, from its charter.
 - `src/schema.ts`: the ECS world: components, relations, resources, services.
+- `src/appeal.ts`: desirability: what buildings and the land do to the cells around them, the whole grid, and one cell explained.
+- `src/places.ts`: street names for the news ("Mill Lane"), from the nearest landmark.
 - `src/grid.ts`: occupancy, entrances, reach, and road paths.
-- `src/sim/`: the fixed-step simulation (no renderer access): edits, work, logistics, walkers, town, and the term
-  (seasons, the crown, approval, the end of the term, history).
+- `src/sim/`: the fixed-step simulation (no renderer access): edits, work (staffing by crew and commute, tools,
+  pace), logistics, walkers (services, mending), town (households and tiers), hazards (desirability, risk
+  meters, fire and firefighters, sickness, theft), decay (wear, collapse, spoilage, the pantry), and the term
+  (seasons and the almanac, the crown, approval, the end of the term, history).
 - `src/present.ts`: per-frame interaction, panel, and view sync.
 - `src/art.ts`: all drawing: buildings and their yards, homes, the land, roads, carts, and figures.
-- `src/render3d/`: live world renderer, model instances, camera and map input.
+- `src/render3d/`: live world renderer, model instances, camera and map input, the map views' overlay,
+  warning signs, flames, ruins, and winter frost.
+- `src/asset-lab/placeholders.ts`: stand-in models for ornaments, ruins, warning signs, and flames.
+
+**Placeholders.** The neighbourhood brought kinds with no approved model yet.
+They are drawn so the game is playable, and are meant to be replaced:
+the granary, smokehouse, fire watch, healer, hospital, watch house, and
+builder's yard use the generic building in their colour; the garden, park,
+fountain, statue, and plaza are simple shapes (`placeholders.ts`, and
+`drawDecor` in `art.ts` for the menu pictures); the townhouse is the
+citizens' home raised a storey; ruins, the warning signs over homes,
+and flames are simple stand-ins; a paved street is the road with setts
+drawn on it; a home's neighbourhood (fine or poor) and a run-down building
+are shown only as a tint, not as fences, gardens, or a patched roof; and
+winter frosts the land and tints what stands, rather than putting snow on
+roofs.
 - `src/townsfolk.ts`: residents out walking, for looking at only: not simulated, not saved.
 - `src/icons.ts`: the page's line-drawn icons.
 - `src/gallery.ts`: the dev-only art gallery (see above).
@@ -176,7 +195,12 @@ averaged over the seeds still in office every few minutes.
 
 ```sh
 pnpm balance -- --size large --term 90 --land harsh
-pnpm balance -- --bot greedy          # sensible (default), greedy (taxes at 200%, sells everything, ignores the crown), idle
+pnpm balance -- --bot greedy          # sensible (default), greedy (taxes at 200%, sells everything, ignores the crown), idle,
+                                      # crowded (homes packed beside industry, no ornaments), uncovered (no fire, health, or order services)
+pnpm balance -- --versus crowded      # the bot against another on the same seeds: citizens, burghers, homes lost
+pnpm balance -- --versus uncovered
+pnpm balance -- --set kinds.sawmill.crew=settlers --set risk.fire.wooden=0   # content changes, numbers or words
+CHRONICLE=1 pnpm balance -- --seeds 1                                         # each seed's chronicle too
 pnpm balance -- --seeds 4 --from 4    # seeds 4 to 7, to split a sweep across processes
 pnpm balance -- --set crown.fine=2 --set kinds.fishery.recipe.seconds=3
 pnpm balance -- --seeds 1 --verbose --every 1   # minute by minute
@@ -204,7 +228,14 @@ always make the same town. `RUNS=200 pnpm test` searches harder;
 
 `pnpm check` puts the real simulation into each way a term can end
 (complete, bankrupt, revolt, abandoned, dismissed, run out), checks an unanswered
-crown request, and checks that a town saved mid-term loads back the same.
+crown request, and checks that a town saved mid-term loads back the same. It
+also checks the neighbourhood: a citizens' home next to a smithy goes back to
+settlers; an unwatched row of cottages catches fire and the fire spreads, and
+firefighters from a fire watch stop it at one home; fish rots in the town
+hall and keeps in a granary; a workplace with no homes within reach stays
+unstaffed until a cottage goes up on its road; citizens will not do settlers'
+work while settlers stand in for citizens as apprentices; and a home nobody
+mends falls down while one by a builder's yard is kept.
 
 ## Releasing to Cloudflare
 

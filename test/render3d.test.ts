@@ -18,12 +18,12 @@ function valid(asset: InkAsset) {
   for (const stroke of asset.strokes) assert.ok(stroke.points.every(p => p.every(Number.isFinite)), asset.id)
 }
 
-test("live construction and fitting are valid for every building and both home tiers", () => {
+test("live construction and fitting are valid for every building and all three home tiers", () => {
   for (const build of [0, 0.125, 0.3, 0.55, 0.77, 0.78, 0.8, 0.9, 1]) {
     for (const kind of kindIds) for (const side of Object.keys(noDoors)) {
       valid(buildingAsset(kind, build, 0.5, { ...noDoors, [side]: true }, 0.5))
     }
-    for (const tier of [1, 2] as const) valid(homeAsset(tier, 0.62, build, 1, { ...noDoors, backLeft: true }))
+    for (const tier of [1, 2, 3] as const) valid(homeAsset(tier, 0.62, build, 1, { ...noDoors, backLeft: true }))
   }
 })
 

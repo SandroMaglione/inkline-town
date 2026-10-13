@@ -6,6 +6,8 @@ import { amounts, defaultCharter } from "../content.ts"
 import { Game, Time } from "../schema.ts"
 import { ApplyEdits } from "./edits.ts"
 import { Deliver, Dispatch } from "./logistics.ts"
+import { Decay } from "./decay.ts"
+import { Appraise, Douse, Hazards } from "./hazards.ts"
 import { Approve, foundedFate, Judge, Record, Requests, Seasons } from "./term.ts"
 import { Collect, Households, TakeCensus } from "./town.ts"
 import { SendWalkers, Walk, Wander } from "./walkers.ts"
@@ -25,6 +27,7 @@ export const simulate = Game.Schedule(
   ApplyEdits,
   Game.Schedule.applyDeferred(),
   IndexGrid,
+  Appraise,
   Seasons,
   Raise,
   AssignStaff,
@@ -38,8 +41,13 @@ export const simulate = Game.Schedule(
   Walk,
   Deliver,
   Wander,
+  Douse,
   Game.Schedule.applyDeferred(),
   Households,
+  Hazards,
+  Game.Schedule.applyDeferred(),
+  Decay,
+  Game.Schedule.applyDeferred(),
   Collect,
   CountStock,
   TakeCensus,
@@ -55,9 +63,9 @@ export const blankResources = () => ({
   Rng: 0x5eed,
   Treasury: { coins: 0 },
   Ledger: { taxes: 0, trade: 0, upkeep: 0, admin: 0 },
-  Census: { homes: 0, settlers: 0, citizens: 0, jobs: 0, employed: 0, food: 0, bread: 0, cloth: 0, faith: 0 },
+  Census: { homes: 0, settlers: 0, citizens: 0, burghers: 0, jobs: 0, employed: 0, food: 0, bread: 0, cloth: 0, faith: 0, sick: 0, burning: 0 },
   Policy: { settlers: 100, citizens: 100, sells: [], buys: [], reserve: 25 },
-  Charter: { ...defaultCharter(0), founded: 0 },
+  Charter: { ...defaultCharter(0), founded: 0, winters: [] as Array<"none" | "mild" | "normal" | "hard"> },
   Land: { mask: "", cells: 0 },
   Market: { prices: amounts({}) },
   Mood: { approval: 0, target: 0, base: 0, needs: 0, taxes: 0, debt: 0, crown: 0, winter: 0 },
@@ -65,12 +73,15 @@ export const blankResources = () => ({
   Fate: foundedFate(),
   History: { samples: [] },
   Chronicle: { lines: [] },
+  Appeal: { cells: [] },
+  Pantry: { eaten: 0, rotted: 0, eatenLast: 0, rottedLast: 0, warned: -1_000_000 },
+  Fires: { fires: [], next: 1 },
   Grid: { owner: [], use: [] },
   Stock: amounts({})
 })
 
-export { CELL_STEPS, elapsed, seasonAt, termTicks } from "./shared.ts"
+export { CELL_STEPS, elapsed, seasonAt, termTicks, winterOf } from "./shared.ts"
 export { SITE_SHARE } from "./work.ts"
 export { unlocked } from "./edits.ts"
-export { adminOf, askOf, capacity, met, priceOf, satisfaction, taxOf } from "./town.ts"
+export { adminOf, askOf, capacity, kept, met, priceOf, satisfaction, taxOf, tierFor } from "./town.ts"
 export { crownGap, goalsOf, larder } from "./term.ts"

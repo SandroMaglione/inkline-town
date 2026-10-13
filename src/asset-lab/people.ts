@@ -162,24 +162,29 @@ export function drawCargo(d: Drawing, good: GoodId, count: number, u: number, v:
       break
     }
     case "fish":
-    case "bread":
+    case "smoked":
+    case "bread": {
+      // Smoked fish is fish in the smokehouse's brown.
+      const fishy = good !== "bread",
+        tint = good === "fish" ? 0x2f8c87 : good === "smoked" ? 0x9a5b3a : 0xd98a6a
       d.box(u, v, 1.6 * U, 1.1 * U, z, 3, 0xc9a46a, 0xe3c592, 0xd2b07a, 1)
       for (let i = 0; i < n + 1; i++) {
         const x = u + (i - n / 2) * 0.9 * U,
           y = v + (i % 2 === 0 ? -0.3 : 0.3) * U
-        d.ellipsoid(x, y, z + 3.6, good === "fish" ? 0.049 : 0.04, 0.028, 0.75, good === "fish" ? 0x2f8c87 : 0xd98a6a, 0.75)
-        if (good === "fish")
+        d.ellipsoid(x, y, z + 3.6, fishy ? 0.049 : 0.04, 0.028, 0.75, tint, 0.75)
+        if (fishy)
           d.face(
             [
               [x - 0.055, y - 0.03, z + 3.6],
               [x - 0.055, y + 0.03, z + 3.6],
               [x - 0.02, y, z + 3.6]
             ],
-            0x2f8c87,
+            tint,
             0.75
           )
       }
       break
+    }
     case "flour":
       ;[-1, 1, 0].slice(0, n).forEach((a, i) => d.sack(u + a * U, v, z + (i === 2 ? 4 : 0)))
       break

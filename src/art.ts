@@ -629,7 +629,20 @@ const dresses: Readonly<Record<KindId, Dress>> = {
       bush(g, c, -a - 1 * U, 4, broadLeaves[1]!)
       bush(g, -a - 1 * U, c, 4, broadLeaves[2]!)
     }
-  }
+  },
+  // New kinds: plain dresses in their colour until they get drawings of their own.
+  granary: { accent: 0xd6ae2e },
+  smokehouse: { accent: 0x9a5b3a, roof: roofOf(0x9a5b3a) },
+  firewatch: { accent: 0xc4523f, roof: roofOf(0xc4523f) },
+  healer: { accent: 0x4f9a8a },
+  hospital: { accent: 0x4f9a8a, glass: glassCool },
+  watchhouse: { accent: 0x3d4f6e, flag: 0x3d4f6e },
+  builder: { accent: 0x8a6a45, roof: roofOf(0xb08a5a) },
+  garden: { accent: 0x4f9a6a },
+  park: { accent: 0x4f9a6a },
+  fountain: { accent: 0x5f8fb0 },
+  statue: { accent: 0x8f9891 },
+  plaza: { accent: 0x8f9891 }
 }
 
 /**
@@ -637,7 +650,37 @@ const dresses: Readonly<Record<KindId, Dress>> = {
  * (shut) → 1 (open); `wave` drives flags and sails. `plain` draws it bare
  * and grey, as a ghost.
  */
+/**
+ * An ornament (a garden, park, fountain, statue, or plaza), drawn simply: a
+ * placeholder until each has a drawing of its own.
+ */
+export const drawDecor = (g: Graphics, kind: Kind) => {
+  const p = plateHalf(kind.size)
+  const green = 0xd8e6c9
+  const stone = 0xe4e6e0
+  quad(g, square(0, 0, p), kind.id === "plaza" ? stone : green)
+  if (kind.id === "garden" || kind.id === "park") {
+    const spots = kind.id === "garden" ? [[-0.2, -0.2], [0.2, 0.2]] : [[-0.5, -0.5], [0.5, -0.4], [-0.4, 0.5], [0.45, 0.45]]
+    for (const [u, v] of spots) {
+      const c = at(u!, v!, 0)
+      g.ellipse(c.x, c.y - 9, 6, 6).fill({ color: 0xa9c79a }).stroke({ color: ink, width: DETAIL })
+      line(g, c, { x: c.x, y: c.y - 4 }, LINE, 0x6b5a45)
+    }
+    if (kind.id === "garden") for (const [u, v] of [[0.25, -0.25], [-0.25, 0.25]]) g.circle(at(u!, v!, 0).x, at(u!, v!, 0).y - 1, 1.6).fill({ color: 0xe89a7c })
+    return
+  }
+  if (kind.id === "fountain") {
+    cylinder(g, 0, 0, 5 * U, 0, 4, 0xdfe3dc, 0xc9dde6)
+    cylinder(g, 0, 0, 1.2 * U, 4, 8, 0xdfe3dc, 0xeef0ea)
+    return
+  }
+  // A statue (on its own, or in the middle of a plaza).
+  cylinder(g, 0, 0, 2.5 * U, 0, 6, 0xdfe3dc, stone)
+  cylinder(g, 0, 0, 1.2 * U, 6, 16, 0xc9ccc4, 0xb9beb5)
+}
+
 export const drawBuilding = (g: Graphics, kind: Kind, build: number, door: number, wave: number, doors: Doors, plain = false) => {
+  if (kind.decor) return drawDecor(g, kind)
   const dress: Dress = plain ? { accent: 0xb9beb5 } : dresses[kind.id]
   const color = dress.accent
   const a = kind.half * U
@@ -804,6 +847,10 @@ export const drawSite = (g: Graphics, half: number, share: number) => {
 
 /** What a building view shows each frame. */
 export interface BuildingLook {
+  /** A sign over it, and whether it is on fire. */
+  readonly alert?: Alert | null
+  readonly burning?: boolean
+  readonly worn?: boolean
   readonly working: boolean
   /** Something keeps it from working: show the marker. */
   readonly problem: boolean
@@ -909,7 +956,7 @@ export class BuildingView extends Container {
 // ── Homes ─────────────────────────────────────────────────────────────────
 
 /** A home's full height, roof included. */
-export const homeHeight = (tier: Tier) => home.tiers[tier].height + HOUSE_ROOF + (tier === 2 ? 2 : 0)
+export const homeHeight = (tier: Tier) => home.tiers[tier].height + HOUSE_ROOF + (tier >= 2 ? 2 : 0)
 
 /** Roof colours homes are built with: muted terracotta, slate, thatch, and moss; and the colour the household wears out walking. */
 const homeRoofs: ReadonlyArray<{ readonly roof: RoofColors; readonly cloth: number }> = [
@@ -943,7 +990,7 @@ const plainHome: HomeVariant = { roof: paleRoof, cloth: 0x8f9891, ridge: "x", ch
  * either side on every floor.
  */
 export const drawHouse = (g: Graphics, tier: Tier, build: number, doors: Doors, variant: HomeVariant = plainHome) => {
-  const a = (tier === 2 ? home.half + 1 : home.half) * U
+  const a = (tier >= 2 ? home.half + 1 : home.half) * U
   const full = home.tiers[tier].height
   const stage = buildStages(build)
   if (stage.frame <= 0) return
@@ -952,10 +999,11 @@ export const drawHouse = (g: Graphics, tier: Tier, build: number, doors: Doors, 
   const H = Math.max(2, Math.round(full * stage.walls))
 
   walls(g, a, H)
-  const floors = tier === 2 ? [0, 12] : [0]
-  if (tier === 2 && H > 13) {
-    line(g, at(-a, a, 13), at(a, a, 13), DETAIL, ink, 0.7)
-    line(g, at(a, -a, 13), at(a, a, 13), DETAIL, ink, 0.7)
+  const floors = tier === 3 ? [0, 12, 24] : tier === 2 ? [0, 12] : [0]
+  for (const z of tier === 3 ? [13, 25] : tier === 2 ? [13] : []) {
+    if (H <= z) continue
+    line(g, at(-a, a, z), at(a, a, z), DETAIL, ink, 0.7)
+    line(g, at(a, -a, z), at(a, a, z), DETAIL, ink, 0.7)
   }
   if (stage.fit > 0.15) {
     for (const side of ["right", "left"] as const) {
@@ -972,13 +1020,13 @@ export const drawHouse = (g: Graphics, tier: Tier, build: number, doors: Doors, 
           }
         }
         if (floor + 10 > H) return
-        if (tier === 2) {
+        if (tier >= 2) {
           for (const along of [-3 * U, 3 * U]) if (!(door && Math.abs(along) < HOUSE_DOOR + 2 * U)) window_(g, side, a, along, floor + 5)
         } else if (!door) window_(g, side, a, 0, floor + 5)
       })
     }
   }
-  gable(g, a, H, Math.round((HOUSE_ROOF + (tier === 2 ? 2 : 0)) * stage.fit), variant.ridge, variant.roof, variant.chimney || tier === 2)
+  gable(g, a, H, Math.round((HOUSE_ROOF + (tier >= 2 ? 2 : 0)) * stage.fit), variant.ridge, variant.roof, variant.chimney || tier >= 2)
 }
 
 /** What a home view shows each frame. */
@@ -988,7 +1036,17 @@ export interface HouseLook {
   readonly doors: Doors
   /** While a site: the share of its materials in, else `null`. */
   readonly site: number | null
+  /** A sign over it: the risk most at hand, or that it is sick. */
+  readonly alert?: Alert | null
+  readonly burning?: boolean
+  /** Run down (see `condition.worn`). */
+  readonly worn?: boolean
+  /** Its neighbourhood: poor, plain, or fine (see `HouseView`). */
+  readonly band?: "poor" | "plain" | "fine"
 }
+
+/** A sign that goes up over a home or building at risk. */
+export type Alert = "fire" | "health" | "order" | "sick" | "worn"
 
 export class HouseView extends Container {
   private readonly plate = new Graphics()
@@ -1410,11 +1468,11 @@ export const serviceDress = (color: number, n: number, faith: boolean): PersonDr
  * deeper-coloured coats and hats.
  */
 export const residentDress = (cloth: number, tier: Tier, n: number): PersonDress => ({
-  coat: tier === 2 ? mix(cloth, ink, 0.2) : mix(cloth, 0xffffff, 0.15),
-  trim: tier === 2 ? ink : mix(cloth, 0xffffff, 0.55),
+  coat: tier >= 2 ? mix(cloth, ink, tier === 3 ? 0.35 : 0.2) : mix(cloth, 0xffffff, 0.15),
+  trim: tier >= 2 ? ink : mix(cloth, 0xffffff, 0.55),
   skin: pick(skins, n * 13 + 0.1),
-  hat: tier === 2 ? (n < 0.5 ? "top" : "brim") : n < 0.35 ? "bonnet" : n < 0.6 ? "cap" : "none",
-  long: tier === 2 || n > 0.85
+  hat: tier === 3 ? "top" : tier === 2 ? (n < 0.5 ? "top" : "brim") : n < 0.35 ? "bonnet" : n < 0.6 ? "cap" : "none",
+  long: tier >= 2 || n > 0.85
 })
 
 /** Where a point on a cart is: `a` along the way it goes, `c` across it, from the cart's centre (u, v). */
@@ -1475,11 +1533,12 @@ export const drawCargo = (g: Graphics, u: number, v: number, d: Point, good: Goo
       return
     }
     case "fish":
+    case "smoked":
     case "bread": {
       cartBox(g, u, v, d, 0, 0, 1.6 * U, 1.1 * U, z, 3, wicker)
       for (let i = 0; i < n + 1; i++) {
         const t = p(((i - n / 2) * 0.9) * U, (i % 2 === 0 ? -0.3 : 0.3) * U, z + 3)
-        if (good === "fish") g.poly([t.x - 2.2, t.y, t.x, t.y - 1.4, t.x + 2.2, t.y, t.x, t.y + 1.2]).fill({ color: 0x2f8c87 }).stroke({ color: ink, width: 0.75 })
+        if (good !== "bread") g.poly([t.x - 2.2, t.y, t.x, t.y - 1.4, t.x + 2.2, t.y, t.x, t.y + 1.2]).fill({ color: good === "fish" ? 0x2f8c87 : 0x9a5b3a }).stroke({ color: ink, width: 0.75 })
         else g.ellipse(t.x, t.y - 0.6, 1.8, 1.2).fill({ color: 0xd98a6a }).stroke({ color: ink, width: 0.75 })
       }
       return

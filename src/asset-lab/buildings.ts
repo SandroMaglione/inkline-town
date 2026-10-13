@@ -1,6 +1,7 @@
 import { kinds, type KindId } from "../content.ts"
 import { U } from "../iso.ts"
 import { Drawing, palette, pale, square, sides, type Vertex, type Side } from "./primitives.ts"
+import { makeDecor } from "./placeholders.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
   townhall: { accent: 0x8a58a8, glass: 0xf3dca6 },
@@ -18,7 +19,20 @@ const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }>
   sheep: { accent: 0xb5654a, roof: 0xb5654a },
   weaver: { accent: 0x8a58a8 },
   market: { accent: 0x3d6db5 },
-  chapel: { accent: 0x3d6db5, glass: 0xc9d6ee }
+  chapel: { accent: 0x3d6db5, glass: 0xc9d6ee },
+  // New kinds: the plain building in their colour, a placeholder until each has a model of its own.
+  granary: { accent: 0xd6ae2e },
+  smokehouse: { accent: 0x9a5b3a, roof: 0x9a5b3a },
+  firewatch: { accent: 0xc4523f, roof: 0xc4523f },
+  healer: { accent: 0x4f9a8a },
+  hospital: { accent: 0x4f9a8a, glass: 0xc9d6ee },
+  watchhouse: { accent: 0x3d4f6e },
+  builder: { accent: 0x8a6a45, roof: 0xb08a5a },
+  garden: { accent: 0x4f9a6a },
+  park: { accent: 0x4f9a6a },
+  fountain: { accent: 0x5f8fb0 },
+  statue: { accent: 0x8f9891 },
+  plaza: { accent: 0x8f9891 }
 }
 
 export interface BuildingOptions {
@@ -29,6 +43,7 @@ export interface BuildingOptions {
   motion?: boolean
 }
 export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
+  if (kinds[id].decor) return makeDecor(id)
   const fit = options.fit ?? 1
   const kind = kinds[id],
     a = kind.half * U,

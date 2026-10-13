@@ -17,6 +17,7 @@ const paths: Record<string, string> = {
   ore: `<path d="M2.5 12.5l2-6 4-2.5 4.5 2 1 6.5-5.5 1.5z" fill="#d5dae3"/><path d="M8.5 8l4.5-2 1 6.5-5.5 1.5z" fill="#bcc3d0"/><path d="M6 7.5l1-3 1 3z" fill="#5a6479"/><rect x="4.5" y="10" width="1.6" height="1.6" fill="#4a5368" stroke="none"/><rect x="10.5" y="10.5" width="1.6" height="1.6" fill="#4a5368" stroke="none"/>`,
   tools: `<path d="M3.5 13.5l6-6" fill="none" stroke-width="2.2" stroke="#8a6a45"/><path d="M7 3.5l5.5 5.5 1.5-1.5-2-2 .5-2-2-1.5z" fill="#8f9891"/>`,
   fish: `<path d="M2 8c2.5-3.5 7-3.5 9.5 0-2.5 3.5-7 3.5-9.5 0z" fill="#9fd0cb"/><path d="M11.5 8l3-2.5v5z" fill="#2f8c87"/><circle cx="5" cy="7.4" r=".7" fill="${ink}" stroke="none"/><path d="M7.5 6v4" fill="none" stroke-width="1"/>`,
+  smoked: `<path d="M2 9c2.5-3.5 7-3.5 9.5 0-2.5 3.5-7 3.5-9.5 0z" fill="#d9a07c"/><path d="M11.5 9l3-2.5v5z" fill="#9a5b3a"/><path d="M5 2.5c-1 1 1 2 0 3M8 2c-1 1 1 2 0 3" fill="none" stroke-width="1" stroke="#77817a"/><path d="M5 8.5h4" fill="none" stroke-width="1"/>`,
   wheat: `<path d="M8 14.5V4" fill="none"/><path d="M8 5.5c-2 0-2.5-2-2.5-3 1.5 0 2.5 1 2.5 3zM8 5.5c2 0 2.5-2 2.5-3-1.5 0-2.5 1-2.5 3zM8 8.5c-2 0-3-1.5-3-3 1.5 0 3 1 3 3zM8 8.5c2 0 3-1.5 3-3-1.5 0-3 1-3 3zM8 11.5c-2 0-3-1.5-3-3 1.5 0 3 1 3 3zM8 11.5c2 0 3-1.5 3-3-1.5 0-3 1-3 3z" fill="#e9cf7c"/>`,
   flour: `<path d="M4.5 5.5h7l1 8c0 1-1.5 1.5-4.5 1.5s-4.5-.5-4.5-1.5z" fill="#f2ecdc"/><path d="M4.5 5.5c1-1 1.5-3 3.5-3s2.5 2 3.5 3" fill="#e6dcc2"/><path d="M5.5 9h5" fill="none" stroke="#c9b48a" stroke-width="2"/>`,
   bread: `<path d="M2 10.5c0-3.5 3-5.5 6-5.5s6 2 6 5.5c0 1.5-1 2.5-2.5 2.5h-7C3 13 2 12 2 10.5z" fill="#e89a7c"/><path d="M5.5 7.5l1 2M8 6.5l1 2M10.5 7l1 2" fill="none" stroke-width="1"/>`,
@@ -56,6 +57,16 @@ const paths: Record<string, string> = {
   close: `<path d="M4 4l8 8M12 4l-8 8" fill="none"/>`,
   info: `<circle cx="8" cy="8" r="6" fill="#f7f8f4" stroke-width="1"/><path d="M8 7v4.5" fill="none" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".9" fill="${ink}" stroke="none"/>`,
   upkeep: `<path d="M8 2.5v11M5 11l3 3 3-3" fill="none" stroke="#b04a39"/>`,
+  burghers: `<circle cx="8" cy="5.5" r="2.3" fill="#f5f6f2"/><path d="M5.5 3.2h5V1.5h-5z" fill="${ink}"/><path d="M3.5 14c0-3.5 2-5.5 4.5-5.5s4.5 2 4.5 5.5z" fill="#8a58a8"/>`,
+  decor: `<path d="M8 14.5v-5" fill="none" stroke="#6b5a45"/><circle cx="8" cy="6.5" r="4.5" fill="#a9c79a"/><circle cx="3.5" cy="13" r="1.4" fill="#e89a7c"/><circle cx="12.5" cy="13" r="1.4" fill="#e3c25a"/>`,
+  pave: `<path d="M1.5 9l6.5-4.5 6.5 4.5-6.5 4.5z" fill="#d8dbd4"/><path d="M4.8 6.8l6.5 4.5M8 4.5L4.8 11.3M11.2 6.8L8 13.5" fill="none" stroke-width="1" stroke="#9aa29b"/>`,
+  fire: `<path d="M8 14.5c-3 0-4.5-2-4.5-4.5 0-2.5 2-3.5 2.5-6 1.5 1 2 2.5 2 3.5.8-.8 1-2 1-3 2 1.5 3.5 3.5 3.5 5.5 0 2.5-1.5 4.5-4.5 4.5z" fill="#f0a868"/><path d="M8 14.5c-1.3 0-2-1-2-2.2 0-1.3 1-2 1.3-3 .9.7 2.7 1.8 2.7 3 0 1.2-.7 2.2-2 2.2z" fill="#f3c76b"/>`,
+  health: `<path d="M6 2.5h4v3.5h3.5v4H10v3.5H6V10H2.5V6H6z" fill="#cfe5d6"/>`,
+  order: `<path d="M8 1.5l5.5 2v4.5c0 3.5-2.5 5.5-5.5 6.5-3-1-5.5-3-5.5-6.5V3.5z" fill="#c9d2da"/><path d="M5.5 8l2 2 3-3.5" fill="none" stroke-width="1.4"/>`,
+  repair: `<path d="M3 13l6-6" fill="none" stroke="#8a6a45" stroke-width="2"/><path d="M8 3.5l2.5-1.5 3 3-1.5 2.5-2-.5-1.5-1.5z" fill="#8f9891"/>`,
+  appeal: `<path d="M8 1.8l1.8 3.9 4.2.5-3.1 2.9.8 4.2L8 11.2l-3.7 2.1.8-4.2L2 6.2l4.2-.5z" fill="#cfe5b8"/>`,
+  condition: `<path d="M2.5 14.5v-8l5.5-4 5.5 4v8z" fill="#f5f6f2"/><path d="M6 6.5l2 2.5-1.5 2 2 3" fill="none" stroke="#b04a39" stroke-width="1.2"/>`,
+  view: `<path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z" fill="#f7f8f4"/><circle cx="8" cy="8" r="2.3" fill="#c9d6ee"/>`,
   workers: `<circle cx="8" cy="5" r="2.3" fill="#f5f6f2"/><path d="M5.3 4.5c0-2 1.2-3 2.7-3s2.7 1 2.7 3z" fill="#e3c25a" stroke-width="1"/><path d="M3.5 14c0-3.5 2-5.5 4.5-5.5s4.5 2 4.5 5.5z" fill="#e9c48a"/>`
 }
 
