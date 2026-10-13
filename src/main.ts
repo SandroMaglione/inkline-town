@@ -134,6 +134,8 @@ const start = async () => {
     if (saved._tag === "Failure") ui.toast(describe(saved.failure))
   }
 
+  /** A shared town has just loaded and not yet been drawn. */
+  let settling = false
   const loop = FixedLoop.start({
     source: FixedLoop.source((onTick) => stage.subscribe(onTick)),
     stepSeconds: STEP_SECONDS,
@@ -147,7 +149,10 @@ const start = async () => {
         const text = arriving
         arriving = null
         arrive(text)
+        settling = true
       }
+      // The town's numbers are still the old town's until the next frame draws the new one: wait for them.
+      if (settling) return Result.success(undefined)
       if (ui.edits.some((edit) => edit.type === "newTown")) {
         resetPresentation()
         stage.resetCamera()
@@ -165,6 +170,7 @@ const start = async () => {
       clock.elapsed += elapsedSeconds
       const shown = runtime.tick(present)
       if (!shown.ok) throw new Error(`The town view stopped: ${JSON.stringify(shown.error)}`)
+      settling = false
       syncPage()
       autosave()
     },
