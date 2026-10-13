@@ -304,3 +304,37 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   .views button kbd { display: none; }
   .legend { top: auto; bottom: calc(176px + env(safe-area-inset-bottom)); }
 }
+
+/* ── Descriptions as rows: what, how much, and why underneath ── */
+.panel .lines .line { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; padding: 6px 0; }
+.panel .lines .line + .line { border-top: 1px dashed #e3e6df; }
+.panel .lines .line .label { font-weight: 600; color: #3d4943; flex: none; max-width: 100%; }
+.panel .lines .line .count { text-align: right; white-space: normal; margin-left: auto; line-height: 1.35; }
+.panel .lines .line .chips { flex-basis: 100%; margin-top: 3px; }
+.panel .lines .line .note { flex-basis: 100%; margin-top: 1px; font-size: 11px; line-height: 1.4; color: #6c766f; }
+.panel .lines .line.ok .count { color: #4f8a3e; }
+.panel .lines .line.warn .count { color: #b8782e; }
+.panel .lines .line.bad .count { color: #b04a39; font-weight: 700; }
+.panel .lines .line.bad .note { color: #8f3f31; }
+.panel .lines .line.warn .note { color: #8a5a22; }
+.panel .lines .line.dim .count, .panel .lines .line.dim .label { color: #8a938c; font-weight: 400; }
+.panel .lines .line .chip { background: #eef0ea; border-radius: 4px; padding: 1px 6px 1px 4px; }
+
+/* ── The build menu: cost and what it does, in labelled rows ── */
+.panel .option { grid-template-rows: auto auto auto auto; }
+.panel .option .thumb { grid-row: span 4; }
+.panel .chips .cap { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #9aa29b; min-width: 3.2em; }
+.panel .chip.good { color: #4f8a3e; }
+.panel .chip.bad { color: #b04a39; }
+.panel .chip i { font-style: normal; color: #9aa29b; }
+
+/* ── The ticker: now and lately, each line a place to go ── */
+.hud .ticker .head { padding: 5px 12px 1px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #9aa29b; }
+.hud .ticker button.cell { font: inherit; color: inherit; background: none; border: 0; text-align: left; cursor: default; width: 100%; }
+.hud .ticker button.cell.place { cursor: pointer; }
+.hud .ticker button.cell.place:hover { background: #eef0ea; }
+.hud .ticker .cell kbd { margin-left: auto; font: inherit; font-size: 10px; color: #3d6db5; border: 1px solid #c9d6ee; border-radius: 3px; padding: 0 5px; }
+.hud .ticker .cell em { font-style: normal; color: #9aa29b; }
+.hud .ticker .cell span { flex: 1; }
+.hud .cell.jobs { cursor: pointer; }
+.hud .cell.jobs:hover { background: #eef0ea; }

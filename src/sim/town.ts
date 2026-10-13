@@ -92,6 +92,7 @@ export const Collect = Game.System(
     resources: {
       time: Game.System.readResource(Time),
       grid: Game.System.readResource(Grid),
+      appeal: Game.System.readResource(Appeal),
       policy: Game.System.readResource(Policy),
       market: Game.System.writeResource(Market),
       treasury: Game.System.writeResource(Treasury),
@@ -109,12 +110,14 @@ export const Collect = Game.System(
     const hall = queries.halls.each()[0]
     const roads = hall ? reach(grid, doors(grid, hall.data.tile.get())) : null
     const share = LEDGER_TICKS / (60 * 60)
+    const cells = resources.appeal.get().cells
     let taxes = 0
     let homes = 0
     for (const { data } of queries.homes.each()) {
       homes += 1
-      const reached = roads !== null && doors(grid, data.tile.get()).some((c) => roads.distance[key(c.x, c.y)]! >= 0)
-      if (reached) taxes += taxOf(data.house.get(), policy, rules)
+      const tile = data.tile.get()
+      const reached = roads !== null && doors(grid, tile).some((c) => roads.distance[key(c.x, c.y)]! >= 0)
+      if (reached) taxes += taxOf(data.house.get(), policy, rules, appealAt(cells, tile.x, tile.y))
     }
     let upkeep = 0
     for (const { data } of queries.buildings.each()) upkeep += kinds[data.building.get().kind].upkeep * (data.paused.present ? PAUSED_UPKEEP : 1)

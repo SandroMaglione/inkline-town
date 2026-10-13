@@ -25,7 +25,7 @@ export const headless = (charter: CharterValue, options: { readonly toast?: (mes
     tool: "select", placing: null, ground: "lawn", prop: "lamp", menu: null, pointer: null, dragFrom: null, selected: null, gestures: [],
     edits: [{ type: "newTown", charter }],
     preview: emptyPreview(), hits: [], panel: null, centres: new Map(), stats: null, speed: 1, founding: false,
-    view: "none", overlay: { key: "", cells: [] }, legend: null,
+    view: "none", overlay: { key: "", cells: [] }, tints: new Map(), legend: null, flash: null,
     toast: options.toast ?? (() => {})
   }
   const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Ui, ui), Game.Runtime.service(Rules, options.rules ?? resolveRules())), resources: blankResources() })

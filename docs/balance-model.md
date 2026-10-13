@@ -4,6 +4,8 @@ The model reads the game's content and pure rules. It runs independently of the 
 
 No values in `src/content.ts` changed when this component was added. Private carrier/walker constants moved into shared configuration with their original values. `src/rules/` owns immutable inputs and the existing household, tax, trade, approval, production cadence, staffing, season, risk, road-choice and dispatch-priority functions. The simulation calls the same functions. Grid and desirability calculations retain their existing shared implementations.
 
+The model shares the street factors on room and taxes, the bread bonus, and the continuous desirability rules with the game. It does not model the grudge over taxes (the forecast keeps the memory at zero) nor the faster walking on paved streets; neither appears in the verified scenarios.
+
 ## Run it
 
 ```sh

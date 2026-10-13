@@ -241,7 +241,10 @@ export const Mood = Descriptor.ConstructedResource(Decode.struct({
   taxes: integer,
   debt: integer,
   crown: integer,
-  winter: integer
+  winter: integer,
+  /** The grudge over taxes past: points off the target now, and the town's memory of them in tenths (see `mood.grudge`). */
+  grudge: integer,
+  memory: integer
 }))("Town/Mood")
 
 /**
@@ -288,9 +291,9 @@ export const Fate = Descriptor.ConstructedResource(Decode.struct({
 export const History = Descriptor.ConstructedResource(Decode.struct({
   samples: Decode.array(Decode.struct({ tick: integer, coins: integer, residents: integer, citizens: integer, approval: integer, net: integer }))
 }))("Town/History")
-/** What happened, in a line each; an `alarm` is news the page announces (a fire, a theft, winter coming). */
+/** What happened, in a line each; an `alarm` is news the page announces (a fire, a theft, winter coming); `at` is where, when it was somewhere. */
 export const Chronicle = Descriptor.ConstructedResource(Decode.struct({
-  lines: Decode.array(Decode.struct({ tick: integer, text: Decode.string, alarm: Decode.boolean }))
+  lines: Decode.array(Decode.struct({ tick: integer, text: Decode.string, alarm: Decode.boolean, at: Decode.nullable(cell) }))
 }))("Town/Chronicle")
 
 /** How desirable each cell is to live on (by `key`), reckoned every `appeal.every` steps; empty before the first. */
@@ -319,6 +322,8 @@ export interface GridValue {
   readonly roads?: number
   /** The entities standing on it, when known: the grid only changes when one of them goes. */
   readonly tiles?: ReadonlySet<number>
+  /** Paved road cells (by `key`), when known: walkers and carriers move faster along them. */
+  readonly paved?: ReadonlySet<number>
 }
 export const Grid = Descriptor.TransientResource<GridValue>()("Town/Grid")
 /** Goods in the town's storage, summed every step. */

@@ -10,7 +10,7 @@ import * as Random from "@typeonce/bevy-ts-math/Random"
 import { fieldDraft, treeDraft } from "../archetypes.ts"
 import { amounts, crewOf, goodIds, ticks, total, type Amounts, type Crew } from "../content.ts"
 import { around, doors, GridBuilder, key, ownerAt, reach, roadPrint, useAt } from "../grid.ts"
-import { Building, Burning, Charter, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Tree, maybe, type Status as StatusValue } from "../schema.ts"
+import { Building, Burning, Charter, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Tree, maybe, type Status as StatusValue } from "../schema.ts"
 import { connected, elapsed, seasonAt, TileRead, useOf } from "./shared.ts"
 
 import { assignWorkers, equipmentPace, effort, paced } from "../rules/production.ts"
@@ -25,22 +25,30 @@ export { effort, paced } from "../rules/production.ts"
 export const IndexGrid = Game.System(
   "Town/IndexGrid",
   {
-    queries: { tiles: TileRead, laid: Game.Query({ selection: { tile: Game.Query.read(Tile) }, filters: [Game.Query.added(Tile)] }) },
+    queries: {
+      tiles: TileRead,
+      laid: Game.Query({ selection: { tile: Game.Query.read(Tile) }, filters: [Game.Query.added(Tile)] }),
+      /** A road just paved: the grid's paved cells change without any tile coming or going. */
+      paved: Game.Query({ selection: { paved: Game.Query.read(Paved) }, filters: [Game.Query.added(Paved)] })
+    },
     despawned: { entities: Game.System.readDespawned() },
     resources: { land: Game.System.readResource(Land), grid: Game.System.writeResource(Grid) }
   },
   ({ queries, despawned, resources }) => {
     const known = resources.grid.get().tiles
-    const changed = known === undefined || queries.laid.each().length > 0 || despawned.entities.all().some((id) => known.has(id))
+    const changed = known === undefined || queries.laid.each().length > 0 || queries.paved.each().length > 0 || despawned.entities.all().some((id) => known.has(id))
     if (!changed) return
     const grid = new GridBuilder(resources.land.get().mask)
     const tiles = new Set<number>()
+    const paved = new Set<number>()
     for (const { entity, data } of queries.tiles.each()) {
-      grid.claim(data.tile.get(), entity.id, useOf(data))
+      const t = data.tile.get()
+      grid.claim(t, entity.id, useOf(data))
       tiles.add(entity.id)
+      if (data.road.present && data.paved.present) paved.add(key(t.x, t.y))
     }
     const value = grid.value()
-    resources.grid.set({ ...value, roads: roadPrint(value), tiles })
+    resources.grid.set({ ...value, roads: roadPrint(value), tiles, paved })
   }
 )
 

@@ -879,6 +879,8 @@ export interface BuildingLook {
   readonly doors: Doors
   /** While a site: the share of its materials in, else `null`. */
   readonly site: number | null
+  /** A map view's colour washed over it, when one is shown. */
+  readonly tint?: number | undefined
 }
 
 /** A building as drawn: its plate on the floor, its body among the other objects, and its problem marker above everything. */
@@ -1062,6 +1064,8 @@ export interface HouseLook {
   readonly worn?: boolean
   /** Its neighbourhood: poor, plain, or fine (see `HouseView`). */
   readonly band?: "poor" | "plain" | "fine"
+  /** A map view's colour washed over it, when one is shown. */
+  readonly tint?: number | undefined
 }
 
 /** A sign that goes up over a home or building at risk. */

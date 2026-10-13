@@ -68,8 +68,10 @@ export class WorldView implements SceneNode {
   orient() {}
   /** A tint for what it is like now (run down, a poor street), before winter's frost. */
   protected shade = 0xffffff
+  /** A map view's colour over the whole model, so the view reads from the buildings and not only the ground under them. */
+  protected viewTint: number | null = null
   protected emphasis(emphasis: Emphasis) {
-    const tint = emphasis === "danger" ? 0xf3b5aa : multiply(this.shade, this.stage.frost ? FROST : 0xffffff)
+    const tint = emphasis === "danger" ? 0xf3b5aa : this.viewTint !== null ? multiply(this.viewTint, this.stage.frost ? FROST : 0xffffff) : multiply(this.shade, this.stage.frost ? FROST : 0xffffff)
     for (const m of this.models) m.tint.setHex(tint)
   }
   destroy() {
@@ -169,6 +171,7 @@ export class BuildingView extends WorldView {
       this.group.add(this.smoke.group)
     }
     this.smoke?.update(performance.now()/1000,Number(smoking))
+    this.viewTint = look.tint ?? null
     this.emphasis(emphasis)
   }
   override orient() {
@@ -212,6 +215,7 @@ export class HouseView extends WorldView {
     }
     this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
     this.shade=0xffffff
+    this.viewTint = look.tint ?? null
     this.emphasis(emphasis)
   }
 }

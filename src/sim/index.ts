@@ -68,7 +68,7 @@ export const blankResources = () => ({
   Charter: { ...defaultCharter(0), founded: 0, winters: [] as Array<"none" | "mild" | "normal" | "hard"> },
   Land: { mask: "", cells: 0 },
   Market: { prices: amounts({}) },
-  Mood: { approval: 0, target: 0, base: 0, needs: 0, taxes: 0, debt: 0, crown: 0, winter: 0 },
+  Mood: { approval: 0, target: 0, base: 0, needs: 0, taxes: 0, debt: 0, crown: 0, winter: 0, grudge: 0, memory: 0 },
   Crown: { open: false, good: "wood" as const, amount: 0, issued: 0, due: 0, reward: 0, next: 0, met: 0, missed: 0, streak: 0, snubs: [] },
   Fate: foundedFate(),
   History: { samples: [] },
@@ -84,4 +84,4 @@ export { CELL_STEPS, elapsed, seasonAt, termTicks, winterOf } from "./shared.ts"
 export { SITE_SHARE } from "./work.ts"
 export { unlocked } from "./edits.ts"
 export { adminOf, askOf, capacity, kept, met, priceOf, satisfaction, taxOf, tierFor } from "./town.ts"
-export { crownGap, goalsOf, larder } from "./term.ts"
+export { crownGap, goalsOf, larder, steadyNet } from "./term.ts"

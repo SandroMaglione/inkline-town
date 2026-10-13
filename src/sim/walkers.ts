@@ -12,7 +12,7 @@ import { appealAt } from "../appeal.ts"
  */
 
 import { amounts, categoryColor, each, provisions, total, type Amounts } from "../content.ts"
-import { DIRS, doors, isRoad, nearest, ownerAt, pathTo, reach, useAt } from "../grid.ts"
+import { DIRS, doors, isRoad, key, nearest, ownerAt, pathTo, reach, useAt } from "../grid.ts"
 import { inside, type Point } from "../iso.ts"
 import { Building, Burning, Condition, Figure, Game, Rules, Grid, Appeal, Patrol, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Roam, Route, Service, Sick, Site, Staff, Status, Tile, Time, WalkerOf, maybe, type Status as StatusValue } from "../schema.ts"
 import { CELL_STEPS } from "./shared.ts"
@@ -27,15 +27,22 @@ const BASKET = transport.basket
 /** Walkers a service building may have out on the roads at once. */
 const OUT = transport.active
 
-/** Every walker steps along its route (a firefighter on the way to a blaze runs); one whose next cell is no longer road is lost. */
+/**
+ * Every walker steps along its route (a firefighter on the way to a blaze
+ * runs, and anyone on a paved street goes `pavedPace` as fast); one whose
+ * next cell is no longer road is lost.
+ */
 export const Walk = Game.System(
   "Town/Walk",
   {
     queries: { walkers: Game.Query({ selection: { route: Game.Query.write(Route), rescue: Game.Query.optional(Rescue) } }) },
-    resources: { grid: Game.System.readResource(Grid) }
+    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, commands }) => {
+  ({ queries, resources, commands, services }) => {
     const grid = resources.grid.get()
+    const tick = resources.time.get().tick
+    const quicker = services.rules.pavedPace - 1
     for (const { entity, data } of queries.walkers.each()) {
       const route = data.route.get()
       const last = route.cells.length - 1
@@ -46,7 +53,8 @@ export const Walk = Game.System(
         continue
       }
       const running = data.rescue.present && !data.rescue.get().back
-      const step = route.step + (running ? RUN : WALK)
+      const paved = !running && quicker > 0 && (grid.paved?.has(key(next.x, next.y)) ?? false) && paced(quicker, tick)
+      const step = route.step + (running ? RUN : WALK) + (paved ? 1 : 0)
       if (step < CELL_STEPS) data.route.set({ ...route, step })
       else {
         const index = route.index + 1

@@ -163,7 +163,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
       for (const g of goodIds) stock[g] = Math.max(0, stock[g] - spoilExpectation(stock[g], g, keeps, rules))
     }
     if (Math.floor(elapsed / (rules.ledgerTicks * rules.stepSeconds)) > Math.floor(second / (rules.ledgerTicks * rules.stepSeconds))) {
-      const tax = homes.reduce((n, h) => n + (analysis.household.find((a) => a.id === h.id)?.taxConnected ? taxOf(h, scenario.policy, rules) : 0), 0), upkeep = buildings.reduce((n, b) => n + rules.kinds[b.kind].upkeep * (b.paused ? rules.pausedUpkeep : 1), 0)
+      const tax = homes.reduce((n, h) => { const a = analysis.household.find((a) => a.id === h.id); return n + (a?.taxConnected ? taxOf(h, scenario.policy, rules, a.desirability) : 0) }, 0), upkeep = buildings.reduce((n, b) => n + rules.kinds[b.kind].upkeep * (b.paused ? rules.pausedUpkeep : 1), 0)
       const parkCost = parks.reduce((n, p) => n + parkUpkeep(p, rules), 0)
       coins += baseCollection(tax, upkeep + parkCost, homes.length, rules).delta
       if (scenario.trade) {

@@ -17,7 +17,7 @@ town, the levers you hold, how a term ends, and how the town works underneath.
 | **Home**, camera reset button | restore the original view |
 | **S** | select: click a building or a home to see what it does |
 | **R** | road: drag to lay one |
-| **P** | pave: drag along a road to pave it (coins and a stone a cell) |
+| **P** | pave: drag along a road to pave it (coins and a stone a cell): carriers and walkers go half again as fast on it |
 | **H** | homes: drag to lay a row along a road |
 | **B** | build: pick a building, then click the map |
 | **X** | bulldoze |
@@ -52,14 +52,16 @@ New town and load ask before they replace the town you have.
     it buys; stone and ore run out;
   - *approval*, from -100 to 100, follows needs met, taxes, unpaid wages,
     snubs from the crown, and hungry winters, and decides how many people
-    each home holds.
+    each home holds. Taxes above 125% also leave a *grudge* that builds
+    for as long as they stay high and fades over ten minutes or so, so a
+    term of squeezing cannot be undone by cutting taxes at the end.
 - **The levers**: taxes per tier; for each good, sell beyond the reserve,
   buy up to it (at half again the price), or neither; the reserve itself;
   pausing a building (no workers, a quarter of its upkeep); answering the
   crown; and the speed of time (space pauses, 1, 2, 3 for 1×, 2×, 4×).
 - **The end**: the town is *complete* once it holds every goal for two
   minutes (enough residents and coins for its size, three in ten of them
-  citizens, approval 15 or more, not losing coins); you may retire or keep
+  citizens, approval 15 or more, not losing coins over the last minute); you may retire or keep
   governing. It is *lost* to bankruptcy (three minutes in debt), revolt
   (approval at -50 or below for two minutes), abandonment (people fall
   below 15% of their peak), or dismissal (three of the crown's requests
@@ -78,7 +80,11 @@ Nobody tells you to build it that way; it works best that way.
   beside it and less out to four cells; a sawmill, bakery, mill, or
   smokehouse 4; warehouses, farms, a granary, a builder's yard 2. Water and
   woods give 2, a market 2 and a chapel 4, the town hall 4, and a paved
-  street 1 beside it. Ruins and run-down homes take a little.
+  street 1 beside it. Ruins and run-down homes take a little. Every point
+  counts: below 0 a home holds fewer residents (a twentieth fewer a point,
+  down to half) and pays less (a fortieth a point, down to three quarters);
+  above 0 it pays more, up to a quarter more. A home's panel says what its
+  street is made of, and what keeps it from the next tier.
 - **Parks** are laid out cell by cell from the build menu. Drag a
   rectangle of ground (lawn, flower beds, gravel walks, a paved square),
   then click a cell of it to set a furnishing (a lamp, a fountain once 30
@@ -104,9 +110,11 @@ Nobody tells you to build it that way; it works best that way.
   (lumberjack, forester, quarry, mine, fishery, smokehouse, farm, sheep,
   storage, fire watch, watch house, builder's yard); citizens the skilled
   (sawmill, smithy, mill, bakery, weaver, market, chapel, healer,
-  hospital). Citizens never take settlers' jobs: upgrade every home and the
-  quarry stands empty. Until there are citizens, settlers stand in at a
-  skilled job as apprentices, at three-quarters pace. A home only supplies workers to
+  hospital). Skilled jobs take their own crew first; citizens left over do
+  rough work, and until there are citizens, settlers stand in at a
+  skilled job as apprentices, at three-quarters pace. The jobs counter in
+  the top right says how many workplaces are short, and clicking it visits
+  them in turn. A home only supplies workers to
   workplaces within 15 road cells, so a distant mine needs its own workers'
   cottages beside it (they stay settlers in its dust, which is what it
   needs). A workplace short of workers says whether anyone lives within
@@ -116,9 +124,10 @@ Nobody tells you to build it that way; it works best that way.
 
 Every home has three risk meters that rise slowly, at a pace fixed by where
 it stands, and every building a fire meter. A walker from the matching
-service resets one as it passes. Past 70% a sign goes up over the home (a
-smoke wisp, a pale face, a broken window); disaster comes only if the meter
-reaches the top.
+service resets one as it passes. Past half way a sign goes up over the home (a
+smoke wisp, a pale face, a broken window) and the map views turn it red;
+disaster comes only if the meter reaches the top. The views colour the
+buildings themselves, not only the ground under them.
 
 | Service | Building | What raises the risk | If neglected |
 |---|---|---|---|
@@ -129,16 +138,21 @@ reaches the top.
 A good layout prevents disasters: streets between rows of homes stop a fire
 from spreading, a fire watch near the cottages gets firefighters there in
 time, and industry away from homes keeps them healthy and orderly. The town
-ticker under the top bar lists what needs attention now (fires, sickness,
-workshops waiting for inputs, workplaces nobody can walk to, no food in
-store) and the latest news, which also pops up as it happens.
+ticker under the top bar lists what needs attention *now* (fires, sickness,
+workshops that have waited half a minute for inputs, workplaces nobody can
+walk to, no food in store) and, under *lately*, the news of the last minute
+and a half, which also pops up as it happens. Click a line to go there.
 
 ## Wear, spoilage, and winters
 
 - **Food spoils in store**: fish keeps about three minutes, bread about
   five; wheat, flour, and smoked fish keep. A **granary** keeps fish and
   bread five times as long, and a **smokehouse** turns fish into smoked
-  fish, which keeps through any winter. Markets hand out fresh fish first.
+  fish, which keeps through any winter. Markets hand settlers fresh fish
+  first, and a loaf besides when they have none: a cottage with bread on
+  the table pays a quarter more, so bread is worth baking before anyone is
+  a citizen. When food rots, the news says whether the town simply makes
+  more than it eats.
 - **Tools wear out**: a lumberjack, quarry, mine, sawmill, mill, bakery,
   weaver, or smokehouse uses up a tool every 50 or 60 jobs, and works at
   half pace without one. Carriers keep one on hand at each.
@@ -159,7 +173,10 @@ store) and the latest news, which also pops up as it happens.
 
 - **A new town** has a town hall in a clearing, ringed by road, plus
   starting coins and goods.
-- **Coins**: homes the town hall can reach by road pay taxes; traders buy
+- **Coins**: homes the town hall can reach by road pay taxes, in proportion
+  to the needs they have met: a hungry home pays nothing, a cottage with
+  bread pays half again, a fine street up to a quarter more, and the town
+  panel says what the same homes would pay if every one were supplied; traders buy
   what the town sells and sell it what it buys; every building costs upkeep
   and the town hall costs administration. Building costs coins up front.
   The **town** panel (T, the town button, or the people in the top right) shows the goals, approval,
@@ -171,9 +188,13 @@ store) and the latest news, which also pops up as it happens.
   (fish, smoked fish, or bread); with bread, cloth, and faith on a street
   with desirability 5 a home becomes a two-story citizens' home that holds
   and pays twice as much, and on a fine street (15) with every service
-  calling, a three-story townhouse.
+  calling, a three-story townhouse. Cloth is only brought to a street fit
+  for citizens, however much is in store: the home's panel says so, and
+  what the street is short of.
 - **Buildings** need a road at the middle of a side and workers of their
-  crew from homes within 15 road cells. Parks need no road and no
+  crew from homes within 15 road cells. While one is placed (or selected),
+  the roads its walkers or its workers would use are shown; the homes tool
+  shows how far its residents would walk to work. Parks need no road and no
   workers; their stone comes straight out of storage. Gatherers work the land within their reach (trees, rocks, water,
   fields); workshops turn one good into another.
 - **Carriers** walk every good along the roads: producers send to whoever
