@@ -65,33 +65,37 @@ export const verifyTransport = (rules: Rules): Verification => {
     "Real full-load trips to a distant warehouse; tolerance permits one in-flight load per carrier at the measurement boundary")
 }
 
-/** Independent runtime excursions, compared with finite-path DP rather than another mathematical sampler. */
-export const verifyService = (rules: Rules, branched: boolean, seeds = 16): Verification => {
+/** Complete dispatch cycles checked against the shared deterministic tours. */
+export const verifyService = (rules: Rules, branched: boolean, seeds = 4): Verification => {
   const base = district(branched ? "branched-faith" : "straight-faith", Array(10).fill(1), ["chapel"], branched, rules)
-  const scenario = { ...base, homes: base.homes.map((h) => ({ ...h, food: 10000000 })), buildings: base.buildings.map((b) => ({ ...b, stock: amounts({}) })) }
-  const chapel = scenario.buildings.find((b) => b.kind === "chapel")!, target = scenario.homes[scenario.homes.length - 1]!
-  const predicted = analyze({ rules, scenario }).services.find((p) => p.source === chapel.id)!.contacts.find((c) => c.target === target.id)?.hitProbability ?? 0
+  const scenario = { ...base, homes: base.homes.map(h => ({ ...h, food: 10000000 })), buildings: base.buildings.map(b => ({ ...b, stock: amounts({}) })) }
+  const chapel = scenario.buildings.find(b => b.kind === "chapel")!, target = scenario.homes.at(-1)!
+  const profile = analyze({ rules, scenario }).services.find(p => p.source === chapel.id)!
+  const predicted = profile.contacts.find(c => c.target === target.id)?.hitProbability ?? 0
+  const wanted = profile.tours * 2
   let trips = 0, hits = 0
   for (let seed = 0; seed < seeds; seed++) {
     const town = fixture({ ...scenario, charter: { ...scenario.charter, seed: 1000 + seed * 7919 } }, rules)
     const seen = new Map<number, { hit: boolean; completed: boolean }>()
-    for (let second = 0; second < 80; second += 0.4) {
+    for (let second = 0; second < 300; second += 0.4) {
       town.run(0.4)
-      const snapshot = town.snapshot()
-      const walkers = snapshot.entities.filter((e) => e.components["Town/Roam"]?.service === "faith")
-      for (const e of walkers) {
+      for (const e of town.snapshot().entities.filter(e => e.components["Town/Roam"]?.service === "faith")) {
+        if (!seen.has(e.id) && seen.size >= wanted) continue
         const roam = e.components["Town/Roam"], route = e.components["Town/Route"]
         const record = seen.get(e.id) ?? { hit: false, completed: false }
         const cell = roam.back ? route.cells[0] : route.cells[route.index]
         if (!record.completed && cell && Math.abs(cell.x - target.tile.x) + Math.abs(cell.y - target.tile.y) === 1) record.hit = true
-        if (roam.back && !record.completed) { trips += 1; hits += Number(record.hit); record.completed = true }
+        if (roam.back) record.completed = true
         seen.set(e.id, record)
       }
+      if (seen.size === wanted && [...seen.values()].every(r => r.completed)) break
     }
+    if (seen.size !== wanted || [...seen.values()].some(r => !r.completed)) throw new Error("Service tours did not complete in 300 seconds")
+    trips += seen.size
+    hits += [...seen.values()].filter(r => r.hit).length
   }
-  const actual = trips > 0 ? hits / trips : 0, tolerance = 3 * Math.sqrt(Math.max(0.01, predicted * (1 - predicted)) / Math.max(1, trips)) + 0.03
-  return compare(branched ? "branched-service-hit" : "straight-service-hit", "finite-path probability", predicted, actual, tolerance,
-    `${hits}/${trips} completed excursions across ${seeds} fixed seeds; tolerance is 3 standard errors plus 0.03 sampling allowance. No basket depletion in faith service.`)
+  return compare(branched ? "branched-service-coverage" : "straight-service-coverage", "exact tour fraction", predicted, hits / trips, 1e-12,
+    `${hits}/${trips} completed dispatches across ${seeds} seeds; two whole rotation cycles per seed, unlimited faith baskets`)
 }
 
 export const verifyProjection = (inputs: Inputs, options: ProjectionOptions) => {

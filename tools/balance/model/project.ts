@@ -136,7 +136,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
       if (Number.isFinite(goods) && Math.floor(second / goods) !== Math.floor((second + step) / goods)) {
         const basket = Object.fromEntries(goodIds.map((g) => [g, Math.max(0, Math.floor(stock[g]))])) as Record<keyof Amounts, number>
         if (options.feeding === "fish") basket.bread = 0
-        const served = serveGoods(next, basket, rules)
+        const served = serveGoods(next, basket, rules, analysis.household.find(a => a.id === h.id)?.desirability ?? 0)
         for (const g of goodIds) stock[g] -= basket[g] - served.basket[g]
         next = { ...served.house }
       }
@@ -187,5 +187,5 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
     }
   }
   return { name: scenario.name, firstCitizenSecond: firstCitizen, rows, events,
-    assumptions: ["One-second pooled rate model; integer recipe phases and local storage are approximated.", "Contacts are periodic mean visits unless explicitly supplied; faith has no goods cost. This understates long revisit gaps.", "Construction spends materials at placement and ignores carrier latency; completion is optimistic.", "Granary protection and tool availability are pooled; source accessibility is frozen between analysis updates.", "Market prices and collection rules are shared; shelf allocation is pooled and optimistic. No disaster losses, repair recovery or victory classification are predicted. Explicit imports/exports and crown events are scenario conditions."] }
+    assumptions: ["One-second pooled rate model; integer recipe phases and local storage are approximated.", "Contacts use periodic mean visits from planned tours unless explicitly supplied; faith has no goods cost. Basket depletion and actual launch gaps can lower coverage.", "Construction spends materials at placement and ignores carrier latency; completion is optimistic.", "Granary protection and tool availability are pooled; source accessibility is frozen between analysis updates.", "Market prices and collection rules are shared; shelf allocation is pooled and optimistic. No disaster losses, repair recovery or victory classification are predicted. Explicit imports/exports and crown events are scenario conditions."] }
 }

@@ -28,6 +28,7 @@ export const buildScenario = (rules: Rules) => {
     buildings: [{ ...hall, stock: initial }], trade: { buys: ["tools"], sells: [], reserve: 10 } }
   const order: ReadonlyArray<readonly [KindId, number]> = [["sawmill", 0], ["lumberjack", 0], ["fishery", 0], ["quarry", 30], ["mill", 60], ["bakery", 90], ["farm", 120], ["sheep", 150], ["weaver", 180], ["market", 210], ["chapel", 240]]
   const builds: BuildAction[] = order.map(([kind, at]) => ({ kind, at, tile: template.buildings.find((b) => b.kind === kind)!.tile }))
+  builds.push({ kind: "firewatch", at: 30, tile: { x: 6, y: 29, size: 2 } })
   for (const p of citizenPark()) builds.push({ kind: "ground", ground: p.ground, at: 0, tile: { x: p.x, y: p.y, size: 1 } })
   // Ground commands must have been applied before a furnishing can address their entities.
   for (const p of citizenPark()) if (p.prop !== "none") builds.push({ kind: "prop", prop: p.prop, at: 1, tile: { x: p.x, y: p.y, size: 1 } })

@@ -2,7 +2,7 @@ import { amounts, goodIds, type GoodId, type WinterId } from "../../../src/conte
 import { appealAt, appealGrid, buildingSource, landSource, parkSources, parkUpkeep } from "../../../src/appeal.ts"
 import { doors, nearest, reach } from "../../../src/grid.ts"
 import { assignWorkers, type Assignment } from "../../../src/rules/production.ts"
-import { baseCollection, mealRate, refreshLevel, taxOf, tierFor } from "../../../src/rules/households.ts"
+import { baseCollection, wantsCitizenGoods, mealRate, refreshLevel, taxOf, tierFor } from "../../../src/rules/households.ts"
 import { riskIncrements, near } from "../../../src/rules/risks.ts"
 import { seasonAt } from "../../../src/rules/seasons.ts"
 import { spoilExpectation } from "../../../src/rules/decay.ts"
@@ -82,15 +82,17 @@ export const analyze = ({ rules, scenario: s }: Inputs, options: AnalysisOptions
   const spoil = { ...amounts({}) }
   for (const b of s.buildings.filter((b) => !b.site)) for (const g of goodIds) spoil[g] += spoilExpectation(b.stock[g], g, rules.kinds[b.kind].keeps ?? 1, rules) * 60 / (rules.spoilTicks * rules.stepSeconds)
   const foodDecay = mealRate(severity !== null)
+  const clothHomes = s.homes.filter(h => wantsCitizenGoods(h, appealAt(appeal, h.tile.x, h.tile.y), rules)).length
   const needBounds = {
+    clothRecipients: clothHomes,
     food: { min: s.homes.length * foodDecay * 60 / (rules.home.lasts.food * rules.stepSeconds), frequent: s.homes.length * foodDecay * 60 / ((rules.home.lasts.food - refreshLevel("food", rules)) * rules.stepSeconds) },
-    cloth: { min: s.homes.length * 60 / (rules.home.lasts.cloth * rules.stepSeconds), frequent: s.homes.length * 60 / ((rules.home.lasts.cloth - refreshLevel("cloth", rules)) * rules.stepSeconds) },
+    cloth: { min: clothHomes * 60 / (rules.home.lasts.cloth * rules.stepSeconds), frequent: clothHomes * 60 / ((rules.home.lasts.cloth - refreshLevel("cloth", rules)) * rules.stepSeconds) },
     citizenCloth: { min: s.homes.filter((h) => h.tier >= 2).length * 60 / (rules.home.lasts.cloth * rules.stepSeconds), frequent: s.homes.filter((h) => h.tier >= 2).length * 60 / ((rules.home.lasts.cloth - refreshLevel("cloth", rules)) * rules.stepSeconds) }
   }
   const net = Object.fromEntries(goodIds.map((g) => [g, supply[g] - inputs[g] - spoil[g]])) as Record<GoodId, number>
   const foodCeiling = supply.fish + supply.smoked + supply.bread - inputs.fish - inputs.smoked - inputs.bread
   if (foodCeiling < needBounds.food.min) findings.push({ code: "food-impossible", confidence: "upper-bound", detail: `Even pooled food capacity ${foodCeiling.toFixed(2)}/min before spoilage is below the no-waste minimum ${needBounds.food.min.toFixed(2)}/min; existing reserves may bridge a finite interval` })
-  if (net.cloth < needBounds.cloth.min) findings.push({ code: "cloth-spread", confidence: "upper-bound", detail: `Cloth capacity ${net.cloth.toFixed(2)}/min cannot keep ${s.homes.length} homes supplied; settlers also accept cloth` })
+  if (net.cloth < needBounds.cloth.min) findings.push({ code: "cloth-capacity", confidence: "upper-bound", detail: `Cloth capacity ${net.cloth.toFixed(2)}/min cannot keep ${clothHomes} eligible homes supplied` })
   const hall = s.buildings.find((b) => b.kind === "townhall"), hallRoads = hall ? reach(g, doors(g, hall.tile)) : null
   const taxes = s.homes.reduce((sum, h) => sum + (hallRoads && nearest(hallRoads, doors(g, h.tile)) ? taxOf(h, s.policy, rules) : 0), 0)
   const upkeep = s.buildings.filter((b) => !b.site).reduce((sum, b) => sum + rules.kinds[b.kind].upkeep * (b.paused ? rules.pausedUpkeep : 1), 0)
@@ -134,7 +136,7 @@ export const analyze = ({ rules, scenario: s }: Inputs, options: AnalysisOptions
   })
   if (storage.length === 0) findings.push({ code: "no-storage", confidence: "exact", detail: "No completed storage accepts town reserves" })
   return { name: s.name, severity, minutes, elapsedMs: performance.now() - started,
-    assumptions: ["Resource flow is a steady-state pooled relaxation; it is an upper bound before household demand and transport cuts.", "Transport ceilings assume full loads and available destinations; nearest-demand dispatch and construction can lower realized throughput.", "Service path probabilities are exact for the stated uniform-walk graph; renewal timing and unlimited baskets are estimates.", "Risk deadlines freeze hunger, approval, neighbourhood and condition; contagion and fire spread are excluded from these local deadlines."],
+    assumptions: ["Resource flow is a steady-state pooled relaxation; it is an upper bound before household demand and transport cuts.", "Transport ceilings assume full loads and available destinations; shelf balancing and construction can lower realized throughput.", "Service coverage uses the actual deterministic tours; launch timing and unlimited baskets are estimates.", "Risk deadlines freeze hunger, approval, neighbourhood and condition; contagion and fire spread are excluded from these local deadlines."],
     staff: Object.fromEntries(staff), recipes: recipes.map((r) => ({ ...r, flowCeiling: rates.get(r.id)! })),
     supply, workshopDemand: inputs, spoilage: spoil, availableAfterWorkshops: net, needBounds,
     economy: { taxesPerMinute: taxes, upkeepPerMinute: upkeep + parkCost, parkUpkeepPerMinute: parkCost, administrationPerMinute: collection.admin, roundedNetPerMinute: cashPerMinute,

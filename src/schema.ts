@@ -141,6 +141,8 @@ export const Carriers = Descriptor.ConstructedComponent(Decode.struct({ count: i
 
 /** Sends a walker out every `interval` steps. */
 export const Service = Descriptor.ConstructedComponent(Decode.struct({ service, interval: integer, cooldown: integer, range: integer }))("Town/Service")
+/** The next tour of a service's district. Optional in older saved worlds. */
+export const Patrol = Descriptor.ConstructedComponent(Decode.struct({ next: integer }))("Town/Patrol")
 
 // ── Walkers ───────────────────────────────────────────────────────────────
 
@@ -341,7 +343,7 @@ export const Game = Schema.bind(
   Schema.fragment({
     components: {
       Tile, Road, Paved, Park, Ruin, Site, Rising, Tree, Rock, Water, Field, House, Risk, Condition, Burning, Sick, Building, TownHall, Status,
-      Paused, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Figure, Route, Errand, Rescue, Roam
+      Paused, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Patrol, Figure, Route, Errand, Rescue, Roam
     },
     resources: {
       Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Appeal, Pantry, Fires,

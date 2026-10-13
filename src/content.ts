@@ -85,7 +85,7 @@ export const homeColor = 0xc4523f
 export type Source = "tree" | "stone" | "ore" | "field" | "water"
 export const serviceIds = ["goods", "faith", "fire", "health", "order", "repair"] as const
 export type ServiceId = (typeof serviceIds)[number]
-/** Who works a building: settlers do the rough work, citizens the skilled (see `AssignStaff`). */
+/** Native crews: surplus citizens can also do rough work; settlers learn skilled jobs as apprentices. */
 export type Crew = "settlers" | "citizens"
 
 export type Topper = "none" | "chimney" | "flag" | "cupola" | "sails" | "crates"
@@ -254,13 +254,13 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     id: "sheep", title: "Sheep farm", blurb: "shears sheep for wool",
     category: "crafts", size: 3, half: 12, stories: 1, roof: "gable", bays: 2, window: 4, topper: "none",
     cost: { coins: 100, materials: { planks: 4 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: { residents: 15, citizens: 0 }, buildable: true,
-    recipe: { input: null, inputs: 0, output: "wool", batch: 1, seconds: 8 }, carriers: 2, appeal: { value: -2, reach: 2 }
+    recipe: { input: null, inputs: 0, output: "wool", batch: 1, seconds: 6 }, carriers: 2, appeal: { value: -2, reach: 2 }
   },
   weaver: {
     id: "weaver", title: "Weaver", blurb: "weaves wool into cloth",
     category: "crafts", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "none",
     cost: { coins: 150, materials: { planks: 4, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 15, citizens: 0 }, buildable: true,
-    recipe: { input: "wool", inputs: 1, output: "cloth", batch: 1, seconds: 8 }, holds: { accepts: ["wool", "cloth"], cap: 8 }, carriers: 2,
+    recipe: { input: "wool", inputs: 1, output: "cloth", batch: 1, seconds: 6 }, holds: { accepts: ["wool", "cloth"], cap: 8 }, carriers: 2,
     wear: 60, appeal: { value: -2, reach: 2 }
   },
   market: {
@@ -403,7 +403,7 @@ export const home = {
   /** A resident moves in (or out) this often. */
   settle: ticks(3),
   /** How long each need stays met after a walker's visit: cloth and faith last longer than a meal. */
-  lasts: { food: ticks(60), bread: ticks(90), cloth: ticks(180), faith: ticks(150) } as Readonly<Record<Need, number>>,
+  lasts: { food: ticks(90), bread: ticks(120), cloth: ticks(240), faith: ticks(180) } as Readonly<Record<Need, number>>,
   /** Where nobody wants to live: homes at this desirability or less hold `crowded` as many. */
   squalid: -5,
   crowded: 0.6
@@ -522,8 +522,8 @@ export const CONDITION_MAX = 1000
 export const condition = {
   /** A point lost every `every` steps: from new to run down in about 33 minutes, and fallen down in 67, unmended. */
   every: ticks(4),
-  /** Below this, a builder mends it as they pass (about every half hour). */
-  mend: 550,
+  /** Below this, a builder mends it as they pass (after about 23 minutes without repair). */
+  mend: 650,
   /** Below this, it works at half pace, and its fire risk rises. */
   worn: 500
 }
@@ -593,12 +593,12 @@ export const lands: Readonly<Record<LandId, {
   fair: {
     title: "fair", blurb: "enough of everything, if it is not wasted",
     forests: 5.5, stone: 3, ore: 2, rock: 32, lakes: 2, coins: 1900,
-    stock: amounts({ wood: 10, planks: 40, stone: 16, tools: 8, fish: 20 })
+    stock: amounts({ wood: 10, planks: 40, stone: 16, tools: 10, fish: 20 })
   },
   harsh: {
     title: "harsh", blurb: "thin woods, little stone, one deposit of ore, one lake",
     forests: 4, stone: 2, ore: 1, rock: 24, lakes: 1, coins: 1500,
-    stock: amounts({ wood: 10, planks: 30, stone: 12, tools: 6, fish: 15 })
+    stock: amounts({ wood: 10, planks: 30, stone: 12, tools: 8, fish: 15 })
   }
 }
 
@@ -630,7 +630,7 @@ export type WinterId = (typeof winterIds)[number]
 export const winters: Readonly<Record<WinterId, { readonly title: string; readonly share: number; readonly fishing: number; readonly heating: boolean; readonly chance: number }>> = {
   mild: { title: "mild", share: WINTER_SHARE, fishing: 0.75, heating: false, chance: 0.3 },
   normal: { title: "normal", share: WINTER_SHARE, fishing: 0.5, heating: false, chance: 0.45 },
-  hard: { title: "hard", share: WINTER_SHARE * 1.5, fishing: 0.25, heating: true, chance: 0.25 }
+  hard: { title: "hard", share: WINTER_SHARE * 1.5, fishing: 0.4, heating: true, chance: 0.25 }
 }
 /** The almanac warns of winter this many steps before it comes. */
 export const WINTER_WARNING = ticks(60)

@@ -449,7 +449,7 @@ const entity = (t: ReturnType<typeof town>, id: number) => t.snapshot().entities
   const w2 = entity(t, sawmill)!.components["Town/Staff"]
   check(
     "crews",
-    q1.assigned === 0 && w1.assigned === 2 && w1.apprentices === 0 && w2.apprentices > 0 && q2.assigned > 0,
+    q1.assigned === 3 && q1.apprentices === 0 && w1.assigned === 2 && w1.apprentices === 0 && w2.apprentices > 0 && q2.assigned > 0,
     `citizens only: quarry ${q1.assigned}/3, sawmill ${w1.assigned}/2; settlers only: quarry ${q2.assigned}/3, sawmill ${w2.assigned}/2 (${w2.apprentices} apprentices)`
   )
 }

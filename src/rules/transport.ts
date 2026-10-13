@@ -8,8 +8,10 @@ export const onwardRoads = (grid: GridValue, cell: Point, previous: Point | null
     .filter((c) => isRoad(grid, c.x, c.y) && !(previous && c.x === previous.x && c.y === previous.y))
 
 export interface DeliveryCandidate {
-  readonly site: boolean; readonly distance: number
+  readonly site: boolean; readonly distance: number; readonly fill?: number
 }
-/** Construction first, then nearest; exact ties keep the earlier candidate. */
+/** Construction first; operating shelves with the lowest fill come next, then distance. */
 export const preferDelivery = (candidate: DeliveryCandidate, best: DeliveryCandidate | null): boolean =>
-  best === null || (candidate.site && !best.site) || (candidate.site === best.site && candidate.distance < best.distance)
+  best === null || (candidate.site && !best.site) || (candidate.site === best.site &&
+    (candidate.site ? candidate.distance < best.distance :
+      (candidate.fill ?? 0) < (best.fill ?? 0) || ((candidate.fill ?? 0) === (best.fill ?? 0) && candidate.distance < best.distance)))

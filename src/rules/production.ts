@@ -30,10 +30,12 @@ export const assignWorkers = (homes: ReadonlyArray<CrewHome>, workplaces: Readon
       if (!h || h.crew !== crew || h.left === 0) continue
       const take = Math.min(place.needed - place.assigned, h.left)
       h.left -= take; place.assigned += take
-      if (crew !== place.crew) place.apprentices += take
+      if (place.crew === "citizens" && crew === "settlers") place.apprentices += take
     }
   }
   for (const p of order) fill(p, p.crew)
+  // Skilled jobs retain their crews; surplus citizens may do rough work at full pace.
+  for (const p of order) if (p.crew === "settlers") fill(p, "citizens")
   for (const p of order) if (p.crew === "citizens") fill(p, "settlers")
   return new Map(places.map((p) => [p.id, { assigned: p.assigned, apprentices: p.apprentices, nearby: p.nearby }]))
 }

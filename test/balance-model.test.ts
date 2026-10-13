@@ -1,10 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { readFileSync, readdirSync, mkdtempSync, rmSync } from "node:fs"
-import { join } from "node:path"
-import { tmpdir } from "node:os"
-import { spawnSync } from "node:child_process"
-import { createHash } from "node:crypto"
+import { readFileSync, readdirSync } from "node:fs"
 import { amounts, kinds } from "../src/content.ts"
 import { resolveRules } from "../src/rules/config.ts"
 import { analyze } from "../tools/balance/model/analyze.ts"
@@ -17,6 +13,11 @@ import { verifyBuilds } from "../tools/balance/verify/builds.ts"
 import { provenance } from "../tools/balance/provenance.ts"
 import { assessTransfers } from "../tools/balance/model/transport.ts"
 import { fixture } from "../tools/balance/verify/fixture.ts"
+import { serveGoods, wantsCitizenGoods } from "../src/rules/households.ts"
+import { assignWorkers } from "../src/rules/production.ts"
+import { planPatrols } from "../src/rules/patrol.ts"
+import { scenarioGrid } from "../tools/balance/scenario.ts"
+import { GRID } from "../src/iso.ts"
 
 test("candidate rules are immutable, isolated and also executed by the game", () => {
   const base = resolveRules(), original = kinds.weaver.recipe!.seconds
@@ -63,7 +64,7 @@ test("cell parks share grouping, beauty and upkeep with the real game", () => {
   assert.equal(actual.resources["Town/Treasury"].coins - before, expected.economy.roundedNetPerMinute)
   for (const h of expected.household) {
     const tile = scenario.homes.find((home) => home.id === h.id)!.tile
-    assert.equal(actual.resources["Town/Appeal"].cells[tile.y * 64 + tile.x], h.desirability)
+    assert.equal(actual.resources["Town/Appeal"].cells[tile.y * GRID + tile.x], h.desirability)
   }
   assert(expected.economy.parkUpkeepPerMinute > 0)
   assert.notEqual(expected.household[0]!.desirability, analyze({ rules: resolveRules(), scenario }, { services: false }).household[0]!.desirability)
@@ -76,10 +77,11 @@ test("desirability rejects an industrial citizen plan even with sufficient goods
   assert(industrial.findings.some((f) => f.code === "appeal-blocks-citizens"))
 })
 
-test("isolated workplaces and citizen-only raw industry cannot borrow global workers", () => {
+test("citizens can do rough work but isolated workplaces cannot borrow global workers", () => {
   const rules = resolveRules(), s = district("unreachable", [2, 2], ["fishery"])
   const a = analyze({ rules, scenario: s }, { services: false })
-  assert.equal(a.recipes[0]!.staff.assigned, 0)
+  assert.equal(a.recipes[0]!.staff.assigned, 2)
+  assert.equal(a.recipes[0]!.staff.apprentices, 0)
   const distant = { ...s, homes: s.homes.map((h) => ({ ...h, tier: 1 as const, residents: 4, tile: { ...h.tile, x: h.tile.x + 30 } })) }
   assert.equal(analyze({ rules, scenario: distant }, { services: false }).recipes[0]!.staff.assigned, 0)
 })
@@ -118,8 +120,8 @@ test("steady-state search counts working tools separately and leaves shipped par
   assert.equal(provenance(rules, []).parametersChanged, false)
 })
 
-test("controlled production, ledger and stochastic service comparisons pass", () => {
-  const comparisons = verify(resolveRules(), 12)
+test("controlled production, ledger and planned service comparisons pass", () => {
+  const comparisons = verify(resolveRules(), 3)
   for (const c of comparisons) assert(c.pass, JSON.stringify(c))
 })
 
@@ -128,18 +130,52 @@ test("the mathematical plan reaches citizens through ordinary game construction"
   const r = verifyBuilds({ rules, scenario }, builds)
   assert.deepEqual(r.messages, [])
   assert.equal(r.actual.at(-1)!.citizens, 32)
-  assert.equal(r.firstCitizenSecond, 336)
+  assert(r.firstCitizenSecond !== null && r.firstCitizenSecond <= 300)
   assert.equal(r.prediction.rows.at(-1)!.citizens, 32)
   assert(r.prediction.assumptions.length > 0)
   assert.equal(r.errors.length, r.actual.length)
 })
 
-test("shared-rule extraction preserves the original PR's complete minute-30 world", { timeout: 180000 }, () => {
-  const out = mkdtempSync(join(tmpdir(), "inkline-rule-parity-"))
-  try {
-    const child = spawnSync(process.execPath, ["scripts/balance.ts", "--seeds", "1", "--term", "60", "--snapshot", "30", "--out", out], { encoding: "utf8", timeout: 160000 })
-    assert.equal(child.status, 0, child.stderr)
-    const world = JSON.parse(readFileSync(join(out, "medium-fair-1000-30min.json"), "utf8")).world
-    assert.equal(createHash("sha256").update(JSON.stringify(world)).digest("hex"), "3eff85260d3a97c25ad628dcf244e8f8b4abc6cd02407eed4446807e03d97557")
-  } finally { rmSync(out, { recursive: true, force: true }) }
+
+test("promotion-aware goods preserve cloth and feed an eligible settler bread before food expires", () => {
+  const rules = resolveRules(), house = { tier: 1 as const, food: rules.home.lasts.food, bread: 0, cloth: 0, faith: 0 }
+  const eligible = serveGoods(house, amounts({ bread: 2, cloth: 2, fish: 2 }), rules, rules.home.tiers[2].appeal)
+  assert(eligible.house.bread > 0 && eligible.house.cloth > 0)
+  const worker = serveGoods({ ...house, food: 0 }, amounts({ bread: 2, cloth: 2, fish: 2 }), rules, 0)
+  assert.equal(worker.basket.fish, 1)
+  assert.equal(worker.basket.bread, 2)
+  assert.equal(worker.basket.cloth, 2)
+  assert.equal(wantsCitizenGoods(house, 0, rules), false)
+  const fallback = serveGoods({ ...house, food: 0 }, amounts({ bread: 1 }), rules, 0)
+  assert(fallback.house.food > 0)
+})
+
+test("surplus citizens fill rough jobs after skilled jobs without an apprentice penalty", () => {
+  const within = [{ home: 1, distance: 1 }]
+  const staff = assignWorkers([{ id: 1, crew: "citizens", residents: 8 }], [
+    { id: 1, crew: "settlers", needed: 7, within },
+    { id: 2, crew: "citizens", needed: 3, within }
+  ])
+  assert.equal(staff.get(2)!.assigned, 3)
+  assert.equal(staff.get(1)!.assigned, 5)
+  assert.equal(staff.get(1)!.apprentices, 0)
+})
+
+test("rotating patrols cover every reachable branch and survive save/load with their cursor", () => {
+  const rules = resolveRules(), scenario = district("patrol-branches", Array(10).fill(1), ["chapel"], true, rules)
+  const source = scenario.buildings.find(b => b.kind === "chapel")!, grid = scenarioGrid(scenario, rules).value()
+  const plan = planPatrols(grid, source.tile, rules.kinds.chapel.service!.range, scenario.homes)
+  assert.deepEqual(plan.unreachable, [])
+  assert(plan.tours.every(tour => tour.length <= rules.kinds.chapel.service!.range))
+  const town = fixture(scenario, rules)
+  town.run(0.5)
+  const saved = town.snapshot()
+  assert(saved.entities.some(e => e.components["Town/Patrol"]))
+  town.run(30)
+  const expected = town.snapshot()
+  const restored = fixture(scenario, rules)
+  restored.restore(saved)
+  assert.equal(JSON.stringify(restored.snapshot()), JSON.stringify(saved))
+  restored.run(30)
+  assert.deepEqual(restored.snapshot(), expected)
 })

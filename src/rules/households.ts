@@ -80,17 +80,24 @@ export const ageNeeds = <T extends Needs & { readonly clock: number }>(h: T, eat
   cloth: Math.max(0, h.cloth - 1), faith: Math.max(0, h.faith - 1)
 })
 
-/** One goods visit. Bread is preferred for food even at a settlers' home. */
-export const serveGoods = <T extends Needs>(house: T, available: Readonly<Record<GoodId, number>>, rules: Rules = shippedRules) => {
+/** Citizen goods also reach settlers whose neighbourhood permits promotion. */
+export const wantsCitizenGoods = (house: Needs, desirability: number, rules: Rules = shippedRules) =>
+  house.tier >= 2 || desirability >= rules.home.tiers[2].appeal
+
+/** Eligible settlers request bread independently of food; other settlers use fish first. */
+export const serveGoods = <T extends Needs>(house: T, available: Readonly<Record<GoodId, number>>, rules: Rules = shippedRules, desirability = 0) => {
   const h = { ...house } as Mutable<T>, basket = { ...available }
+  const citizens = wantsCitizenGoods(h, desirability, rules)
   let eaten = 0
-  if ((lowNeed(h.food, "food", rules) || (h.tier >= 2 && lowNeed(h.bread, "bread", rules))) && basket.bread > 0) {
+  if (citizens && (lowNeed(h.food, "food", rules) || lowNeed(h.bread, "bread", rules)) && basket.bread > 0) {
     basket.bread -= 1; h.food = rules.home.lasts.food; h.bread = rules.home.lasts.bread; eaten += 1
   } else if (lowNeed(h.food, "food", rules) && (basket.fish > 0 || basket.smoked > 0)) {
     const g = basket.fish > 0 ? "fish" : "smoked"
     basket[g] -= 1; h.food = rules.home.lasts.food; eaten += 1
+  } else if (lowNeed(h.food, "food", rules) && basket.bread > 0) {
+    basket.bread -= 1; h.food = rules.home.lasts.food; h.bread = rules.home.lasts.bread; eaten += 1
   }
-  if (lowNeed(h.cloth, "cloth", rules) && basket.cloth > 0) {
+  if (citizens && lowNeed(h.cloth, "cloth", rules) && basket.cloth > 0) {
     basket.cloth -= 1; h.cloth = rules.home.lasts.cloth
   }
   return { house: h, basket, eaten }

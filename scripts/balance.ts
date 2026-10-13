@@ -41,8 +41,8 @@ import { resolveRules } from "../src/rules/config.ts"
  */
 import { goodIds, home, kinds, landIds, ROAD_COST, sizeIds, type Amounts, type CharterValue, type GoodId, type GroundId, type Kind, type KindId, type PropId } from "../src/content.ts"
 import * as content from "../src/content.ts"
-import { around, canPlace, DIRS, entrances, GridBuilder, isRoad, key, useAt, type Use } from "../src/grid.ts"
-import { parksOf, ringOf } from "../src/appeal.ts"
+import { around, canPlace, DIRS, entrances, GridBuilder, isRoad, key, doors, nearest, reach, roadPrint, useAt, type Use } from "../src/grid.ts"
+import { parksOf, ringOf, effectAt } from "../src/appeal.ts"
 import { GRID, inside, type Point } from "../src/iso.ts"
 import type { GridValue } from "../src/schema.ts"
 import { headless, type Snapshot } from "../src/sim/headless.ts"
@@ -50,6 +50,8 @@ import { goalsOf, larder, seasonAt } from "../src/sim/index.ts"
 import type { Edit } from "../src/ui.ts"
 import { SAVE_FORMAT, SAVE_VERSION } from "../src/save.ts"
 import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname } from "node:path"
+import { fingerprint } from "../tools/balance/provenance.ts"
 
 // ── Options ───────────────────────────────────────────────────────────────
 
@@ -131,7 +133,7 @@ interface World {
   readonly policy: { readonly settlers: number; readonly citizens: number; readonly sells: ReadonlyArray<GoodId>; readonly buys: ReadonlyArray<GoodId>; readonly reserve: number }
   readonly mood: { readonly approval: number; readonly target: number }
   readonly crown: { readonly open: boolean; readonly good: GoodId; readonly amount: number; readonly met: number; readonly missed: number }
-  readonly fate: { readonly state: string; readonly reason: string; readonly at: number; readonly score: number }
+  readonly fate: { readonly state: string; readonly reason: string; readonly at: number; readonly score: number; readonly goalSince: number }
   readonly charter: { readonly size: CharterValue["size"]; readonly term: number; readonly founded: number }
   readonly tick: number
 }
@@ -170,7 +172,7 @@ const read = (snapshot: Snapshot): World => {
     if (c["Town/Storage"] && c["Town/Inventory"]) for (const g of goodIds) stock[g] = (stock[g] ?? 0) + c["Town/Inventory"].stock[g]
   }
   return {
-    grid: builder.value(),
+    grid: { ...builder.value(), roads: roadPrint(builder.value()) },
     appeal: r["Town/Appeal"].cells,
     paved,
     parks,
@@ -201,6 +203,7 @@ const net = (w: World) => w.ledger.taxes + w.ledger.trade - w.ledger.upkeep - w.
 const residents = (w: World) => w.census.settlers! + w.census.citizens!
 const unlocked = (w: World, kind: Kind) => residents(w) >= kind.unlock.residents && w.census.citizens! >= kind.unlock.citizens
 const count = (w: World, kind: KindId) => w.buildings.filter((b) => b.kind === kind).length
+const citizenHomeTarget = (w: World) => Math.ceil(Math.max(content.sizes[w.charter.size].goal.residents, residents(w)) * content.fate.citizens / content.home.tiers[2].residents * 4 / 3)
 const sites = (w: World) => w.buildings.filter((b) => b.site).length + w.homes.length - w.homes.filter((h) => h.residents > 0 || h.tier > 1).length
 
 const sourceUse: Record<string, Use> = { tree: "tree", stone: "rock", ore: "rock", water: "water", field: "empty" }
@@ -216,6 +219,7 @@ const score = (w: World, kind: Kind, tile: Tile): number => {
 
 /** Where to put a kind: road at a door, room for it, and (for gatherers) the most to work, nearest the middle as a tiebreak. */
 const spotFor = (w: World, kind: Kind): Point | null => {
+  const workersRoads = w.homes.map(home => ({ home, roads: reach(w.grid, doors(w.grid, home.tile)) }))
   let best: { cell: Point; value: number } | null = null
   const needs = kind.gathers ? (kind.gathers.source === "tree" ? 8 : kind.gathers.source === "water" ? 2 : kind.gathers.source === "field" ? 0 : 2) : 0
   for (let y = 0; y + kind.size <= GRID; y++) {
@@ -229,7 +233,9 @@ const spotFor = (w: World, kind: Kind): Point | null => {
       // A forester belongs beside a lumberjack, replanting what it fells.
       if (kind.id === "forester" && !w.buildings.some((b) => b.kind === "lumberjack" && Math.abs(b.tile.x - x) <= 5 && Math.abs(b.tile.y - y) <= 5)) continue
       // A zoning mayor keeps dirty workshops a couple of cells clear of homes; services go among the homes.
-      const dirty = zoned() && (kind.appeal?.value ?? 0) <= -4 && !kind.gathers ? Math.min(2, nearestHome(w, tile)) * 2 : 0
+      const dirty = zoned() && kind.appeal && kind.appeal.value < 0
+        ? w.homes.reduce((n, h) => n + effectAt(kind.appeal!, ringOf(tile, h.tile.x, h.tile.y)) * (h.tier >= 2 ? 6 : 2), 0)
+        : 0
       // A fire watch, healer, or watch house goes among the homes whose signs are up; a builder among run-down ones.
       const risky = kind.service?.service === "fire" || kind.service?.service === "health" || kind.service?.service === "order" ? kind.service.service : null
       const amid = risky !== null
@@ -238,7 +244,14 @@ const spotFor = (w: World, kind: Kind): Point | null => {
           ? w.homes.filter((h) => h.condition < 700 && ringOf(tile, h.tile.x, h.tile.y) <= 6).length * 3
           : kind.service && kind.id !== "market" ? homesAround(w, tile, 4) : 0
       // Workers walk at most `COMMUTE` road cells: a workplace well away from every home stands empty.
-      if (w.homes.length > 0 && kind.workers > 0 && nearestHome(w, tile) > 9) continue
+      if (w.homes.length > 0 && kind.workers > 0) {
+        const entrances = doors(w.grid, tile)
+        const workers = workersRoads.reduce((n, h) => {
+          const found = nearest(h.roads, entrances)
+          return n + (found && found.distance <= content.COMMUTE ? h.home.residents : 0)
+        }, 0)
+        if (workers < kind.workers) continue
+      }
       // Services go where they are needed, wherever that is; everything else as near the middle as it can.
       const value = (kind.gathers || kind.plants ? s * 10 : 0) + dirty + amid * 2 - Math.hypot(x - middle, y - middle) / (risky !== null ? 4 : 1)
       if (!best || value > best.value) best = { cell: { x, y }, value }
@@ -299,12 +312,13 @@ const homeSpots = (w: World, n: number, near?: Tile): Array<Point> => {
  */
 const parkFor = (w: World, size: number, value: number): Point | null => {
   const short = w.homes.filter((h) => {
-    if (h.site || h.tier === 3 || !h.provided) return false
+    if (h.site || h.tier === 3) return false
     const v = w.appeal[key(h.tile.x, h.tile.y)] ?? 0
     const goal = content.home.tiers[h.tier === 1 ? 2 : 3].appeal
     return v < goal && v >= goal - value
   })
-  if (short.length < 3) return null
+  const minimum = size === 1 ? 1 : 3
+  if (short.length < minimum) return null
   const reach = content.park.reach[0] + Math.floor((size * size) / content.park.reach[1])
   let best: { cell: Point; value: number } | null = null
   for (let y = 0; y + size <= GRID; y++) {
@@ -312,7 +326,7 @@ const parkFor = (w: World, size: number, value: number): Point | null => {
       const tile = { x, y, size }
       if (!canPlace(w.grid, tile) || offPlan(tile)) continue
       const value = short.filter((h) => ringOf(tile, h.tile.x, h.tile.y) <= Math.max(1, reach - 1)).length
-      if (value >= 3 && (!best || value > best.value)) best = { cell: { x, y }, value }
+      if (value >= minimum && (!best || value > best.value)) best = { cell: { x, y }, value }
     }
   }
   return best?.cell ?? null
@@ -424,8 +438,10 @@ const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: b
   // 16 homes and needs a mill, and a mill most of a farm; a weaver weaves for
   // about 14 homes from one sheep farm's wool. Upstream first, so what a
   // workshop needs is coming before it stands.
-  const bakeries = homes < 20 ? 1 : 1 + Math.floor(homes / 12)
-  const weavers = homes < 20 ? 1 : 1 + Math.floor(homes / 12)
+  const plannedHomes = citizenHomeTarget(w)
+  const citizenHomes = Math.max(plannedHomes, w.homes.filter(h => !h.site && (h.tier >= 2 || (w.appeal[key(h.tile.x, h.tile.y)] ?? 0) >= home.tiers[2].appeal)).length)
+  const bakeries = Math.max(1, Math.ceil(citizenHomes / 8))
+  const weavers = Math.max(1, Math.ceil(citizenHomes / 12))
   return [
     ...basics,
     // One of each first, saved up for (see `saving`): tools are scarce until there are citizens to run a smithy.
@@ -447,7 +463,7 @@ const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: b
     { kind: "warehouse", when: count(w, "warehouse") < Math.floor(homes / 25) },
     // Fish and bread rot: a granary keeps them, and smoked fish keeps.
     { kind: "granary", when: homes >= 40 && count(w, "granary") < 1 + Math.floor(homes / 70) },
-    { kind: "smokehouse", when: larder(w.stock) >= homes && count(w, "smokehouse") < Math.floor(count(w, "fishery") / 5) },
+    { kind: "smokehouse", when: homes >= 30 && count(w, "smokehouse") < Math.floor(count(w, "fishery") / 3) },
     { kind: "sawmill", when: w.stock.planks < 15 && w.stock.wood > 10 && count(w, "sawmill") < 3 },
     { kind: "quarry", when: w.stock.stone < 8 && count(w, "quarry") < 3 }
   ]
@@ -480,7 +496,8 @@ const decide = (w: World): ReadonlyArray<Edit> => {
     if (crownBuy && !w.policy.buys.includes(crownBuy)) edits.push({ type: "trade", good: crownBuy, mode: "buy" })
     // Buy what runs short, while the treasury can bear it; stop once there is enough.
     // Never at any price: buying drives it up, so stop at half again the usual.
-    const shortages: ReadonlyArray<readonly [GoodId, number, number]> = [["planks", 6, 14], ["stone", 4, 12], ["tools", 3, 6], ["fish", (fed < 0.5 && w.stock.fish < 10) || (closing && fed < 0.7 && w.stock.fish < 20) ? 1000 : -1, 24]]
+    const civicShort = w.coins > 1500 && count(w, "mill") > 0 && count(w, "weaver") > 0 && count(w, "chapel") > 0 && w.census.citizens! < Math.max(content.sizes[w.charter.size].goal.residents, residents(w)) * content.fate.citizens
+    const shortages: ReadonlyArray<readonly [GoodId, number, number]> = [["bread", civicShort ? 8 : -1, 20], ["cloth", civicShort ? 4 : -1, 12], ["planks", 6, 14], ["stone", 4, 12], ["tools", 3, 6], ["fish", (fed < 0.5 && w.stock.fish < 10) || (closing && fed < 0.7 && w.stock.fish < 20) ? 1000 : -1, 24]]
     for (const [g, low, enough] of shortages) {
       if (g === crownBuy) continue
       const buying = w.policy.buys.includes(g)
@@ -507,8 +524,22 @@ const decide = (w: World): ReadonlyArray<Edit> => {
   if (bot !== "idle") for (const r of w.ruins) edits.push({ type: "remove", cell: { x: r.tile.x, y: r.tile.y } })
   if (bot === "idle" && residents(w) > 30) return edits
 
+  // Establish enough desirable homes before adding more cottages or repeating industrial chains.
+  const citizenHomes = citizenHomeTarget(w)
+  const eligible = w.homes.filter(h => !h.site && (w.appeal[key(h.tile.x, h.tile.y)] ?? 0) >= content.home.tiers[2].appeal).length
+  if (zoned() && residents(w) >= 30 && count(w, "chapel") > 0 && eligible < citizenHomes && w.coins > 250) {
+    const furnishingEdit = furnishing(w)
+    if (furnishingEdit) return [...edits, furnishingEdit]
+    const large = parkFor(w, 2, 9)
+    const size = large ? 2 : 1
+    const spot = large ?? parkFor(w, 1, w.census.citizens! >= 20 ? 6 : 5)
+    if (spot && affordable(w, { coins: size * size * content.grounds.flowers.cost.coins, materials: {} })) {
+      const cells = Array.from({ length: size * size }, (_, i) => ({ x: spot.x + i % size, y: spot.y + Math.floor(i / size) }))
+      return [...edits, { type: "ground", ground: "flowers", cells }]
+    }
+  }
   // Workers' cottages beside a workplace no settler can walk to.
-  const lonely = w.buildings.find((b) => !b.site && b.status === "unstaffed" && b.nearby === 0 && kinds[b.kind].crew === "settlers" && kinds[b.kind].workers > 0)
+  const lonely = w.buildings.find((b) => !b.site && b.status === "unstaffed" && kinds[b.kind].workers > 0)
   if (lonely && affordable(w, { coins: home.cost.coins * 3, materials: { planks: 3 } })) {
     const spots = homeSpots(w, 3, lonely.tile).filter((c) => ringOf(lonely.tile, c.x, c.y) <= 6)
     if (spots.length > 0) return [...edits, { type: "homes", cells: spots }]
@@ -517,7 +548,7 @@ const decide = (w: World): ReadonlyArray<Edit> => {
   // Homes when workers run short, or (they are the town's income) when food reaches most of them and
   // there are coins to spare; not far past the goal, where upgrading homes pays better than more of them.
   const goal = content.sizes[w.charter.size].goal.residents
-  const short = w.census.jobs! + 6 > residents(w) || (fed >= 0.6 && w.stock.planks >= 8 && w.coins > 300 && residents(w) < goal * 1.2)
+  const short = w.census.jobs! + 6 > residents(w) || (fed >= 0.6 && w.stock.planks >= 8 && w.coins > 300 && residents(w) < goal * 1.1 && w.homes.length < Math.ceil(goal / home.tiers[1].residents))
   if (short && affordable(w, { coins: home.cost.coins * 4, materials: { planks: 4 } })) {
     const spots = homeSpots(w, 4)
     if (spots.length > 0) return [...edits, { type: "homes", cells: spots }]
@@ -622,6 +653,7 @@ const run = (seed: number) => {
   const problems: Record<string, number> = {}
   const ruined = new Set<number>()
   const spend: Record<string, number> = {}
+  let longestGoalHold = 0
   let w = read(town.snapshot())
   const DECIDE = 5
   for (let t = 0; t < term * 60 + DECIDE && w.fate.state === "playing"; t += DECIDE) {
@@ -642,6 +674,7 @@ const run = (seed: number) => {
     ui.edits.push(...chosen)
     step(DECIDE)
     w = read(town.snapshot())
+    if (w.fate.goalSince >= 0) longestGoalHold = Math.max(longestGoalHold, (w.tick - w.charter.founded - w.fate.goalSince) / 60)
     for (const r of w.ruins) ruined.add(r.id)
     if ((t + DECIDE) % 60 !== 0) continue
     if (process.env.TRACE) {
@@ -705,11 +738,15 @@ const run = (seed: number) => {
     settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: net(w), approval: w.mood.approval
   }, rules).map((g) => `${g.met ? "✓" : "✗"} ${g.text} (${g.value})`).join(" · ")
   const hh = Math.max(1, w.homes.length)
+  console.log(`  longest continuous goal hold: ${longestGoalHold.toFixed(1)} seconds`)
   const supplied = `food ${Math.round((w.census.food! / hh) * 100)}% bread ${Math.round((w.census.bread! / hh) * 100)}% cloth ${Math.round((w.census.cloth! / hh) * 100)}% faith ${Math.round((w.census.faith! / hh) * 100)}%`
   const end = w.fate.state === "playing" ? { state: "playing", reason: "", minute: term } : { state: w.fate.state, reason: w.fate.reason, minute: Math.round(w.fate.at / 360) / 10 }
   const built: Record<string, number> = {}
   for (const b of w.buildings) built[b.kind] = (built[b.kind] ?? 0) + 1
-  return { seed, rows, problems, end, score: w.fate.score, built, stock: w.stock, crown: w.crown, lastGoals, supplied, lost: ruined.size }
+  const final = town.snapshot().resources
+  return { seed, rows, problems, end, score: w.fate.score, built, stock: w.stock, crown: w.crown, lastGoals, supplied, lost: ruined.size,
+    longestGoalHoldSeconds: longestGoalHold,
+    final: { census: final["Town/Census"], treasury: final["Town/Treasury"], ledger: final["Town/Ledger"], mood: final["Town/Mood"], fate: final["Town/Fate"], charter: final["Town/Charter"] } }
 }
 
 const pad = (v: unknown, n: number) => String(v).padStart(n)
@@ -769,6 +806,11 @@ const play = (which: Bot) => {
 }
 
 const mine = play(bot)
+const jsonOut = option("json", "")
+if (jsonOut) {
+  mkdirSync(dirname(jsonOut), { recursive: true })
+  writeFileSync(jsonOut, JSON.stringify({ size, land, term, bot, rulesSha256: fingerprint(rules), results: mine }, null, 2))
+}
 if (versus !== "") {
   const first = bot
   const theirs = play(versus)
