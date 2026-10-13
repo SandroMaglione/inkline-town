@@ -80,7 +80,7 @@ import {
   type GridValue,
   type Status as StatusValue
 } from "./schema.ts"
-import { capacity, CELL_STEPS, elapsed, goalsOf, larder, met, seasonAt, SITE_SHARE, steadyNet, taxOf, termTicks, winterOf } from "./sim/index.ts"
+import { capacity, CELL_STEPS, elapsed, goalsOf, larder, lockReason, met, seasonAt, SITE_SHARE, steadyNet, taxOf, termTicks, winterOf } from "./sim/index.ts"
 import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type Alert as Notice, type HitBox, type Legend, type Line, type View } from "./ui.ts"
 import { blockers as blockersOf, streetAdvice, type InTown, type Served, type Street } from "./rules/explain.ts"
@@ -234,21 +234,26 @@ const riskText = (value: number) => (value < RISK_MAX * 0.35 ? "ok" : value >= r
 
 // ── Map views ─────────────────────────────────────────────────────────────
 
-const GOOD = 0x4f9a6a
-const FAIR = 0xc9b45a
-const BAD = 0xc4523f
-const COOL = 0x3d6db5
-/** A meter 0 → `of` as a colour: green when low, amber, red past the warning line. */
+// Blue for fine, sand for worth a look, vermilion for wrong: a scale that still reads with
+// red-green colour blindness, unlike green to red.
+const GOOD = 0x3a78c2
+const FAIR = 0xe2c25c
+const BAD = 0xc8553d
+/** Citizens' homes, in the workers view. */
+const COOL = 0x8a58a8
+/** The buildings that serve a view (its fire watch, its healer), and a workplace's reach: ink, apart from the scale. */
+const MARK = 0x3d4943
+/** A meter 0 → `of` as a colour: blue when low, sand, vermilion past the warning line. */
 const meterColor = (value: number, of: number, warn: number) => (value >= warn ? BAD : value >= of * 0.35 ? FAIR : GOOD)
 
 const legends: Readonly<Record<Exclude<View, "none">, Legend>> = {
   appeal: {
     title: "desirability",
     keys: [
-      { color: 0x2f7a43, label: `${home.tiers[3].appeal}+: townhouses` },
+      { color: 0x1f4f8f, label: `${home.tiers[3].appeal}+: townhouses` },
       { color: GOOD, label: `${home.tiers[2].appeal}+: citizens` },
-      { color: 0xc9d6a0, label: "0 to 4: settlers only" },
-      { color: 0xe0a060, label: "below 0: fewer people, less tax" },
+      { color: 0xc6d4e4, label: "0 to 4: settlers only" },
+      { color: 0xeaa26a, label: "below 0: fewer people, less tax" },
       { color: BAD, label: `${home.squalid} or less: squalid` }
     ],
     note: "Every point counts: a cottage holds fewer and pays less for each point below 0, and pays more above it. Industry pushes homes away; parks (the more they hold, the further they reach), a chapel, a market, and paved streets draw them in."
@@ -271,7 +276,7 @@ const legends: Readonly<Record<Exclude<View, "none">, Legend>> = {
       { color: FAIR, label: "rising" },
       { color: BAD, label: "at risk, or burning" }
     ],
-    note: "Buildings take the colour too. A fire watch's watchman resets the risk of every home and workshop along the way; red means past half way, so there is time. Wooden cottages, ovens, forges, and crowding raise it."
+    note: "Buildings take the colour too. A fire watch's watchman resets the risk of every home and workshop along the way; vermilion means past half way, so there is still time. Wooden cottages, ovens, forges, and crowding raise it."
   },
   health: {
     title: "health",
@@ -306,11 +311,11 @@ const legends: Readonly<Record<Exclude<View, "none">, Legend>> = {
 const starvedSince = new Map<number, number>()
 const ALERT_PATIENCE = ticks(30)
 /** A view's colour over a model: pale, so the ink still reads. */
-const TINT = { good: 0xb6dcc0, fair: 0xf0dea4, bad: 0xefb0a4, cool: 0xb7cdef, settlers: 0xead7bd, fine: 0x9fd0ad, plain: 0xffffff }
+const TINT = { good: 0xbcd2ee, fair: 0xf3e3a8, bad: 0xf2b9a0, cool: 0xdccbe8, mark: 0xd5dad3, settlers: 0xead7bd, fine: 0xa9c4e8, plain: 0xffffff }
 const needIcons = { food: "food", bread: "bread", cloth: "cloth", faith: "faith" } as const
 
 const appealColor = (v: number) =>
-  v >= home.tiers[3].appeal ? 0x2f7a43 : v >= home.tiers[2].appeal ? GOOD : v >= 0 ? 0xc9d6a0 : v > home.squalid ? 0xe0a060 : BAD
+  v >= home.tiers[3].appeal ? 0x1f4f8f : v >= home.tiers[2].appeal ? GOOD : v >= 0 ? 0xc6d4e4 : v > home.squalid ? 0xeaa26a : BAD
 
 export const Interact = Game.System(
   "Town/Interact",
@@ -545,7 +550,8 @@ export const Interact = Game.System(
       showReach(tile, kind)
       rangeOfKind(tile, kind)
       if (kind.appeal) preview.plots.push({ x: tile.x - kind.appeal.reach, y: tile.y - kind.appeal.reach, size: tile.size + 2 * kind.appeal.reach, look: kind.appeal.value > 0 ? "reach" : "hover" })
-      if (canPlace(grid, tile)) preview.ghosts.push({ what: ui.placing, cell: at })
+      if (lockReason(kind, resources.census.get())) preview.plots.push({ ...tile, look: "blocked" })
+      else if (canPlace(grid, tile)) preview.ghosts.push({ what: ui.placing, cell: at })
       else preview.plots.push({ ...tile, look: "blocked" })
     } else if (ui.tool === "bulldoze") {
       preview.danger = true
@@ -861,7 +867,9 @@ export const Interact = Game.System(
       const kind = kinds[ui.placing]
       const r = reachOf(kind)
       const a = kind.appeal
-      preview.tooltip = `${kind.title.toLowerCase()}${r !== null ? ` · works ${r} cells around` : ""}${a ? ` · desirability ${signed(a.value)} out to ${a.reach} cells` : ""}${preview.rangeNote ? ` · ${preview.rangeNote}` : ""} · needs a road at the middle of a side`
+      const lock = lockReason(kind, resources.census.get())
+      if (lock) preview.tooltip = `${kind.title.toLowerCase()} · ${lock}`
+      else preview.tooltip = `${kind.title.toLowerCase()}${r !== null ? ` · works ${r} cells around` : ""}${a ? ` · desirability ${signed(a.value)} out to ${a.reach} cells` : ""}${preview.rangeNote ? ` · ${preview.rangeNote}` : ""} · needs a road at the middle of a side`
     } else if (ui.tool === "pave") preview.tooltip = `drag along a road to pave it · ${PAVE_COST.coins} coins and a stone a cell · carriers and walkers go half again as fast on it, and homes beside it like it a little`
     else if (cell && ui.view === "appeal" && inside(cell.x, cell.y)) preview.tooltip = `desirability ${appealAt(cells, cell.x, cell.y)}`
     ui.preview = preview
@@ -952,7 +960,7 @@ export const Interact = Game.System(
           const roads = reach(grid, doors(grid, picked.data.tile.get()))
           for (let k = 0; k < roads.distance.length; k++) {
             const d = roads.distance[k]!
-            if (d >= 0 && d <= COMMUTE) out.push({ x: k % GRID, y: Math.floor(k / GRID), size: 1, color: COOL, alpha: 0.18 })
+            if (d >= 0 && d <= COMMUTE) out.push({ x: k % GRID, y: Math.floor(k / GRID), size: 1, color: MARK, alpha: 0.14 })
           }
           inReach = (t) => doors(grid, t).some((c) => {
             const n = roads.distance[key(c.x, c.y)]!
@@ -986,8 +994,8 @@ export const Interact = Game.System(
           const service = maybe(data.service)?.service
           const r = maybe(data.risk)
           if (service === view) {
-            out.push({ ...data.tile.get(), color: COOL, alpha: 0.55, ring: true })
-            tints.set(entity.id, TINT.cool)
+            out.push({ ...data.tile.get(), color: MARK, alpha: 0.55, ring: true })
+            tints.set(entity.id, TINT.mark)
           } else if (view === "fire" && r) {
             const color = data.burning.present ? BAD : meterColor(r.fire, RISK_MAX, risk.warn)
             out.push({ ...data.tile.get(), color, alpha: 0.4 })
@@ -1003,8 +1011,8 @@ export const Interact = Game.System(
           tints.set(row.entity.id, tintOf(color))
         }
         for (const { entity, data } of standing(buildings)) if (maybe(data.service)?.service === "repair") {
-          out.push({ ...data.tile.get(), color: COOL, alpha: 0.55, ring: true })
-          tints.set(entity.id, TINT.cool)
+          out.push({ ...data.tile.get(), color: MARK, alpha: 0.55, ring: true })
+          tints.set(entity.id, TINT.mark)
         }
         for (const { data } of ruins) out.push({ ...data.tile.get(), color: BAD, alpha: 0.8 })
       }
@@ -1018,9 +1026,9 @@ export const Interact = Game.System(
     const census = resources.census.get()
     const stock = resources.stock.get()
     const burningRow = [...buildings, ...houses].find(({ data }) => data.burning.present)
-    if (census.burning > 0) alerts.push({ text: `${census.burning} on fire`, at: burningRow?.data.tile.get() ?? null, size: burningRow?.data.tile.get().size ?? 1, id: burningRow?.entity.id ?? null })
+    if (census.burning > 0) alerts.push({ tone: "bad", text: `${census.burning} on fire`, at: burningRow?.data.tile.get() ?? null, size: burningRow?.data.tile.get().size ?? 1, id: burningRow?.entity.id ?? null })
     const sickRow = houses.find(({ data }) => data.sick.present)
-    if (census.sick > 0) alerts.push({ text: `${census.sick} home${census.sick > 1 ? "s" : ""} sick`, at: sickRow?.data.tile.get() ?? null, size: 1, id: sickRow?.entity.id ?? null })
+    if (census.sick > 0) alerts.push({ tone: "warn", text: `${census.sick} home${census.sick > 1 ? "s" : ""} sick`, at: sickRow?.data.tile.get() ?? null, size: 1, id: sickRow?.entity.id ?? null })
     const waiting = new Map<string, { n: number; at: TileLike; id: number }>()
     const remote = new Map<string, { n: number; at: TileLike; id: number }>()
     const shortStaffed: Array<{ id: number; title: string; cell: Point; size: number; assigned: number; needed: number; nobodyNear: boolean }> = []
@@ -1051,19 +1059,19 @@ export const Interact = Game.System(
     for (const id of [...starvedSince.keys()]) if (!seen.has(id)) starvedSince.delete(id)
     const list = (m: Map<string, { n: number }>) => [...m].map(([k, v]) => `${k}${v.n > 1 ? ` ×${v.n}` : ""}`).join(", ")
     const first = (m: Map<string, { at: TileLike; id: number }>) => [...m.values()][0]
-    if (waiting.size > 0) alerts.push({ text: `waiting for inputs: ${list(waiting)}`, at: first(waiting)?.at ?? null, size: first(waiting)?.at.size ?? 1, id: first(waiting)?.id ?? null })
-    if (remote.size > 0) alerts.push({ text: `no workers within ${COMMUTE} road cells: ${list(remote)}`, at: first(remote)?.at ?? null, size: first(remote)?.at.size ?? 1, id: first(remote)?.id ?? null })
+    if (waiting.size > 0) alerts.push({ tone: "warn", text: `waiting for inputs: ${list(waiting)}`, at: first(waiting)?.at ?? null, size: first(waiting)?.at.size ?? 1, id: first(waiting)?.id ?? null })
+    if (remote.size > 0) alerts.push({ tone: "warn", text: `no workers within ${COMMUTE} road cells: ${list(remote)}`, at: first(remote)?.at ?? null, size: first(remote)?.at.size ?? 1, id: first(remote)?.id ?? null })
     const hallRow = buildings.find(({ data }) => data.hall.present)
-    if (census.homes > 0 && larder(stock) === 0) alerts.push({ text: "no food in store: homes go hungry", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
+    if (census.homes > 0 && larder(stock) === 0) alerts.push({ tone: "bad", text: "no food in store: homes go hungry", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
     // A town's first steps, until it has taken them: the ticker is otherwise silent when there is least to go on.
     const hallAt = { at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: null }
     const standingKinds = new Set(buildings.filter(({ data }) => !data.site.present && !data.rising.present).map(({ data }) => data.building.get().kind))
     const placedKinds = new Set(buildings.map(({ data }) => data.building.get().kind))
     const residents = census.settlers + census.citizens
-    if (census.homes === 0 && houses.length === 0) alerts.push({ text: "first: lay a road out from the town hall (R), then drag a row of homes along it (H); settlers move in on their own", ...hallAt })
-    else if (!placedKinds.has("fishery") && !placedKinds.has("bakery") && residents < 60) alerts.push({ text: "settlers eat: build a fishery (B) within two cells of water, on a road; the town hall's walker hands the fish out", ...hallAt })
-    else if (residents >= 20 && !placedKinds.has("lumberjack") && stock.planks < 20) alerts.push({ text: "planks are running out: a lumberjack by the woods and a sawmill make more; every home and building needs them", ...hallAt })
-    else if (residents >= 40 && !placedKinds.has("market") && standingKinds.has("fishery")) alerts.push({ text: "the town hall's walker only reaches 20 road cells: a market (B) hands out food further along the streets", ...hallAt })
+    if (census.homes === 0 && houses.length === 0) alerts.push({ tone: "hint", text: "first: lay a road out from the town hall (R), then drag a row of homes along it (H); settlers move in on their own", ...hallAt })
+    else if (!placedKinds.has("fishery") && !placedKinds.has("bakery") && residents < 60) alerts.push({ tone: "hint", text: "settlers eat: build a fishery (B) within two cells of water, on a road; the town hall's walker hands the fish out", ...hallAt })
+    else if (residents >= 20 && !placedKinds.has("lumberjack") && stock.planks < 20) alerts.push({ tone: "hint", text: "planks are running out: a lumberjack by the woods and a sawmill make more; every home and building needs them", ...hallAt })
+    else if (residents >= 40 && !placedKinds.has("market") && standingKinds.has("fishery")) alerts.push({ tone: "hint", text: "the town hall's walker only reaches 20 road cells: a market (B) hands out food further along the streets", ...hallAt })
 
     const ledger = resources.ledger.get()
     const charter = resources.charter.get()

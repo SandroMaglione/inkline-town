@@ -2,7 +2,7 @@
  * The simulation, one fixed step at a time. Nothing here touches the
  * renderer, so it runs headless too.
  */
-import { amounts, defaultCharter } from "../content.ts"
+import { amounts, defaultCharter, goodIds, TRADE_LOAD } from "../content.ts"
 import { Game, Time } from "../schema.ts"
 import { ApplyEdits } from "./edits.ts"
 import { Deliver, Dispatch } from "./logistics.ts"
@@ -64,7 +64,7 @@ export const blankResources = () => ({
   Treasury: { coins: 0 },
   Ledger: { taxes: 0, trade: 0, upkeep: 0, admin: 0 },
   Census: { homes: 0, settlers: 0, citizens: 0, burghers: 0, jobs: 0, employed: 0, food: 0, bread: 0, cloth: 0, faith: 0, sick: 0, burning: 0 },
-  Policy: { settlers: 100, citizens: 100, sells: [], buys: [], reserve: 25 },
+  Policy: { settlers: 100, citizens: 100, sells: [], buys: [], reserve: 25, loads: amounts(Object.fromEntries(goodIds.map((g) => [g, TRADE_LOAD]))) },
   Charter: { ...defaultCharter(0), founded: 0, winters: [] as Array<"none" | "mild" | "normal" | "hard"> },
   Land: { mask: "", cells: 0 },
   Market: { prices: amounts({}) },
@@ -82,6 +82,6 @@ export const blankResources = () => ({
 
 export { CELL_STEPS, elapsed, seasonAt, termTicks, winterOf } from "./shared.ts"
 export { SITE_SHARE } from "./work.ts"
-export { unlocked } from "./edits.ts"
+export { lockReason, unlocked } from "./edits.ts"
 export { adminOf, askOf, capacity, kept, met, priceOf, satisfaction, taxOf, tierFor } from "./town.ts"
 export { crownGap, goalsOf, larder, steadyNet } from "./term.ts"

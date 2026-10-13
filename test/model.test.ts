@@ -15,7 +15,7 @@ import { test } from "node:test"
 import { Arbitrary, Data, Effect, Schema } from "effect"
 
 import {
-  CONDITION_MAX, crown, goodIds, groundIds, home, kindOrder, kinds, landIds, market, propIds, RESERVES, RISK_MAX, TAX_STEPS, type CharterValue
+  CONDITION_MAX, crown, goodIds, groundIds, home, kindOrder, kinds, landIds, market, propIds, RESERVE_MAX, RISK_MAX, TAX_STEPS, TRADE_LOAD, type CharterValue
 } from "../src/content.ts"
 import { canPlace, cellsOf, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/grid.ts"
 import { GRID, inside, type Point } from "../src/iso.ts"
@@ -60,9 +60,9 @@ const Command = Schema.Union([
   Schema.TaggedStruct("BuildAnywhere", { kind: Schema.Literals(kindOrder), x: Cell, y: Cell }),
   // One of the buildings, homes, or roads that stand.
   Schema.TaggedStruct("Remove", { pick: Pick, what: Schema.Literals(["building", "house", "road", "park"]) }),
-  Schema.TaggedStruct("Tax", { tier: Schema.Literals(["settlers", "citizens"]), rate: Schema.Literals(TAX_STEPS) }),
-  Schema.TaggedStruct("Trade", { good: Schema.Literals(goodIds), mode: Schema.Literals(["sell", "buy", "none"]) }),
-  Schema.TaggedStruct("Reserve", { amount: Schema.Literals(RESERVES) }),
+  Schema.TaggedStruct("Tax", { tier: Schema.Literals(["settlers", "citizens"]), rate: between(TAX_STEPS[0], TAX_STEPS.at(-1)!) }),
+  Schema.TaggedStruct("Trade", { good: Schema.Literals(goodIds), mode: Schema.Literals(["sell", "buy", "none"]), amount: between(0, TRADE_LOAD) }),
+  Schema.TaggedStruct("Reserve", { amount: between(0, RESERVE_MAX) }),
   Schema.TaggedStruct("Pause", { pick: Pick, on: Schema.Boolean }),
   Schema.TaggedStruct("Deliver", {}),
   Schema.TaggedStruct("Govern", {}),
@@ -191,7 +191,7 @@ const apply = (town: Headless, command: Command): string | null => {
       edit({ type: "tax", tier: command.tier, rate: command.rate })
       break
     case "Trade":
-      edit({ type: "trade", good: command.good, mode: command.mode })
+      edit({ type: "trade", good: command.good, mode: command.mode, amount: command.amount })
       break
     case "Reserve":
       edit({ type: "reserve", amount: command.amount })

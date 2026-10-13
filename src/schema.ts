@@ -203,14 +203,16 @@ export const Census = Descriptor.ConstructedResource(Decode.struct({
 }))("Town/Census")
 /**
  * The town's tax rates (in percent of the usual, for each tier), what it
- * sells to traders beyond the reserve it keeps, and what it buys up to it.
+ * sells to traders beyond the reserve it keeps, and what it buys up to it;
+ * `loads` is how much of each good may change hands at a collection.
  */
 export const Policy = Descriptor.ConstructedResource(Decode.struct({
   settlers: integer,
   citizens: integer,
   sells: Decode.array(good),
   buys: Decode.array(good),
-  reserve: integer
+  reserve: integer,
+  loads: amounts
 }))("Town/Policy")
 
 /**

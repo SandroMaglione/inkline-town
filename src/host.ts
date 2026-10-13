@@ -29,7 +29,10 @@ import {
   lands,
   mood as moodRules,
   needTitle,
-  RESERVES,
+  LEDGER_TICKS,
+  RESERVE_MAX,
+  STEP_SECONDS,
+  TRADE_LOAD,
   ROAD_COST,
   sizeIds,
   sizes,
@@ -60,6 +63,45 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   node.textContent = text
   return node
 }
+/**
+ * Sets a node's markup only when it changed. Rewriting it every frame would
+ * replace the element under the pointer between press and release, and the
+ * browser then drops the click.
+ */
+const setHtml = (node: HTMLElement, html: string) => {
+  if (node.dataset.html === html) return
+  node.dataset.html = html
+  node.innerHTML = html
+}
+const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+
+/** Words in the town's messages that name a building or a good, longest first, so "smoked fish" wins over "fish". */
+const namedThings: ReadonlyArray<{ readonly word: string; readonly ref: { readonly kind: KindId } | { readonly good: GoodId } }> = [
+  ...kindOrder.flatMap((id) => {
+    const title = kinds[id].title.toLowerCase()
+    return [title, `${title}s`].map((word) => ({ word, ref: { kind: id } }))
+  }),
+  ...goodIds.map((id) => ({ word: goods[id].title, ref: { good: id } })),
+  { word: "loaves", ref: { good: "bread" as GoodId } },
+  { word: "loaf", ref: { good: "bread" as GoodId } }
+].sort((a, b) => b.word.length - a.word.length)
+const namedPattern = new RegExp(`\\b(${namedThings.map((t) => t.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b|\\(([A-Z])\\)`, "gi")
+
+/**
+ * A message as markup: each building it names becomes a chip to click (to
+ * build one), each good a chip with its icon, and each key in brackets a key.
+ */
+const callouts = (text: string): string =>
+  escapeHtml(text).replace(namedPattern, (match, word: string | undefined, key: string | undefined) => {
+    if (key) return `<kbd class="key">${key}</kbd>`
+    const thing = namedThings.find((t) => t.word === word!.toLowerCase())
+    if (!thing) return match
+    if ("good" in thing.ref) return `<span class="ref ware" title="${goods[thing.ref.good].title}">${goodIcon(thing.ref.good, 13)}${match}</span>`
+    const kind = kinds[thing.ref.kind]
+    return kind.buildable
+      ? `<button class="ref kind" data-kind="${thing.ref.kind}" title="Build a ${kind.title.toLowerCase()}: ${escapeHtml(kind.blurb)}">${icon("build", 13)}${match}</button>`
+      : `<span class="ref kind" title="${escapeHtml(kind.blurb)}">${icon("town", 13)}${match}</span>`
+  })
 
 const hex = (color: number) => `#${color.toString(16).padStart(6, "0")}`
 /** Seconds as m:ss. */
@@ -287,7 +329,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     { view: "order", label: "order", key: "O", icon: "order" },
     { view: "condition", label: "condition", key: "C", icon: "condition" }
   ]
-  views.append(iconEl("view", 16))
+  const viewsTitle = el("div", "views-title", "map overlays")
+  viewsTitle.title = "Colour the map by one of these, to see where the town is doing well or badly. Press the key again (or click) to hide it."
+  views.append(viewsTitle)
   const viewEls = viewButtons.map((v) => {
     const button = el("button", "")
     button.title = `Show ${v.label} over the map (${v.key}); again to hide it`
@@ -495,14 +539,49 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const h3 = el("h3", "")
     if (glyph) h3.append(iconEl(glyph))
     h3.append(document.createTextNode(heading))
-    if (help) {
-      const info = iconEl("info", 15)
-      info.classList.add("help")
-      info.title = help
-      h3.append(info)
-    }
     box.append(h3)
+    if (help) {
+      const info = el("button", "help")
+      info.append(iconEl("info", 15))
+      info.title = "What this means"
+      info.setAttribute("aria-expanded", "false")
+      const text = el("p", "help-text", help)
+      info.onclick = () => {
+        const open = !text.classList.contains("open")
+        text.classList.toggle("open", open)
+        info.setAttribute("aria-expanded", String(open))
+      }
+      h3.append(info)
+      box.append(text)
+    }
     return box
+  }
+  /**
+   * A slider for one of the town's levers. While it is held, the town's
+   * numbers do not move it back; `sync` sets it otherwise.
+   */
+  const slider = (min: number, max: number, step: number, onInput: (value: number) => void) => {
+    const input = el("input", "slider")
+    input.type = "range"
+    input.min = String(min)
+    input.max = String(max)
+    input.step = String(step)
+    let held = false
+    input.addEventListener("pointerdown", () => (held = true))
+    input.addEventListener("pointerup", () => (held = false))
+    input.addEventListener("blur", () => (held = false))
+    const paint = () => input.style.setProperty("--at", `${((Number(input.value) - min) / (max - min)) * 100}%`)
+    input.oninput = () => {
+      paint()
+      onInput(Number(input.value))
+    }
+    const sync = (value: number) => {
+      if (held || input.value === String(value)) return
+      input.value = String(value)
+      paint()
+    }
+    paint()
+    return { input, sync }
   }
   const header = (title: string, lead: HTMLElement, below?: HTMLElement) => {
     const head = el("header", "")
@@ -708,30 +787,23 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     )
     for (const tier of ["settlers", "citizens"] as const) {
       const line = el("div", "row lever")
-      const minus = el("button", "frame step", "−")
       const value = el("span", "rate")
-      const plus = el("button", "frame step", "+")
-      const controls = el("span", "controls")
-      controls.append(minus, value, plus)
       const name = el("span", "label")
       name.innerHTML = icon(tier, 16)
       name.append(document.createTextNode(tier))
-      line.append(name, controls)
+      line.append(name, value)
+      const rate = slider(TAX_STEPS[0], TAX_STEPS.at(-1)!, 5, (to) => ui.edits.push({ type: "tax", tier, rate: to }))
+      rate.input.classList.add("tax")
+      rate.input.title = "Drag to set the rate; double-click for the usual 100%"
+      rate.input.ondblclick = () => ui.edits.push({ type: "tax", tier, rate: 100 })
       const effect = el("p", "effect")
-      levers.append(line, effect)
-      const move = (by: number) => {
-        const now = ui.stats?.policy[tier] ?? 100
-        const i = TAX_STEPS.indexOf(now as (typeof TAX_STEPS)[number])
-        const next = TAX_STEPS[Math.min(TAX_STEPS.length - 1, Math.max(0, (i < 0 ? 2 : i) + by))]!
-        ui.edits.push({ type: "tax", tier, rate: next })
-      }
-      minus.onclick = () => move(-1)
-      plus.onclick = () => move(1)
+      levers.append(line, rate.input, effect)
       live.push(() => {
-        const rate = ui.stats?.policy[tier] ?? 100
-        value.textContent = `${rate}%`
-        const sway = Math.round((100 - rate) * moodRules.perTaxPoint)
-        const grudge = rate > moodRules.grudge.above ? " · a grudge builds while it stays this high, and fades slowly" : ""
+        const now = ui.stats?.policy[tier] ?? 100
+        rate.sync(now)
+        value.textContent = `${now}%`
+        const sway = Math.round((100 - now) * moodRules.perTaxPoint)
+        const grudge = now > moodRules.grudge.above ? " · a grudge builds while it stays this high, and fades slowly" : ""
         effect.textContent = (sway === 0 ? "the usual rate" : `${signed(sway)} approval`) + grudge
         effect.className = `effect ${sway > 0 ? "up" : sway < 0 ? "down" : ""}`
       })
@@ -792,45 +864,41 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const store = section(
       "goods and trade",
       "trade",
-      "Traders buy what the town sells beyond what it keeps, and sell it what it buys up to that, at half again the price. Prices fall as the town sells and rise as it buys. Click sell / buy / — to change a good."
+      "Traders call every few seconds. Drag a good's slider left to sell it beyond what the town keeps, right to buy it up to that (at half again the price), the further the more each call; the middle neither sells nor buys. Prices fall as the town sells and rise as it buys."
     )
     const reserveLine = el("div", "row lever")
-    const reserveControls = el("span", "controls")
-    const fewer = el("button", "frame step", "−")
     const reserveValue = el("span", "rate")
-    const more = el("button", "frame step", "+")
-    reserveControls.append(fewer, reserveValue, more)
-    reserveLine.append(el("span", "label", "keep in store"), reserveControls)
-    store.append(reserveLine)
-    const stepReserve = (by: number) => {
-      const now = ui.stats?.policy.reserve ?? 25
-      const i = RESERVES.indexOf(now as (typeof RESERVES)[number])
-      ui.edits.push({ type: "reserve", amount: RESERVES[Math.min(RESERVES.length - 1, Math.max(0, (i < 0 ? 1 : i) + by))]! })
-    }
-    fewer.onclick = () => stepReserve(-1)
-    more.onclick = () => stepReserve(1)
-    const modes: ReadonlyArray<TradeMode> = ["none", "sell", "buy"]
+    reserveLine.append(el("span", "label", "keep in store"), reserveValue)
+    const reserve = slider(0, RESERVE_MAX, 5, (amount) => ui.edits.push({ type: "reserve", amount }))
+    reserve.input.title = "How much of each good the town keeps: it sells only beyond this, and buys only up to it"
+    store.append(reserveLine, reserve.input, el("p", "effect", "of each good: sold only above this, bought only up to it"))
+    /** Collections a minute: the traders come at every ledger. */
+    const perMinute = 60 / (LEDGER_TICKS * STEP_SECONDS)
     const goodRows = goodIds.map((g) => {
-      const line = el("div", "row good-row")
-      const mode = el("button", "frame mode", "")
-      mode.title = "Click to sell, buy, or neither"
-      mode.onclick = () => {
-        const s = ui.stats
-        if (!s) return
-        const now: TradeMode = s.policy.sells.includes(g) ? "sell" : s.policy.buys.includes(g) ? "buy" : "none"
-        ui.edits.push({ type: "trade", good: g, mode: modes[(modes.indexOf(now) + 1) % modes.length]! })
-      }
+      const line = el("div", "trade-row")
       const name = el("span", "label")
       name.innerHTML = goodIcon(g, 16)
       name.append(document.createTextNode(goods[g].title))
-      const price = el("span", "price")
-      name.append(price)
       const value = el("span", "count")
+      const price = el("span", "price")
+      const top = el("div", "row")
+      const change = el("small", "change")
       const right = el("span", "label")
-      right.append(value, mode)
-      line.append(name, right)
+      right.append(change, value, price)
+      top.append(name, right)
+      // Left of the middle sells, right of it buys, the middle neither; how far out is how much a collection.
+      const deal = slider(-TRADE_LOAD, TRADE_LOAD, 1, (v) =>
+        ui.edits.push(v === 0 ? { type: "trade", good: g, mode: "none" } : { type: "trade", good: g, mode: v < 0 ? "sell" : "buy", amount: Math.abs(v) })
+      )
+      deal.input.classList.add("deal")
+      deal.input.title = `Drag left to sell ${goods[g].title}, right to buy it; the further, the more each time the traders call. Double-click to stop trading it.`
+      deal.input.ondblclick = () => ui.edits.push({ type: "trade", good: g, mode: "none" })
+      const mode = el("span", "mode")
+      const bottom = el("div", "deal-line")
+      bottom.append(deal.input, mode)
+      line.append(top, bottom)
       store.append(line)
-      return { g, value, mode, price }
+      return { g, value, change, mode, price, deal, line }
     })
     panel.append(store)
 
@@ -918,14 +986,21 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       // Goods' change over the last minute of samples.
       const ago = history[Math.max(0, history.length - 1 - Math.round(60 / SAMPLE_SECONDS))]
       reserveValue.textContent = String(s.policy.reserve)
+      reserve.sync(s.policy.reserve)
       for (const r of goodRows) {
         const change = ago ? s.stock[r.g] - ago.stock[r.g] : 0
-        r.value.innerHTML = `${s.stock[r.g]}${change !== 0 ? ` <small class="${change > 0 ? "up" : "down"}">${change > 0 ? "+" : ""}${change}/min</small>` : ""}`
+        r.change.textContent = change !== 0 ? `${change > 0 ? "+" : ""}${change}/min` : ""
+        r.change.className = `change ${change > 0 ? "up" : "down"}`
+        r.value.textContent = String(s.stock[r.g])
         const now: TradeMode = s.policy.sells.includes(r.g) ? "sell" : s.policy.buys.includes(r.g) ? "buy" : "none"
-        r.mode.textContent = now === "none" ? "—" : now
-        r.mode.className = `frame mode ${now === "none" ? "" : now}`
+        const load = s.policy.loads[r.g]
+        r.deal.sync(now === "sell" ? -load : now === "buy" ? load : 0)
+        r.mode.textContent = now === "none" ? "no trade" : `${now} ≤${Math.round(load * perMinute)}/min`
+        r.mode.className = `mode ${now}`
+        r.line.className = `trade-row ${now}`
         const price = now === "buy" ? askOf(r.g, s.prices[r.g]) : Math.round(priceOf(r.g, s.prices[r.g]) * 10) / 10
         r.price.textContent = `${price}c${s.prices[r.g] !== 100 ? ` (${s.prices[r.g]}%)` : ""}`
+        r.price.title = now === "buy" ? "what traders ask for one" : "what traders pay for one"
       }
       const samples = s.history
       const coinsSvg = sparkline(samples.map((h) => h.coins))
@@ -952,9 +1027,10 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
 
   /** A line of a description as a row: its icon and what it is about, its value, any goods as chips, and a note underneath saying why. */
   const renderLine = (row: HTMLElement, l: Line) => {
-    row.className = `line ${l.tone ?? ""}`
+    // A value too long to sit beside the label goes under it, aligned with it.
+    row.className = `line ${l.tone ?? ""}${(l.value ?? "").length > 14 ? " long" : ""}`
     const chips = l.goods ? `<span class="chips">${l.goods.map((g) => `<span class="chip" title="${goods[g.good].title}">${goodIcon(g.good, 14)}${g.count}</span>`).join("")}</span>` : ""
-    row.innerHTML = `<span class="label">${icon(l.icon, 16)}<span class="what"></span></span><span class="count"></span>${chips}${l.note ? `<small class="note"></small>` : ""}`
+    row.innerHTML = `<span class="mark">${icon(l.icon, 16)}</span><span class="what"></span><span class="count"></span>${chips}${l.note ? `<small class="note"></small>` : ""}`
     row.querySelector<HTMLElement>(".what")!.textContent = l.label
     row.querySelector<HTMLElement>(".count")!.textContent = l.value ?? ""
     if (l.note) row.querySelector<HTMLElement>(".note")!.textContent = l.note
@@ -1346,6 +1422,32 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     input.reset()
   }
 
+  /** Ticker lines the mayor has put away, by what they say (and, for news, when). */
+  const dismissed = new Set<string>()
+  let tickerLines: { alerts: Stats["alerts"]; news: Stats["chronicle"] } = { alerts: [], news: [] }
+  ticker.onclick = (event) => {
+    event.stopPropagation()
+    const target = event.target as HTMLElement
+    const off = target.closest<HTMLElement>("[data-dismiss]")
+    if (off) {
+      dismissed.add(off.dataset.dismiss!)
+      return
+    }
+    const ref = target.closest<HTMLElement>("[data-kind]")
+    if (ref) {
+      const kind = ref.dataset.kind as KindId
+      // Straight to placing it: the placement itself says if the town cannot build it yet.
+      if (kinds[kind].buildable) place(kind)
+      return
+    }
+    const line = target.closest<HTMLElement>(".cell.place")
+    if (!line) return
+    const alert = line.dataset.alert !== undefined ? tickerLines.alerts[Number(line.dataset.alert)] : undefined
+    if (alert?.at) return goTo(alert.at, alert.size, alert.id)
+    const news = line.dataset.news !== undefined ? tickerLines.news[Number(line.dataset.news)] : undefined
+    if (news?.at) goTo(news.at, 1, null)
+  }
+
   /** The last chronicle line announced. */
   let lastNews = ""
   /** Copies the town's numbers and preview into the page, once a frame. */
@@ -1353,7 +1455,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     syncPanel()
     const s = ui.stats
     if (s) {
-      coins.innerHTML = `${icon("coins", 20)}<span class="stack"><b>${s.coins}</b><small class="${s.net >= 0 ? "up" : "down"}">${s.net >= 0 ? "+" : ""}${s.net}/min</small></span>`
+      setHtml(coins, `${icon("coins", 20)}<span class="stack"><b>${s.coins}</b><small class="${s.net >= 0 ? "up" : "down"}">${s.net >= 0 ? "+" : ""}${s.net}/min</small></span>`)
       coins.title = "Coins in the treasury, and what it gains (or loses) a minute"
       coins.classList.toggle("debt", s.coins < 0)
       const left = Math.max(0, s.charter.term * 60 - Math.floor(s.minute * 60))
@@ -1363,14 +1465,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         : s.season.coming === null
           ? "no more winters this term"
           : `winter in ${clockText(s.season.left)}${severity(s.season.coming)}`
-      clock.innerHTML = `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}</b><small class="${s.season.winter ? "winter" : s.season.coming === "hard" ? "down" : ""}">year ${s.season.year} · ${until}</small></span>`
+      setHtml(clock, `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}</b><small class="${s.season.winter ? "winter" : s.season.coming === "hard" ? "down" : ""}">year ${s.season.year} · ${until}</small></span>`)
       clock.title = `${s.season.winter ? "Winter: fields lie still, fishing is slow, and homes eat faster" : "Time left in the term"}\nThe almanac: the coming winter is ${s.season.coming === null ? "beyond the term" : winters[s.season.coming].title}, the one after ${s.season.after === null ? "beyond the term" : winters[s.season.after].title}.\nMild: fishing at ${Math.round(winters.mild.fishing * 100)}%. Normal: ${Math.round(winters.normal.fishing * 100)}%. Hard: half as long again, fishing at ${Math.round(winters.hard.fishing * 100)}%, and homes heating are a fire risk.`
       const trend = s.mood.target > s.mood.approval ? "↑" : s.mood.target < s.mood.approval ? "↓" : ""
-      approval.innerHTML = `${icon("approval", 18)}<span class="stack"><b class="${s.mood.approval < 0 ? "down" : ""}">${signed(s.mood.approval)} <span class="${s.mood.target >= s.mood.approval ? "up" : "down"}">${trend}</span></b><small>approval</small></span>`
-      settlerCell.innerHTML = `${icon("settlers", 18)}<span class="stack"><b>${s.settlers}</b><small>settlers</small></span>`
-      citizenCell.innerHTML = `${icon("citizens", 18)}<span class="stack"><b>${s.citizens}</b><small>citizens${s.burghers > 0 ? ` · ${s.burghers} burghers` : ""}</small></span>`
+      setHtml(approval, `${icon("approval", 18)}<span class="stack"><b class="${s.mood.approval < 0 ? "down" : ""}">${signed(s.mood.approval)} <span class="${s.mood.target >= s.mood.approval ? "up" : "down"}">${trend}</span></b><small>approval</small></span>`)
+      setHtml(settlerCell, `${icon("settlers", 18)}<span class="stack"><b>${s.settlers}</b><small>settlers</small></span>`)
+      setHtml(citizenCell, `${icon("citizens", 18)}<span class="stack"><b>${s.citizens}</b><small>citizens${s.burghers > 0 ? ` · ${s.burghers} burghers` : ""}</small></span>`)
       const short = s.shortStaffed.length
-      jobs.innerHTML = `${icon("jobs", 18)}<span class="stack"><b>${s.employed}<span class="of">/${s.jobs}</span></b><small class="${short > 0 ? "down" : ""}">${short > 0 ? `${short} short · click` : "jobs filled"}</small></span>`
+      setHtml(jobs, `${icon("jobs", 18)}<span class="stack"><b>${s.employed}<span class="of">/${s.jobs}</span></b><small class="${short > 0 ? "down" : ""}">${short > 0 ? `${short} short · click` : "jobs filled"}</small></span>`)
       jobs.title = short > 0
         ? `Workers at work over workers needed. ${short} workplace${short > 1 ? "s are" : " is"} short: ${s.shortStaffed.slice(0, 5).map((w) => `${w.title} ${w.assigned}/${w.needed}${w.nobodyNear ? " (no homes within 15 road cells)" : ""}`).join(", ")}. Click to visit them in turn.`
         : "Workers at work over workers needed: every workplace has its crew. Residents walk at most 15 road cells to work."
@@ -1382,7 +1484,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       request.classList.toggle("show", s.crown.open && s.fate.state === "playing")
       if (s.crown.open) {
         const have = s.stock[s.crown.good]
-        requestText.innerHTML = `${icon("crown", 18)}<span>the crown asks for <b>${s.crown.amount}</b> ${goodIcon(s.crown.good, 14)} <b>${goods[s.crown.good].title}</b> <span class="muted">(${have} in store)</span> · <b>${clockText(s.crown.left)}</b> · +${s.crown.reward} coins</span>`
+        setHtml(requestText, `${icon("crown", 18)}<span>the crown asks for <b>${s.crown.amount}</b> ${goodIcon(s.crown.good, 14)} <b>${goods[s.crown.good].title}</b> <span class="muted">(${have} in store)</span> · <b>${clockText(s.crown.left)}</b> · +${s.crown.reward} coins</span>`)
         send.disabled = have < s.crown.amount
       }
       // What threatens the term, or is about to complete it.
@@ -1415,26 +1517,26 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         const sec = Math.max(0, Math.round((minute - tick) / 60))
         return sec < 5 ? "just now" : sec < 60 ? `${sec} s ago` : `${Math.round(sec / 60)} min ago`
       }
+      const alerts = s.alerts.filter((a) => !dismissed.has(`a:${a.text}`))
+      const fresh = news.filter((l) => !dismissed.has(`n:${l.tick}:${l.text}`))
+      const toneIcon = { hint: "hint", warn: "caution", bad: "warning" } as const
+      const row = (kind: string, tone: string, glyph: IconName, text: string, place: boolean, key: string, data: string) =>
+        `<div class="cell ${kind} ${tone}${place ? " place" : ""}" ${data}>${icon(glyph, 16, "mark")}<span class="text">${text}</span><span class="acts">${place ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-dismiss="${escapeHtml(key)}" title="Dismiss">${icon("close", 12)}</button></span></div>`
       const tickerHtml = [
-        ...(s.alerts.length > 0 ? [`<div class="head">now</div>`] : []),
-        ...s.alerts.map((a, i) => `<button class="cell${a.at ? " place" : ""}" data-alert="${i}" title="${a.at ? "Click to go there" : ""}">${icon("warning", 14)}<span>${a.text}</span>${a.at ? `<kbd>go</kbd>` : ""}</button>`),
-        ...(news.length > 0 ? [`<div class="head">lately</div>`] : []),
-        ...news.map((l, i) => `<button class="cell news${l.at ? " place" : ""}" data-news="${i}" title="${l.at ? "Click to go there" : ""}">${icon("chronicle", 14)}<span>${l.text} <em>${ago(l.tick)}</em></span>${l.at ? `<kbd>go</kbd>` : ""}</button>`)
+        ...(alerts.length > 0 ? [`<div class="head">now</div>`] : []),
+        ...alerts.map((a) => row("alert", a.tone, toneIcon[a.tone], callouts(a.text), a.at !== null, `a:${a.text}`, `data-alert="${s.alerts.indexOf(a)}"`)),
+        ...(fresh.length > 0 ? [`<div class="head">lately</div>`] : []),
+        ...fresh.map((l) => row("news", "", "chronicle", `${callouts(l.text)} <em data-tick="${l.tick}"></em>`, l.at !== null, `n:${l.tick}:${l.text}`, `data-news="${news.indexOf(l)}"`))
       ].join("")
       if (ticker.dataset.html !== tickerHtml) {
         ticker.dataset.html = tickerHtml
         ticker.innerHTML = tickerHtml
-        for (const b of ticker.querySelectorAll<HTMLButtonElement>("button.place")) {
-          b.onclick = (event) => {
-            event.stopPropagation()
-            const alertIndex = b.dataset.alert
-            const target = alertIndex !== undefined ? s.alerts[Number(alertIndex)] : null
-            if (target?.at) return goTo(target.at, target.size, target.id)
-            const line = news[Number(b.dataset.news)]
-            if (line?.at) goTo(line.at, 1, null)
-          }
-        }
       }
+      for (const em of ticker.querySelectorAll<HTMLElement>("em[data-tick]")) {
+        const text = ago(Number(em.dataset.tick))
+        if (em.textContent !== text) em.textContent = text
+      }
+      tickerLines = { alerts: s.alerts, news }
       ticker.classList.toggle("show", tickerHtml !== "" && s.fate.state === "playing")
       // News as it happens: a toast for each new alarm line.
       const latest = s.chronicle.at(-1)
