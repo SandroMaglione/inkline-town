@@ -68,24 +68,24 @@ and elevation controls also work with a keyboard. The original view uses a
 
 | Collection | Entries | Coverage |
 | --- | ---: | --- |
-| Buildings | 42 | Every building kind, plus winter and worn material presets of the seven town services and stores |
+| Buildings | 37 | Every building kind, plus winter and worn material presets of the seven town services and stores |
 | Homes | 21 | Four settler and citizen roof palettes, townhouse, and fine/poor/worn/winter material presets of every tier |
-| Land | 20 | Trees, rocks, crops, roads, water and raised stone paving |
+| Land | 24 | Trees, rocks, crops, roads, water, raised stone paving, three retained park furnishings and the park layout |
 | People | 32 | Carriers, residents, market and chapel walkers, and five equipped service workers |
 | Cargo and vehicles | 75 | Twelve distinct goods and labelled crates; empty handcart/barrow and small/full loads of each good; the approved mixed goods plate |
 | Construction and effects | 14 | Sites, frame/walls, problem sign, smoke, placement outlines and three kinds of ruin |
 
-The 204 entries cover object families and representative seeded variants.
+The 203 entries cover object families and representative seeded variants.
 Continuous growth, construction progress, walk poses and colours can be
 generated; this is not a list of every possible random seed. Page icons
 remain the game's original 2D UI art.
 
 ![Complete 3D world catalogue at a rotated angle](screenshots/3d-catalogue.webp)
 
-`pnpm assets:build` exports 204 GLBs and editable geometry descriptions,
-a manifest, and four standalone viewers to `output/inkline-3d/`:
+`pnpm assets:build` exports 203 GLBs and editable geometry descriptions,
+a manifest, and five standalone viewers to `output/inkline-3d/`:
 `inkline-3d-study.html`, `inkline-3d-map.html`, and
-`inkline-town-model-review.html`, and `inkline-house-effects.html`. It reimports every GLB and
+`inkline-town-model-review.html`, `inkline-house-effects.html`, and `inkline-park.html`. It reimports every GLB and
 checks geometry and unlit materials. The viewers work without a dev server;
 their optional web fonts use the network. The game build remains separate.
 Material effects render in the viewers and live game. Ordinary GLB viewers
@@ -117,7 +117,7 @@ Double-click the ground to focus the camera there.
 ![Every model together on the review island](screenshots/3d-map-complete.webp)
 
 District shortcuts focus the town, workshops, homes, people, cargo yard or
-forest. Inspect selects any of the 204 entries and links to its original
+forest. Inspect selects any of the 203 entries and links to its original
 drawing comparison. Eight additional people walk along the street using two
 procedural poses; pause them for review. Smoke and the problem sign face
 the camera so they stay readable when the map turns.
@@ -197,6 +197,15 @@ same instanced renderer and effect code.
 The original 2D menu drawings remain in `art.ts` for comparison. The live
 3D town uses the new geometry, including equipped service workers and cured
 fish cargo. The game has no audio, so winter music is outside this model work.
+
+Open `/park-lab.html` for a park assembled from 25 cells using the current
+park layout system, with two street entrances. The three retained furnishings
+are lamps, fountains and statues. The statue is a simple bust and pedestal;
+`render3d/fountain-effects.ts` supplies moving droplets and impact ripples in
+the actual basin. Park rendering in the game, catalogue, map and preview shares
+the same emitter metadata and water renderer. `pnpm check:park` verifies the
+rendered animation, pause, camera controls and phone layout, and captures stills
+and a five-second MP4 in `output/inkline-3d/park-review/`.
 - `src/townsfolk.ts`: residents out walking, for looking at only: not simulated, not saved.
 - `src/icons.ts`: the page's line-drawn icons.
 - `src/gallery.ts`: the dev-only art gallery (see above).

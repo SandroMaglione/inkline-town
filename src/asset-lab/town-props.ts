@@ -44,32 +44,35 @@ export function setts(d: Drawing, x: number, y: number, half: number, z: number)
   }
 }
 
-const figure = (d: Drawing, u: number, v: number, z: number) => {
-  d.box(u, v, 3.3 * U, 3.3 * U, z - 6, 2)
-  d.box(u, v, 2.5 * U, 2.5 * U, z - 4, 7, stone, 0xd5d9d0, 0xbec5bb)
-  d.face([[u + 2.51 * U, v - U, z - 2], [u + 2.51 * U, v + U, z - 2], [u + 2.51 * U, v + U, z + 1], [u + 2.51 * U, v - U, z + 1]], 0xc1af81, 0.75)
-  for (const x of [-0.7, 0.7]) d.cylinder(u + x * U, v, 0.55 * U, z + 3, 5, 0xaebbb0, 0xc9d2c7, 0.75, 8)
-  d.ellipsoid(u, v, z + 11, 1.7 * U, 1.3 * U, 4, 0xaebbb0, 1, 0xc9d2c7, 12)
-  d.ellipsoid(u, v, z + 16.3, 1.1 * U, 1.1 * U, 1.8, 0xc9d2c7, 1, undefined, 12)
-  d.cylinder(u, v, 1.7 * U, z + 17.2, 0.5, 0xaebbb0, 0xc9d2c7, 0.75, 12)
-  d.line([[u - 1.2 * U, v, z + 13], [u - 2.4 * U, v, z + 10], [u - 2.4 * U, v, z + 7]], 2, 0xaebbb0)
-  d.box(u - 2.4 * U, v, U, 0.5 * U, z + 6, 3, 0xc9d2c7, 0xaebbb0, 0x9daa9f, 1)
-  d.line([[u + 1.2 * U, v, z + 13], [u + 2.8 * U, v, z + 14], [u + 2.8 * U, v, z + 20]], 2, 0xaebbb0)
-  d.face([[u + 2.8 * U, v, z + 19], [u + 5 * U, v, z + 17], [u + 2.8 * U, v, z + 16]], 0xc9d2c7, 1)
+const figure = (d: Drawing, u: number, v: number) => {
+  d.box(u, v, 2.4 * U, 2.4 * U, 1.5, 6.5, stone, 0xd5d9d0, 0xbec5bb, 1)
+  const ring=(width:number,depth:number,z:number):Vertex[]=>[[u-width,v-depth,z],[u+width,v-depth,z],[u+width,v+depth,z],[u-width,v+depth,z]]
+  const bottom=ring(1.4*U,U,8), shoulders=ring(2.1*U,1.1*U,12.5)
+  for(let i=0;i<4;i++)d.face([bottom[i]!,bottom[(i+1)%4]!,shoulders[(i+1)%4]!,shoulders[i]!],i<2?0xc9d2c7:0xe2e6dc,1)
+  d.face(shoulders,0xe2e6dc,1)
+  d.cylinder(u,v,0.45*U,12.5,1.3,0xc9d2c7,0xc9d2c7,0,8)
+  d.ellipsoid(u,v,16.5,U,0.9*U,3,0xc9d2c7,0.8,0xe2e6dc,8)
 }
 
-/** A fountain's basin, column, and jets, centred on (u, v). */
+/** A simple stone basin. Running water is supplied by the shared effects renderer. */
 function fountain(d: Drawing, u: number, v: number) {
-  d.cylinder(u, v, 5.5 * U, 0, 4, 0xdfe3dc, water, 1, 16)
-  d.cylinder(u, v, 1.2 * U, 4, 7, 0xdfe3dc, stone, 1, 10)
-  d.cylinder(u, v, 2.5 * U, 11, 2, 0xdfe3dc, water, 1, 12)
-  d.cylinder(u, v, 4.6 * U, 4.03, 0.2, water, 0xd8e8ee, 0.75, 24)
-  d.ellipsoid(u, v, 15, U, U, 1.8, stone, 1, undefined, 12)
-  for (let i = 0; i < 4; i++) {
-    const a = i * Math.PI / 2
-    d.line(Array.from({ length: 9 }, (_, j): Vertex => { const t = j / 8; return [u + Math.cos(a) * (1 + 3 * t) * U, v + Math.sin(a) * (1 + 3 * t) * U, 13 + 2 * Math.sin(t * Math.PI) - 8 * t] }), 1, 0x8faebd)
+  const n=16, outer=5.5*U, inner=4.5*U
+  const ring=(r:number,z:number)=>Array.from({length:n},(_,i):Vertex=>[u+Math.cos(i*Math.PI*2/n)*r,v+Math.sin(i*Math.PI*2/n)*r,z])
+  d.cylinder(u,v,5.8*U,0,1,0xd5d9d0,stone,1,n)
+  const low=ring(outer,1),rim=ring(outer,4),inside=ring(inner,4),bed=ring(inner,1)
+  for(let i=0;i<n;i++){
+    const j=(i+1)%n
+    d.face([low[i]!,low[j]!,rim[j]!,rim[i]!],0xd5d9d0,0)
+    d.face([rim[i]!,rim[j]!,inside[j]!,inside[i]!],stone,0)
+    d.face([inside[i]!,inside[j]!,bed[j]!,bed[i]!],0xbec5bb,0)
   }
-  for (const r of [2.5, 3.5]) d.line(Array.from({ length: 25 }, (_, i): Vertex => [u + Math.cos(i * Math.PI / 12) * r * U, v + Math.sin(i * Math.PI / 12) * r * U, 4.3]), 0.75, 0xa9c5d0)
+  // Only the basin rims carry ink; water has no drawn guide curves.
+  d.line([...rim,rim[0]!],1)
+  d.line([...inside,inside[0]!],0.75)
+  d.cylinder(u,v,4.4*U,2.6,0.15,water,0xd8e8ee,0,n)
+  d.cylinder(u,v,U,2.75,7.5,0xd5d9d0,stone,1,8)
+  d.cylinder(u,v,1.5*U,10.25,0.75,0xd5d9d0,stone,0.75,8)
+  ;(d.asset.fountains??=[]).push({origin:[u,v,0],radius:4.4*U,level:2.75,nozzle:11})
 }
 
 /** An iron lamp post with a lantern. */
@@ -85,8 +88,8 @@ function lamp(d: Drawing, u: number, v: number) {
 export function parkProp(d: Drawing, prop: PropId, u: number, v: number) {
   if (prop === "lamp") lamp(d, u + 4 * U, v - 4 * U)
   else if (prop === "statue") {
-    d.box(u, v, 4.5 * U, 4.5 * U, 0, 2, 0xe9ebe5, 0xd5d9d0, 0xbec5bb, 1)
-    figure(d, u, v, 8)
+    d.box(u, v, 3.8 * U, 3.8 * U, 0, 1.5, 0xe9ebe5, 0xd5d9d0, 0xbec5bb, 1)
+    figure(d, u, v)
   } else fountain(d, u, v)
 }
 
@@ -147,6 +150,7 @@ export function parkAsset(cells: ReadonlyMap<number, ParkCell>, roads: ReadonlyS
     // A low stone kerb where the park ends.
     for (const { x: dx, y: dy } of DIRS) {
       if (isPark(x + dx, y + dy)) continue
+      if ((c.ground==="path"||c.ground==="square")&&roads.has(key(x+dx,y+dy))) continue
       const q = (along: number, across: number): Vertex => [u + dx * along - dy * across, v + dy * along + dx * across, z]
       const centre = q(0.47, 0)
       d.box(centre[0], centre[1], dx ? 0.03 : 0.5, dy ? 0.03 : 0.5, z, 1.2, 0xeceee8, 0xd7dbd2, 0xc9cec4, 0.75)
@@ -163,9 +167,10 @@ export function makeParkProp(prop: PropId) {
   const shift = ([u, v, z]: Vertex): Vertex => [u - 0.5, v - 0.5, z]
   asset.faces.forEach((f) => { f.points = f.points.map(shift) })
   asset.strokes.forEach((s) => { s.points = s.points.map(shift) })
+  asset.fountains?.forEach(f=>{f.origin=shift(f.origin)})
   asset.id = `park-${prop}`
   asset.title = `Park · ${props[prop].title.toLowerCase()}`
-  asset.note = props[prop].blurb
+  asset.note = prop==="statue"?"A simple stone bust on a plain pedestal, readable at the town's scale.":prop==="fountain"?"A stone basin with running water and soft surface ripples.":props[prop].blurb
   asset.category = "land"
   asset.reference = { type: "none" }
   asset.footprint = 1
@@ -195,6 +200,7 @@ export function makeSamplePark() {
   const shift = ([u, v, z]: Vertex): Vertex => [u - 2.5, v - 2.5, z]
   asset.faces.forEach((f) => { f.points = f.points.map(shift) })
   asset.strokes.forEach((s) => { s.points = s.points.map(shift) })
+  asset.fountains?.forEach(f=>{f.origin=shift(f.origin)})
   asset.id = "park-sample"
   asset.title = "Park · laid out"
   asset.note = "A five-by-five park built piece by piece: lawn, a cross of walks, flower beds in the corners, lamps, a fountain, and a statue on paved squares."

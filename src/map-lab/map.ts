@@ -78,6 +78,7 @@ function place(id: string, x: number, y: number, scale = 1, record = true, heigh
   const asset = inkAssets.find((asset) => asset.id === id)!
   const transform = ([u, v, z]: Vertex): Vertex => [x + u * scale, y + v * scale, z * scale + height]
   const groups = new Map<number, number>()
+  for(const fountain of asset.fountains??[])(town.fountains??=[]).push({...fountain,origin:transform(fountain.origin),radius:fountain.radius*scale,level:fountain.level*scale,nozzle:fountain.nozzle*scale})
   const effect = id === "smoke" || id === "problem-marker"
   if (effect) effects.push({ asset: id, x, y, height })
   for (const polygon of asset.faces) {

@@ -274,6 +274,8 @@ renderer.setAnimationLoop((now) => {
       f.updateContours(camera)
     })
   }
+  map.updateEffects(elapsed)
+  effects.forEach(e=>e.updateEffects(elapsed))
   renderer.render(scene, camera)
 })
 const resizeObserver = new ResizeObserver(resize)

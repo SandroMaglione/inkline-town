@@ -18,7 +18,7 @@ const root = document.querySelector<HTMLElement>("#review")!
 root.innerHTML = `<header><a href="/">Inkline Town</a><span>PR 03 / MODEL REVIEW</span><a href="/map-lab.html">Town map ↗</a></header>
   <section class="intro"><div><p class="eyebrow">A town with a little more life</p><h1>New places.<br>The same ink.</h1><p>Inspect the models together, turn them around, then open any one for a closer look.</p></div><aside>7 buildings<br>3 park furnishings<br>3 home tiers<br><span>Plus people, hazards, paving,<br>snow and signs of wear.</span></aside></section>
   <nav aria-label="Model collections"></nav><section class="camera"><label>Turn the models <input aria-label="Model rotation" type="range" min="-180" max="180" value="0"><output>0°</output></label><button id="rear">See the back</button><button id="reset">Reset view</button><button id="sheet">Save model sheet</button><a id="sheet-link" hidden download>Download sheet ↗</a><label>View <select aria-label="View elevation"><option value="30">Street angle</option><option value="50">From above</option><option value="15">Near the ground</option></select></label></section>
-  <section class="grid" aria-label="3D models"></section><footer><a href="/effects-lab.html">Animated house effects ↗</a> · Drag a model to turn the collection · <a href="/asset-lab.html">Full asset catalogue ↗</a> · <a href="/">Play this town ↗</a></footer>`
+  <section class="grid" aria-label="3D models"></section><footer><a href="/park-lab.html">Built park & running water ↗</a> · <a href="/effects-lab.html">Animated house effects ↗</a> · Drag a model to turn the collection · <a href="/asset-lab.html">Full asset catalogue ↗</a> · <a href="/">Play this town ↗</a></footer>`
 const nav = root.querySelector("nav")!, grid = root.querySelector<HTMLElement>(".grid")!, rotation = root.querySelector<HTMLInputElement>("input")!, elevation = root.querySelector<HTMLSelectElement>("select")!
 const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -115,7 +115,7 @@ addEventListener("scroll", schedule, {passive: true}); addEventListener("resize"
 const query = new URLSearchParams(location.search).get("collection")
 select(query && query in families ? query as Family : "buildings")
 let effectFrame=0
-const animateEffects=()=>{if(families[family].ids.some(id=>assetById.get(id)?.smokeEffect))render();effectFrame=requestAnimationFrame(animateEffects)}
+const animateEffects=()=>{if(families[family].ids.some(id=>assetById.get(id)?.smokeEffect||assetById.get(id)?.fountains?.length))render();effectFrame=requestAnimationFrame(animateEffects)}
 effectFrame=requestAnimationFrame(animateEffects)
 Object.assign(window, { townModelReview: { stats: () => ({ family, models: models.length, renders, yaw, pitch }) } })
 if (import.meta.hot) import.meta.hot.dispose(() => { cancelAnimationFrame(effectFrame);models.forEach(m => m.built.dispose()); renderer.dispose(); renderer.domElement.remove(); removeEventListener("scroll", schedule); removeEventListener("resize", schedule) })

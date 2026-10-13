@@ -31,6 +31,7 @@ for (const asset of inkAssets) {
   const imported = await loader.parseAsync(glb, "")
   if(asset.effects&&!imported.scene.getObjectByName(asset.id)?.userData.inklineSurfaceEffects)throw new Error(`${asset.id}: surface state metadata lost on export`)
   if(asset.smokeEffect&&!imported.scene.getObjectByName(asset.id)?.userData.inklineSmokeEffect)throw new Error(`${asset.id}: smoke emitter metadata lost on export`)
+  if(asset.fountains?.length&&!imported.scene.getObjectByName(asset.id)?.userData.inklineFountains)throw new Error(`${asset.id}: fountain metadata lost on export`)
   let meshes = 0,
     vertices = 0
   imported.scene.traverse((object) => {
@@ -54,6 +55,7 @@ for (const asset of inkAssets) {
     category: asset.category,
     effects: asset.effects,
     smokeEffect: asset.smokeEffect,
+    fountains: asset.fountains,
     glb: `models/${asset.id}.glb`,
     geometry: `models/${asset.id}.json`,
     bytes: glb.byteLength,
@@ -68,7 +70,8 @@ for (const [input, directory, filename] of [
   ["asset-lab.html", "viewer", "inkline-3d-study.html"],
   ["map-lab.html", "map-viewer", "inkline-3d-map.html"],
   ["model-review.html", "town-viewer", "inkline-town-model-review.html"],
-  ["effects-lab.html", "effects-viewer", "inkline-house-effects.html"]
+  ["effects-lab.html", "effects-viewer", "inkline-house-effects.html"],
+  ["park-lab.html", "park-viewer", "inkline-park.html"]
 ]) {
   await build({
     configFile: false,

@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { existsSync } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
 import { chromium } from "playwright"
+import { inkAssets } from "../src/asset-lab/assets.ts"
 
 const executablePath=process.env.BROWSER_EXECUTABLE_PATH??["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser","/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(existsSync)
 const browser=await chromium.launch({headless:true,...(executablePath?{executablePath}:{})})
@@ -31,7 +32,7 @@ try{
   assert.notEqual(first,next,"Smoke must animate in the actual GPU rendering")
   await writeFile(`${output}/smoke.png`,Buffer.from(next.split(",")[1],"base64"))
   const count=await page.evaluate(()=>{const lab=(window as any).inkLab;for(const a of lab.assets){lab.select(a.id);assertGeometry(lab.stats().triangles,a.id)}function assertGeometry(n:number,id:string){if(n<=0)throw new Error(`${id}: empty render`)}return lab.assets.length})
-  assert.equal(count,204)
+  assert.equal(count,inkAssets.length)
   assert.deepEqual(errors,[])
   console.log(JSON.stringify({catalogueModels:count,markerViews:[0,180],animatedSmoke:true,browserErrors:errors}))
 }finally{await browser.close()}

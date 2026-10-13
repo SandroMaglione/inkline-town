@@ -275,6 +275,8 @@ export class GameScene {
       for (const node of this.nodes) node.orient()
       this.camera.getWorldDirection(this.pool.viewDirection).negate()
       this.pool.time.value = now / 1000
+      this.parks?.updateEffects(now/1000)
+      this.parkPreview?.updateEffects(now/1000)
       this.pool.flush()
       this.renderer.render(this.scene, this.camera)
       this.frames++

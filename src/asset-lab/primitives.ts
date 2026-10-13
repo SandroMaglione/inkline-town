@@ -33,6 +33,7 @@ export type AssetReference =
   | { type: "roads" | "water" }
   | { type: "none" }
 export interface InkAsset {
+  fountains?: Array<{ origin: Vertex; radius: number; level: number; nozzle: number }>
   smokeEffect?: { origin: Vertex }
   effects?: { half: number; height: number; state: SurfaceState }
   appearance?: "fine" | "poor" | "worn" | "winter"

@@ -12,12 +12,15 @@ import {
   drawSite,
   drawRoads,
   drawWater,
+  drawParkPiece,
   homeVariant,
   plate,
   plateHalf
 } from "../art.ts"
 import { kinds, goods } from "../content.ts"
 import { key } from "../grid.ts"
+import { samplePark } from "./town-props.ts"
+import type { PropId } from "../content.ts"
 import { drawPlot } from "../art.ts"
 import { U, toScreen } from "../iso.ts"
 import { inkAssets, assetCategoryTitles, type InkAsset } from "./assets.ts"
@@ -54,6 +57,12 @@ await pixi.init({ width: 32, height: 32, antialias: true, resolution: 3, backgro
 
 function original(asset: InkAsset) {
   const g = new Graphics()
+  if(asset.id.startsWith("park-")){
+    if(asset.id==="park-sample")for(const c of samplePark){
+      const p=toScreen(c.x-2,c.y-2);g.translateTransform(p.x,p.y);drawParkPiece(g,c.prop==="none"?c.ground:c.prop);g.resetTransform()
+    }else drawParkPiece(g,asset.id.slice(5) as PropId)
+    return g
+  }
   const r = asset.reference
   if (r) {
     switch (r.type) {
@@ -225,7 +234,7 @@ function render() {
   if (!width || !height) return
   const ref = references.get(selected.id)!
   const model = models.get(selected.id)!
-  const effectBounds=selected.smokeEffect?new THREE.Box3().setFromObject(model.group):null
+  const effectBounds=selected.smokeEffect||selected.fountains?.length?new THREE.Box3().setFromObject(model.group):null
   const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds?effectBounds.getSize(new THREE.Vector3()).y*1.45:0) / zoom
   renderer.setSize(width, height, false)
   camera.left = (-vertical * width) / height / 2
@@ -409,7 +418,7 @@ Object.assign(window, {
 })
 select(new URLSearchParams(location.search).get("asset") ?? selected.id)
 let effectFrame=0
-const animateEffect=()=>{if(selected.smokeEffect)render();effectFrame=requestAnimationFrame(animateEffect)}
+const animateEffect=()=>{if(selected.smokeEffect||selected.fountains?.length)render();effectFrame=requestAnimationFrame(animateEffect)}
 effectFrame=requestAnimationFrame(animateEffect)
 if (import.meta.hot)
   import.meta.hot.dispose(() => {

@@ -8,6 +8,7 @@ import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometr
 import { palette, type Face, type InkAsset, type Vertex } from "./primitives.ts"
 import { installSurfaceShader } from "../render3d/surface-shader.ts"
 import { SmokePlume } from "../render3d/smoke-effects.ts"
+import { FountainWater } from "../render3d/fountain-effects.ts"
 
 /** A 30° elevation and 45° heading reproduce the game's 64×32 projection.
  * The vertical conversion preserves pixel-authored building heights exactly. */
@@ -302,8 +303,11 @@ export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean; mes
   }
   const plume=asset.smokeEffect&&options.surfaceEffects!==false?new SmokePlume():null
   if(plume){plume.group.position.copy(vertex3(asset.smokeEffect!.origin));group.add(plume.group);plume.update(0)}
+  const fountains=options.surfaceEffects!==false?(asset.fountains??[]).map(f=>new FountainWater(f)):[]
+  for(const fountain of fountains)group.add(fountain.group)
   const dispose = () => {
     plume?.dispose()
+    fountains.forEach(f=>f.dispose())
     group.traverse((object) => {
       if (object instanceof THREE.Mesh) object.geometry.dispose()
     })
@@ -313,7 +317,7 @@ export function buildAsset(asset: InkAsset, options: { batchFaces?: boolean; mes
     if (hull) (hull.material as THREE.Material).dispose()
     for (const object of group.children) if (object instanceof LineSegments2) object.geometry.dispose()
   }
-  return { group, lineMaterials, updateContours, updateEffects: time => { effectTime.value = time;plume?.update(time) }, dispose }
+  return { group, lineMaterials, updateContours, updateEffects: time => { effectTime.value = time;plume?.update(time);fountains.forEach(f=>f.update(time)) }, dispose }
 }
 
 /** GLB uses ordinary meshes for ink strokes so the outlines survive import.
@@ -323,6 +327,7 @@ export async function exportAsset(asset: InkAsset) {
   group.name = asset.id
   if(asset.effects)group.userData.inklineSurfaceEffects=asset.effects
   if(asset.smokeEffect)group.userData.inklineSmokeEffect=asset.smokeEffect
+  if(asset.fountains?.length)group.userData.inklineFountains=asset.fountains
   for (const face of asset.faces) group.add(faceMesh(face.points, face.color, face.opacity ?? 1))
   const contourFaces = asset.faces.filter((face) => face.contour)
   const hull = contourFaces.length ? silhouetteMesh(asset, contourFaces) : null
