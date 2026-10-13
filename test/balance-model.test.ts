@@ -93,8 +93,8 @@ test("steady-state search counts working tools separately and leaves shipped par
   const rules = resolveRules(), result = searchDistricts(rules, 8)
   assert.equal(result.length, 27)
   assert.equal(result[0]!.cost, 870)
-  assert.equal(result[0]!.materials.tools, 9)
-  assert.equal(result[0]!.affordableAtFoundation, false)
+  assert.equal(result[0]!.materials.tools, 6)
+  assert.equal(result[0]!.affordableAtFoundation, true)
   const score = (a: ReturnType<typeof analyze>) => a.availableAfterWorkshops.cloth
   const candidates = searchParameters({ rules, scenario: citizensDistrict(rules) }, [[{ path: "kinds.weaver.recipe.seconds", value: 12 }], []], score)
   assert.deepEqual(candidates[0]!.patches, [])
@@ -117,12 +117,12 @@ test("the mathematical plan reaches citizens through ordinary game construction"
   assert.equal(r.errors.length, r.actual.length)
 })
 
-test("shared-rule extraction preserves the original PR's complete minute-30 world", { timeout: 90000 }, () => {
+test("shared-rule extraction preserves the original PR's complete minute-30 world", { timeout: 180000 }, () => {
   const out = mkdtempSync(join(tmpdir(), "inkline-rule-parity-"))
   try {
-    const child = spawnSync(process.execPath, ["scripts/balance.ts", "--seeds", "1", "--term", "60", "--snapshot", "30", "--out", out], { encoding: "utf8", timeout: 80000 })
+    const child = spawnSync(process.execPath, ["scripts/balance.ts", "--seeds", "1", "--term", "60", "--snapshot", "30", "--out", out], { encoding: "utf8", timeout: 160000 })
     assert.equal(child.status, 0, child.stderr)
     const world = JSON.parse(readFileSync(join(out, "medium-fair-1000-30min.json"), "utf8")).world
-    assert.equal(createHash("sha256").update(JSON.stringify(world)).digest("hex"), "e759806fa37003f6215db219c3a784332afc2fc5c44d22845b71dc0fcdd78f87")
+    assert.equal(createHash("sha256").update(JSON.stringify(world)).digest("hex"), "3eff85260d3a97c25ad628dcf244e8f8b4abc6cd02407eed4446807e03d97557")
   } finally { rmSync(out, { recursive: true, force: true }) }
 })

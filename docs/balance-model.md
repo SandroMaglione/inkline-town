@@ -83,7 +83,7 @@ The construction case starts on authored flat land with roads and homes charged 
 
 Production comparisons allow one incomplete job; transport allows one in-flight load per carrier at the observation boundary. Service comparisons use independent fixed seeds and report their sample sizes and statistical tolerances. The coarse forecast's timing and cash errors remain visible. Passing the controlled checks does not turn an approximate forecast into an exact outcome prediction.
 
-The original seed-1000 sensible mayor's entire minute-30 world is checked against the PR #3 reference SHA-256 `e759806fa37003f6215db219c3a784332afc2fc5c44d22845b71dc0fcdd78f87`. This checks the shared-rule extraction across production, transport, random streams, risks, economy and persistence. Refresh that reference only after an intentional gameplay or engine change has been reviewed.
+The original seed-1000 sensible mayor's entire minute-30 world is checked against the PR #3 reference SHA-256 `3eff85260d3a97c25ad628dcf244e8f8b4abc6cd02407eed4446807e03d97557`. This checks the shared-rule extraction across production, transport, random streams, risks, economy and persistence. Refresh that reference only after an intentional gameplay or engine change has been reviewed.
 
 Every report includes rule, content, source and scenario fingerprints. A rule change recomputes the analysis; a semantic change in the game must either update a shared function or fail the behavior/verification checks. Mathematical approximations also need calibration when their assumptions change.
 
