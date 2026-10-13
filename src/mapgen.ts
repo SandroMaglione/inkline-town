@@ -1,3 +1,4 @@
+import { shippedRules, type Rules } from "./rules/config.ts"
 /**
  * A new town's land, from its charter: an island-like stretch of land of
  * the charter's size, its coast wandering in and out and a few capes
@@ -9,7 +10,7 @@
  */
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
-import { GROWN, lands, sizes, type CharterValue } from "./content.ts"
+import { GROWN, type CharterValue } from "./content.ts"
 import { DIRS, key } from "./grid.ts"
 import { GRID, inside, type Point } from "./iso.ts"
 
@@ -93,10 +94,10 @@ const shape = (random: Random.Random, radius: number): Array<boolean> => {
   return land.map((_, k) => main.has(k) || !sea.has(k))
 }
 
-export const generate = (charter: CharterValue): Land => {
+export const generate = (charter: CharterValue, rules: Rules = shippedRules): Land => {
   const random = Random.make(charter.seed)
-  const richness = lands[charter.land]
-  const ground = shape(random, sizes[charter.size].radius)
+  const richness = rules.lands[charter.land]
+  const ground = shape(random, rules.sizes[charter.size].radius)
   const cells = ground.filter(Boolean).length
   const per = (perThousand: number) => Math.max(1, Math.round((cells / 1000) * perThousand))
 

@@ -1,3 +1,4 @@
+import { near, riskIncrements } from "../rules/risks.ts"
 /**
  * The neighbourhood and its dangers. Every so often the town's desirability
  * is reckoned cell by cell (`Appraise`). Once a second every home's risk of
@@ -12,14 +13,11 @@ import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { appealGrid, appealAt, buildingSource, landSource, parkSources, type AppealSource } from "../appeal.ts"
 import { ruinDraft } from "../archetypes.ts"
-import { appeal, condition as wear, goodIds, goods, home, kinds, risk, RISK_MAX, winters, type GoodId } from "../content.ts"
+import { goodIds, risk, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../grid.ts"
 import { counted, placeName, type Landmark } from "../places.ts"
 import type { Point } from "../iso.ts"
-import {
-  Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Grid, House, Inventory, Mood, Park, Paved, Rescue, Rising, Risk, Rng,
-  Road, Route, Ruin, Service, Sick, Site, Staff, Storage, Tile, Time, Tree, Treasury, WalkerOf, Water, maybe
-} from "../schema.ts"
+import { Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Rules, Grid, House, Inventory, Mood, Park, Paved, Rescue, Rising, Risk, Rng, Road, Route, Ruin, Service, Sick, Site, Staff, Storage, Tile, Time, Tree, Treasury, WalkerOf, Water, maybe } from "../schema.ts"
 import { elapsed, seasonAt, write } from "./shared.ts"
 
 // ── Desirability ──────────────────────────────────────────────────────────
@@ -38,23 +36,27 @@ export const Appraise = Game.System(
       ruins: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Ruin] }),
       homes: Game.Query({ selection: { tile: Game.Query.read(Tile), condition: Game.Query.read(Condition) }, with: [House], without: [Site, Rising] })
     },
-    resources: { time: Game.System.readResource(Time), appeal: Game.System.writeResource(Appeal) }
+    resources: { time: Game.System.readResource(Time), appeal: Game.System.writeResource(Appeal) },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources }) => {
+  ({ queries, resources, services }) => {
+    const rules = services.rules
+    const { appeal, condition: wear } = rules
+
     if (resources.time.get().tick % appeal.every !== 0 && resources.appeal.get().cells.length > 0) return
     const sources: Array<AppealSource> = []
     for (const { data } of queries.buildings.each()) {
-      const s = buildingSource(data.building.get().kind, data.tile.get())
+      const s = buildingSource(data.building.get().kind, data.tile.get(), rules)
       if (s) sources.push(s)
     }
-    for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get()))
-    for (const { data } of queries.water.each()) sources.push(landSource("water", data.tile.get()))
-    for (const { data } of queries.paved.each()) sources.push(landSource("paved", data.tile.get()))
+    for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get(), rules))
+    for (const { data } of queries.water.each()) sources.push(landSource("water", data.tile.get(), rules))
+    for (const { data } of queries.paved.each()) sources.push(landSource("paved", data.tile.get(), rules))
     const roads = new Set(queries.roads.each().map(({ data }) => `${data.tile.get().x},${data.tile.get().y}`))
-    sources.push(...parkSources(queries.parks.each().map(({ data }) => ({ ...data.tile.get(), ...data.park.get() })), (x, y) => roads.has(`${x},${y}`)))
-    for (const { data } of queries.ruins.each()) sources.push(landSource("ruin", data.tile.get()))
-    for (const { data } of queries.homes.each()) if (data.condition.get().value < wear.worn) sources.push(landSource("worn", data.tile.get()))
-    resources.appeal.set({ cells: appealGrid(sources) })
+    sources.push(...parkSources(queries.parks.each().map(({ data }) => ({ ...data.tile.get(), ...data.park.get() })), (x, y) => roads.has(`${x},${y}`), rules))
+    for (const { data } of queries.ruins.each()) sources.push(landSource("ruin", data.tile.get(), rules))
+    for (const { data } of queries.homes.each()) if (data.condition.get().value < wear.worn) sources.push(landSource("worn", data.tile.get(), rules))
+    resources.appeal.set({ cells: appealGrid(sources, rules) })
   }
 )
 
@@ -63,18 +65,7 @@ export const Appraise = Game.System(
 /** The risks are reckoned this often (once a second). */
 export const RISK_TICKS = 60
 
-/** A stable number 0 → 1 for a cell. */
-const hash = (x: number, y: number) => {
-  let h = (x * 374761393 + y * 668265263) >>> 0
-  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
-}
-/** How fast the risks of whatever stands on a cell rise, against the usual. */
-export const paceAt = (x: number, y: number) => risk.pace[0] + (risk.pace[1] - risk.pace[0]) * hash(x, y)
-
-/** Within `r` rings of a footprint. */
-const near = (a: { readonly x: number; readonly y: number; readonly size: number }, b: { readonly x: number; readonly y: number; readonly size: number }, r: number) =>
-  Math.max(a.x - (b.x + b.size - 1), b.x - (a.x + a.size - 1), a.y - (b.y + b.size - 1), b.y - (a.y + a.size - 1)) <= r
+export { paceAt } from "../rules/risks.ts"
 
 export const Hazards = Game.System(
   "Town/Hazards",
@@ -112,9 +103,13 @@ export const Hazards = Game.System(
       treasury: Game.System.writeResource(Treasury),
       fires: Game.System.writeResource(Fires),
       chronicle: Game.System.writeResource(Chronicle)
-    }
+    },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, commands }) => {
+  ({ queries, resources, commands, services }) => {
+    const rules = services.rules
+    const { kinds, goods, risk, winters, riskMax: RISK_MAX, riskTicks: RISK_TICKS } = rules
+
     const tick = resources.time.get().tick
     if (tick % RISK_TICKS !== 0) return
     const charter = resources.charter.get()
@@ -122,7 +117,7 @@ export const Hazards = Game.System(
     const grid = resources.grid.get()
     const cells = resources.appeal.get().cells
     const approval = resources.mood.get().approval
-    const season = seasonAt(t, charter)
+    const season = seasonAt(t, charter, rules)
     const heating = season.severity !== null && winters[season.severity].heating
     const random = Random.make(resources.rng.get())
     const news = (text: string) => write(resources.chronicle, t, text, true)
@@ -158,26 +153,17 @@ export const Hazards = Game.System(
       const h = maybe(data.house)
       const b = maybe(data.building)
       const r = { ...data.risk.get() }
-      const worn = data.condition.get().value < wear.worn
-      const desirability = appealAt(cells, tile.x, tile.y)
-      const squalid = desirability < 0
-      const pace = paceAt(tile.x, tile.y)
-      let fire = 0
+      const increments = riskIncrements({
+        tile, condition: data.condition.get().value, desirability: appealAt(cells, tile.x, tile.y), approval, heating,
+        hotNearby: hot.filter((source) => near(source, tile, risk.fire.reach)).length,
+        dusty: dusty.some((d) => near(d, tile, risk.health.reach)), water: waterNear(tile),
+        ...(h ? { house: h } : {}), ...(b ? { kind: b.kind } : {})
+      }, rules)
       if (h) {
-        const max = home.tiers[h.tier].residents
-        const crowded = h.residents >= max * 0.75
-        fire = (h.tier === 1 ? risk.fire.wooden : risk.fire.stone) +
-          Math.min(2, hot.filter((s) => near(s, tile, risk.fire.reach)).length) * risk.fire.near +
-          (crowded ? risk.fire.crowded : 0) + (worn ? risk.fire.worn : 0) + (heating ? risk.fire.winter : 0)
-        const health = risk.health.base + (h.food <= 0 ? risk.health.hungry : 0) + (crowded ? risk.health.crowded : 0) +
-          (squalid ? risk.health.squalid : 0) + (dusty.some((d) => near(d, tile, risk.health.reach)) ? risk.health.dust : 0) +
-          (waterNear(tile) ? risk.health.water : 0)
-        const order = risk.order.base + (approval < 0 ? Math.round((-approval / 50) * risk.order.unrest) : 0) + (squalid ? risk.order.squalid : 0) +
-          (h.residents < max / 2 ? risk.order.vacant : 0) + (h.tier === 3 ? risk.order.wealth : 0)
-        if (!data.sick.present) r.health = Math.min(RISK_MAX, r.health + Math.round(health * pace))
-        r.order = Math.min(RISK_MAX, r.order + Math.round(order * pace))
-      } else if (b) fire = risk.fire.building + (kinds[b.kind].hot ? risk.fire.hot : 0) + (worn ? risk.fire.worn : 0)
-      r.fire = Math.min(RISK_MAX, r.fire + Math.round(fire * pace))
+        if (!data.sick.present) r.health = Math.min(RISK_MAX, r.health + increments.health)
+        r.order = Math.min(RISK_MAX, r.order + increments.order)
+      }
+      r.fire = Math.min(RISK_MAX, r.fire + increments.fire)
 
       if (r.fire >= RISK_MAX) {
         // Fire!

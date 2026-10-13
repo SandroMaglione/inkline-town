@@ -1,3 +1,6 @@
+import { serveGoods } from "../rules/households.ts"
+import { transport } from "../rules/config.ts"
+import { onwardRoads } from "../rules/transport.ts"
 /**
  * Walking: every walker steps along its route; service buildings send a
  * walker out now and then, who wanders the roads serving the homes beside
@@ -8,26 +11,21 @@
  */
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
-import {
-  amounts, APPRENTICE, categoryColor, condition as wear, CONDITION_MAX, each, home, kinds, provisions, total, type Amounts, type Need
-} from "../content.ts"
-import { DIRS, doors, isRoad, key, nearest, ownerAt, pathTo, reach, useAt } from "../grid.ts"
+import { amounts, categoryColor, each, provisions, total, type Amounts } from "../content.ts"
+import { DIRS, doors, isRoad, nearest, ownerAt, pathTo, reach, useAt } from "../grid.ts"
 import { inside, type Point } from "../iso.ts"
-import {
-  Building, Burning, Condition, Figure, Game, Grid, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Rng, Roam, Route, Service, Sick,
-  Site, Staff, Status, Tile, Time, WalkerOf, maybe, type Status as StatusValue
-} from "../schema.ts"
+import { Building, Burning, Condition, Figure, Game, Rules, Grid, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Rng, Roam, Route, Service, Sick, Site, Staff, Status, Tile, Time, WalkerOf, maybe, type Status as StatusValue } from "../schema.ts"
 import { CELL_STEPS } from "./shared.ts"
 import { paced } from "./work.ts"
 
 /** Steps a walker takes each tick: 1.25 cells a second. */
-const WALK = 1
+const WALK = transport.walk
 /** Firefighters run to a blaze. */
-const RUN = 3
+const RUN = transport.run
 /** Of each provision, the most a walker's basket holds. */
-const BASKET = 10
+const BASKET = transport.basket
 /** Walkers a service building may have out on the roads at once. */
-const OUT = 2
+const OUT = transport.active
 
 /** Every walker steps along its route (a firefighter on the way to a blaze runs); one whose next cell is no longer road is lost. */
 export const Walk = Game.System(
@@ -83,9 +81,13 @@ export const SendWalkers = Game.System(
       inventories: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Service] }),
       walkers: Game.Query({ selection: { roam: Game.Query.read(Roam), home: Game.Query.readRelation(WalkerOf) } })
     },
-    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) }
+    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, commands }) => {
+  ({ queries, resources, commands, services }) => {
+    const rules = services.rules
+    const { kinds, apprentice: APPRENTICE } = rules
+
     const grid = resources.grid.get()
     const tick = resources.time.get().tick
     const out = new Map<number, number>()
@@ -168,9 +170,13 @@ export const Wander = Game.System(
       buildings: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Service] }),
       inventories: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Service] })
     },
-    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), pantry: Game.System.writeResource(Pantry) }
+    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), pantry: Game.System.writeResource(Pantry) },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, commands }) => {
+  ({ queries, resources, commands, services }) => {
+    const rules = services.rules
+    const { home, condition: wear, conditionMax: CONDITION_MAX } = rules
+
     const grid = resources.grid.get()
     const random = Random.make(resources.rng.get())
     const walkers = queries.walkers.each()
@@ -179,7 +185,6 @@ export const Wander = Game.System(
     for (const row of queries.homes.each()) homes.set(row.entity.id, row)
     const cared = new Map<number, ReturnType<typeof queries.cared.each>[number]>()
     for (const row of queries.cared.each()) cared.set(row.entity.id, row)
-    const low = (left: number, need: Need) => left < home.lasts[need] / 2
     let eaten = 0
 
     for (const { entity, data } of walkers) {
@@ -217,21 +222,10 @@ export const Wander = Game.System(
           const h = { ...row.data.house.get() }
           if (roam.service === "faith") h.faith = home.lasts.faith
           else if (roam.service === "goods") {
-            if ((low(h.food, "food") || (h.tier >= 2 && low(h.bread, "bread"))) && (basket.bread ?? 0) > 0) {
-              basket.bread = (basket.bread ?? 0) - 1
-              h.food = home.lasts.food
-              h.bread = home.lasts.bread
-              eaten += 1
-            } else if (low(h.food, "food") && ((basket.fish ?? 0) > 0 || (basket.smoked ?? 0) > 0)) {
-              const g = (basket.fish ?? 0) > 0 ? "fish" : "smoked"
-              basket[g] = (basket[g] ?? 0) - 1
-              h.food = home.lasts.food
-              eaten += 1
-            }
-            if (low(h.cloth, "cloth") && (basket.cloth ?? 0) > 0) {
-              basket.cloth = (basket.cloth ?? 0) - 1
-              h.cloth = home.lasts.cloth
-            }
+            const served = serveGoods(h, amounts(basket), rules)
+            Object.assign(h, served.house)
+            Object.assign(basket, served.basket)
+            eaten += served.eaten
           }
           row.data.house.set(h)
         }
@@ -258,9 +252,7 @@ export const Wander = Game.System(
       const keepsGoing = roam.service === "goods" ? total(carrying) > 0 : roam.service === "repair" ? carrying.planks > 0 : true
       if (left > 0 && keepsGoing) {
         const previous = route.cells.length >= 2 ? route.cells[route.cells.length - 2]! : null
-        const onward = DIRS
-          .map((d) => ({ x: cell.x + d.x, y: cell.y + d.y }))
-          .filter((c) => isRoad(grid, c.x, c.y) && !(previous && c.x === previous.x && c.y === previous.y))
+        const onward = onwardRoads(grid, cell, previous)
         const next = random.pick(onward) ?? previous
         if (next) {
           data.route.set({ cells: [cell, next], index: 0, step: 0 })

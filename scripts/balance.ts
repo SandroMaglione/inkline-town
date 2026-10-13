@@ -1,3 +1,4 @@
+import { resolveRules } from "../src/rules/config.ts"
 /**
  * Balance runs: a bot plays the real simulation headless on several seeds,
  * the way a kind of mayor would, and reports how each term ended and how
@@ -89,6 +90,8 @@ for (let i = 0; i < args.length; i++) {
   for (const part of parts.slice(0, -1)) target = target[part] as Record<string, unknown>
   target[parts.at(-1)!] = value === "" || Number.isNaN(Number(value)) ? value : Number(value)
 }
+
+const rules = resolveRules()
 
 // ── Reading the world ─────────────────────────────────────────────────────
 
@@ -463,7 +466,7 @@ const decide = (w: World): ReadonlyArray<Edit> => {
     // Taxes follow the town's mood; once every other goal is met, they come down to win it over.
     const goals = goalsOf(w.charter, {
       settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: net(w), approval: w.mood.approval
-    })
+    }, rules)
     // Closing in on a complete town: everything but approval and the larder met. Cut taxes, buy food.
     const closing = goals.every((g) => g.met || g.id === "approval") && w.coins > 1000
     const rate = closing || w.mood.approval < 0 ? 50 : w.mood.approval < 15 ? 75 : w.mood.approval > 45 ? 125 : 100
@@ -611,7 +614,7 @@ interface Row {
 const run = (seed: number) => {
   roading.clear()
   resting.clear()
-  const town = headless({ size, term, land, seed }, { toast: (m) => { if (process.env.DEBUG) console.log("toast:", m) } })
+  const town = headless({ size, term, land, seed }, { rules, toast: (m) => { if (process.env.DEBUG) console.log("toast:", m) } })
   const ui = town.ui
   const step = town.run
 
@@ -673,7 +676,7 @@ const run = (seed: number) => {
     const costs = w.ledger.upkeep + w.ledger.admin + Math.max(0, -w.ledger.trade)
     const goals = goalsOf(w.charter, {
       settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: income - costs, approval: w.mood.approval
-    })
+    }, rules)
     rows.push({
       minute,
       coins: w.coins,
@@ -687,7 +690,7 @@ const run = (seed: number) => {
       homes: w.homes.length,
       food: Math.round((w.census.food! / h) * 100),
       larder: larder(w.stock),
-      winter: seasonAt(w.tick - w.charter.founded, w.charter).winter,
+      winter: seasonAt(w.tick - w.charter.founded, w.charter, rules).winter,
       crown: `${w.crown.open ? `${w.crown.amount} ${w.crown.good}` : "-"} ${w.crown.met}/${w.crown.missed}`,
       goals: goals.filter((g) => g.met).length,
       sick: w.census.sick!,
@@ -700,7 +703,7 @@ const run = (seed: number) => {
   if (process.env.CHRONICLE) for (const l of town.snapshot().resources["Town/Chronicle"].lines as Array<{ tick: number; text: string }>) console.log(`  ${(l.tick / 3600).toFixed(1)} ${l.text}`)
   const lastGoals = goalsOf(w.charter, {
     settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: net(w), approval: w.mood.approval
-  }).map((g) => `${g.met ? "✓" : "✗"} ${g.text} (${g.value})`).join(" · ")
+  }, rules).map((g) => `${g.met ? "✓" : "✗"} ${g.text} (${g.value})`).join(" · ")
   const hh = Math.max(1, w.homes.length)
   const supplied = `food ${Math.round((w.census.food! / hh) * 100)}% bread ${Math.round((w.census.bread! / hh) * 100)}% cloth ${Math.round((w.census.cloth! / hh) * 100)}% faith ${Math.round((w.census.faith! / hh) * 100)}%`
   const end = w.fate.state === "playing" ? { state: "playing", reason: "", minute: term } : { state: w.fate.state, reason: w.fate.reason, minute: Math.round(w.fate.at / 360) / 10 }

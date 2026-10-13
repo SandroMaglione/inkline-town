@@ -1,3 +1,4 @@
+import { wildTreeSpots, canSeedTree } from "../rules/land.ts"
 /**
  * Building and working: the grid and the town's stock are indexed, sites
  * whose materials are in start going up, workers are assigned, recipes
@@ -7,22 +8,13 @@
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { fieldDraft, treeDraft } from "../archetypes.ts"
-import {
-  amounts, APPRENTICE, BUILD_TICKS, COMMUTE, condition, crewOf, goodIds, GROWN, kinds, ticks, total, winters, type Amounts, type Crew
-} from "../content.ts"
-import { around, DIRS, doors, GridBuilder, key, ownerAt, reach, roadPrint, useAt } from "../grid.ts"
-import {
-  Building, Burning, Charter, Condition, Field, FieldOf, Game, Gatherer, Grid, House, Inventory, Land, Paused, Planter, Recipe, Rising, Rng,
-  Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Tree, maybe, type Status as StatusValue
-} from "../schema.ts"
+import { amounts, crewOf, goodIds, ticks, total, type Amounts, type Crew } from "../content.ts"
+import { around, doors, GridBuilder, key, ownerAt, reach, roadPrint, useAt } from "../grid.ts"
+import { Building, Burning, Charter, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Tree, maybe, type Status as StatusValue } from "../schema.ts"
 import { connected, elapsed, seasonAt, TileRead, useOf } from "./shared.ts"
 
-/**
- * Whether a building working at `pace` (a share of full speed, a sum of
- * halves and quarters) gets its step in on step `tick`: at a half, every
- * other step; at a quarter, every fourth.
- */
-export const paced = (pace: number, tick: number): boolean => pace >= 1 || Math.floor((tick + 1) * pace) > Math.floor(tick * pace)
+import { assignWorkers, equipmentPace, effort, paced } from "../rules/production.ts"
+export { effort, paced } from "../rules/production.ts"
 
 /**
  * What stands where on the land, for every system after it this step.
@@ -80,9 +72,13 @@ export const Raise = Game.System(
     queries: {
       sites: Game.Query({ selection: { site: Game.Query.read(Site) } }),
       rising: Game.Query({ selection: { rising: Game.Query.write(Rising), status: Game.Query.optional(Status) } })
-    }
+    },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, commands }) => {
+  ({ queries, commands, services }) => {
+    const rules = services.rules
+    const { buildTicks: BUILD_TICKS } = rules
+
     for (const { entity, data } of queries.sites.each()) {
       if (total(data.site.get().owed) > 0) continue
       commands.remove(entity.id, Site)
@@ -130,19 +126,24 @@ export const AssignStaff = Game.System(
         without: [Site, Rising]
       })
     },
-    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) }
+    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources }) => {
+  ({ queries, resources, services }) => {
+    const rules = services.rules
+    const { kinds, commute: COMMUTE, staffTicks: STAFF_TICKS } = rules
+
     if (resources.time.get().tick % STAFF_TICKS !== 0) return
     const grid = resources.grid.get()
-    const homes: Array<{ readonly crew: Crew; left: number; readonly doors: ReadonlyArray<{ readonly x: number; readonly y: number }> }> = []
-    for (const { data } of queries.homes.each()) {
+    const homes: Array<{ readonly id: number; readonly crew: Crew; left: number; readonly doors: ReadonlyArray<{ readonly x: number; readonly y: number }> }> = []
+    for (const { entity, data } of queries.homes.each()) {
       const h = data.house.get()
       const ds = doors(grid, data.tile.get())
-      if (h.residents > 0 && ds.length > 0) homes.push({ crew: crewOf(h.tier), left: h.residents, doors: ds })
+      if (h.residents > 0 && ds.length > 0) homes.push({ id: entity.id, crew: crewOf(h.tier), left: h.residents, doors: ds })
     }
     type Row = ReturnType<typeof queries.workplaces.each>[number]
     const places: Array<{
+      readonly id: number;
       readonly data: Row["data"]
       readonly staff: { readonly needed: number; readonly assigned: number; readonly apprentices: number; readonly nearby: number }
       readonly crew: Crew
@@ -151,7 +152,7 @@ export const AssignStaff = Game.System(
       apprentices: number
       readonly nearby: number
     }> = []
-    for (const { data } of queries.workplaces.each()) {
+    for (const { entity, data } of queries.workplaces.each()) {
       const staff = data.staff.get()
       if (staff.needed === 0) continue
       const crew = kinds[data.building.get().kind].crew
@@ -170,30 +171,19 @@ export const AssignStaff = Game.System(
         within.sort((a, b) => a.distance - b.distance)
       }
       const nearby = within.reduce((n, w) => n + (w.home.crew === crew ? w.home.left : 0), 0)
-      places.push({ data, staff, crew, within, assigned: 0, apprentices: 0, nearby })
+      places.push({ id: entity.id, data, staff, crew, within, assigned: 0, apprentices: 0, nearby })
     }
-    const fill = (place: (typeof places)[number], from: Crew) => {
-      for (const { home } of place.within) {
-        if (place.assigned >= place.staff.needed) return
-        if (home.crew !== from || home.left === 0) continue
-        const take = Math.min(place.staff.needed - place.assigned, home.left)
-        home.left -= take
-        place.assigned += take
-        if (from !== place.crew) place.apprentices += take
-      }
-    }
-    const order = places.map((place, index) => ({ place, index })).sort((a, b) => a.place.nearby - b.place.nearby || a.index - b.index)
-    for (const { place } of order) fill(place, place.crew)
-    for (const { place } of order) if (place.crew === "citizens") fill(place, "settlers")
-    for (const { data, staff, assigned, apprentices, nearby } of places) {
-      if (staff.assigned !== assigned || staff.apprentices !== apprentices || staff.nearby !== nearby) data.staff.set({ ...staff, assigned, apprentices, nearby })
+    const assigned = assignWorkers(
+      homes.map((h) => ({ id: h.id, crew: h.crew, residents: h.left })),
+      places.map((p) => ({ id: p.id, crew: p.crew, needed: p.staff.needed,
+        within: p.within.map((w) => ({ home: w.home.id, distance: w.distance })) }))
+    )
+    for (const { id, data, staff } of places) {
+      const next = assigned.get(id)!
+      if (staff.assigned !== next.assigned || staff.apprentices !== next.apprentices || staff.nearby !== next.nearby) data.staff.set({ ...staff, ...next })
     }
   }
 )
-
-/** Worker-steps a crew puts in this step: apprentices only on their share of the steps (see `APPRENTICE`). */
-export const effort = (staff: { readonly assigned: number; readonly apprentices: number }, tick: number) =>
-  staff.assigned - staff.apprentices + (paced(APPRENTICE, tick) ? staff.apprentices : 0)
 
 // ── Recipes ───────────────────────────────────────────────────────────────
 
@@ -228,13 +218,17 @@ export const Work = Game.System(
       rocks: Game.Query({ selection: { rock: Game.Query.write(Rock) } }),
       fields: Game.Query({ selection: { field: Game.Query.write(Field) } })
     },
-    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time), charter: Game.System.readResource(Charter) }
+    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time), charter: Game.System.readResource(Charter) },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, commands }) => {
+  ({ queries, resources, commands, services }) => {
+    const rules = services.rules
+    const { kinds, winters, grown: GROWN } = rules
+
     const grid = resources.grid.get()
     const tick = resources.time.get().tick
     const t = elapsed(resources.time.get(), resources.charter.get())
-    const season = seasonAt(t, resources.charter.get())
+    const season = seasonAt(t, resources.charter.get(), rules)
     const fishing = season.severity ? winters[season.severity].fishing : 1
     // The land by entity, looked up only once some gatherer starts a job this step.
     const lazy = <T>(make: () => T) => {
@@ -302,9 +296,9 @@ export const Work = Game.System(
           recipe = { ...recipe, progress: 1 }
         }
       }
-      const worn = (maybe(data.condition)?.value ?? Infinity) < condition.worn
-      const pace = (kind.wear && stock.tools === 0 ? 0.5 : 1) * (worn ? 0.5 : 1) * (gatherer?.source === "water" ? fishing : 1)
-      const put = effort(staff, tick)
+
+      const pace = equipmentPace(kind, stock.tools, maybe(data.condition)?.value ?? Infinity, fishing, rules)
+      const put = effort(staff, tick, rules)
       if (open && recipe.progress > 0 && put > 0 && paced(pace, tick)) {
         const progress = recipe.progress + put
         if (progress > recipe.period * staff.needed) {
@@ -353,9 +347,13 @@ export const Plant = Game.System(
         without: [Site, Rising]
       })
     },
-    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) }
+    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, commands }) => {
+  ({ queries, resources, commands, services }) => {
+    const rules = services.rules
+    const { staffTicks: STAFF_TICKS } = rules
+
     const grid = resources.grid.get()
     const random = Random.make(resources.rng.get())
     const sown = new Set<number>()
@@ -393,9 +391,6 @@ export const Plant = Game.System(
   }
 )
 
-/** How often a wild forest seeds a new tree. */
-const SPREAD_TICKS = ticks(1.5)
-
 /**
  * Wild forests regrow: now and then a grown tree seeds an empty cell beside
  * it, but only one that already has two trees around it, so forests fill
@@ -406,9 +401,13 @@ export const Spread = Game.System(
   "Town/Spread",
   {
     queries: { trees: Game.Query({ selection: { tile: Game.Query.read(Tile), tree: Game.Query.read(Tree) } }) },
-    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) }
+    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, commands }) => {
+  ({ queries, resources, commands, services }) => {
+    const rules = services.rules
+    const { grown: GROWN, spreadTicks: SPREAD_TICKS } = rules
+
     if (resources.time.get().tick % SPREAD_TICKS !== 0) return
     const grid = resources.grid.get()
     const random = Random.make(resources.rng.get())
@@ -416,15 +415,12 @@ export const Spread = Game.System(
     const parent = random.pick(grown)
     if (parent) {
       const t = parent.data.tile.get()
-      const spot = random.pick(DIRS.map((d) => ({ x: t.x + d.x, y: t.y + d.y })).filter((c) => useAt(grid, c.x, c.y) === "empty"))
-      if (spot && DIRS.filter((d) => useAt(grid, spot.x + d.x, spot.y + d.y) === "tree").length >= 2) commands.spawn(treeDraft(spot, 0))
+      const spot = random.pick(wildTreeSpots(grid, t))
+      if (spot && canSeedTree(grid, spot)) commands.spawn(treeDraft(spot, 0))
     }
     resources.rng.set(random.state)
   }
 )
-
-/** Trees and fields grow this many steps at a time. */
-const GROW_TICKS = 10
 
 /** Trees and fields grow until they are ready; fields not in winter. */
 export const Grow = Game.System(
@@ -434,15 +430,19 @@ export const Grow = Game.System(
       trees: Game.Query({ selection: { tree: Game.Query.write(Tree) } }),
       fields: Game.Query({ selection: { field: Game.Query.write(Field) } })
     },
-    resources: { time: Game.System.readResource(Time), charter: Game.System.readResource(Charter) }
+    resources: { time: Game.System.readResource(Time), charter: Game.System.readResource(Charter) },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources }) => {
+  ({ queries, resources, services }) => {
+    const rules = services.rules
+    const { grown: GROWN, growTicks: GROW_TICKS } = rules
+
     if (resources.time.get().tick % GROW_TICKS !== 0) return
     for (const { data } of queries.trees.each()) {
       const growth = data.tree.get().growth
       if (growth < GROWN.tree) data.tree.set({ growth: Math.min(GROWN.tree, growth + GROW_TICKS) })
     }
-    if (seasonAt(elapsed(resources.time.get(), resources.charter.get()), resources.charter.get()).winter) return
+    if (seasonAt(elapsed(resources.time.get(), resources.charter.get()), resources.charter.get(), rules).winter) return
     for (const { data } of queries.fields.each()) {
       const growth = data.field.get().growth
       if (growth < GROWN.field) data.field.set({ growth: Math.min(GROWN.field, growth + GROW_TICKS) })
