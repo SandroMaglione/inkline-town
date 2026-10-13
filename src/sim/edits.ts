@@ -12,7 +12,7 @@ import { amounts, goodIds, RESERVE_MAX, TAX_STEPS, type Amounts, type Kind, type
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
-import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Rules, History, Inventory, Land, Ledger, Market, Mood, Pantry, Park, Paved, Paused, Policy, Rng, Status, Stock, Storage, Time, TownHall, Treasury, Ui } from "../schema.ts"
+import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, Inventory, Land, Ledger, Market, Mood, Pantry, Park, Paved, Paused, Policy, Rng, Status, Stock, Storage, Time, TownHall, Treasury, Ui } from "../schema.ts"
 import { elapsed, rollWinters, TileRead, useOf, write } from "./shared.ts"
 import { crownGap, foundedFate } from "./term.ts"
 
@@ -53,6 +53,7 @@ export const ApplyEdits = Game.System(
       fate: Game.System.writeResource(Fate),
       history: Game.System.writeResource(History),
       chronicle: Game.System.writeResource(Chronicle),
+      guide: Game.System.writeResource(Guide),
       appeal: Game.System.writeResource(Appeal),
       pantry: Game.System.writeResource(Pantry),
       fires: Game.System.writeResource(Fires)
@@ -341,6 +342,8 @@ export const ApplyEdits = Game.System(
           resources.appeal.set({ cells: [] })
           resources.pantry.set({ eaten: 0, rotted: 0, eatenLast: 0, rottedLast: 0, warned: -1_000_000 })
           resources.fires.set({ fires: [], next: 1 })
+          // A new town starts the guide over, unless the mayor turned it off.
+          resources.guide.update((g) => ({ done: [], off: g.off }))
           resources.land.set({ mask: land.mask, cells: land.cells })
           resources.ledger.set({ taxes: 0, trade: 0, upkeep: 0, admin: 0 })
           resources.policy.set({ settlers: 100, citizens: 100, sells: trade.sells, buys: [], reserve: trade.reserve, loads: amounts(Object.fromEntries(goodIds.map((g) => [g, rules.tradeLoad]))) })

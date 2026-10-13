@@ -234,6 +234,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     dragFrom: null,
     selected: null,
     gestures: [],
+    guide: [],
     // A town is founded behind the dialog, so there is land to look at while choosing.
     edits: [{ type: "newTown", charter: defaultCharter((Date.now() & 0x7fffffff) >>> 0) }],
     preview: emptyPreview(),
@@ -353,6 +354,11 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     button.onclick = run
     system.append(button)
   }
+  // The guide, on or off (it is on for a new mayor).
+  const guideButton = el("button", "guide-toggle")
+  guideButton.append(iconEl("hint"), document.createTextNode("guide"))
+  guideButton.onclick = () => ui.guide.push({ type: ui.stats?.guide.off ? "on" : "off" })
+  system.append(guideButton)
   action("save", "save", "Save the town in this browser (it also autosaves every two minutes)", () =>
     ui.toast(persistence().save() ?? "Saved")
   )
@@ -1424,13 +1430,24 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
 
   /** Ticker lines the mayor has put away, by what they say (and, for news, when). */
   const dismissed = new Set<string>()
-  let tickerLines: { alerts: Stats["alerts"]; news: Stats["chronicle"] } = { alerts: [], news: [] }
+  let tickerLines: { guide: Stats["guide"]["step"]; alerts: Stats["alerts"]; news: Stats["chronicle"] } = { guide: null, alerts: [], news: [] }
   ticker.onclick = (event) => {
     event.stopPropagation()
     const target = event.target as HTMLElement
     const off = target.closest<HTMLElement>("[data-dismiss]")
     if (off) {
       dismissed.add(off.dataset.dismiss!)
+      return
+    }
+    // The guide: put this step away, or turn the guide off (the bottom-right button turns it back on).
+    const skip = target.closest<HTMLElement>("[data-skip]")
+    if (skip) {
+      ui.guide.push({ type: "skip", id: skip.dataset.skip! })
+      return
+    }
+    if (target.closest("[data-guide-off]")) {
+      ui.guide.push({ type: "off" })
+      ui.toast("Guide off · turn it back on from the bottom right")
       return
     }
     const ref = target.closest<HTMLElement>("[data-kind]")
@@ -1442,6 +1459,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     }
     const line = target.closest<HTMLElement>(".cell.place")
     if (!line) return
+    if (line.dataset.guide !== undefined && tickerLines.guide?.at) return goTo(tickerLines.guide.at, tickerLines.guide.size, tickerLines.guide.id)
     const alert = line.dataset.alert !== undefined ? tickerLines.alerts[Number(line.dataset.alert)] : undefined
     if (alert?.at) return goTo(alert.at, alert.size, alert.id)
     const news = line.dataset.news !== undefined ? tickerLines.news[Number(line.dataset.news)] : undefined
@@ -1522,7 +1540,16 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       const toneIcon = { hint: "hint", warn: "caution", bad: "warning" } as const
       const row = (kind: string, tone: string, glyph: IconName, text: string, place: boolean, key: string, data: string) =>
         `<div class="cell ${kind} ${tone}${place ? " place" : ""}" ${data}>${icon(glyph, 16, "mark")}<span class="text">${text}</span><span class="acts">${place ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-dismiss="${escapeHtml(key)}" title="Dismiss">${icon("close", 12)}</button></span></div>`
+      // The guide's step first: what to do next, and why.
+      const g = s.guide.step
+      const guideHtml = g
+        ? [
+            `<div class="head guide"><span>guide · ${escapeHtml(g.chapter)}</span><span class="progress" title="Steps of the guide done">${s.guide.done} of ${s.guide.total} done</span><button class="quiet" data-guide-off title="Turn the guide off (the guide button in the bottom right turns it back on)">hide guide</button></div>`,
+            `<div class="cell alert hint guide${g.at !== null ? " place" : ""}" data-guide>${icon("hint", 16, "mark")}<span class="text">${callouts(g.text)}</span><span class="acts">${g.at !== null ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="Skip this step">${icon("close", 12)}</button></span></div>`
+          ]
+        : []
       const tickerHtml = [
+        ...guideHtml,
         ...(alerts.length > 0 ? [`<div class="head">now</div>`] : []),
         ...alerts.map((a) => row("alert", a.tone, toneIcon[a.tone], callouts(a.text), a.at !== null, `a:${a.text}`, `data-alert="${s.alerts.indexOf(a)}"`)),
         ...(fresh.length > 0 ? [`<div class="head">lately</div>`] : []),
@@ -1536,7 +1563,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         const text = ago(Number(em.dataset.tick))
         if (em.textContent !== text) em.textContent = text
       }
-      tickerLines = { alerts: s.alerts, news }
+      tickerLines = { guide: g, alerts: s.alerts, news }
+      guideButton.classList.toggle("on", !s.guide.off)
+      guideButton.title = s.guide.off ? "Turn the guide back on: a next step to take, and why, at the top of the ticker" : "Turn the guide off"
       ticker.classList.toggle("show", tickerHtml !== "" && s.fate.state === "playing")
       // News as it happens: a toast for each new alarm line.
       const latest = s.chronicle.at(-1)

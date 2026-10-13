@@ -254,6 +254,13 @@ export interface Stats {
   readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly text: string; readonly alarm: boolean; readonly at: Point | null }>
   /** What needs looking at right now, a line each: workshops waiting, workplaces no one can reach, food running out. */
   readonly alerts: ReadonlyArray<Alert>
+  /** The mayor's guide: the step to take now (if any, and the guide is on), and how far along it is. */
+  readonly guide: {
+    readonly step: (Omit<Alert, "tone"> & { readonly key: string; readonly chapter: string }) | null
+    readonly done: number
+    readonly total: number
+    readonly off: boolean
+  }
 }
 
 /** A map view's legend: what each colour means. */
@@ -299,5 +306,7 @@ export interface UiValue {
   legend: Legend | null
   /** A place the page points at (from the ticker): outlined until `until`, in the clock's seconds. */
   flash: { readonly cell: Point; readonly size: number; readonly until: number } | null
+  /** What the mayor told the guide since the last frame: put a step away, or turn the guide off or on (see `Guide`). */
+  guide: Array<{ readonly type: "skip"; readonly id: string } | { readonly type: "off" | "on" }>
   toast: (message: string) => void
 }
