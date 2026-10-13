@@ -126,8 +126,10 @@ pnpm release --profile admin --yes --no-input
 
 Release from an up-to-date `main`. The release command checks the game's
 types and simulation and the deployment config, then Alchemy builds and
-deploys the game. It prints the live URL; check that the game opens and
-save/load works there after each release.
+deploys the game to <https://inkline.typeonce.dev>. Alchemy attaches that
+custom domain to the `prod` Worker and creates its DNS record and certificate
+in the `typeonce.dev` Cloudflare zone. Check that the game opens and save/load
+works there after each release.
 
 `admin` is the existing local Alchemy Cloudflare profile. On another
 machine, use your own logged-in profile or set `CLOUDFLARE_ACCOUNT_ID` and
@@ -141,4 +143,5 @@ pnpm --dir deploy exec alchemy deploy --stage preview --profile admin
 pnpm --dir deploy exec alchemy destroy --stage preview --profile admin
 ```
 
-The second command removes the preview. Each stage has its own Worker.
+The second command removes the preview. Each stage has its own Worker;
+previews stay on their `workers.dev` URL and never claim the custom domain.

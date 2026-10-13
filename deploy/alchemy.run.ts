@@ -7,6 +7,9 @@ import * as Effect from "effect/Effect"
 // Keep deployment dependencies separate from the browser game.
 const rootDir = fileURLToPath(new URL("..", import.meta.url))
 
+// Only production claims the custom domain; previews stay on workers.dev.
+const productionDomain = "inkline.typeonce.dev"
+
 export default Alchemy.Stack(
   "inkline-town",
   {
@@ -15,7 +18,11 @@ export default Alchemy.Stack(
     state: Cloudflare.state()
   },
   Effect.gen(function* () {
-    const game = yield* Cloudflare.Website.Vite("Game", { rootDir })
+    const stage = yield* Alchemy.Stage
+    const game = yield* Cloudflare.Website.Vite("Game", {
+      rootDir,
+      ...(stage === "prod" ? { domain: productionDomain } : {})
+    })
     return { url: game.url }
   })
 )
