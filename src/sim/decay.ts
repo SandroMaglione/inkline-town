@@ -1,3 +1,4 @@
+import { spoilExpectation } from "../rules/decay.ts"
 /**
  * What time does to the town: homes and buildings run down until a builder
  * mends them, and fall into ruin if none does; fish and bread rot on the
@@ -7,11 +8,9 @@
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { ruinDraft } from "../archetypes.ts"
-import { condition as wear, goodIds, kinds, SPOIL_TICKS, spoils, ticks } from "../content.ts"
+import { goodIds, ticks } from "../content.ts"
 import { counted, placeName } from "../places.ts"
-import {
-  Building, Burning, Charter, Chronicle, Condition, Game, House, Inventory, Pantry, Rising, Rng, Site, Tile, Time, maybe
-} from "../schema.ts"
+import { Building, Burning, Charter, Chronicle, Condition, Game, Rules, House, Inventory, Pantry, Rising, Rng, Site, Tile, Time, maybe } from "../schema.ts"
 import { elapsed, write } from "./shared.ts"
 
 /** The pantry warns of rotting food at most this often. */
@@ -34,9 +33,13 @@ export const Decay = Game.System(
       rng: Game.System.writeResource(Rng),
       pantry: Game.System.writeResource(Pantry),
       chronicle: Game.System.writeResource(Chronicle)
-    }
+    },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, commands }) => {
+  ({ queries, resources, commands, services }) => {
+    const rules = services.rules
+    const { kinds, condition: wear, spoils, spoilTicks: SPOIL_TICKS } = rules
+
     const tick = resources.time.get().tick
     const t = elapsed(resources.time.get(), resources.charter.get())
 
@@ -73,7 +76,7 @@ export const Decay = Game.System(
         for (const g of goodIds) {
           const life = spoils[g]
           if (life === undefined || stock[g] <= 0) continue
-          const expected = (stock[g] * SPOIL_TICKS) / (life * 60 * keeps)
+          const expected = spoilExpectation(stock[g], g, keeps, rules)
           const lose = Math.min(stock[g], Math.floor(expected) + (random.next() < expected % 1 ? 1 : 0))
           if (lose <= 0) continue
           stock = { ...stock, [g]: stock[g] - lose }

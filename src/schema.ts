@@ -18,6 +18,7 @@ import type { NodeRegistry } from "@typeonce/bevy-ts-render"
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
 import type { GameScene } from "./render3d/scene.ts"
 import { goodIds, groundIds, kindIds, landIds, propIds, serviceIds, sizeIds, type Amounts } from "./content.ts"
+import type { Rules as RuleInputs } from "./rules/config.ts"
 import type { UiValue } from "./ui.ts"
 
 export const Root = Schema.defineRoot("Town")
@@ -323,6 +324,7 @@ export const Stock = Descriptor.TransientResource<Amounts>()("Town/Stock")
 
 // ── Host services ─────────────────────────────────────────────────────────
 
+export const Rules = Descriptor.Service<RuleInputs>()("Town/Rules")
 export const Ui = Descriptor.Service<UiValue>()("Town/Ui")
 /** The frame's length, for animation only: the simulation runs on `Time`. */
 export const Clock = Descriptor.Service<{ deltaSeconds: number; elapsed: number }>()("Town/Clock")
