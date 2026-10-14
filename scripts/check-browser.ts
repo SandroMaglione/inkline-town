@@ -43,7 +43,7 @@ try {
   await page.goto(process.env.GAME_BASE_URL??"http://127.0.0.1:5232")
   await page.waitForFunction(()=>window.town)
   await page.getByRole("button",{name:"small",exact:true}).click()
-  await page.getByRole("button",{name:"Found the town",exact:true}).click()
+  await page.getByRole("button",{name:"Start new",exact:true}).click()
   await page.waitForFunction(()=>!window.town.ui.founding)
   await page.locator(".toolbar .pause").click()
   const hall=(await entities("Town/TownHall"))[0]!,tile=hall.components["Town/Tile"]
@@ -105,7 +105,7 @@ try {
   await page.getByRole("button",{name:"Choose new land without saving",exact:true}).click()
   await page.getByRole("button",{name:"large",exact:true}).click()
   await page.getByRole("button",{name:"rich",exact:true}).click()
-  await page.getByRole("button",{name:"Found the town",exact:true}).click()
+  await page.getByRole("button",{name:"Start new",exact:true}).click()
   await page.waitForFunction(()=>!window.town.ui.founding&&window.town.ui.stats?.charter.size==="large")
   assert.equal((await entities("Town/House")).length,0)
   assert.equal((await entities("Town/TownHall")).length,1)

@@ -20,7 +20,7 @@ try {
     await page.goto(process.env.GAME_BASE_URL??"http://127.0.0.1:5232")
     await page.waitForFunction(()=>"town" in window)
     // The found button sits inside the screen without scrolling: it is pinned to the bottom.
-    const found=page.getByRole("button",{name:"Found the town",exact:true})
+    const found=page.getByRole("button",{name:"Start new",exact:true})
     const box=(await found.boundingBox())!
     assert.ok(box.y>=0&&box.y+box.height<=height,`${name}: the found button is off screen`)
     await page.screenshot({path:`${output}/${name}-picker.png`})

@@ -1434,7 +1434,7 @@ export const createHost = async (
     }
     refresh()
     const actions = el("div", "actions")
-    const found = el("button", "frame primary", cancellable ? "Found the town" : "Start new")
+    const found = el("button", "frame primary", "Start new")
     found.onclick = () => {
       if (visiting) endVisit()
       ui.edits.push({ type: "newTown", charter: { ...choice } })
