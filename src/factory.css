@@ -391,7 +391,9 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .hud .ticker .head.guide .quiet:hover { color: #3d4943; text-decoration: underline; }
 .hud .ticker .cell.guide { background: #f6f8fc; }
 /* What closes the step, under it. */
-.hud .ticker .cell.guide .goal { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; color: #6d7f9c; }
+/* The flag in its own column, the words wrapping beside it as one paragraph. */
+.hud .ticker .cell.guide .goal { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 7px; align-items: start; margin-top: 6px; font-size: 11px; line-height: 1.7; color: #6d7f9c; }
+.hud .ticker .cell.guide .goal > .glyph, .hud .ticker .cell.guide .goal > svg { height: 1.7em; }
 .hud .ticker .cell.guide.place:hover { background: #eef3fb; }
 .hud .ticker .cell.guide + .head { border-top: 1px dashed #e3e6df; }
 .hud .ticker .alert.warn { box-shadow: inset 3px 0 0 #d9a24e; }

@@ -8,7 +8,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import { amounts, kinds, type KindId } from "../src/content.ts"
-import { guideBuilding, guideDone, guideStep, guideSteps, type GuideFacts } from "../src/rules/guide.ts"
+import { guideDone, guideStep, guideSteps, type GuideFacts } from "../src/rules/guide.ts"
 
 const fresh: GuideFacts = {
   homes: 0,
@@ -68,9 +68,7 @@ test("the opening comes step after step, each once the last is built", () => {
   const put = new Set(guideDone(housed, none))
   assert.equal(guideStep(housed, put, { quiet: true })?.id, "fishery", "no quiet in the opening")
   const building = { ...housed, placed: new Set<KindId>(["fishery"]) }
-  const step = guideStep(building, put)!
-  assert.equal(step.id, "fishery")
-  assert.ok(guideBuilding(step, building), "a laid fishery is told as being built")
+  assert.equal(guideStep(building, put)?.id, "fishery", "a laid fishery is not done until it stands")
   const fed = town({ homes: 4, residents: 8 }, ["fishery"])
   assert.equal(guideStep(fed, new Set(guideDone(fed, none)), { quiet: true })?.id, "planks")
   const sawn = town({ homes: 4, residents: 8 }, ["fishery", "lumberjack", "sawmill"])

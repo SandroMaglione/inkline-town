@@ -1692,7 +1692,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       const guideHtml = g
         ? [
             `<div class="head guide"><span>guide · ${escapeHtml(g.chapter)}</span><span class="progress" title="Steps of the guide done">${s.guide.done} of ${s.guide.total} done</span><button class="quiet" data-guide-off title="Turn the guide off (the guide button in the bottom right turns it back on)">hide guide</button></div>`,
-            `<div class="cell alert hint guide${g.at !== null ? " place" : ""}" data-guide>${icon("hint", 16, "mark")}<span class="text">${callouts(g.text)}<span class="goal">${icon("goal", 12)}done when ${callouts(g.goal)}</span></span><span class="acts">${g.at !== null ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="Skip this step">${icon("close", 12)}</button></span></div>`
+            `<div class="cell alert hint guide${g.at !== null ? " place" : ""}" data-guide>${icon("hint", 16, "mark")}<span class="text">${callouts(g.text)}<span class="goal">${icon("goal", 12)}<span>done when ${callouts(g.goal)}</span></span></span><span class="acts">${g.at !== null ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="Skip this step">${icon("close", 12)}</button></span></div>`
           ]
         : []
       const tickerHtml = [

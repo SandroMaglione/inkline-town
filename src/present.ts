@@ -87,7 +87,7 @@ import { emptyPreview, type Alert as Notice, type HitBox, type Legend, type Line
 import { blockers as blockersOf, streetAdvice, type InTown, type Served, type Street } from "./rules/explain.ts"
 import { breadBonus, streetTax, suppliedTaxOf } from "./rules/households.ts"
 import { rockBlocks, type RockPart } from "./render3d/rock-blocks.ts"
-import { GUIDE_QUIET, guideBuilding, guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
+import { GUIDE_QUIET, guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
 import { ticks } from "./content.ts"
 
 const cellAt = (at: Point): Point => {
@@ -317,7 +317,7 @@ const ALERT_PATIENCE = ticks(30)
 let emptySince: number | null = null
 /** Once said, it stays said a while, so a handful of fish arriving does not flick it off and on. */
 let hungryUntil = 0
-const HUNGER_PATIENCE = ticks(8)
+const HUNGER_PATIENCE = ticks(20)
 /** A view's colour over a model: pale, so the ink still reads. */
 const TINT = { good: 0xbcd2ee, fair: 0xf3e3a8, bad: 0xf2b9a0, cool: 0xdccbe8, mark: 0xd5dad3, settlers: 0xead7bd, fine: 0xa9c4e8, plain: 0xffffff }
 const needIcons = { food: "food", bread: "bread", cloth: "cloth", faith: "faith" } as const
@@ -1269,7 +1269,7 @@ export const Interact = Game.System(
       chronicle: resources.chronicle.get().lines,
       alerts,
       guide: {
-        step: step && shown ? { key: step.id, chapter: step.chapter, goal: step.goal, text: guideBuilding(step, facts) ? `${step.text} Laid: it starts once the builders finish it.` : step.text, at: shown.at, size: shown.at?.size ?? 1, id: shown.id } : null,
+        step: step && shown ? { key: step.id, chapter: step.chapter, goal: step.goal, text: step.text, at: shown.at, size: shown.at?.size ?? 1, id: shown.id } : null,
         done: guideSteps.filter((s) => put.has(s.id)).length,
         total: guideSteps.length,
         off: guide.off

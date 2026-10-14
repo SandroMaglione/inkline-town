@@ -83,8 +83,6 @@ export interface GuideStep {
   readonly goal: string
   readonly focus: GuideFocus | null
   readonly when: (f: GuideFacts) => boolean
-  /** The buildings it asks for (done when they stand). */
-  readonly kinds?: ReadonlyArray<KindId>
   /** One of the first steps, which come one after another, without the quiet. */
   readonly opening?: boolean
   /** It cannot wait for the guide's quiet (and goes ahead of the step shown). */
@@ -112,7 +110,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     chapter: "Founding",
     text: "The bar at the top is the town's store. Settlers eat fish from it, and the fish there will not last. Build a fishery (B) on a road within two cells of water; the town hall's walker carries the fish to the homes.",
     focus: "water",
-    kinds: ["fishery"],
     opening: true,
     when: (f) => f.builtHomes > 0,
     done: (f) => has(f, "fishery") || has(f, "bakery")
@@ -130,7 +127,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "winter",
     goal: "a granary or a smokehouse stands",
-    kinds: ["granary", "smokehouse"],
     chapter: "Keeping it standing",
     text: "Winter is coming: fishing slows, homes eat faster, and fish rots in store. A granary keeps fish five times as long, and a smokehouse makes fish that keeps all winter.",
     focus: "hall",
@@ -153,7 +149,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     chapter: "Founding",
     text: "Every home and building costs planks from the store, and they run out. Goods come in chains: a lumberjack by the woods fells wood, and a sawmill saws the wood into planks.",
     focus: "trees",
-    kinds: ["lumberjack", "sawmill"],
     opening: true,
     when: (f) => f.stock.planks < 25 || f.standing.has("fishery"),
     done: (f) => has(f, "lumberjack", "sawmill")
@@ -161,7 +156,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "forester",
     goal: "a forester stands",
-    kinds: ["forester"],
     chapter: "Founding",
     text: "The lumberjack is running out of trees. A forester beside it plants new ones for it to fell.",
     focus: { kind: "lumberjack" },
@@ -174,7 +168,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     chapter: "Founding",
     text: "Storage, workshops, and paving take stone, and the town starts with little. A quarry cuts it from the pale rocks nearby (the dark ones are ore, for later).",
     focus: "stone",
-    kinds: ["quarry"],
     opening: true,
     when: (f) => f.stock.stone < 10 || has(f, "lumberjack", "sawmill"),
     done: (f) => has(f, "quarry")
@@ -212,7 +205,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "firewatch",
     goal: "a fire watch stands",
-    kinds: ["firewatch"],
     chapter: "Keeping it standing",
     text: "The risk of fire is rising: wooden cottages catch fire, and a fire spreads to its neighbours. A fire watch sends a watchman along the streets, and firefighters to any blaze. Press F to see the risk.",
     focus: "hall",
@@ -223,7 +215,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "builder",
     goal: "a builder's yard stands",
-    kinds: ["builder"],
     chapter: "Keeping it standing",
     text: "Buildings wear out, and a run-down one works at half pace and may fall. A builder's yard mends what its builder passes, with planks and stone. Press C to see their condition.",
     focus: "worn",
@@ -234,7 +225,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "market",
     goal: "a market stands",
-    kinds: ["market"],
     chapter: "Keeping it standing",
     text: "The town hall's walker only reaches 20 road cells. A market sends a walker with fish, bread, and cloth further along the streets.",
     focus: "hall",
@@ -253,7 +243,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "wheat",
     goal: "a farm and a mill stand",
-    kinds: ["farm", "mill"],
     chapter: "Growing citizens",
     text: "Settlers become citizens, who pay twice as much, once they have bread, cloth, and faith, all three; until then they want only food. Start with bread, the longest chain: a farm grows wheat, and a mill grinds it into flour.",
     focus: "hall",
@@ -263,7 +252,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "bakery",
     goal: "a bakery stands",
-    kinds: ["bakery"],
     chapter: "Growing citizens",
     text: "A bakery bakes the mill's flour into bread. Citizens need it, and a settlers' cottage with bread on the table pays half again.",
     focus: { kind: "mill" },
@@ -273,7 +261,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "cloth",
     goal: "a sheep farm and a weaver stand",
-    kinds: ["sheep", "weaver"],
     chapter: "Growing citizens",
     text: "Next, cloth: a sheep farm shears wool, and a weaver weaves it into cloth.",
     focus: "hall",
@@ -283,7 +270,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "chapel",
     goal: "a chapel stands",
-    kinds: ["chapel"],
     chapter: "Growing citizens",
     text: "The last need is faith: a chapel's walker brings it to the homes it passes, and the chapel makes its street more desirable.",
     focus: "hall",
@@ -302,7 +288,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "healer",
     goal: "a healer stands",
-    kinds: ["healer"],
     chapter: "Keeping it standing",
     text: "Sickness is spreading: hunger, crowding, and a quarry's dust make homes sick, and a sick home holds half as many. A healer's physician calls on the homes and cures them. Press A to see the risk.",
     focus: "hall",
@@ -313,7 +298,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "watchhouse",
     goal: "a watch house stands",
-    kinds: ["watchhouse"],
     chapter: "Keeping it standing",
     text: "Thieves are about: poor streets, half-empty homes, and low approval breed them. A watch house sends a constable along the streets to keep order. Press O to see the risk.",
     focus: "hall",
@@ -341,7 +325,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "smithy",
     goal: "a mine and a smithy stand",
-    kinds: ["mine", "smithy"],
     chapter: "Governing",
     text: "Ore is for one thing: tools. Now open: a mine by the dark, rust-veined rocks digs ore, and a smithy forges it into tools, which every workshop and lamp needs and which wear out.",
     focus: "ore",
@@ -353,10 +336,6 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
 /** The steps the town has now done that the guide has not yet put away. */
 export const guideDone = (f: GuideFacts, done: ReadonlySet<string>): Array<string> =>
   guideSteps.filter((s) => !done.has(s.id) && s.done(f)).map((s) => s.id)
-
-/** The step asks for buildings that are laid but not all standing yet: say so, rather than ask again. */
-export const guideBuilding = (step: GuideStep, f: GuideFacts) =>
-  step.id === "homes" ? f.homes > 0 && f.builtHomes === 0 : (step.kinds ?? []).some((k) => f.placed.has(k) && !f.standing.has(k))
 
 /**
  * The step to show now, if any: an urgent one first; else the step already
