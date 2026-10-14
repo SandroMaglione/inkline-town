@@ -22,7 +22,8 @@ test("the portable catalogue covers all world object families", () => {
   assert.deepEqual([...hats].sort(), ["bonnet", "brim", "cap", "hood", "none", "top"])
   for (const tier of [1, 2]) assert.equal(inkAssets.filter((a) => a.reference?.type === "house" && a.reference.tier === tier && !a.appearance).length, 4)
   assert.equal(inkAssets.filter((a) => a.reference?.type === "tree").length, 9)
-  assert.equal(inkAssets.filter((a) => a.reference?.type === "rock").length, 4)
+  // Stone and ore, full and quarried, one cell; and full outcrops over 2×1, 2×2, and 3×3 cells.
+  assert.equal(inkAssets.filter((a) => a.reference?.type === "rock").length, 10)
   assert.equal(inkAssets.filter((a) => a.reference?.type === "field").length, 4)
 })
 

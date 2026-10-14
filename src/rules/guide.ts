@@ -7,6 +7,13 @@
  * a mayor who already knows the game is not told what they did. The list
  * is in order of priority, not of chapters: a request from the crown with a
  * deadline goes ahead of a chain that takes minutes to build.
+ *
+ * Steps come when the town needs them, not back to back: each waits for a
+ * sign (planks running low, the woods thinning, a fire risk rising), and
+ * after one is done the guide keeps quiet for `GUIDE_QUIET` seconds. An
+ * urgent step (the crown's request, winter, a fire, the sick, a building
+ * falling apart) does not wait for the quiet. A step once shown stays until
+ * it is done or put away, so the ticker does not hop between steps.
  */
 import type { Amounts, KindId } from "../content.ts"
 
@@ -42,7 +49,14 @@ export interface GuideFacts {
   readonly most: number
   /** The page: the town panel has been open. */
   readonly sawTown: boolean
+  /** A home whose risk of fire, sickness, or theft is rising. */
+  readonly risk: { readonly fire: boolean; readonly health: boolean; readonly order: boolean }
+  /** A lumberjack with few trees left in reach. */
+  readonly fewTrees: boolean
 }
+
+/** Seconds of the town's time the guide keeps quiet after a step, before the next that is not urgent. */
+export const GUIDE_QUIET = 45
 
 /** Where a step's "show me where" goes: a place on the land, or a building of a kind. */
 export type GuideFocus = "hall" | "water" | "trees" | "stone" | "ore" | "worn" | "poorStreet" | { readonly kind: KindId }
@@ -57,6 +71,8 @@ export interface GuideStep {
   readonly text: string
   readonly focus: GuideFocus | null
   readonly when: (f: GuideFacts) => boolean
+  /** It cannot wait for the guide's quiet (and goes ahead of the step shown). */
+  readonly urgent?: (f: GuideFacts) => boolean
   readonly done: (f: GuideFacts) => boolean
 }
 
@@ -85,6 +101,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     text: "The crown asks for goods by a deadline. Send them from the bar at the top for coins; an unanswered request is a fine, and three missed in a row and the mayor is dismissed.",
     focus: null,
     when: (f) => f.crown.open,
+    urgent: () => true,
     done: (f) => f.crown.met > 0
   },
   {
@@ -93,12 +110,13 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     text: "Winter is coming: fishing slows, homes eat faster, and fish rots in store. A granary keeps fish five times as long, and a smokehouse makes fish that keeps all winter.",
     focus: "hall",
     when: (f) => f.residents >= 20 && (f.winter || (f.winterIn !== null && f.winterIn <= 120)),
+    urgent: () => true,
     done: (f) => has(f, "granary") || has(f, "smokehouse")
   },
   {
     id: "tools",
     chapter: "Growing citizens",
-    text: "Tools are scarce until a smithy makes them, and that needs 10 citizens. Keep them for the weaver, the mill, and the bakery (not lamps), or buy them from traders in the town panel (T).",
+    text: "Tools are scarce until a smithy forges them from ore, and that needs 10 citizens. Keep them for the weaver, the mill, and the bakery (not lamps), or buy them from traders in the town panel (T).",
     focus: null,
     when: (f) => f.residents >= 15 && f.stock.tools <= 3 && !has(f, "weaver", "mill", "bakery"),
     done: (f) => has(f, "weaver", "mill", "bakery") || has(f, "smithy")
@@ -108,15 +126,15 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     chapter: "Founding",
     text: "Every home and building costs planks. A lumberjack by the woods fells wood, and a sawmill saws it into planks.",
     focus: "trees",
-    when: (f) => has(f, "fishery") || f.stock.planks < 20,
+    when: (f) => f.stock.planks < 25 || (f.standing.has("fishery") && f.homes >= 6),
     done: (f) => has(f, "lumberjack", "sawmill")
   },
   {
     id: "forester",
     chapter: "Founding",
-    text: "The woods run out. A forester beside the lumberjack plants new trees for it to fell.",
+    text: "The lumberjack is running out of trees. A forester beside it plants new ones for it to fell.",
     focus: { kind: "lumberjack" },
-    when: (f) => has(f, "lumberjack"),
+    when: (f) => f.fewTrees,
     done: (f) => has(f, "forester")
   },
   {
@@ -124,15 +142,16 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     chapter: "Founding",
     text: "Storage, workshops, and paving take stone, and the town starts with little. A quarry cuts it from the rocks nearby.",
     focus: "stone",
-    when: (f) => has(f, "lumberjack", "sawmill") || f.stock.stone < 6,
+    when: (f) => f.stock.stone < 10 || (f.standing.has("sawmill") && f.homes >= 10),
     done: (f) => has(f, "quarry")
   },
   {
     id: "firewatch",
     chapter: "Keeping it standing",
-    text: "Wooden cottages catch fire, and a fire spreads to its neighbours. A fire watch sends a watchman along the streets, and firefighters to any blaze. Press F to see the risk.",
+    text: "The risk of fire is rising: wooden cottages catch fire, and a fire spreads to its neighbours. A fire watch sends a watchman along the streets, and firefighters to any blaze. Press F to see the risk.",
     focus: "hall",
-    when: (f) => f.homes >= 8 || f.burning > 0,
+    when: (f) => f.risk.fire || f.burning > 0,
+    urgent: (f) => f.burning > 0,
     done: (f) => has(f, "firewatch")
   },
   {
@@ -141,6 +160,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     text: "Buildings wear out, and a run-down one works at half pace and may fall. A builder's yard mends what its builder passes, with planks and stone. Press C to see their condition.",
     focus: "worn",
     when: (f) => f.worn,
+    urgent: () => true,
     done: (f) => has(f, "builder")
   },
   {
@@ -186,17 +206,18 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "healer",
     chapter: "Keeping it standing",
-    text: "Hunger, crowding, and a quarry's dust make homes sick, and a sick home holds half as many. A healer's physician calls on the homes and cures them. Press A to see the risk.",
+    text: "Sickness is spreading: hunger, crowding, and a quarry's dust make homes sick, and a sick home holds half as many. A healer's physician calls on the homes and cures them. Press A to see the risk.",
     focus: "hall",
-    when: (f) => f.residents >= 30 && (f.sick > 0 || f.residents >= 50),
+    when: (f) => f.residents >= 30 && (f.sick > 0 || f.risk.health),
+    urgent: (f) => f.sick > 0,
     done: (f) => has(f, "healer") || has(f, "hospital")
   },
   {
     id: "watchhouse",
     chapter: "Keeping it standing",
-    text: "Poor streets, half-empty homes, and low approval breed thieves. A watch house sends a constable along the streets to keep order. Press O to see the risk.",
+    text: "Thieves are about: poor streets, half-empty homes, and low approval breed them. A watch house sends a constable along the streets to keep order. Press O to see the risk.",
     focus: "hall",
-    when: (f) => f.residents >= 40,
+    when: (f) => f.residents >= 40 && f.risk.order,
     done: (f) => has(f, "watchhouse")
   },
   {
@@ -218,7 +239,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "smithy",
     chapter: "Governing",
-    text: "Now open: a mine digs ore from a deposit, and a smithy forges it into tools, which every workshop and lamp needs and which wear out.",
+    text: "Ore is for one thing: tools. Now open: a mine by the dark, rust-veined rocks digs ore, and a smithy forges it into tools, which every workshop and lamp needs and which wear out.",
     focus: "ore",
     when: (f) => f.citizens >= 10,
     done: (f) => has(f, "mine", "smithy")
@@ -229,6 +250,16 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
 export const guideDone = (f: GuideFacts, done: ReadonlySet<string>): Array<string> =>
   guideSteps.filter((s) => !done.has(s.id) && s.done(f)).map((s) => s.id)
 
-/** The step to show now, if any: the first that applies and is not yet done or put away. */
-export const guideStep = (f: GuideFacts, done: ReadonlySet<string>): GuideStep | null =>
-  guideSteps.find((s) => !done.has(s.id) && !s.done(f) && s.when(f)) ?? null
+/**
+ * The step to show now, if any: an urgent one first; else the step already
+ * shown (`shown`), until it is done or put away; else, unless the guide is
+ * keeping `quiet`, the first that applies.
+ */
+export const guideStep = (f: GuideFacts, done: ReadonlySet<string>, pace: { readonly shown?: string | null; readonly quiet?: boolean } = {}): GuideStep | null => {
+  const open = (s: GuideStep) => !done.has(s.id) && !s.done(f)
+  const urgent = guideSteps.find((s) => open(s) && s.when(f) && s.urgent?.(f))
+  if (urgent) return urgent
+  const shown = guideSteps.find((s) => s.id === pace.shown && open(s) && (!s.urgent || s.when(f)))
+  if (shown) return shown
+  return pace.quiet ? null : (guideSteps.find((s) => open(s) && s.when(f)) ?? null)
+}

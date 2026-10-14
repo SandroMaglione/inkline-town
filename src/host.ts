@@ -140,7 +140,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     wood: "lumberjacks fell it; a sawmill saws it into planks",
     planks: "what homes and buildings are built from: a sawmill makes them from wood",
     stone: "for building and paving: quarries cut it from rocks, which run out",
-    ore: "mines dig it; a smithy forges it into tools",
+    ore: "only for tools: once the town has 10 citizens, a mine digs it from the rust-red deposits, and a smithy forges it into tools",
     tools: "for building, and workshops wear one out every 50 or 60 jobs: a smithy forges them, or buy them",
     fish: "food for settlers: fisheries catch it by the water; it rots in about three minutes",
     smoked: "fish that keeps all winter: a smokehouse smokes it",
@@ -353,10 +353,12 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     ui.view = view
     for (const v of viewEls) v.button.classList.toggle("on", v.view === view)
   }
-  // New town, save, and load, out of the way in the bottom right. Founding or
-  // loading replaces the town, so each asks first.
+  // Share, the guide, save, load, and new town: a row of icons at the top,
+  // beside the people (it keeps its distance as their card grows). Founding
+  // or loading replaces the town, so each asks first.
+  new ResizeObserver(() => document.body.style.setProperty("--people-width", `${folk.offsetWidth}px`)).observe(folk)
   const action = (name: IconName, label: string, tip: string, run: () => void) => {
-    const button = el("button", "")
+    const button = el("button", name === "share" ? "labelled" : "")
     button.title = tip
     button.append(iconEl(name), document.createTextNode(label))
     button.onclick = run
@@ -365,6 +367,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   action("share", "share", "Share a picture of the town, or a link anyone can open to watch it and play on", () => void openShare())
   // The guide, on or off (it is on for a new mayor).
   const guideButton = el("button", "guide-toggle")
+  guideButton.title = "Turn the guide on or off: it tells a new mayor what to do next, and why"
   guideButton.append(iconEl("hint"), document.createTextNode("guide"))
   guideButton.onclick = () => ui.guide.push({ type: ui.stats?.guide.off ? "on" : "off" })
   system.append(guideButton)
@@ -1568,7 +1571,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       dismissed.add(off.dataset.dismiss!)
       return
     }
-    // The guide: put this step away, or turn the guide off (the bottom-right button turns it back on).
+    // The guide: put this step away, or turn the guide off (the top-right button turns it back on).
     const skip = target.closest<HTMLElement>("[data-skip]")
     if (skip) {
       ui.guide.push({ type: "skip", id: skip.dataset.skip! })
@@ -1576,7 +1579,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     }
     if (target.closest("[data-guide-off]")) {
       ui.guide.push({ type: "off" })
-      ui.toast("Guide off · turn it back on from the bottom right")
+      ui.toast("Guide off · turn it back on from the top right")
       return
     }
     const ref = target.closest<HTMLElement>("[data-kind]")
@@ -1673,7 +1676,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       const g = s.guide.step
       const guideHtml = g
         ? [
-            `<div class="head guide"><span>guide · ${escapeHtml(g.chapter)}</span><span class="progress" title="Steps of the guide done">${s.guide.done} of ${s.guide.total} done</span><button class="quiet" data-guide-off title="Turn the guide off (the guide button in the bottom right turns it back on)">hide guide</button></div>`,
+            `<div class="head guide"><span>guide · ${escapeHtml(g.chapter)}</span><span class="progress" title="Steps of the guide done">${s.guide.done} of ${s.guide.total} done</span><button class="quiet" data-guide-off title="Turn the guide off (the guide button in the top right turns it back on)">hide guide</button></div>`,
             `<div class="cell alert hint guide${g.at !== null ? " place" : ""}" data-guide>${icon("hint", 16, "mark")}<span class="text">${callouts(g.text)}</span><span class="acts">${g.at !== null ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="Skip this step">${icon("close", 12)}</button></span></div>`
           ]
         : []

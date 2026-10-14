@@ -13,7 +13,7 @@
   .toolbar button, .toolbar .town-button { font-size: 0; gap: 0; padding: 6px; min-width: 40px; min-height: 40px; justify-content: center; }
   .toolbar .speed button { font-size: 12px; min-width: 36px; }
   .toolbar button kbd { display: none; }
-  .system button { font-size: 0; gap: 0; padding: 6px; min-width: 38px; min-height: 38px; justify-content: center; }
+  .system button, .system button.labelled { font-size: 0; gap: 0; padding: 6px; min-width: 38px; min-height: 38px; justify-content: center; }
   .camera-controls [data-mode="pan"], .camera-controls output { display: none; }
 
   /* The goods on one line that scrolls, a little smaller. */
@@ -85,13 +85,19 @@
   .hud { top: calc(6px + env(safe-area-inset-top)); gap: 5px; }
   .hud .card .cell { padding: 5px 10px; }
   .toolbar { bottom: calc(6px + env(safe-area-inset-bottom)); }
-  .system { bottom: calc(6px + env(safe-area-inset-bottom)); }
+  .system { top: calc(6px + env(safe-area-inset-top)); }
   .panel-open .system { display: none; }
   .camera-controls { bottom: calc(60px + env(safe-area-inset-bottom)); padding: 3px; }
   .views { bottom: calc(60px + env(safe-area-inset-bottom)); }
   .legend { bottom: calc(60px + env(safe-area-inset-bottom)); }
   .toast { bottom: calc(110px + env(safe-area-inset-bottom)); }
   .panel { padding-top: 12px; }
+}
+
+/* A small landscape window: the map views stand in a column on the right, so the ticker and the speed keep left of it. */
+@media (max-width: 760px) and (max-height: 500px) {
+  .hud.left { right: 66px; }
+  .toolbar .speed { right: 66px; }
 }
 
 /* ── Touch: fingers instead of a mouse ── */

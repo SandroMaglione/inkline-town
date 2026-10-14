@@ -86,7 +86,8 @@ import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type Alert as Notice, type HitBox, type Legend, type Line, type View } from "./ui.ts"
 import { blockers as blockersOf, streetAdvice, type InTown, type Served, type Street } from "./rules/explain.ts"
 import { breadBonus, streetTax, suppliedTaxOf } from "./rules/households.ts"
-import { guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
+import { rockBlocks, type RockPart } from "./render3d/rock-blocks.ts"
+import { GUIDE_QUIET, guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
 import { ticks } from "./content.ts"
 
 const cellAt = (at: Point): Point => {
@@ -1126,7 +1127,18 @@ export const Interact = Game.System(
       trading: rates.sells.length > 0 || rates.buys.length > 0,
       taxed: rates.settlers !== 100 || rates.citizens !== 100,
       most: Math.max(...goodIds.map((g) => stock[g])),
-      sawTown: ui.menu === "town"
+      sawTown: ui.menu === "town",
+      risk: {
+        fire: houses.some((row) => (maybe(row.data.risk)?.fire ?? 0) >= RISK_MAX * 0.35),
+        health: houses.some((row) => (maybe(row.data.risk)?.health ?? 0) >= RISK_MAX * 0.35),
+        order: houses.some((row) => (maybe(row.data.risk)?.order ?? 0) >= RISK_MAX * 0.35)
+      },
+      fewTrees: buildings.some((row) => {
+        if (row.data.building.get().kind !== "lumberjack" || !finished(row)) return false
+        const tile = row.data.tile.get()
+        const reach = kinds.lumberjack.gathers!.radius
+        return queries.trees.each().map(({ data }) => data.tile.get()).filter((t) => t.x >= tile.x - reach && t.x < tile.x + tile.size + reach && t.y >= tile.y - reach && t.y < tile.y + tile.size + reach).length < 6
+      })
     }
     const guide = resources.guide.get()
     const put = new Set(guide.done)
@@ -1136,7 +1148,12 @@ export const Interact = Game.System(
       resources.guide.update((g) => ({ ...g, done: [...g.done, ...newly] }))
       for (const id of newly) put.add(id)
     }
-    const step = guide.off || !playing ? null : guideStep(facts, put)
+    // The guide keeps quiet a while after a step is put away; a new town (the clock gone back) starts it afresh.
+    if (t < guidePace.since) Object.assign(guidePace, { shown: null, since: 0, quietUntil: 0 })
+    if (guidePace.shown !== null && put.has(guidePace.shown)) Object.assign(guidePace, { shown: null, quietUntil: t + GUIDE_QUIET * 60 })
+    const step = guide.off || !playing ? null : guideStep(facts, put, { shown: guidePace.shown, quiet: t < guidePace.quietUntil })
+    if (step && !step.urgent?.(facts)) guidePace.shown = step.id
+    guidePace.since = t
     const hallTile = hallRow?.data.tile.get()
     /** Of some tiles, the one nearest the town hall. */
     const nearestHall = (tiles: ReadonlyArray<TileLike>): TileLike | undefined => {
@@ -1404,7 +1421,7 @@ export const Animate = Game.System(
         }
       }),
       trees: Game.Query({ selection: { tree: Game.Query.read(Tree) } }),
-      rocks: Game.Query({ selection: { rock: Game.Query.read(Rock) } }),
+      rocks: Game.Query({ selection: { rock: Game.Query.read(Rock), tile: Game.Query.read(Tile) } }),
       fields: Game.Query({ selection: { field: Game.Query.read(Field) } })
     },
     resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal) },
@@ -1509,13 +1526,28 @@ export const Animate = Game.System(
     }
     for (const { entity, data } of queries.trees.each())
       services.treeNodes.get(entity.id)?.update(data.tree.get().growth, emphasis(entity.id))
-    for (const { entity, data } of queries.rocks.each()) {
+    // Neighbouring rocks are drawn as one big outcrop; the blocks are formed again only when a rock runs out (or the land changes).
+    const rocks = queries.rocks.each()
+    const rockKey = `${rocks.length}:${rocks.reduce((n, { entity }) => n + entity.id, 0)}`
+    if (rockKey !== rockShapes.key) {
+      rockShapes.key = rockKey
+      rockShapes.parts = rockBlocks(rocks.map(({ entity, data }) => ({ id: entity.id, ...data.tile.get(), ore: data.rock.get().ore })))
+    }
+    const amounts = new Map<number, number>(rocks.map(({ entity, data }) => [entity.id, data.rock.get().amount]))
+    for (const { entity, data } of rocks) {
       const r = data.rock.get()
-      services.rockNodes.get(entity.id)?.update(r.ore, r.amount)
+      const part = rockShapes.parts.get(entity.id)
+      if (!part || !part.draws) services.rockNodes.get(entity.id)?.update(r.ore, r.amount, part ? 0 : 1, part ? 0 : 1)
+      else services.rockNodes.get(entity.id)?.update(r.ore, part.members.reduce((n, id) => n + (amounts.get(id) ?? 0), 0) / part.members.length, part.w, part.h)
     }
     for (const { entity, data } of queries.fields.each()) services.fieldNodes.get(entity.id)?.update(data.field.get().growth)
   }
 )
+
+/** The guide's pace (page-side, not saved): the step it is showing, and until when it keeps quiet. */
+const guidePace: { shown: string | null; since: number; quietUntil: number } = { shown: null, since: 0, quietUntil: 0 }
+
+const rockShapes: { key: string; parts: Map<number, RockPart> } = { key: "", parts: new Map() }
 
 /** Ghosts, the road being dragged, and outlines, redrawn every frame. */
 export const DrawPreview = Game.System(

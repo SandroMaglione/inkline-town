@@ -265,19 +265,24 @@ export class TreeView extends WorldView {
 export class RockView extends WorldView {
   private body: ModelHandle
   private variant = 0
+  private cell = { x: 0, y: 0 }
   constructor(stage: GameScene, entity: number) {
     super(stage, entity)
     this.body = this.model()
   }
   place(x: number, y: number) {
     this.variant = Math.floor(hash(x,y)*6)
-    this.anchor.x = x + 0.5
-    this.anchor.y = y + 0.5
-    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
+    this.cell = { x, y }
   }
-  update(ore: boolean, amount: number) {
+  /** `w` × `h`: the cells of the outcrop this rock draws (see `rock-blocks.ts`); 0, drawn by a neighbour. */
+  update(ore: boolean, amount: number, w = 1, h = 1) {
+    this.group.visible = w > 0
+    if (w === 0) return
+    this.anchor.x = this.cell.x + w / 2
+    this.anchor.y = this.cell.y + h / 2
+    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
     const full = amount > ROCK_AMOUNT / 2
-    this.body.use(`rock/${ore}/${full}/${this.variant}`, () => makeRock(ore, full, this.variant))
+    this.body.use(`rock/${ore}/${full}/${this.variant}/${w}x${h}`, () => makeRock(ore, full, this.variant, w, h))
   }
 }
 export class FieldView extends WorldView {
