@@ -87,7 +87,7 @@ import { emptyPreview, type Alert as Notice, type HitBox, type Legend, type Line
 import { blockers as blockersOf, streetAdvice, type InTown, type Served, type Street } from "./rules/explain.ts"
 import { breadBonus, streetTax, suppliedTaxOf } from "./rules/households.ts"
 import { rockBlocks, type RockPart } from "./render3d/rock-blocks.ts"
-import { GUIDE_QUIET, guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
+import { GUIDE_QUIET, guideBuilding, guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
 import { ticks } from "./content.ts"
 
 const cellAt = (at: Point): Point => {
@@ -1109,6 +1109,7 @@ export const Interact = Game.System(
     })
     const facts: GuideFacts = {
       homes: houses.length,
+      builtHomes: houses.filter(finished).length,
       residents: census.settlers + census.citizens,
       citizens: census.citizens,
       finerHomes: houses.filter((row) => row.data.house.get().tier > 1).length,
@@ -1254,7 +1255,7 @@ export const Interact = Game.System(
       chronicle: resources.chronicle.get().lines,
       alerts,
       guide: {
-        step: step && shown ? { key: step.id, chapter: step.chapter, text: step.text, at: shown.at, size: shown.at?.size ?? 1, id: shown.id } : null,
+        step: step && shown ? { key: step.id, chapter: step.chapter, text: guideBuilding(step, facts) ? `${step.text} Laid: it starts once the builders finish it.` : step.text, at: shown.at, size: shown.at?.size ?? 1, id: shown.id } : null,
         done: guideSteps.filter((s) => put.has(s.id)).length,
         total: guideSteps.length,
         off: guide.off

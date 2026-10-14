@@ -264,7 +264,7 @@ pnpm balance -- --snapshot 40                   # save each seed's town at minut
 
 ## Sharing a town
 
-**share** (top right, and on the reckoning) draws the town as the camera
+**share** (bottom right, and on the reckoning) draws the town as the camera
 sees it into a 1200 × 630 card (at 2×), with the term's state and numbers on a
 strip of paper. **Save the picture** downloads it; on a phone it goes to the
 share sheet instead. **Make a link** uploads the town (its save file, gzipped,

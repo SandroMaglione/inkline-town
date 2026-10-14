@@ -8,19 +8,25 @@
  * is in order of priority, not of chapters: a request from the crown with a
  * deadline goes ahead of a chain that takes minutes to build.
  *
- * Steps come when the town needs them, not back to back: each waits for a
+ * The first steps (`opening`) come one after another, each once the last
+ * is built: homes, then food, then planks, then stone, so a new mayor learns
+ * the store and its chains. After them, steps come when the town needs them,
+ * not back to back: each waits for a
  * sign (planks running low, the woods thinning, a fire risk rising), and
  * after one is done the guide keeps quiet for `GUIDE_QUIET` seconds. An
  * urgent step (the crown's request, winter, a fire, the sick, a building
  * falling apart) does not wait for the quiet. A step once shown stays until
- * it is done or put away, so the ticker does not hop between steps.
+ * it is done or put away, so the ticker does not hop between steps. A step
+ * that asks for a building is done when the building stands, not when it is
+ * laid.
  */
 import type { Amounts, KindId } from "../content.ts"
 
 /** What the guide reads of the town. */
 export interface GuideFacts {
-  /** Homes laid, built or not. */
+  /** Homes laid, built or not; and built. */
   readonly homes: number
+  readonly builtHomes: number
   readonly residents: number
   /** Citizens, and homes that hold them (citizens' homes and townhouses). */
   readonly citizens: number
@@ -71,28 +77,36 @@ export interface GuideStep {
   readonly text: string
   readonly focus: GuideFocus | null
   readonly when: (f: GuideFacts) => boolean
+  /** The buildings it asks for (done when they stand). */
+  readonly kinds?: ReadonlyArray<KindId>
+  /** One of the first steps, which come one after another, without the quiet. */
+  readonly opening?: boolean
   /** It cannot wait for the guide's quiet (and goes ahead of the step shown). */
   readonly urgent?: (f: GuideFacts) => boolean
   readonly done: (f: GuideFacts) => boolean
 }
 
-const has = (f: GuideFacts, ...kinds: ReadonlyArray<KindId>) => kinds.every((k) => f.placed.has(k))
+/** Every one of these buildings stands (built, not only laid). */
+const has = (f: GuideFacts, ...kinds: ReadonlyArray<KindId>) => kinds.every((k) => f.standing.has(k))
 
 export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "homes",
     chapter: "Founding",
-    text: "Drag a row of homes along the road from the town hall (H), or lay more road first (R). Settlers move in on their own, and every home pays taxes.",
+    text: "Drag a row of homes along the road from the town hall (H), or lay more road first (R). Builders carry planks from the store to each one; once it stands, settlers move in on their own, and every home pays taxes.",
     focus: "hall",
+    opening: true,
     when: () => true,
-    done: (f) => f.homes > 0
+    done: (f) => f.builtHomes > 0
   },
   {
     id: "fishery",
     chapter: "Founding",
-    text: "Settlers eat, and the fish in store will not last. Build a fishery (B) on a road within two cells of water; the town hall's walker carries the fish to the homes.",
+    text: "The bar at the top is the town's store. Settlers eat fish from it, and the fish there will not last. Build a fishery (B) on a road within two cells of water; the town hall's walker carries the fish to the homes.",
     focus: "water",
-    when: (f) => f.homes > 0,
+    kinds: ["fishery"],
+    opening: true,
+    when: (f) => f.builtHomes > 0,
     done: (f) => has(f, "fishery") || has(f, "bakery")
   },
   {
@@ -106,6 +120,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "winter",
+    kinds: ["granary", "smokehouse"],
     chapter: "Keeping it standing",
     text: "Winter is coming: fishing slows, homes eat faster, and fish rots in store. A granary keeps fish five times as long, and a smokehouse makes fish that keeps all winter.",
     focus: "hall",
@@ -124,13 +139,16 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "planks",
     chapter: "Founding",
-    text: "Every home and building costs planks. A lumberjack by the woods fells wood, and a sawmill saws it into planks.",
+    text: "Every home and building costs planks from the store, and they run out. Goods come in chains: a lumberjack by the woods fells wood, and a sawmill saws the wood into planks.",
     focus: "trees",
-    when: (f) => f.stock.planks < 25 || (f.standing.has("fishery") && f.homes >= 6),
+    kinds: ["lumberjack", "sawmill"],
+    opening: true,
+    when: (f) => f.stock.planks < 25 || f.standing.has("fishery"),
     done: (f) => has(f, "lumberjack", "sawmill")
   },
   {
     id: "forester",
+    kinds: ["forester"],
     chapter: "Founding",
     text: "The lumberjack is running out of trees. A forester beside it plants new ones for it to fell.",
     focus: { kind: "lumberjack" },
@@ -140,13 +158,16 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "quarry",
     chapter: "Founding",
-    text: "Storage, workshops, and paving take stone, and the town starts with little. A quarry cuts it from the rocks nearby.",
+    text: "Storage, workshops, and paving take stone, and the town starts with little. A quarry cuts it from the pale rocks nearby (the dark ones are ore, for later).",
     focus: "stone",
-    when: (f) => f.stock.stone < 10 || (f.standing.has("sawmill") && f.homes >= 10),
+    kinds: ["quarry"],
+    opening: true,
+    when: (f) => f.stock.stone < 10 || has(f, "lumberjack", "sawmill"),
     done: (f) => has(f, "quarry")
   },
   {
     id: "firewatch",
+    kinds: ["firewatch"],
     chapter: "Keeping it standing",
     text: "The risk of fire is rising: wooden cottages catch fire, and a fire spreads to its neighbours. A fire watch sends a watchman along the streets, and firefighters to any blaze. Press F to see the risk.",
     focus: "hall",
@@ -156,6 +177,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "builder",
+    kinds: ["builder"],
     chapter: "Keeping it standing",
     text: "Buildings wear out, and a run-down one works at half pace and may fall. A builder's yard mends what its builder passes, with planks and stone. Press C to see their condition.",
     focus: "worn",
@@ -165,6 +187,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "market",
+    kinds: ["market"],
     chapter: "Keeping it standing",
     text: "The town hall's walker only reaches 20 road cells. A market sends a walker with fish, bread, and cloth further along the streets.",
     focus: "hall",
@@ -181,6 +204,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "cloth",
+    kinds: ["sheep", "weaver", "chapel"],
     chapter: "Growing citizens",
     text: "Settlers become citizens, who pay twice as much, once they have bread, cloth, and faith. Now open: a sheep farm and a weaver make cloth, and a chapel brings faith.",
     focus: "hall",
@@ -189,6 +213,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "bread",
+    kinds: ["farm", "mill", "bakery"],
     chapter: "Growing citizens",
     text: "Bread is the last of a citizen's needs. Now open: a farm grows wheat, a mill grinds it into flour, and a bakery bakes the bread.",
     focus: "hall",
@@ -205,6 +230,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "healer",
+    kinds: ["healer"],
     chapter: "Keeping it standing",
     text: "Sickness is spreading: hunger, crowding, and a quarry's dust make homes sick, and a sick home holds half as many. A healer's physician calls on the homes and cures them. Press A to see the risk.",
     focus: "hall",
@@ -214,6 +240,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "watchhouse",
+    kinds: ["watchhouse"],
     chapter: "Keeping it standing",
     text: "Thieves are about: poor streets, half-empty homes, and low approval breed them. A watch house sends a constable along the streets to keep order. Press O to see the risk.",
     focus: "hall",
@@ -238,6 +265,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "smithy",
+    kinds: ["mine", "smithy"],
     chapter: "Governing",
     text: "Ore is for one thing: tools. Now open: a mine by the dark, rust-veined rocks digs ore, and a smithy forges it into tools, which every workshop and lamp needs and which wear out.",
     focus: "ore",
@@ -250,6 +278,10 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
 export const guideDone = (f: GuideFacts, done: ReadonlySet<string>): Array<string> =>
   guideSteps.filter((s) => !done.has(s.id) && s.done(f)).map((s) => s.id)
 
+/** The step asks for buildings that are laid but not all standing yet: say so, rather than ask again. */
+export const guideBuilding = (step: GuideStep, f: GuideFacts) =>
+  step.id === "homes" ? f.homes > 0 && f.builtHomes === 0 : (step.kinds ?? []).some((k) => f.placed.has(k) && !f.standing.has(k))
+
 /**
  * The step to show now, if any: an urgent one first; else the step already
  * shown (`shown`), until it is done or put away; else, unless the guide is
@@ -261,5 +293,6 @@ export const guideStep = (f: GuideFacts, done: ReadonlySet<string>, pace: { read
   if (urgent) return urgent
   const shown = guideSteps.find((s) => s.id === pace.shown && open(s) && (!s.urgent || s.when(f)))
   if (shown) return shown
-  return pace.quiet ? null : (guideSteps.find((s) => open(s) && s.when(f)) ?? null)
+  // The opening steps come one after another; the rest wait out the quiet.
+  return guideSteps.find((s) => open(s) && s.when(f) && (!pace.quiet || s.opening)) ?? null
 }

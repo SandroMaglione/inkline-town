@@ -44,11 +44,14 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .hud .good.empty { opacity: 0.55; }
 
 /* ── The toolbar: the town's panel, the tools, the speed ── */
-.toolbar, .system { position: fixed; display: flex; align-items: stretch; gap: 8px; z-index: 2; }
-.toolbar { bottom: calc(14px + env(safe-area-inset-bottom)); left: 16px; max-width: calc(100vw - 32px); overflow-x: auto; }
-/* Share, the guide, save, load, new town: icons in a row at the top, left of the people's card (its width set by the page). */
-.system { top: 12px; right: calc(24px + var(--people-width, 330px)); transition: right 240ms cubic-bezier(.2,.8,.2,1); }
-.panel-open .system { right: calc(384px + var(--people-width, 330px)); }
+.toolbar, .system {
+  position: fixed; bottom: calc(14px + env(safe-area-inset-bottom)); display: flex; align-items: stretch; gap: 8px; z-index: 2;
+}
+.toolbar { left: 16px; max-width: calc(100vw - 32px); overflow-x: auto; }
+/* Share, the guide, save, load, new town: icons in the bottom right. With the panel open it moves over, and up above the toolbar it would cover. */
+.system { right: 16px; transition: right 240ms cubic-bezier(.2,.8,.2,1), bottom 240ms cubic-bezier(.2,.8,.2,1); }
+.panel-open .system { right: 376px; bottom: calc(70px + env(safe-area-inset-bottom)); }
+@media (max-width: 1210px) { .system { bottom: calc(70px + env(safe-area-inset-bottom)); } }
 .toolbar .group, .system {
   display: flex; gap: 4px; padding: 5px; background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db;
 }
@@ -62,8 +65,6 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .toolbar button kbd { font: inherit; font-size: 10px; opacity: 0.55; }
 .toolbar .pause { padding: 6px 9px; }
 .toolbar .pause.on .glyph { background: none; }
-/* With the panel open, the people move over and leave no room beside them, unless the screen is wide. */
-@media (max-width: 1440px) { .panel-open .system { display: none; } }
 .system button { color: #5d6861; font-size: 0; gap: 0; padding: 6px 9px; }
 .system button.labelled { font-size: 12px; gap: 7px; padding: 6px 10px; }
 .system .guide-toggle.on { color: #2f5a9c; background: #eef3fb; border-color: #c9d6ee; }
