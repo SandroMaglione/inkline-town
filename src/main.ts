@@ -21,6 +21,14 @@ import { blankResources, simulate } from "./sim/index.ts"
 /** Minutes of game time between autosaves. */
 const AUTOSAVE_MINUTES = 2
 
+/** Fades the loading card out: once the town has drawn its first frame, or when it could not start. */
+const loaded = () => {
+  const card = document.getElementById("loading")
+  if (!card || card.classList.contains("done")) return
+  card.classList.add("done")
+  setTimeout(() => card.remove(), 400)
+}
+
 const start = async () => {
   const mount = document.getElementById("app")!
   let persistence: Persistence = { save: () => "Not ready", load: () => "Not ready", shareFile: () => "" }
@@ -65,6 +73,7 @@ const start = async () => {
   })
   if (!made.ok) {
     mount.textContent = `The town could not start: ${JSON.stringify(made.error)}`
+    loaded()
     return
   }
   const runtime = made.value
@@ -173,15 +182,24 @@ const start = async () => {
       settling = false
       syncPage()
       autosave()
+      // The first frame builds the town's meshes and shaders; the card lifts on the frame after it.
+      requestAnimationFrame(loaded)
     },
     onFailure: (failure) => {
       mount.textContent =
         failure.kind === "InvalidTickDelta" ? `Invalid frame delta: ${failure.deltaMS}` : "The town stopped after a system failure."
+      loaded()
     }
   })
-  if (!loop.ok) mount.textContent = `Invalid fixed-loop option: ${loop.error.field}`
+  if (!loop.ok) {
+    mount.textContent = `Invalid fixed-loop option: ${loop.error.field}`
+    loaded()
+  }
 }
 
-void start()
+start().catch((error: unknown) => {
+  document.getElementById("app")!.textContent = `The town could not start: ${error instanceof Error ? error.message : String(error)}`
+  loaded()
+})
 
 if (import.meta.hot) import.meta.hot.accept(() => location.reload())
