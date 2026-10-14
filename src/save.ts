@@ -188,12 +188,15 @@ export const load = (slot: Slot) =>
     return file
   })
 
+/** The slot saved last that can still be read (the mayor's own save, or the autosave), without loading it; `null` when there is none. */
+export const latest = Effect.gen(function* () {
+  const files = yield* Effect.forEach(slots, (slot) => read(slot).pipe(Effect.option))
+  return files.flatMap((f) => (f._tag === "Some" ? [f.value] : [])).sort((a, b) => b.savedAt - a.savedAt)[0] ?? null
+})
+
 /** Loads whichever slot was saved last: the mayor's own save, or the autosave. */
 export const loadLatest = Effect.gen(function* () {
-  const files = yield* Effect.forEach(slots, (slot) => read(slot).pipe(Effect.option))
-  const newest = files
-    .flatMap((f) => (f._tag === "Some" ? [f.value] : []))
-    .sort((a, b) => b.savedAt - a.savedAt)[0]
+  const newest = yield* latest
   return yield* load(newest?.slot ?? "manual")
 })
 

@@ -286,12 +286,17 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .dialog .frame:hover { background: #e6e9e2; }
 .dialog .frame.primary { background: #3d4943; color: #f7f8f4; }
 .dialog .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; }
-.dialog .charter { display: grid; grid-template-columns: 1fr 200px; gap: 22px; }
+.dialog .charter { display: grid; grid-template-columns: 1fr 300px; gap: 24px; }
 .dialog .choices { display: flex; gap: 6px; flex-wrap: wrap; }
 .dialog .choice { border-color: #c9cec4; color: #6c766f; }
 .dialog .choice.on { border-color: #3d4943; color: #3d4943; font-weight: 700; background: #e6e9e2; }
 .dialog .preview { display: flex; flex-direction: column; gap: 8px; }
-.dialog .preview canvas { width: 192px; height: 192px; background: #e2e9e6; border: 1px solid #c9cec4; image-rendering: pixelated; }
+/* The land is the picture the charter is chosen by: as large as the sheet allows, with its reroll on it. */
+.dialog .preview .map { position: relative; }
+.dialog .preview canvas { display: block; width: 100%; height: auto; aspect-ratio: 1; box-sizing: border-box; background: #e2e9e6; border: 1px solid #c9cec4; border-radius: 4px; image-rendering: pixelated; }
+.dialog .preview .reroll { position: absolute; right: 8px; bottom: 8px; background: rgba(247, 248, 244, 0.92); font-size: 12px; }
+.dialog .preview .reroll:hover { background: #f7f8f4; }
+.dialog .actions .saved { flex-basis: 100%; margin: 0 0 2px; font-size: 12px; color: #6c766f; }
 .dialog .preview .sub { font-size: 12px; }
 .dialog .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 14px 0; }
 .dialog .fact { display: flex; flex-direction: column; border-left: 2px solid #d3d7ce; padding-left: 8px; }

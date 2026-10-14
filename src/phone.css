@@ -152,7 +152,6 @@
   .dialog .sub { font-size: 12px; }
   .dialog section { margin-top: 12px; }
   .dialog .choices .frame { flex: 1; justify-content: center; padding: 8px 6px; }
-  .dialog .preview canvas { width: 132px; height: 132px; }
   .dialog .chronicle { max-height: none; }
 }
 
@@ -167,7 +166,7 @@
   .panel-open .toolbar { left: calc(8px + env(safe-area-inset-left)); transform: none; max-width: calc(54vw - 16px); }
   .panel-open .hud .ticker.peek { display: none; }
   /* The picker: the options beside the map. */
-  .dialog .charter { grid-template-columns: 1fr 150px; gap: 16px; }
+  .dialog .charter { grid-template-columns: 1fr min(42%, 300px); gap: 16px; }
 }
 
 /* ── Portrait phone: sheets from the bottom, so the town stays in view above them ── */
@@ -186,10 +185,10 @@
   .panel::before { content: ""; position: absolute; top: 8px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: #c9cec4; }
   .panel.open { transform: none; }
   .panel-open .hud .stock, .panel-open .hud .ticker, .panel-open .views, .panel-open .legend { display: none; }
+  /* The land first, the full width of the sheet; the choices under it. */
   .dialog .charter { grid-template-columns: 1fr; gap: 0; }
-  .dialog .preview { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 12px; }
-  .dialog .preview .sub { flex: 1; min-width: 0; margin: 0; }
-  .dialog .preview .row { flex-basis: 100%; }
+  .dialog .preview { order: -1; gap: 6px; margin-top: 4px; }
+  .dialog .preview .sub { margin: 0; }
 }
 
 /* A very narrow phone: the tool bar's buttons a little narrower so it still fits. */

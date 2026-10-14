@@ -12,7 +12,7 @@ import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, 
 import { lands, sizes, STEP_SECONDS } from "./content.ts"
 import { createHost, type Persistence } from "./host.ts"
 import { present } from "./present.ts"
-import { browserStorage, describe, fileOf, loadLatest, loadText, save, Storage, World } from "./save.ts"
+import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World } from "./save.ts"
 import type { CameraView } from "./render3d/scene.ts"
 import { download, sharedId } from "./share/client.ts"
 import { BuildingNodes, Clock, FieldNodes, Game, Rules, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
@@ -35,7 +35,10 @@ const start = async () => {
   // A shared town's link (`/t/<id>`): fetch it while the page starts, and load it once the town is up.
   const shared = sharedId(location.pathname)
   let arriving: string | null = null
-  const { stage, ui, syncPage, resetPage, visit, visitFailed, visiting } = await createHost(mount, () => persistence, { shared: shared !== null })
+  // A town saved in this browser before: the founding screen offers to carry on with it.
+  const last = Effect.runSync(Effect.result(latest.pipe(Effect.provideService(Storage, browserStorage(localStorage)))))
+  const saved = last._tag === "Success" && last.success !== null ? { title: last.success.title, savedAt: last.success.savedAt } : null
+  const { stage, ui, syncPage, resetPage, visit, visitFailed, visiting } = await createHost(mount, () => persistence, { shared: shared !== null, saved })
   if (shared)
     download(shared).then(
       (text) => (arriving = text),

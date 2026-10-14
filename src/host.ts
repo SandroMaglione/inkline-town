@@ -120,8 +120,15 @@ export interface Persistence {
   readonly shareFile: (camera: CameraView) => string
 }
 
-/** `shared`: the page opened on a shared town's link, so it loads that rather than asking for a charter. */
-export const createHost = async (mount: HTMLElement, persistence: () => Persistence, options: { readonly shared?: boolean } = {}) => {
+/**
+ * `shared`: the page opened on a shared town's link, so it loads that rather than asking for a charter.
+ * `saved`: the newest town saved in this browser, which the first charter offers to carry on with.
+ */
+export const createHost = async (
+  mount: HTMLElement,
+  persistence: () => Persistence,
+  options: { readonly shared?: boolean; readonly saved?: { readonly title: string; readonly savedAt: number } | null } = {}
+) => {
   const app = new Application()
   // Pixi remains an offscreen thumbnail renderer for the unchanged menus.
   await app.init({ width: 64, height: 64, antialias: true, resolution: 2, autoStart: false, backgroundAlpha: 0 })
@@ -1298,6 +1305,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   }
 
   // ── Founding a town ──
+  const savedTown = options.saved ?? null
   const choice: { -readonly [K in keyof CharterValue]: CharterValue[K] } = defaultCharter((Date.now() & 0x7fffffff) >>> 0)
   /** The land a charter would found, drawn small: a dot a cell. */
   const drawLand = (canvas: HTMLCanvasElement) => {
@@ -1331,7 +1339,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const openCharter = (cancellable: boolean) => {
     ui.founding = true
     dialog.replaceChildren()
-    const card = el("div", "sheet")
+    const card = el("div", "sheet wide")
     card.append(
       el("h2", "", "found a town"),
       el(
@@ -1343,9 +1351,11 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const body = el("div", "charter")
     const options = el("div", "")
     const preview = el("div", "preview")
+    const mapBox = el("div", "map")
     const map = document.createElement("canvas")
+    mapBox.append(map)
     const facts = el("p", "sub")
-    preview.append(map, facts)
+    preview.append(mapBox, facts)
     body.append(options, preview)
     const group = <T extends string | number>(
       title: string,
@@ -1400,19 +1410,17 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         (v) => (choice.land = v)
       )
     ]
-    const seedLine = el("div", "row")
-    const seedText = el("span", "")
-    const reroll = el("button", "frame", "other land")
+    // The land is drawn from a seed: a fresh one on a click; the number itself only on hover, for whoever wants it.
+    const reroll = el("button", "frame reroll", "↻ other land")
     reroll.onclick = () => {
       choice.seed = (Math.random() * 0x7fffffff) >>> 0
       refresh()
     }
-    seedLine.append(seedText, reroll)
-    preview.append(seedLine)
+    mapBox.append(reroll)
     const refresh = () => {
       for (const r of refreshers) r()
       const land = drawLand(map)
-      seedText.textContent = `seed ${choice.seed}`
+      reroll.title = `Draw other land (this is seed ${choice.seed})`
       facts.textContent = `${land.cells} cells of land · ${land.trees.length} trees · ${land.rocks.filter((r) => !r.ore).length} stone · ${land.rocks.filter((r) => r.ore).length} ore · ${lands[choice.land].coins} coins to start`
     }
     refresh()
@@ -1430,6 +1438,26 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       setSpeed(1)
     }
     actions.append(found)
+    // On the way in, a town saved in this browser: carry on with it instead.
+    if (!cancellable && savedTown) {
+      const saved = savedTown
+      const resume = el("button", "frame", "Continue")
+      resume.title = `Carry on with the town saved in this browser: ${saved.title}`
+      resume.onclick = () => {
+        const said = persistence().load() ?? "Loaded"
+        ui.toast(said)
+        if (!said.startsWith("Loaded")) return
+        history.length = 0
+        ui.selected = null
+        ui.menu = null
+        closeCharter()
+        choose("select")
+        setSpeed(1)
+      }
+      const note = el("p", "saved", `your town: ${saved.title}${saved.savedAt > 0 ? ` · saved ${ago(saved.savedAt)}` : ""}`)
+      actions.prepend(note)
+      actions.append(resume)
+    }
     if (cancellable) {
       const cancel = el("button", "frame", "Cancel")
       cancel.onclick = () => closeCharter()
@@ -1943,4 +1971,15 @@ const flowHtml = (s: Stats): string => {
       `${cell(f.made[g])}${cell(f.used[g])}<span>${traded}</span>${cell(s.stock[g])}${cell(f.elsewhere[g])}`
   }).join("")
   return `<div class="flow-grid">${head}${body}</div>`
+}
+
+/** How long ago a save was made, roughly: "just now", "12 min ago", "3 h ago", "2 days ago". */
+const ago = (at: number): string => {
+  const minutes = Math.floor((Date.now() - at) / 60000)
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} h ago`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? "yesterday" : `${days} days ago`
 }
