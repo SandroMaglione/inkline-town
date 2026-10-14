@@ -15,6 +15,9 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 
 /* ── The top bar: the term and the treasury on the left, the people on the right ── */
 .hud { position: fixed; top: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; max-width: calc(50vw - 24px); z-index: 2; }
+/* The column is as wide as its widest card; the space beside a narrower card is the map, and takes its clicks. */
+.hud { pointer-events: none; }
+.hud > * { pointer-events: auto; }
 .hud.left { left: 16px; align-items: flex-start; }
 .hud.right { right: 16px; align-items: flex-end; cursor: pointer; transition: right 240ms cubic-bezier(.2,.8,.2,1); }
 .panel-open .hud.right { right: 376px; }
@@ -48,9 +51,12 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   position: fixed; bottom: calc(14px + env(safe-area-inset-bottom)); display: flex; align-items: stretch; gap: 8px; z-index: 2;
 }
 .toolbar { left: 16px; max-width: calc(100vw - 32px); overflow-x: auto; }
-.system { right: 16px; transition: right 240ms cubic-bezier(.2,.8,.2,1); }
-.panel-open .system { right: 376px; }
-.panel-open .system button { font-size: 0; gap: 0; padding: 6px 8px; }
+/* Share, the guide, save, load, new town: icons in the bottom right. With the panel open it moves over, and up above the toolbar it would cover. */
+.system { right: 16px; transition: right 240ms cubic-bezier(.2,.8,.2,1), bottom 240ms cubic-bezier(.2,.8,.2,1); }
+/* With the panel open: a column of icons beside it, above the toolbar. */
+.panel-open .system { right: 376px; bottom: calc(70px + env(safe-area-inset-bottom)); flex-direction: column; }
+.panel-open .system button.labelled { font-size: 0; gap: 0; padding: 6px 9px; }
+@media (max-width: 1210px) { .system { bottom: calc(70px + env(safe-area-inset-bottom)); } }
 .toolbar .group, .system {
   display: flex; gap: 4px; padding: 5px; background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db;
 }
@@ -64,7 +70,8 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .toolbar button kbd { font: inherit; font-size: 10px; opacity: 0.55; }
 .toolbar .pause { padding: 6px 9px; }
 .toolbar .pause.on .glyph { background: none; }
-.system button { color: #5d6861; }
+.system button { color: #5d6861; font-size: 0; gap: 0; padding: 6px 9px; }
+.system button.labelled { font-size: 12px; gap: 7px; padding: 6px 10px; }
 .system .guide-toggle.on { color: #2f5a9c; background: #eef3fb; border-color: #c9d6ee; }
 .toolbar .town-button {
   padding: 8px 18px 8px 12px; gap: 10px; font-size: 14px; font-weight: 700; letter-spacing: 0.02em;
@@ -83,10 +90,8 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   font-size: 12px; padding: 7px 14px; border-radius: 4px; opacity: 0; transition: opacity 160ms ease; pointer-events: none; z-index: 20;
 }
 .toast.show { opacity: 1; }
-@media (max-width: 1260px) {
-  .system button { font-size: 0; gap: 0; padding: 6px 8px; }
-}
 @media (max-width: 1000px) {
+  .system button.labelled { font-size: 0; gap: 0; padding: 6px 9px; }
   .toolbar button kbd, .toolbar .town-button kbd { display: none; }
   .hud .stack small { display: none; }
 }
@@ -185,12 +190,19 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .hud .clock .winter { color: #3d6db5; font-weight: 600; }
 .hud .request, .hud .alarm { display: none; }
 .hud .request.show, .hud .alarm.show { display: flex; }
-.hud .request { border-color: #d6ae2e; box-shadow: 0 2px 0 #eadca7; }
+.hud .request { border-color: #d6ae2e; box-shadow: 0 2px 0 #eadca7; width: 440px; max-width: 100%; box-sizing: border-box; }
+.hud .request .cell { flex: 1; min-width: 0; gap: 12px; }
+.hud .request .lines { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hud .request .ask { display: flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 13px; }
+.hud .request .terms { white-space: normal; font-size: 11px; color: #77817a; }
+.hud .request .terms b { color: #3d4943; }
 .hud .request .send {
-  font: inherit; font-size: 12px; margin: 4px 6px 4px 0; padding: 2px 12px; border: 1px solid #3d4943; border-radius: 3px;
-  background: #3d4943; color: #f7f8f4; cursor: pointer;
+  font: inherit; font-size: 12px; margin: 8px 8px 8px 0; padding: 4px 16px; border: 1px solid #3d4943; border-radius: 5px;
+  background: #3d4943; color: #f7f8f4; cursor: pointer; transition: background 120ms ease, box-shadow 120ms ease;
 }
-.hud .request .send:disabled { background: transparent; color: #8a938c; border-color: #c9cec4; cursor: default; }
+.hud .request .send:not(:disabled):hover { background: #26302b; box-shadow: 0 2px 0 #c9b25e; }
+.hud .request .send:not(:disabled):active { transform: translateY(1px); box-shadow: none; }
+.hud .request .send:disabled { background: transparent; color: #8a938c; border-color: #c9cec4; cursor: not-allowed; }
 .hud .alarm { flex-direction: column; border-color: #b04a39; box-shadow: 0 2px 0 #e6c3bc; color: #b04a39; white-space: normal; }
 .hud .alarm .cell + .cell { border-left: 0; border-top: 1px solid #ecd2cc; }
 .hud .alarm.good { border-color: #4f8a3e; box-shadow: 0 2px 0 #cfe0c5; color: #4f8a3e; }
@@ -362,7 +374,8 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   box-shadow: inset 3px 0 0 transparent;
 }
 .hud .ticker .cell + .cell { border-left: none; border-top: 1px dashed #e3e6df; }
-.hud .ticker .cell .mark { margin-top: 2px; }
+/* The icon as tall as a line of text, so it sits centred on the first line (a pixel lower: the letters sit low in the line). */
+.hud .ticker .cell .mark { height: 1.55em; transform: translateY(1px); }
 .hud .ticker .cell .text { flex: 1; min-width: 0; }
 .hud .ticker .cell em { font-style: normal; color: #9aa29b; white-space: nowrap; }
 .hud .ticker .cell.place { cursor: pointer; }
@@ -377,6 +390,10 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 }
 .hud .ticker .head.guide .quiet:hover { color: #3d4943; text-decoration: underline; }
 .hud .ticker .cell.guide { background: #f6f8fc; }
+/* What closes the step, under it. */
+/* The flag in its own column, the words wrapping beside it as one paragraph. */
+.hud .ticker .cell.guide .goal { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 7px; align-items: start; margin-top: 6px; font-size: 11px; line-height: 1.7; color: #6d7f9c; }
+.hud .ticker .cell.guide .goal > .glyph, .hud .ticker .cell.guide .goal > svg { height: 1.7em; }
 .hud .ticker .cell.guide.place:hover { background: #eef3fb; }
 .hud .ticker .cell.guide + .head { border-top: 1px dashed #e3e6df; }
 .hud .ticker .alert.warn { box-shadow: inset 3px 0 0 #d9a24e; }
@@ -400,6 +417,9 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .ref.kind { background: #eef3fb; border: 1px solid #c9d6ee; color: #2f5a9c; }
 button.ref.kind { cursor: pointer; }
 button.ref.kind:hover { background: #dce6f5; border-color: #3d6db5; }
+/* A building that stands already: its chip goes there. */
+.ref.kind.go { background: #f4f2ea; border-color: #d9d3bf; color: #5b5338; }
+button.ref.kind.go:hover { background: #ebe7d8; border-color: #8a7d55; }
 kbd.key {
   display: inline-block; min-width: 1.6ch; padding: 0 4px; font: inherit; font-size: 10px; line-height: 1.5; text-align: center;
   color: #3d4943; background: #fbfcf9; border: 1px solid #c9cec4; border-bottom-width: 2px; border-radius: 4px; vertical-align: 1px;

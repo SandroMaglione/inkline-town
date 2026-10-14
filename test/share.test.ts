@@ -10,7 +10,7 @@ import { gunzipSync, gzipSync } from "node:zlib"
 import { Effect } from "effect"
 
 import { fileOf, loadText, memoryStorage, Storage, World } from "../src/save.ts"
-import { handle, memoryBucket, type Env } from "../src/server/handler.ts"
+import { DAILY_SHARES, handle, memoryBucket, type Env, type Limiter } from "../src/server/handler.ts"
 import { checkMeta, ID_PATTERN, newId, pictureType, TOWN_LIMIT } from "../src/share/format.ts"
 import { headless, type Headless } from "../src/sim/headless.ts"
 
@@ -87,6 +87,30 @@ test("what the server will not keep", async () => {
   await refused(form({ town: huge, picture: jpeg(), meta }), 413)
   await refused({ method: "GET" }, 405)
   assert.equal(bucket.files.size, 0)
+})
+
+test("one visitor may share a few towns a minute, and so many a day", async () => {
+  // A stand-in for Cloudflare's binding: two a "minute", counted per key.
+  const counts = new Map<string, number>()
+  const burst: Limiter = { limit: async ({ key }) => ({ success: (counts.set(key, (counts.get(key) ?? 0) + 1).get(key) ?? 0) <= 2 }) }
+  const bucket = memoryBucket()
+  const env: Env = { bucket, burst, assets: { fetch: async () => new Response(PAGE) } }
+  const share = async (ip: string) => (await handle(new Request(`${ORIGIN}/api/towns`, { ...form({ town: gzipSync("{}"), picture: jpeg(), meta }), headers: { "cf-connecting-ip": ip } }), env))!
+  assert.equal((await share("1.1.1.1")).status, 201)
+  assert.equal((await share("1.1.1.1")).status, 201)
+  const third = await share("1.1.1.1")
+  assert.equal(third.status, 429)
+  assert.match(((await third.json()) as { error: string }).error, /wait a minute/)
+  assert.equal((await share("2.2.2.2")).status, 201, "another visitor is not held up")
+  assert.ok(![...bucket.files.keys()].some((key) => key.includes("1.1.1.1")), "no address is kept")
+
+  // The day's count, without the minute's limit.
+  const dayBucket = memoryBucket()
+  const daily: Env = { bucket: dayBucket, assets: env.assets }
+  const again = async () => (await handle(new Request(`${ORIGIN}/api/towns`, { ...form({ town: gzipSync("{}"), picture: jpeg(), meta }), headers: { "cf-connecting-ip": "3.3.3.3" } }), daily))!
+  for (let i = 0; i < DAILY_SHARES; i++) assert.equal((await again()).status, 201)
+  assert.equal((await again()).status, 429)
+  assert.equal([...dayBucket.files.keys()].filter((key) => key.endsWith(".picture")).length, DAILY_SHARES)
 })
 
 test("unknown and malformed links", async () => {

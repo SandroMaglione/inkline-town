@@ -47,7 +47,7 @@ try {
   await page.waitForFunction(()=>!window.town.ui.founding)
   await page.locator(".toolbar .pause").click()
   const hall=(await entities("Town/TownHall"))[0]!,tile=hall.components["Town/Tile"]
-  await page.getByRole("button",{name:"Rotate map right",exact:true}).click()
+  await page.keyboard.press("e")
   await clickGrid(tile.x+1.5,tile.y+1.5,48)
   await page.waitForFunction(id=>window.town.ui.selected===id,hall.id)
   assert.equal((await page.evaluate(()=>window.town.ui.panel))?.type,"building")
@@ -73,7 +73,7 @@ try {
   assert.ok((await entities("Town/House")).some(e=>!("Town/Site" in e.components)))
   facts.liveConstruction=true
   await tool("select")
-  await page.getByRole("button",{name:"Rotate map right",exact:true}).click()
+  await page.keyboard.press("e")
   const lt=lumber.components["Town/Tile"]
   await clickGrid(lt.x+1,lt.y+1,16)
   await page.waitForFunction(id=>window.town.ui.selected===id,lumber.id)
@@ -138,13 +138,13 @@ try {
   await page.evaluate(([x,y])=>window.town.view.focus(x!,y!),[ht.x+1.5,ht.y+1.5])
   await capture("populated-town")
   for (let angle=0;angle<8;angle++) {
-    await page.getByRole("button",{name:"Rotate map right",exact:true}).click()
+    await page.keyboard.press("e")
     await clickGrid(ht.x+1.5,ht.y+1.5,48)
     await page.waitForFunction(id=>window.town.ui.selected===id,grownHall.id)
     await page.locator(".panel .close").click()
   }
   facts.selectionAllEightAngles=true
-  await page.getByRole("button",{name:"Rotate map right",exact:true}).click()
+  await page.keyboard.press("e")
   await capture("populated-rotated")
   await page.getByRole("button",{name:"4×",exact:true}).click()
   const before=await snapshot()
@@ -159,7 +159,7 @@ try {
   facts.liveWalkerMovement=true
   await page.setViewportSize({width:390,height:844})
   await page.getByRole("button",{name:"Reset camera",exact:true}).click()
-  await page.getByRole("button",{name:"Rotate map left",exact:true}).click()
+  await page.keyboard.press("q")
   assert.equal(await page.evaluate(()=>[...document.querySelectorAll(".camera-controls,.toolbar,.system,.hud")].some(e=>{const r=e.getBoundingClientRect();return r.left<0||r.right>innerWidth+1})),false)
   facts.phoneViewport=true
   await tool("homes")

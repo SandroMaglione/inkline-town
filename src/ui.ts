@@ -36,6 +36,8 @@ export interface Alert {
   readonly size: number
   /** The entity to select on the way there, if there is one. */
   readonly id: number | null
+  /** Buildings the line names, by kind: where one of each stands, so its chip goes there rather than placing another. */
+  readonly places?: Partial<Record<KindId, { readonly at: Point; readonly size: number; readonly id: number }>>
 }
 
 export type Tool = "select" | "road" | "pave" | "home" | "bulldoze" | "place" | "ground" | "prop"
@@ -256,7 +258,7 @@ export interface Stats {
   readonly alerts: ReadonlyArray<Alert>
   /** The mayor's guide: the step to take now (if any, and the guide is on), and how far along it is. */
   readonly guide: {
-    readonly step: (Omit<Alert, "tone"> & { readonly key: string; readonly chapter: string }) | null
+    readonly step: (Omit<Alert, "tone"> & { readonly key: string; readonly chapter: string; readonly goal: string }) | null
     readonly done: number
     readonly total: number
     readonly off: boolean

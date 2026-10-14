@@ -13,7 +13,7 @@ import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView, Rui
 import type { DoorSet, OverlayCell } from "./render3d/models.ts"
 import {
   BUILD_TICKS, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
-  PAVE_COST, propIds, props, risk, RISK_MAX, ROAD_COST, tierHome, total, winters, type GoodId, type Kind, type Tier
+  PAVE_COST, propIds, props, risk, RISK_MAX, ROAD_COST, tierHome, total, winters, type GoodId, type Kind, type KindId, type Tier
 } from "./content.ts"
 import { around, canPlace, cellOf, doors, entrances, isRoad, key, lPath, nearest, reach, useAt, type TileLike } from "./grid.ts"
 import { GRID, inside, U, type Point } from "./iso.ts"
@@ -86,7 +86,8 @@ import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type Alert as Notice, type HitBox, type Legend, type Line, type View } from "./ui.ts"
 import { blockers as blockersOf, streetAdvice, type InTown, type Served, type Street } from "./rules/explain.ts"
 import { breadBonus, streetTax, suppliedTaxOf } from "./rules/households.ts"
-import { guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
+import { rockBlocks, type RockPart } from "./render3d/rock-blocks.ts"
+import { GUIDE_QUIET, guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
 import { ticks } from "./content.ts"
 
 const cellAt = (at: Point): Point => {
@@ -312,6 +313,11 @@ const legends: Readonly<Record<Exclude<View, "none">, Legend>> = {
 /** When each workshop began waiting for its input: a shelf runs empty for a moment all the time, so the ticker only says so after `ALERT_PATIENCE`. */
 const starvedSince = new Map<number, number>()
 const ALERT_PATIENCE = ticks(30)
+/** Since when the store has held no food (`null`: it has some). Fish comes in and goes out in handfuls, so the ticker waits `HUNGER_PATIENCE` before saying so. */
+let emptySince: number | null = null
+/** Once said, it stays said a while, so a handful of fish arriving does not flick it off and on. */
+let hungryUntil = 0
+const HUNGER_PATIENCE = ticks(20)
 /** A view's colour over a model: pale, so the ink still reads. */
 const TINT = { good: 0xbcd2ee, fair: 0xf3e3a8, bad: 0xf2b9a0, cool: 0xdccbe8, mark: 0xd5dad3, settlers: 0xead7bd, fine: 0xa9c4e8, plain: 0xffffff }
 const needIcons = { food: "food", bread: "bread", cloth: "cloth", faith: "faith" } as const
@@ -1033,8 +1039,8 @@ export const Interact = Game.System(
     if (census.burning > 0) alerts.push({ tone: "bad", text: `${census.burning} on fire`, at: burningRow?.data.tile.get() ?? null, size: burningRow?.data.tile.get().size ?? 1, id: burningRow?.entity.id ?? null })
     const sickRow = houses.find(({ data }) => data.sick.present)
     if (census.sick > 0) alerts.push({ tone: "warn", text: `${census.sick} home${census.sick > 1 ? "s" : ""} sick`, at: sickRow?.data.tile.get() ?? null, size: 1, id: sickRow?.entity.id ?? null })
-    const waiting = new Map<string, { n: number; at: TileLike; id: number }>()
-    const remote = new Map<string, { n: number; at: TileLike; id: number }>()
+    const waiting = new Map<string, { n: number; at: TileLike; id: number; kind: KindId }>()
+    const remote = new Map<string, { n: number; at: TileLike; id: number; kind: KindId }>()
     const shortStaffed: Array<{ id: number; title: string; cell: Point; size: number; assigned: number; needed: number; nobodyNear: boolean }> = []
     const seen = new Set<number>()
     for (const { entity, data } of buildings) {
@@ -1050,23 +1056,30 @@ export const Interact = Game.System(
         if (tick - since >= ALERT_PATIENCE) {
           const label = `${kind.title.toLowerCase()} (${kind.recipe.input})`
           const was = waiting.get(label)
-          waiting.set(label, was ? { ...was, n: was.n + 1 } : { n: 1, at: tile, id: entity.id })
+          waiting.set(label, was ? { ...was, n: was.n + 1 } : { n: 1, at: tile, id: entity.id, kind: kind.id })
         }
       }
       if (staff.needed > 0 && staff.assigned < staff.needed) shortStaffed.push({ id: entity.id, title: kind.title.toLowerCase(), cell: tile, size: tile.size, assigned: staff.assigned, needed: staff.needed, nobodyNear: staff.nearby === 0 })
       if (status === "unstaffed" && staff.nearby === 0) {
         const label = kind.title.toLowerCase()
         const was = remote.get(label)
-        remote.set(label, was ? { ...was, n: was.n + 1 } : { n: 1, at: tile, id: entity.id })
+        remote.set(label, was ? { ...was, n: was.n + 1 } : { n: 1, at: tile, id: entity.id, kind: kind.id })
       }
     }
     for (const id of [...starvedSince.keys()]) if (!seen.has(id)) starvedSince.delete(id)
     const list = (m: Map<string, { n: number }>) => [...m].map(([k, v]) => `${k}${v.n > 1 ? ` ×${v.n}` : ""}`).join(", ")
     const first = (m: Map<string, { at: TileLike; id: number }>) => [...m.values()][0]
-    if (waiting.size > 0) alerts.push({ tone: "warn", text: `waiting for inputs: ${list(waiting)}`, at: first(waiting)?.at ?? null, size: first(waiting)?.at.size ?? 1, id: first(waiting)?.id ?? null })
-    if (remote.size > 0) alerts.push({ tone: "warn", text: `no workers within ${COMMUTE} road cells: ${list(remote)}`, at: first(remote)?.at ?? null, size: first(remote)?.at.size ?? 1, id: first(remote)?.id ?? null })
+    const placesOf = (m: Map<string, { at: TileLike; id: number; kind: KindId }>) =>
+      Object.fromEntries([...m.values()].map((v) => [v.kind, { at: v.at, size: v.at.size, id: v.id }]))
+    if (waiting.size > 0) alerts.push({ tone: "warn", text: `waiting for inputs: ${list(waiting)}`, at: first(waiting)?.at ?? null, size: first(waiting)?.at.size ?? 1, id: first(waiting)?.id ?? null, places: placesOf(waiting) })
+    if (remote.size > 0) alerts.push({ tone: "warn", text: `no workers within ${COMMUTE} road cells: ${list(remote)}`, at: first(remote)?.at ?? null, size: first(remote)?.at.size ?? 1, id: first(remote)?.id ?? null, places: placesOf(remote) })
     const hallRow = buildings.find(({ data }) => data.hall.present)
-    if (census.homes > 0 && larder(stock) === 0) alerts.push({ tone: "bad", text: "no food in store: homes go hungry", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
+    const empty = census.homes > 0 && larder(stock) === 0
+    if (!empty || (emptySince !== null && emptySince > tick)) emptySince = null
+    if (empty && emptySince === null) emptySince = tick
+    if (empty && tick - emptySince! >= HUNGER_PATIENCE) hungryUntil = tick + HUNGER_PATIENCE
+    if (hungryUntil > tick + HUNGER_PATIENCE) hungryUntil = 0
+    if (census.homes > 0 && tick < hungryUntil) alerts.push({ tone: "bad", text: "no food in store: homes go hungry", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
     const ledger = resources.ledger.get()
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
@@ -1108,6 +1121,7 @@ export const Interact = Game.System(
     })
     const facts: GuideFacts = {
       homes: houses.length,
+      builtHomes: houses.filter(finished).length,
       residents: census.settlers + census.citizens,
       citizens: census.citizens,
       finerHomes: houses.filter((row) => row.data.house.get().tier > 1).length,
@@ -1124,9 +1138,22 @@ export const Interact = Game.System(
       net: steadyNet(resources.history.get().samples, net),
       approval: mood.approval,
       trading: rates.sells.length > 0 || rates.buys.length > 0,
+      buysTools: rates.buys.includes("tools"),
       taxed: rates.settlers !== 100 || rates.citizens !== 100,
       most: Math.max(...goodIds.map((g) => stock[g])),
-      sawTown: ui.menu === "town"
+      sawTown: ui.menu === "town",
+      sawHome: houses.some((row) => row.entity.id === ui.selected),
+      risk: {
+        fire: houses.some((row) => (maybe(row.data.risk)?.fire ?? 0) >= RISK_MAX * 0.35),
+        health: houses.some((row) => (maybe(row.data.risk)?.health ?? 0) >= RISK_MAX * 0.35),
+        order: houses.some((row) => (maybe(row.data.risk)?.order ?? 0) >= RISK_MAX * 0.35)
+      },
+      fewTrees: buildings.some((row) => {
+        if (row.data.building.get().kind !== "lumberjack" || !finished(row)) return false
+        const tile = row.data.tile.get()
+        const reach = kinds.lumberjack.gathers!.radius
+        return queries.trees.each().map(({ data }) => data.tile.get()).filter((t) => t.x >= tile.x - reach && t.x < tile.x + tile.size + reach && t.y >= tile.y - reach && t.y < tile.y + tile.size + reach).length < 6
+      })
     }
     const guide = resources.guide.get()
     const put = new Set(guide.done)
@@ -1136,7 +1163,12 @@ export const Interact = Game.System(
       resources.guide.update((g) => ({ ...g, done: [...g.done, ...newly] }))
       for (const id of newly) put.add(id)
     }
-    const step = guide.off || !playing ? null : guideStep(facts, put)
+    // The guide keeps quiet a while after a step is put away; a new town (the clock gone back) starts it afresh.
+    if (t < guidePace.since) Object.assign(guidePace, { shown: null, since: 0, quietUntil: 0 })
+    if (guidePace.shown !== null && put.has(guidePace.shown)) Object.assign(guidePace, { shown: null, quietUntil: t + GUIDE_QUIET * 60 })
+    const step = guide.off || !playing ? null : guideStep(facts, put, { shown: guidePace.shown, quiet: t < guidePace.quietUntil })
+    if (step && !step.urgent?.(facts)) guidePace.shown = step.id
+    guidePace.since = t
     const hallTile = hallRow?.data.tile.get()
     /** Of some tiles, the one nearest the town hall. */
     const nearestHall = (tiles: ReadonlyArray<TileLike>): TileLike | undefined => {
@@ -1237,7 +1269,7 @@ export const Interact = Game.System(
       chronicle: resources.chronicle.get().lines,
       alerts,
       guide: {
-        step: step && shown ? { key: step.id, chapter: step.chapter, text: step.text, at: shown.at, size: shown.at?.size ?? 1, id: shown.id } : null,
+        step: step && shown ? { key: step.id, chapter: step.chapter, goal: step.goal, text: step.text, at: shown.at, size: shown.at?.size ?? 1, id: shown.id } : null,
         done: guideSteps.filter((s) => put.has(s.id)).length,
         total: guideSteps.length,
         off: guide.off
@@ -1404,7 +1436,7 @@ export const Animate = Game.System(
         }
       }),
       trees: Game.Query({ selection: { tree: Game.Query.read(Tree) } }),
-      rocks: Game.Query({ selection: { rock: Game.Query.read(Rock) } }),
+      rocks: Game.Query({ selection: { rock: Game.Query.read(Rock), tile: Game.Query.read(Tile) } }),
       fields: Game.Query({ selection: { field: Game.Query.read(Field) } })
     },
     resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal) },
@@ -1509,13 +1541,28 @@ export const Animate = Game.System(
     }
     for (const { entity, data } of queries.trees.each())
       services.treeNodes.get(entity.id)?.update(data.tree.get().growth, emphasis(entity.id))
-    for (const { entity, data } of queries.rocks.each()) {
+    // Neighbouring rocks are drawn as one big outcrop; the blocks are formed again only when a rock runs out (or the land changes).
+    const rocks = queries.rocks.each()
+    const rockKey = `${rocks.length}:${rocks.reduce((n, { entity }) => n + entity.id, 0)}`
+    if (rockKey !== rockShapes.key) {
+      rockShapes.key = rockKey
+      rockShapes.parts = rockBlocks(rocks.map(({ entity, data }) => ({ id: entity.id, ...data.tile.get(), ore: data.rock.get().ore })))
+    }
+    const amounts = new Map<number, number>(rocks.map(({ entity, data }) => [entity.id, data.rock.get().amount]))
+    for (const { entity, data } of rocks) {
       const r = data.rock.get()
-      services.rockNodes.get(entity.id)?.update(r.ore, r.amount)
+      const part = rockShapes.parts.get(entity.id)
+      if (!part || !part.draws) services.rockNodes.get(entity.id)?.update(r.ore, r.amount, part ? 0 : 1, part ? 0 : 1)
+      else services.rockNodes.get(entity.id)?.update(r.ore, part.members.reduce((n, id) => n + (amounts.get(id) ?? 0), 0) / part.members.length, part.w, part.h)
     }
     for (const { entity, data } of queries.fields.each()) services.fieldNodes.get(entity.id)?.update(data.field.get().growth)
   }
 )
+
+/** The guide's pace (page-side, not saved): the step it is showing, and until when it keeps quiet. */
+const guidePace: { shown: string | null; since: number; quietUntil: number } = { shown: null, since: 0, quietUntil: 0 }
+
+const rockShapes: { key: string; parts: Map<number, RockPart> } = { key: "", parts: new Map() }
 
 /** Ghosts, the road being dragged, and outlines, redrawn every frame. */
 export const DrawPreview = Game.System(

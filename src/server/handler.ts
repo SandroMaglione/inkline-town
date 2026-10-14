@@ -7,6 +7,10 @@
  * - `GET /t/:id` is the game's own page, with the town's picture and lines
  *   written into it for link previews; the page loads the town itself.
  *
+ * Uploads are limited per visitor (by IP): a few a minute, by Cloudflare's
+ * rate-limit binding (`burst`), and `DAILY_SHARES` a day, counted in the same
+ * bucket under `limits/` (which forgets them after a day). Reading is free.
+ *
  * It is written against the few bucket and asset calls it uses, so the same
  * code runs on Cloudflare (an R2 bucket and the site's assets), under the
  * dev server, and in tests (both in memory).
@@ -24,10 +28,32 @@ export interface Bucket {
   ): Promise<unknown>
 }
 
+/** What the handler needs of a Cloudflare rate-limit binding. */
+export interface Limiter {
+  limit(options: { readonly key: string }): Promise<{ readonly success: boolean }>
+}
+
 export interface Env {
   readonly bucket: Bucket
+  /** A few uploads a minute from one visitor (absent: no limit by the minute, as in dev and tests). */
+  readonly burst?: Limiter
   /** The site's static files: here, its `index.html`. */
   readonly assets: { fetch(request: Request): Promise<Response> }
+}
+
+/** Towns one visitor may share in a day. */
+export const DAILY_SHARES = 20
+
+/** Who is asking, as far as limits go: their IP, hashed, so the bucket keeps no addresses. */
+const visitorOf = async (request: Request) => {
+  const ip = request.headers.get("cf-connecting-ip") ?? "local"
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`inkline:${ip}`)))
+  return [...digest.slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join("")
+}
+const limitKey = (visitor: string) => `limits/${new Date().toISOString().slice(0, 10)}/${visitor}`
+const sharedToday = async (env: Env, key: string) => {
+  const object = await env.bucket.get(key)
+  return object ? Number(await new Response(object.body).text()) || 0 : 0
 }
 
 const townKey = (id: string) => `towns/${id}.json.gz`
@@ -90,6 +116,11 @@ const bytesOf = async (value: FormDataEntryValue | null): Promise<Uint8Array | n
 
 /** Keeps a new share and answers with its id and link. */
 const create = async (request: Request, env: Env) => {
+  const visitor = await visitorOf(request)
+  if (env.burst && !(await env.burst.limit({ key: visitor })).success) return fail(429, "Too many shares at once: wait a minute and try again")
+  const today = limitKey(visitor)
+  const shared = await sharedToday(env, today)
+  if (shared >= DAILY_SHARES) return fail(429, `That is ${DAILY_SHARES} towns shared today: try again tomorrow`)
   const length = Number(request.headers.get("content-length") ?? "0")
   if (length > TOWN_LIMIT + PICTURE_LIMIT + 10_000) return fail(413, "That town is too large to share")
   let form: FormData
@@ -121,6 +152,7 @@ const create = async (request: Request, env: Env) => {
     httpMetadata: { contentType: "application/gzip" },
     customMetadata: { title: meta.title, description: meta.description }
   })
+  await env.bucket.put(today, new TextEncoder().encode(String(shared + 1)), { httpMetadata: { contentType: "text/plain" } })
   const origin = new URL(request.url).origin
   return json({ id, url: `${origin}${sharePath(id)}` }, 201)
 }

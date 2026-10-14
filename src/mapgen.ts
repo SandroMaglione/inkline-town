@@ -4,8 +4,8 @@ import { shippedRules, type Rules } from "./rules/config.ts"
  * the charter's size, its coast wandering in and out and a few capes
  * reaching out; lakes, forests and single trees, outcrops of stone and
  * deposits of ore, as many as the land's richness gives; and a clearing in
- * the middle where the town hall stands, ringed by a road with a stub out
- * from each side.
+ * the middle where the town hall stands, ringed by a road (the mayor lays
+ * the rest).
  * Pure: the same charter always makes the same land.
  */
 import * as Random from "@typeonce/bevy-ts-math/Random"
@@ -117,7 +117,8 @@ export const generate = (charter: CharterValue, rules: Rules = shippedRules): La
     return { x: random.integer(1, GRID - 1), y: random.integer(1, GRID - 1) }
   }
 
-  // The town hall, a ring road around it, and a stub out from the middle of each side.
+  // The town hall and a ring road around it. The ground a cell or two out from each side is cleared too, but no road
+  // leads out: where the town grows is the mayor's first choice.
   for (let dx = 0; dx < 3; dx++) for (let dy = 0; dy < 3; dy++) take({ x: hall.x + dx, y: hall.y + dy })
   const roads: Array<Point> = []
   for (let x = hall.x - 1; x <= hall.x + 3; x++) {
@@ -125,10 +126,8 @@ export const generate = (charter: CharterValue, rules: Rules = shippedRules): La
       if (x === hall.x - 1 || x === hall.x + 3 || y === hall.y - 1 || y === hall.y + 3) roads.push({ x, y })
     }
   }
-  for (let i = 2; i <= 3; i++) {
-    roads.push({ x: hall.x + 2 + i, y: hall.y + 1 }, { x: hall.x + 1, y: hall.y + 2 + i }, { x: hall.x - i, y: hall.y + 1 }, { x: hall.x + 1, y: hall.y - i })
-  }
   roads.forEach(take)
+  for (let i = 2; i <= 3; i++) [{ x: hall.x + 2 + i, y: hall.y + 1 }, { x: hall.x + 1, y: hall.y + 2 + i }, { x: hall.x - i, y: hall.y + 1 }, { x: hall.x + 1, y: hall.y - i }].forEach(take)
 
   // Lakes, the first not too far from the town.
   const water: Array<Point> = []

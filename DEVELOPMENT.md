@@ -286,7 +286,12 @@ and `towns/<id>.picture`:
 
 The Worker runs only for `/t/*` and `/api/*`; everything else is a static
 file, served free and unmetered. Shares are deleted after 180 days by a
-lifecycle rule on the bucket. Under `pnpm dev` the same routes run in Vite
+lifecycle rule on the bucket. Uploads are limited per visitor, by a hash of
+their IP: 3 a minute through Cloudflare's rate-limit binding (`SHARE_BURST`,
+declared in `deploy/alchemy.run.ts`; no resource behind it), and 20 a day
+counted in the same bucket under `limits/<day>/<visitor>`, which a second
+lifecycle rule clears after a day. Either answers 429 with a line the page
+shows. Under `pnpm dev` the same routes run in Vite
 over a bucket in memory (shares last until the server stops), so sharing
 works locally and `pnpm check:browser` checks it end to end.
 

@@ -138,7 +138,7 @@ export class MapInput {
     this.controls = document.createElement("nav")
     this.controls.className = "camera-controls"
     this.controls.setAttribute("aria-label", "Map camera")
-    this.controls.innerHTML = `<button data-mode="pan" aria-pressed="true" title="Drag to pan; the road, pave, home, and park ground tools drag to build">Pan</button><button data-mode="rotate" aria-pressed="false" title="Drag to rotate instead of placing. Right-drag also rotates.">Rotate</button><button data-action="left" aria-label="Rotate map left" title="Rotate left (Q)">↶</button><button data-action="right" aria-label="Rotate map right" title="Rotate right (E)">↷</button><button data-action="out" aria-label="Zoom out">−</button><output aria-label="Camera zoom"></output><button data-action="in" aria-label="Zoom in">+</button><button data-action="reset" aria-label="Reset camera" title="Original angle and centre (Home)">⌂</button>`
+    this.controls.innerHTML = `<button data-mode="pan" aria-pressed="true" title="Drag to pan; the road, pave, home, and park ground tools drag to build">Pan</button><button data-mode="rotate" aria-pressed="false" title="Drag to rotate instead of placing. Right-drag also rotates, and Q and E turn it an eighth.">Rotate</button><button data-action="out" aria-label="Zoom out">−</button><output aria-label="Camera zoom"></output><button data-action="in" aria-label="Zoom in">+</button><button data-action="reset" aria-label="Reset camera" title="Original angle and centre (Home)">⌂</button>`
     this.controls.querySelectorAll<HTMLButtonElement>("button").forEach(
       (button) =>
         (button.onclick = () => {
@@ -148,8 +148,6 @@ export class MapInput {
             ui.dragFrom = null
             this.press = null
           }
-          if (button.dataset.action === "left") scene.rotate(-Math.PI / 4)
-          if (button.dataset.action === "right") scene.rotate(Math.PI / 4)
           if (button.dataset.action === "out") scene.zoomBy(0.8)
           if (button.dataset.action === "in") scene.zoomBy(1.25)
           if (button.dataset.action === "reset") scene.resetCamera()

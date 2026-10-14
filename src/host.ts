@@ -94,13 +94,15 @@ const namedPattern = new RegExp(`\\b(${namedThings.map((t) => t.word.replace(/[.
  * A message as markup: each building it names becomes a chip to click (to
  * build one), each good a chip with its icon, and each key in brackets a key.
  */
-const callouts = (text: string): string =>
+/** `standing`: buildings the line is about, which stand already; their chips go to them rather than placing another. */
+const callouts = (text: string, standing: ReadonlySet<KindId> = new Set()): string =>
   escapeHtml(text).replace(namedPattern, (match, word: string | undefined, key: string | undefined) => {
     if (key) return `<kbd class="key">${key}</kbd>`
     const thing = namedThings.find((t) => t.word === word!.toLowerCase())
     if (!thing) return match
     if ("good" in thing.ref) return `<span class="ref ware" title="${goods[thing.ref.good].title}">${goodIcon(thing.ref.good, 13)}${match}</span>`
     const kind = kinds[thing.ref.kind]
+    if (standing.has(thing.ref.kind)) return `<button class="ref kind go" data-go="${thing.ref.kind}" title="Go to the ${kind.title.toLowerCase()}">${icon("locate", 13)}${match}</button>`
     return kind.buildable
       ? `<button class="ref kind" data-kind="${thing.ref.kind}" title="Build a ${kind.title.toLowerCase()}: ${escapeHtml(kind.blurb)}">${icon("build", 13)}${match}</button>`
       : `<span class="ref kind" title="${escapeHtml(kind.blurb)}">${icon("town", 13)}${match}</span>`
@@ -140,7 +142,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     wood: "lumberjacks fell it; a sawmill saws it into planks",
     planks: "what homes and buildings are built from: a sawmill makes them from wood",
     stone: "for building and paving: quarries cut it from rocks, which run out",
-    ore: "mines dig it; a smithy forges it into tools",
+    ore: "only for tools: once the town has 10 citizens, a mine digs it from the rust-red deposits, and a smithy forges it into tools",
     tools: "for building, and workshops wear one out every 50 or 60 jobs: a smithy forges them, or buy them",
     fish: "food for settlers: fisheries catch it by the water; it rots in about three minutes",
     smoked: "fish that keeps all winter: a smokehouse smokes it",
@@ -353,10 +355,10 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     ui.view = view
     for (const v of viewEls) v.button.classList.toggle("on", v.view === view)
   }
-  // New town, save, and load, out of the way in the bottom right. Founding or
-  // loading replaces the town, so each asks first.
+  // Share, the guide, save, load, and new town: a row of icons in the bottom
+  // right. Founding or loading replaces the town, so each asks first.
   const action = (name: IconName, label: string, tip: string, run: () => void) => {
-    const button = el("button", "")
+    const button = el("button", name === "share" ? "labelled" : "")
     button.title = tip
     button.append(iconEl(name), document.createTextNode(label))
     button.onclick = run
@@ -365,6 +367,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   action("share", "share", "Share a picture of the town, or a link anyone can open to watch it and play on", () => void openShare())
   // The guide, on or off (it is on for a new mayor).
   const guideButton = el("button", "guide-toggle")
+  guideButton.title = "Turn the guide on or off: it tells a new mayor what to do next, and why"
   guideButton.append(iconEl("hint"), document.createTextNode("guide"))
   guideButton.onclick = () => ui.guide.push({ type: ui.stats?.guide.off ? "on" : "off" })
   system.append(guideButton)
@@ -1579,6 +1582,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       ui.toast("Guide off · turn it back on from the bottom right")
       return
     }
+    // A building the line is about: go to it.
+    const go = target.closest<HTMLElement>("[data-go]")
+    if (go) {
+      const row = go.closest<HTMLElement>("[data-alert]")
+      const there = row ? tickerLines.alerts[Number(row.dataset.alert)]?.places?.[go.dataset.go as KindId] : undefined
+      if (there) goTo(there.at, there.size, there.id)
+      return
+    }
     const ref = target.closest<HTMLElement>("[data-kind]")
     if (ref) {
       const kind = ref.dataset.kind as KindId
@@ -1631,7 +1642,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       request.classList.toggle("show", s.crown.open && s.fate.state === "playing")
       if (s.crown.open) {
         const have = s.stock[s.crown.good]
-        setHtml(requestText, `${icon("crown", 18)}<span>the crown asks for <b>${s.crown.amount}</b> ${goodIcon(s.crown.good, 14)} <b>${goods[s.crown.good].title}</b> <span class="muted">(${have} in store)</span> · <b>${clockText(s.crown.left)}</b> · +${s.crown.reward} coins</span>`)
+        // What is asked on top, in one line; the terms under it.
+        setHtml(
+          requestText,
+          `${icon("crown", 18)}<span class="lines"><span class="ask">the crown asks for <b>${s.crown.amount}</b> ${goodIcon(s.crown.good, 14)} <b>${goods[s.crown.good].title}</b></span>` +
+            `<span class="terms"><span class="${have < s.crown.amount ? "down" : "up"}">${have} in store</span> · due in <b>${clockText(s.crown.left)}</b> · +${s.crown.reward} coins</span></span>`
+        )
+        send.title = have < s.crown.amount ? `Not enough ${goods[s.crown.good].title} in store yet` : `Send ${s.crown.amount} ${goods[s.crown.good].title} to the crown for ${s.crown.reward} coins`
         send.disabled = have < s.crown.amount
       }
       // What threatens the term, or is about to complete it.
@@ -1665,7 +1682,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         return sec < 5 ? "just now" : sec < 60 ? `${sec} s ago` : `${Math.round(sec / 60)} min ago`
       }
       const alerts = s.alerts.filter((a) => !dismissed.has(`a:${a.text}`))
-      const fresh = news.filter((l) => !dismissed.has(`n:${l.tick}:${l.text}`))
+      // The crown's request has its own card while it is open, and is settled after: its news line would only repeat it.
+      const fresh = news.filter((l) => !dismissed.has(`n:${l.tick}:${l.text}`) && !l.text.startsWith("The crown asks"))
       const toneIcon = { hint: "hint", warn: "caution", bad: "warning" } as const
       const row = (kind: string, tone: string, glyph: IconName, text: string, place: boolean, key: string, data: string) =>
         `<div class="cell ${kind} ${tone}${place ? " place" : ""}" ${data}>${icon(glyph, 16, "mark")}<span class="text">${text}</span><span class="acts">${place ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-dismiss="${escapeHtml(key)}" title="Dismiss">${icon("close", 12)}</button></span></div>`
@@ -1674,13 +1692,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       const guideHtml = g
         ? [
             `<div class="head guide"><span>guide · ${escapeHtml(g.chapter)}</span><span class="progress" title="Steps of the guide done">${s.guide.done} of ${s.guide.total} done</span><button class="quiet" data-guide-off title="Turn the guide off (the guide button in the bottom right turns it back on)">hide guide</button></div>`,
-            `<div class="cell alert hint guide${g.at !== null ? " place" : ""}" data-guide>${icon("hint", 16, "mark")}<span class="text">${callouts(g.text)}</span><span class="acts">${g.at !== null ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="Skip this step">${icon("close", 12)}</button></span></div>`
+            `<div class="cell alert hint guide${g.at !== null ? " place" : ""}" data-guide>${icon("hint", 16, "mark")}<span class="text">${callouts(g.text)}<span class="goal">${icon("goal", 12)}<span>done when ${callouts(g.goal)}</span></span></span><span class="acts">${g.at !== null ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="Skip this step">${icon("close", 12)}</button></span></div>`
           ]
         : []
       const tickerHtml = [
         ...guideHtml,
         ...(alerts.length > 0 ? [`<div class="head">now</div>`] : []),
-        ...alerts.map((a) => row("alert", a.tone, toneIcon[a.tone], callouts(a.text), a.at !== null, `a:${a.text}`, `data-alert="${s.alerts.indexOf(a)}"`)),
+        ...alerts.map((a) => row("alert", a.tone, toneIcon[a.tone], callouts(a.text, new Set(Object.keys(a.places ?? {}) as Array<KindId>)), a.at !== null, `a:${a.text}`, `data-alert="${s.alerts.indexOf(a)}"`)),
         ...(fresh.length > 0 ? [`<div class="head">lately</div>`] : []),
         ...fresh.map((l) => row("news", "", "chronicle", `${callouts(l.text)} <em data-tick="${l.tick}"></em>`, l.at !== null, `n:${l.tick}:${l.text}`, `data-news="${news.indexOf(l)}"`))
       ].join("")

@@ -13,7 +13,7 @@
   .toolbar button, .toolbar .town-button { font-size: 0; gap: 0; padding: 6px; min-width: 40px; min-height: 40px; justify-content: center; }
   .toolbar .speed button { font-size: 12px; min-width: 36px; }
   .toolbar button kbd { display: none; }
-  .system button { font-size: 0; gap: 0; padding: 6px; min-width: 38px; min-height: 38px; justify-content: center; }
+  .system button, .system button.labelled { font-size: 0; gap: 0; padding: 6px; min-width: 38px; min-height: 38px; justify-content: center; }
   .camera-controls [data-mode="pan"], .camera-controls output { display: none; }
 
   /* The goods on one line that scrolls, a little smaller. */
@@ -92,6 +92,14 @@
   .legend { bottom: calc(60px + env(safe-area-inset-bottom)); }
   .toast { bottom: calc(110px + env(safe-area-inset-bottom)); }
   .panel { padding-top: 12px; }
+}
+
+/* A small landscape window: the map views stand in a column on the right, so the ticker and the speed keep left of it. */
+@media (max-width: 760px) and (max-height: 500px) {
+  .hud.left { right: 66px; }
+  /* Portrait puts the bar at the top; it must not also keep landscape's bottom. */
+  .system, .panel-open .system { bottom: auto; }
+  .toolbar .speed { right: 66px; }
 }
 
 /* ── Touch: fingers instead of a mouse ── */
