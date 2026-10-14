@@ -126,7 +126,9 @@
   }
 
   .toast { bottom: calc(108px + env(safe-area-inset-bottom)); max-width: calc(100vw - 28px); white-space: normal; text-align: center; }
-  .stroke-bar { bottom: calc(56px + env(safe-area-inset-bottom)); width: max-content; }
+  .stroke-bar { bottom: calc(56px + env(safe-area-inset-bottom)); }
+  /* A held stroke's buttons take the guide's place above the tool bar. */
+  .stroke-held .hud .ticker.peek { display: none; }
 
   /* ── Dialogs: the whole screen, the body scrolling, the actions pinned to the bottom ── */
   .dialog { padding: 0; }
@@ -201,14 +203,14 @@
   /* No hover, so no key hints. */
   .toolbar button kbd, .views button kbd { display: none; }
   .panel .close { min-width: 40px; min-height: 40px; }
-  /* The build hint follows no finger: a slim strip at the top, under the top line, clear of the town in the middle. */
+  /* The build hint follows no finger: a thin strip the width of the screen, under the top line, clear of the town in the middle. */
   .tooltip {
-    left: 50% !important; top: calc(58px + env(safe-area-inset-top)) !important; transform: translateX(-50%);
-    width: max-content; max-width: calc(100vw - 20px); white-space: normal; text-align: center;
-    font-size: 11px; line-height: 1.35; padding: 4px 10px; background: rgba(47, 70, 57, 0.82); border-radius: 6px;
+    left: 0 !important; right: 0; top: calc(52px + env(safe-area-inset-top)) !important; transform: none;
+    white-space: normal; text-align: center; font-size: 9.5px; line-height: 1.3; padding: 3px 8px;
+    background: rgba(47, 70, 57, 0.8); border-radius: 0;
   }
 }
 /* A portrait phone's top line takes two rows: the hint goes under both. */
 @media (pointer: coarse) and (max-width: 760px) and (min-height: 501px) {
-  .tooltip { top: calc(88px + env(safe-area-inset-top)) !important; }
+  .tooltip { top: calc(84px + env(safe-area-inset-top)) !important; }
 }

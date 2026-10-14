@@ -1674,16 +1674,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   }
 
   const input = new MapInput(stage, ui)
-  // A road, a row of homes, or a patch of park let go of on a touch screen is held here until built or dropped.
+  // A road, a row of homes, or a patch of park let go of on a touch screen is held here until built or
+  // dropped; the tooltip says what it lays and costs.
   const strokeBar = el("div", "stroke-bar")
-  const strokeText = el("span", "what")
-  const strokeBuild = el("button", "frame primary", "Build")
+  const strokeBuild = el("button", "primary", "Build")
   strokeBuild.onclick = () => input.confirmStroke()
-  const strokeDrop = el("button", "frame", "")
-  strokeDrop.append(iconEl("close", 14))
-  strokeDrop.setAttribute("aria-label", "Cancel")
+  const strokeDrop = el("button", "", "Cancel")
   strokeDrop.onclick = () => input.cancelStroke()
-  strokeBar.append(strokeText, strokeDrop, strokeBuild)
+  strokeBar.append(strokeDrop, strokeBuild)
   document.body.append(strokeBar)
   const resetPage = () => {
     choose("select")
@@ -1906,8 +1904,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const text = ui.dragFrom && ui.stroke !== "cancel" && ui.preview.stroke ? ui.preview.stroke : ui.preview.tooltip
     // A held touch stroke waits for its build button.
     const held = ui.stroke === "held" && ui.preview.stroke !== null
-    if (held) strokeText.textContent = ui.preview.stroke
     strokeBar.classList.toggle("open", held)
+    document.body.classList.toggle("stroke-held", held)
     if (text && screenPointer) {
       tooltip.textContent = text
       tooltip.style.display = "block"

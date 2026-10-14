@@ -300,13 +300,12 @@ export class MapInput {
     return this.screen
   }
   /** Where the tooltip goes, or `null` for none. A finger shows it only for what it is about to
-   * build (a stroke being drawn, an armed tap), never while it moves the camera or picks a
-   * building, whose panel says the same, nor for a held stroke, whose bar says it; the
-   * stylesheet pins it to the top on touch. */
+   * build (a stroke being drawn or held, an armed tap), never while it moves the camera or
+   * picks a building, whose panel says the same; the stylesheet pins it to the top on touch. */
   get tip(): Point | null {
     if (!this.touch) return this.screen
-    if (this.pinch || this.held) return null
-    if (this.armed) return this.screen ?? { x: 0, y: 0 }
+    if (this.pinch) return null
+    if (this.held || this.armed) return this.screen ?? { x: 0, y: 0 }
     return this.press?.mode === "edit" ? this.screen : null
   }
   sync() {

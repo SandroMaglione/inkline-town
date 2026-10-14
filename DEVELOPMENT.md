@@ -33,13 +33,13 @@ build; camera gestures never place anything. A finger has no hover, so on
 touch the tap tools (buildings, park pieces, bulldoze) take two taps: the
 first holds the ghost or outline where it landed, a second on the same spot
 commits it. The drag tools (road, pave, homes, park ground) hold the stroke
-on touch too: a bar above the tool bar says what it lays and costs, with
-**Build** and ✕; a tap on the stroke's end builds it, a tap elsewhere drops
+on touch too: **Cancel** and **Build** sit above the tool bar (in the guide's
+place) and the tooltip says what it lays and costs; a tap on the stroke's end builds it, a tap elsewhere drops
 it, and two fingers move the camera under it. With any pointer, a stroke let
 go off the map (over the tool bar, say) is dropped and shows red while it
 would be, as are a right click or Esc mid-drag. On touch the tooltip shows
 only for what is about to be built, never while panning or picking, in a
-strip under the top line. This lives entirely in `src/render3d/input.ts`
+thin full-width strip under the top line. This lives entirely in `src/render3d/input.ts`
 (and the bar in `host.ts`); the game still sees one ordinary press and
 release.
 
