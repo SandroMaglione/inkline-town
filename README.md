@@ -127,7 +127,8 @@ different on every cell.
 ## Play
 
 Inkline Town runs in the browser. Saves stay in your browser, and the town
-autosaves every two minutes of play.
+autosaves every two minutes of play. Share a picture of your town, or a link
+that opens it running for anyone, who can then play on from where you left it.
 
 ```sh
 pnpm install

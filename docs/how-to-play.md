@@ -31,6 +31,13 @@ Save, load, and new town sit in the bottom right. The town also autosaves
 every two minutes of game time, and **load** takes whichever save is newer.
 New town and load ask before they replace the town you have.
 
+**share** makes a picture of the town as you see it, with how it stands, to
+save or post anywhere (on a phone it opens the share sheet). **Make a link**
+there gives a link anyone can open to watch your town running, from where
+you were looking; **Play from here** makes it theirs to carry on, in their
+own browser. The end of a term has a share button too. Shared links last
+six months.
+
 ## A term in office
 
 - **The charter**: a new town is founded on land you choose: its size

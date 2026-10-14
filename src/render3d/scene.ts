@@ -13,6 +13,15 @@ import { groundAsset, landAsset, overlayAsset, previewAsset, type OverlayCell } 
 import { parkAsset } from "../asset-lab/town-props.ts"
 import type { ParkCell } from "../appeal.ts"
 
+/** Where the camera stands: the grid cell it looks at, its zoom, and its angles. */
+export interface CameraView {
+  readonly x: number
+  readonly y: number
+  readonly zoom: number
+  readonly heading: number
+  readonly elevation: number
+}
+
 export interface SceneNode {
   readonly group: THREE.Group
   orient(): void
@@ -301,6 +310,50 @@ export class GameScene {
   }
   capture() {
     return this.canvas.toDataURL("image/webp", 0.94)
+  }
+  /** Where the camera looks from, to share along with the town. */
+  view(): CameraView {
+    return { x: this.target.x / floorScale, y: this.target.z / floorScale, zoom: this.camera.zoom, heading: this.heading, elevation: this.elevation }
+  }
+  /** Looks from a shared view, kept within the limits the controls keep to. */
+  setView(view: CameraView) {
+    const finite = (n: number, fallback: number) => (Number.isFinite(n) ? n : fallback)
+    this.target.set(THREE.MathUtils.clamp(finite(view.x, GRID / 2), 0, GRID) * floorScale, 0, THREE.MathUtils.clamp(finite(view.y, GRID / 2), 0, GRID) * floorScale)
+    this.camera.zoom = THREE.MathUtils.clamp(finite(view.zoom, 1), 0.35, 4)
+    this.heading = finite(view.heading, Math.PI / 4)
+    this.elevation = THREE.MathUtils.clamp(finite(view.elevation, Math.PI / 6), Math.PI / 12, (Math.PI / 180) * 65)
+    this.camera.updateProjectionMatrix()
+    this.placeCamera()
+  }
+  /**
+   * The town as the camera sees it, drawn afresh at `width` × `height`
+   * (times `scale`) into a canvas of its own. The view is widened or
+   * narrowed so all of what the mayor sees on screen fits the picture.
+   * The drawing buffer is read right after the render, so this works
+   * without keeping the buffer between frames.
+   */
+  picture(width: number, height: number, scale = 2): HTMLCanvasElement {
+    const ratio = this.renderer.getPixelRatio(),
+      zoom = this.camera.zoom,
+      fit = Math.min(width / this.width, height / this.height)
+    this.renderer.setPixelRatio(scale)
+    this.renderer.setSize(width, height, false)
+    this.camera.left = -width / 2
+    this.camera.right = width / 2
+    this.camera.top = height / 2
+    this.camera.bottom = -height / 2
+    this.camera.zoom = Math.max(0.3, zoom * fit)
+    this.camera.updateProjectionMatrix()
+    this.renderer.render(this.scene, this.camera)
+    const out = document.createElement("canvas")
+    out.width = width * scale
+    out.height = height * scale
+    out.getContext("2d")!.drawImage(this.canvas, 0, 0, out.width, out.height)
+    this.camera.zoom = zoom
+    this.renderer.setPixelRatio(ratio)
+    this.resize()
+    this.renderer.render(this.scene, this.camera)
+    return out
   }
   dispose() {
     this.renderer.setAnimationLoop(null)

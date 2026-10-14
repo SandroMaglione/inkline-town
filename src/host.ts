@@ -54,7 +54,10 @@ import { generate } from "./mapgen.ts"
 import { askOf, priceOf } from "./sim/index.ts"
 import type { Line, Stats, Tool, TradeMode, UiValue, View } from "./ui.ts"
 import { emptyPreview } from "./ui.ts"
-import { GameScene } from "./render3d/scene.ts"
+import { GameScene, type CameraView } from "./render3d/scene.ts"
+import { blobOf, cardFacts, drawCard, metaOf, scaled, verdictOf } from "./share/card.ts"
+import { handheld, offerLink, offerPicture, upload } from "./share/client.ts"
+import { PICTURE_HEIGHT, PICTURE_WIDTH } from "./share/format.ts"
 import { MapInput } from "./render3d/input.ts"
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
@@ -111,9 +114,12 @@ const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)}
 export interface Persistence {
   readonly save: () => string | null
   readonly load: () => string | null
+  /** The town as a save file (as text), with where the camera stands, to share. */
+  readonly shareFile: (camera: CameraView) => string
 }
 
-export const createHost = async (mount: HTMLElement, persistence: () => Persistence) => {
+/** `shared`: the page opened on a shared town's link, so it loads that rather than asking for a charter. */
+export const createHost = async (mount: HTMLElement, persistence: () => Persistence, options: { readonly shared?: boolean } = {}) => {
   const app = new Application()
   // Pixi remains an offscreen thumbnail renderer for the unchanged menus.
   await app.init({ width: 64, height: 64, antialias: true, resolution: 2, autoStart: false, backgroundAlpha: 0 })
@@ -216,12 +222,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const dialog = el("div", "dialog")
   const confirmBox = el("div", "dialog")
   const reckoning = el("div", "dialog")
+  const shareBox = el("div", "dialog share")
+  const visitBar = el("div", "card visit")
   const result = el("button", "result", "")
   result.onclick = () => showReckoning(true)
   // Map views, and the legend of the one shown.
   const views = el("div", "views")
   const legend = el("div", "card legend")
-  document.body.append(hud, people, tooltip, toastBox, toolbar, system, panel, result, dialog, confirmBox, reckoning, views, legend)
+  document.body.append(hud, people, tooltip, toastBox, toolbar, system, panel, result, dialog, confirmBox, reckoning, shareBox, visitBar, views, legend)
 
   let toastTimer = 0
   const ui: UiValue = {
@@ -354,6 +362,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     button.onclick = run
     system.append(button)
   }
+  action("share", "share", "Share a picture of the town, or a link anyone can open to watch it and play on", () => void openShare())
   // The guide, on or off (it is on for a new mayor).
   const guideButton = el("button", "guide-toggle")
   guideButton.append(iconEl("hint"), document.createTextNode("guide"))
@@ -449,7 +458,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     if (event.target instanceof HTMLElement && event.target.closest("input,select,textarea,[contenteditable=true]")) return
     if (event.key === " " && event.target instanceof HTMLButtonElement) return
     if (confirmBox.classList.contains("open") && event.key === "Escape") confirmBox.querySelector<HTMLButtonElement>(".primary")?.click()
-    if (ui.founding || reckoning.classList.contains("open") || confirmBox.classList.contains("open")) return
+    if (shareBox.classList.contains("open") && event.key === "Escape") closeShare()
+    if (ui.founding || reckoning.classList.contains("open") || confirmBox.classList.contains("open") || shareBox.classList.contains("open") || visiting) return
     if (event.key === " ") {
       event.preventDefault()
       setSpeed(ui.speed === 0 ? lastSpeed : 0)
@@ -1285,6 +1295,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const actions = el("div", "actions")
     const found = el("button", "frame primary", "Found the town")
     found.onclick = () => {
+      if (visiting) endVisit()
       ui.edits.push({ type: "newTown", charter: { ...choice } })
       history.length = 0
       ui.selected = null
@@ -1308,7 +1319,131 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     ui.founding = false
     dialog.classList.remove("open")
   }
-  openCharter(false)
+  if (!options.shared) openCharter(false)
+
+  // ── Sharing ──
+  // A picture of the town (the card), to post anywhere; and, on asking, a link
+  // that opens the town itself, running, for anyone to watch and play on.
+  let shareSpeed = 1
+  const closeShare = () => {
+    if (!shareBox.classList.contains("open")) return
+    shareBox.classList.remove("open")
+    for (const img of shareBox.querySelectorAll("img")) URL.revokeObjectURL(img.src)
+    if (!visiting) setSpeed(shareSpeed)
+  }
+  shareBox.onclick = (event) => {
+    if (event.target === shareBox) closeShare()
+  }
+  const openShare = async () => {
+    const s = ui.stats
+    if (!s || shareBox.classList.contains("open")) return
+    shareSpeed = ui.speed
+    setSpeed(0)
+    const facts = cardFacts(s)
+    let card: HTMLCanvasElement, png: Blob
+    try {
+      card = await drawCard(stage.picture(PICTURE_WIDTH, PICTURE_HEIGHT, 2), facts, location.host)
+      png = await blobOf(card, "image/png")
+    } catch (error) {
+      setSpeed(shareSpeed)
+      return ui.toast(error instanceof Error ? error.message : "The picture could not be made")
+    }
+    const name = `inkline-town-${s.fate.state === "playing" ? `year-${s.season.year}` : s.fate.state === "won" ? "complete" : "reckoning"}.png`
+    const caption = `${metaOf(facts).title} · ${metaOf(facts).description}`
+    shareBox.replaceChildren()
+    const sheet = el("div", "sheet")
+    sheet.append(el("h2", "", "share the town"))
+    const preview = document.createElement("img")
+    preview.className = "card-preview"
+    preview.alt = caption
+    preview.src = URL.createObjectURL(png)
+    sheet.append(preview)
+    sheet.append(el("p", "sub", "Post the picture anywhere, or make a link: whoever opens it sees this town running, from where you look at it now, and can play on from here."))
+    const actions = el("div", "actions")
+    const picture = el("button", "frame primary", "")
+    picture.append(iconEl("picture", 15), document.createTextNode(handheld() ? "Share the picture" : "Save the picture"))
+    picture.onclick = async () => ui.toast(await offerPicture(png, name, caption))
+    const link = el("button", "frame", "")
+    link.append(iconEl("link", 15), document.createTextNode("Make a link"))
+    const linkRow = el("div", "link-row")
+    link.onclick = async () => {
+      link.disabled = true
+      link.lastChild!.textContent = "Making a link…"
+      try {
+        const small = await blobOf(scaled(card, PICTURE_WIDTH, PICTURE_HEIGHT), "image/jpeg", 0.86)
+        const made = await upload(persistence().shareFile(stage.view()), small, metaOf(facts))
+        link.remove()
+        const field = document.createElement("input")
+        field.readOnly = true
+        field.value = made.url
+        field.onfocus = () => field.select()
+        const copy = el("button", "frame primary", handheld() ? "Share the link" : "Copy the link")
+        copy.onclick = async () => ui.toast(await offerLink(made.url, metaOf(facts).title))
+        const open = el("a", "frame", "Open")
+        open.setAttribute("href", made.url)
+        open.setAttribute("target", "_blank")
+        open.setAttribute("rel", "noopener")
+        linkRow.replaceChildren(field, copy, open)
+        linkRow.classList.add("show")
+        copy.focus()
+      } catch (error) {
+        link.disabled = false
+        link.lastChild!.textContent = "Try the link again"
+        ui.toast(error instanceof Error ? error.message : "Could not share the town")
+      }
+    }
+    const close = el("button", "frame", "Close")
+    close.onclick = () => closeShare()
+    actions.append(picture, link, close)
+    sheet.append(actions, linkRow)
+    shareBox.append(sheet)
+    shareBox.classList.add("open")
+    picture.focus()
+  }
+
+  // ── Visiting a shared town ──
+  // The town runs as its mayor left it, with the building tools put away,
+  // until the visitor plays on from here (it becomes theirs, and autosaves)
+  // or founds a town of their own.
+  let visiting = false
+  const endVisit = () => {
+    visiting = false
+    document.body.classList.remove("visiting")
+    visitBar.classList.remove("show")
+    window.history.replaceState(null, "", "/")
+  }
+  /** The shared town is loaded: show it running. */
+  const visit = (title: string) => {
+    visiting = true
+    closeCharter()
+    resetPage()
+    document.body.classList.add("visiting")
+    visitBar.replaceChildren()
+    const text = el("div", "cell")
+    text.append(iconEl("town", 18))
+    const words = el("span", "stack")
+    words.append(el("b", "", "a shared town"), el("small", "", title))
+    text.append(words)
+    const play = el("button", "frame primary", "Play from here")
+    play.title = "Make this town yours: build, govern, and it autosaves in this browser"
+    play.onclick = () => {
+      endVisit()
+      ui.toast("The town is yours: it autosaves as you play")
+    }
+    const own = el("button", "frame", "Found your own")
+    own.onclick = () => openCharter(true)
+    const buttons = el("div", "cell")
+    buttons.append(play, own)
+    visitBar.append(text, buttons)
+    visitBar.classList.add("show")
+    setSpeed(1)
+  }
+  /** The shared town could not be opened: say why, and found a town instead. */
+  const visitFailed = (message: string) => {
+    window.history.replaceState(null, "", "/")
+    openCharter(false)
+    ui.toast(message)
+  }
 
   // ── The end of the term ──
   /** Lines of residents, coins, and approval over the term, on the term's own time axis. */
@@ -1335,15 +1470,6 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       return `<rect x="${from.toFixed(1)}" y="0" width="${((w * 0.3) / 6).toFixed(1)}" height="${h}" fill="#3d6db5" opacity="0.06"/>`
     }).join("")
     return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${winters}<line x1="0" x2="${w}" y1="${goal}" y2="${goal}" stroke="#77817a" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>${line(coinsLine, Math.min(0, ...coinsLine), Math.max(1, ...coinsLine), "#d6ae2e")}${line(approvalLine, -100, 100, "#3d6db5", "4 3")}${line(residents, 0, top, "#3d4943")}</svg>`
-  }
-  /** What became of a town whose term ran out. */
-  const verdictOf = (s: Stats): string => {
-    if (s.fate.governing) return "complete"
-    const residents = s.settlers + s.citizens
-    if (s.fate.peak < 40) return "the town never took root"
-    if (residents >= sizes[s.charter.size].goal.residents * 0.75) return "flourishing"
-    if (residents >= s.fate.peak * 0.7) return "holding on"
-    return "declining"
   }
   let reckoned = ""
   let reckoningOpen = false
@@ -1414,7 +1540,10 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     }
     const look = el("button", "frame", "Look at the town")
     look.onclick = () => showReckoning(false)
-    actions.append(again, look)
+    const share = el("button", "frame", "Share the town")
+    share.title = "A picture of the town and its verdict, or a link anyone can open"
+    share.onclick = () => void openShare()
+    actions.append(again, look, share)
     card.append(actions)
     reckoning.append(card)
     showReckoning(true)
@@ -1597,5 +1726,5 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     } else tooltip.style.display = "none"
   }
 
-  return { app, stage, ui, syncPage, resetPage, input }
+  return { app, stage, ui, syncPage, resetPage, input, visit, visitFailed, visiting: () => visiting }
 }
