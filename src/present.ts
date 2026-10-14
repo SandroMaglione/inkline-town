@@ -7,13 +7,13 @@
 import { RenderSync } from "@typeonce/bevy-ts-render"
 import { hazardStrength } from "./render3d/surface-state.ts"
 
-import { appealAt, appealParts, buildingSource, landSource, parkSources, parksOf, type AppealSource, type ParkCell, type ParkValue } from "./appeal.ts"
+import { appealAt, appealParts, buildingSource, homeSource, landSource, parkSources, parksOf, type AppealSource, type ParkCell, type ParkValue } from "./appeal.ts"
 import { homeHeight, topOf, type Alert, type Load, type Emphasis } from "./art.ts"
 import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView, RuinView } from "./render3d/views.ts"
 import type { DoorSet, OverlayCell } from "./render3d/models.ts"
 import {
-  BUILD_TICKS, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
-  PAVE_COST, propIds, props, risk, RISK_MAX, ROAD_COST, tierHome, total, winters, type GoodId, type Kind, type KindId, type Tier
+  amounts, BUILD_TICKS, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
+  PAVE_COST, propIds, props, risk, RISK_MAX, ROAD_COST, tierHome, total, winters, type Amounts, type GoodId, type Kind, type KindId, type Tier
 } from "./content.ts"
 import { around, canPlace, cellOf, doors, entrances, isRoad, key, lPath, nearest, reach, useAt, type TileLike } from "./grid.ts"
 import { GRID, inside, U, type Point } from "./iso.ts"
@@ -67,6 +67,7 @@ import {
   StageService,
   Status,
   Stock,
+  Flow,
   Tile,
   Time,
   TownHall,
@@ -86,6 +87,7 @@ import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type Alert as Notice, type HitBox, type Legend, type Line, type View } from "./ui.ts"
 import { blockers as blockersOf, streetAdvice, type InTown, type Served, type Street } from "./rules/explain.ts"
 import { breadBonus, streetTax, suppliedTaxOf } from "./rules/households.ts"
+import { salvageOf, salvageText } from "./rules/salvage.ts"
 import { rockBlocks, type RockPart } from "./render3d/rock-blocks.ts"
 import { GUIDE_QUIET, guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
 import { ticks } from "./content.ts"
@@ -191,7 +193,8 @@ const HouseRead = Game.Query({
     risk: Game.Query.optional(Risk),
     condition: Game.Query.optional(Condition),
     burning: Game.Query.optional(Burning),
-    sick: Game.Query.optional(Sick)
+    sick: Game.Query.optional(Sick),
+    closed: Game.Query.optional(Paused)
   }
 })
 const RuinRead = Game.Query({ selection: { tile: Game.Query.read(Tile), ruin: Game.Query.read(Ruin) } })
@@ -344,6 +347,7 @@ export const Interact = Game.System(
       treasury: Game.System.readResource(Treasury),
       ledger: Game.System.readResource(Ledger),
       stock: Game.System.readResource(Stock),
+      flow: Game.System.readResource(Flow),
       policy: Game.System.readResource(Policy),
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter),
@@ -600,7 +604,12 @@ export const Interact = Game.System(
       for (const { data } of queries.paved.each()) sources.push(landSource("paved", data.tile.get()))
       sources.push(...parkSources(parkCells, road))
       for (const { data } of ruins) sources.push(landSource("ruin", data.tile.get()))
-      for (const { data } of houses) if ((maybe(data.condition)?.value ?? CONDITION_MAX) < wear.worn) sources.push(landSource("worn", data.tile.get()))
+      for (const { data } of houses) {
+        if (data.site.present || data.rising.present) continue
+        if ((maybe(data.condition)?.value ?? CONDITION_MAX) < wear.worn) sources.push(landSource("worn", data.tile.get()))
+        const fine = data.closed.present ? null : homeSource(data.house.get().tier, data.tile.get())
+        if (fine) sources.push(fine)
+      }
       return sources
     }
     /** Where a home's residents work: the nearest workplace of their crew in reach that has them. */
@@ -759,6 +768,13 @@ export const Interact = Game.System(
       const h = row.data.house.get()
       const site = maybe(row.data.site)
       if (site) return { h, lines: [{ icon: "planks", label: "a site", value: "waiting for its plank", tone: "warn" } as Line], blockers: [] as Array<Line> }
+      if (row.data.closed.present) {
+        return {
+          h,
+          lines: [{ icon: "settlers", label: "closed", value: "empty: it pays no taxes and costs the town hall nothing", tone: "warn", note: "reopen it and settlers move back in, a resident at a time" } as Line],
+          blockers: [] as Array<Line>
+        }
+      }
       const tile = row.data.tile.get()
       const tier = home.tiers[h.tier]
       const next = h.tier < 3 ? home.tiers[(h.tier + 1) as Tier] : null
@@ -855,17 +871,29 @@ export const Interact = Game.System(
       return { h, lines, blockers }
     }
 
+    /** What pulling a building or home down would cost and give back, for the bulldozer and the panel. */
+    const salvageFor = (cost: Kind["cost"], site: { readonly owed: Amounts } | undefined) => {
+      const s = salvageOf(cost, site?.owed ?? null)
+      const said = salvageText(s)
+      return `${site ? "cancel" : "pull down"}${said ? `: ${said}` : ""}`
+    }
     const hovered = preview.hover
     const hoveredBuilding = hovered !== null ? buildings.find((row) => row.entity.id === hovered) : undefined
     const hoveredHouse = hovered !== null ? houses.find((row) => row.entity.id === hovered) : undefined
     const hoveredRuin = hovered !== null ? ruins.find((row) => row.entity.id === hovered) : undefined
     if (hoveredBuilding) {
       const { kind, status, problem } = describeBuilding(hoveredBuilding)
-      preview.tooltip = `${kind.title.toLowerCase()} · ${problem ?? status}`
+      preview.tooltip = ui.tool === "bulldoze"
+        ? `${kind.title.toLowerCase()} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(kind.cost, maybe(hoveredBuilding.data.site))}`
+        : `${kind.title.toLowerCase()} · ${problem ?? status}`
     } else if (hoveredHouse) {
       const h = hoveredHouse.data.house.get()
       const t = hoveredHouse.data.tile.get()
-      preview.tooltip = `${tierHome[h.tier]} · ${h.residents} residents · desirability ${appealAt(cells, t.x, t.y)}${hoveredHouse.data.burning.present ? " · on fire!" : hoveredHouse.data.sick.present ? " · sick" : ""}`
+      preview.tooltip = ui.tool === "bulldoze"
+        ? `${tierHome[h.tier]} · ${salvageFor(home.cost, maybe(hoveredHouse.data.site))}`
+        : hoveredHouse.data.closed.present
+        ? `${tierHome[h.tier]} · closed`
+        : `${tierHome[h.tier]} · ${h.residents} residents · desirability ${appealAt(cells, t.x, t.y)}${hoveredHouse.data.burning.present ? " · on fire!" : hoveredHouse.data.sick.present ? " · sick" : ""}`
     } else if (hoveredRuin) {
       preview.tooltip = `ruin · ${hoveredRuin.data.ruin.get().cause} · bulldoze to clear`
     } else if (hovered !== null && ui.tool === "select" && parkRows.some((row) => row.entity.id === hovered)) {
@@ -901,11 +929,17 @@ export const Interact = Game.System(
         problem,
         lines,
         pausable,
-        paused: pickedBuilding.data.paused.present
+        paused: pickedBuilding.data.paused.present,
+        salvage: salvageFor(kind.cost, maybe(pickedBuilding.data.site))
       }
     } else if (pickedHouse) {
       const { h, lines, blockers } = describeHouse(pickedHouse)
-      ui.panel = { type: "house", id: pickedHouse.entity.id, cell: pickedHouse.data.tile.get(), tier: h.tier, lines, blockers }
+      ui.panel = {
+        type: "house", id: pickedHouse.entity.id, cell: pickedHouse.data.tile.get(), tier: h.tier, lines, blockers,
+        closable: !pickedHouse.data.site.present && !pickedHouse.data.rising.present && !pickedHouse.data.burning.present,
+        closed: pickedHouse.data.closed.present,
+        salvage: salvageFor(home.cost, maybe(pickedHouse.data.site))
+      }
     } else if (pickedPark && picked) {
       ui.panel = {
         type: "park",
@@ -1194,6 +1228,8 @@ export const Interact = Game.System(
       return row ? { at: row.data.tile.get(), id: row.entity.id } : { at: null, id: null }
     }
     const shown = step ? focusOf(step.focus) : null
+    const flowNow = resources.flow.get().last
+    const flowHeld = resources.flow.get().held
     ui.stats = {
       coins,
       taxes: ledger.taxes,
@@ -1261,6 +1297,7 @@ export const Interact = Game.System(
       },
       goals: goalsOf(charter, { settlers: census.settlers, citizens: census.citizens, coins, net: steadyNet(resources.history.get().samples, net), approval: mood.approval }),
       larder: larder(stock),
+      flow: flowNow === null ? null : { ...flowNow, elsewhere: amounts(Object.fromEntries(goodIds.map((g) => [g, Math.max(0, flowHeld[g] - stock[g])]))) },
       eaten: pantry.eatenLast,
       rotted: pantry.rottedLast,
       sick: census.sick,
@@ -1510,6 +1547,7 @@ export const Animate = Game.System(
               sick: Number(data.sick.present)
             },
             band: desirability < 0 ? "poor" : desirability >= home.tiers[2].appeal ? "fine" : "plain",
+            closed: data.closed.present,
             tint: services.ui.tints.get(entity.id)
           },
           emphasis(entity.id)

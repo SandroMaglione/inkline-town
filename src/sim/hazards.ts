@@ -11,13 +11,13 @@ import { near, riskIncrements } from "../rules/risks.ts"
  */
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
-import { appealGrid, appealAt, buildingSource, landSource, parkSources, type AppealSource } from "../appeal.ts"
+import { appealGrid, appealAt, buildingSource, homeSource, landSource, parkSources, type AppealSource } from "../appeal.ts"
 import { ruinDraft } from "../archetypes.ts"
 import { goodIds, risk, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../grid.ts"
 import { counted, placeName, type Landmark } from "../places.ts"
 import type { Point } from "../iso.ts"
-import { Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Rules, Grid, House, Inventory, Mood, Park, Paved, Rescue, Rising, Risk, Rng, Road, Route, Ruin, Service, Sick, Site, Staff, Storage, Tile, Time, Tree, Treasury, WalkerOf, Water, maybe } from "../schema.ts"
+import { Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Rules, Grid, House, Inventory, Mood, Park, Paused, Paved, Rescue, Rising, Risk, Rng, Road, Route, Ruin, Service, Sick, Site, Staff, Storage, Tile, Time, Tree, Treasury, WalkerOf, Water, maybe } from "../schema.ts"
 import { elapsed, seasonAt, write } from "./shared.ts"
 
 // ── Desirability ──────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ export const Appraise = Game.System(
       parks: Game.Query({ selection: { tile: Game.Query.read(Tile), park: Game.Query.read(Park) } }),
       roads: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road] }),
       ruins: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Ruin] }),
-      homes: Game.Query({ selection: { tile: Game.Query.read(Tile), condition: Game.Query.read(Condition) }, with: [House], without: [Site, Rising] })
+      homes: Game.Query({ selection: { tile: Game.Query.read(Tile), condition: Game.Query.read(Condition), house: Game.Query.read(House), closed: Game.Query.optional(Paused) }, without: [Site, Rising] })
     },
     resources: { time: Game.System.readResource(Time), appeal: Game.System.writeResource(Appeal) },
     services: { rules: Game.System.service(Rules) }
@@ -55,7 +55,11 @@ export const Appraise = Game.System(
     const roads = new Set(queries.roads.each().map(({ data }) => `${data.tile.get().x},${data.tile.get().y}`))
     sources.push(...parkSources(queries.parks.each().map(({ data }) => ({ ...data.tile.get(), ...data.park.get() })), (x, y) => roads.has(`${x},${y}`), rules))
     for (const { data } of queries.ruins.each()) sources.push(landSource("ruin", data.tile.get(), rules))
-    for (const { data } of queries.homes.each()) if (data.condition.get().value < wear.worn) sources.push(landSource("worn", data.tile.get(), rules))
+    for (const { data } of queries.homes.each()) {
+      if (data.condition.get().value < wear.worn) sources.push(landSource("worn", data.tile.get(), rules))
+      const fine = data.closed.present ? null : homeSource(data.house.get().tier, data.tile.get(), rules)
+      if (fine) sources.push(fine)
+    }
     resources.appeal.set({ cells: appealGrid(sources, rules) })
   }
 )
@@ -79,7 +83,8 @@ export const Hazards = Game.System(
           house: Game.Query.optional(House),
           building: Game.Query.optional(Building),
           sick: Game.Query.optional(Sick),
-          burning: Game.Query.optional(Burning)
+          burning: Game.Query.optional(Burning),
+          paused: Game.Query.optional(Paused)
         },
         without: [Site, Rising]
       }),
@@ -151,6 +156,8 @@ export const Hazards = Game.System(
       if (data.burning.present) continue
       const tile = data.tile.get()
       const h = maybe(data.house)
+      // A closed home has nobody in it to fall sick, steal, or knock over a lamp.
+      if (h && data.paused.present) continue
       const b = maybe(data.building)
       const r = { ...data.risk.get() }
       const increments = riskIncrements({

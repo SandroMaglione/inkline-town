@@ -88,8 +88,11 @@ Nobody tells you to build it that way; it works best that way.
   take from it, fading with distance: a smithy, quarry, or mine takes 8
   beside it and less out to four cells; a sawmill, bakery, mill, or
   smokehouse 4; warehouses, farms, a granary, a builder's yard 2. Water and
-  woods give 2, a market 2 and a chapel 4, the town hall 4, and a paved
-  street 1 beside it. Ruins and run-down homes take a little. Every point
+  woods give 2, and a paved street 1 beside it. The good places carry
+  further: a chapel and the town hall give 4 out to two cells before they
+  fade (to four), a market 2 out to two. Fine homes lift the homes beside
+  them, never themselves: a citizens' home 1, a townhouse 2, up to 3 in all,
+  so a good quarter keeps itself up. Ruins and run-down homes take a little. Every point
   counts: below 0 a home holds fewer residents (a twentieth fewer a point,
   down to half) and pays less (a fortieth a point, down to three quarters);
   above 0 it pays more, up to a quarter more. A home's panel says what its
@@ -103,7 +106,8 @@ Nobody tells you to build it that way; it works best that way.
   kind in full, each more of it half as much, and one for every two
   cells), and its ways in from the street (a walk or a square beside a
   road: 1.5 each, two count), up to 15, out to 2 cells and one more for
-  every 6 cells of park, up to 5. A lone statue is worth little; a lawn
+  every 6 cells of park, up to 5; its whole worth reaches half that far
+  before it fades. A lone statue is worth little; a lawn
   with walks in from the street, lamps, and a statue is worth a street of
   citizens.
   Parks cost upkeep by the cell and by the furnishing: a fine centre is
@@ -112,7 +116,7 @@ Nobody tells you to build it that way; it works best that way.
 - **Tiers.** Settlers live anywhere. A citizens' home needs desirability 5
   as well as bread, cloth, and faith; a home whose street drops below 5
   goes back to settlers even with every need met. A **townhouse** of
-  burghers (12 residents, the best taxes) needs desirability 15 and a
+  burghers (12 residents, the best taxes) needs desirability 12 and a
   fire watch, a healer, and a watch house all calling on it. At
   desirability −5 or less a home is squalid and holds fewer people.
 - **Workers by tier, and the commute.** Settlers do the rough work
@@ -206,15 +210,29 @@ with the town, and starts over with a new one.
   The **town** panel (T, the town button, or the people in the top right) shows the goals, approval,
   treasury, people, supplies, the crown, goods and trade, and the
   chronicle, and holds the levers.
+- **The goods bar** at the top counts what is in storage. Food and other
+  goods often go straight from who makes them to who wants them (a market,
+  a workshop), so storage can read 0 while the homes are well fed: the
+  arrow beside each good says which way it went over the last minute (made
+  and bought against used and sold; → holding steady), reckoned again every
+  ten seconds. Click the bar for each good's minute side by side: made,
+  used, traded, in storage, and about town (in workshops, markets, baskets,
+  and crates).
 - **Materials** (planks, stone, tools) come from storage: a new building is a
   site until carriers have brought what it costs, then it goes up.
 - **Homes** fill with settlers once a road touches them. Settlers need food
   (fish, smoked fish, or bread); with bread, cloth, and faith on a street
   with desirability 5 a home becomes a two-story citizens' home that holds
-  and pays twice as much, and on a fine street (15) with every service
+  and pays twice as much, and on a fine street (12) with every service
   calling, a three-story townhouse. Cloth is only brought to a street fit
   for citizens, however much is in store: the home's panel says so, and
   what the street is short of.
+- **Pulling down** a building or a home costs a tenth of what it cost in
+  coins, and half its materials (rounded down) go back into storage, to
+  build with or sell. A site not yet going up is cancelled instead: its
+  coins and whatever was brought to it come back. A home can also be
+  **closed** from its panel: it stands empty, pays nothing, and costs the
+  town hall nothing, until it is reopened.
 - **Buildings** need a road at the middle of a side and workers of their
   crew from homes within 15 road cells. While one is placed (or selected),
   the roads its walkers or its workers would use are shown; the homes tool

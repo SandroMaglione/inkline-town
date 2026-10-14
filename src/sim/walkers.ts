@@ -181,7 +181,7 @@ export const Wander = Game.System(
   {
     queries: {
       walkers: Game.Query({ selection: { route: Game.Query.write(Route), roam: Game.Query.write(Roam), home: Game.Query.readRelation(WalkerOf) } }),
-      homes: Game.Query({ selection: { house: Game.Query.write(House) }, without: [Site, Rising] }),
+      homes: Game.Query({ selection: { house: Game.Query.write(House) }, without: [Site, Rising, Paused] }),
       cared: Game.Query({
         selection: { risk: Game.Query.write(Risk), condition: Game.Query.write(Condition), sick: Game.Query.optional(Sick) },
         without: [Site, Rising]

@@ -336,6 +336,35 @@ export interface GridValue {
 export const Grid = Descriptor.TransientResource<GridValue>()("Town/Grid")
 /** Goods in the town's storage, summed every step. */
 export const Stock = Descriptor.TransientResource<Amounts>()("Town/Stock")
+/** Ten seconds of goods: what the town held as it began, what was made, and what was traded. */
+export interface FlowSlice {
+  readonly start: Amounts
+  readonly made: Amounts
+  readonly traded: Amounts
+}
+/**
+ * Where the town's goods go, over the last minute, a slice of `FLOW_SLICE`
+ * at a time (not saved: it starts over on a load). `made` by workshops and
+ * gatherers and `traded` (bought less sold) are counted into the slice under
+ * way, which began at `since` holding `start`; `held` is everything the
+ * town holds now, in storage or not (workshops, markets, walkers' baskets,
+ * carriers' crates). What was used (eaten, worked up, built with, rotted,
+ * sent to the crown) is what is left over: `start + made + traded − held`.
+ */
+export interface FlowValue {
+  /** Which town it counts (its seed and founding step): a new or loaded town starts over. */
+  readonly town: string
+  readonly since: number
+  readonly start: Amounts | null
+  readonly made: Amounts
+  readonly traded: Amounts
+  readonly held: Amounts
+  /** The last minute's slices, oldest first. */
+  readonly slices: ReadonlyArray<FlowSlice>
+  /** A minute's worth over the slices kept, or `null` before there are enough to say. */
+  readonly last: { readonly made: Amounts; readonly used: Amounts; readonly traded: Amounts } | null
+}
+export const Flow = Descriptor.TransientResource<FlowValue>()("Town/Flow")
 
 // ── Host services ─────────────────────────────────────────────────────────
 
@@ -360,7 +389,7 @@ export const Game = Schema.bind(
     },
     resources: {
       Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Guide, Appeal, Pantry, Fires,
-      Grid, Stock
+      Grid, Stock, Flow
     },
     relations: { WalkerOf, FieldOf }
   }),

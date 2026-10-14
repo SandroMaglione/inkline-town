@@ -78,7 +78,8 @@ export const blankResources = () => ({
   Pantry: { eaten: 0, rotted: 0, eatenLast: 0, rottedLast: 0, warned: -1_000_000 },
   Fires: { fires: [], next: 1 },
   Grid: { owner: [], use: [] },
-  Stock: amounts({})
+  Stock: amounts({}),
+  Flow: { town: "", since: 0, start: null, made: amounts({}), traded: amounts({}), held: amounts({}), slices: [], last: null }
 })
 
 export { CELL_STEPS, elapsed, seasonAt, termTicks, winterOf } from "./shared.ts"

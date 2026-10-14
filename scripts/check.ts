@@ -284,6 +284,7 @@ const standing = (s: Snapshot, kind: KindId, x: number, y: number, stock: Partia
   s.entities.push({ id, components: c })
   return id
 }
+const signedText = (n: number) => (n > 0 ? `+${n}` : `${n}`)
 const entity = (t: ReturnType<typeof town>, id: number) => t.snapshot().entities.find((e) => e.id === id)
 
 // A citizens' home on a fine street stays citizens; a smithy beside it sends it back to settlers.
@@ -553,6 +554,78 @@ const entity = (t: ReturnType<typeof town>, id: number) => t.snapshot().entities
   // A road runs past both ends of the walk.
   const open = parkValue(cells, (x, y) => x === 1 && (y === -1 || y === 3))
   check("park entrances", open.entrances === 2 && open.value === shut.value + 3, `shut in: ${shut.value}; two walks out to the road: ${open.value}`)
+}
+
+// Pulling down a sawmill: a tenth of its coins, and half its planks and stone back in storage.
+{
+  const t = town()
+  let mill = { x: 0, y: 0 }
+  t.change((s) => {
+    const g = gridOf(s)
+    mill = find(g, 2, doorOnRoad(g, 2))
+    standing(s, "sawmill", mill.x, mill.y)
+  })
+  const held = () => t.snapshot().entities.find((e) => e.components["Town/TownHall"])!.components["Town/Inventory"].stock
+  const coins = () => t.snapshot().resources["Town/Treasury"].coins
+  t.run(1)
+  const before = { coins: coins(), ...held() }
+  t.edit({ type: "remove", cell: mill })
+  t.run(0.05)
+  const after = { coins: coins(), ...held() }
+  const gone = !t.snapshot().entities.some((e) => e.components["Town/Building"]?.kind === "sawmill")
+  check("salvage", gone && before.coins - after.coins === 10 && after.planks - before.planks === 1 && after.stone - before.stone === 1,
+    `${before.coins - after.coins} coins, +${after.planks - before.planks} planks, +${after.stone - before.stone} stone`)
+}
+
+// A closed home stands empty and costs the town hall nothing; reopened, settlers come back.
+{
+  const t = town()
+  let home = 0
+  let spot = { x: 0, y: 0 }
+  t.change((s) => {
+    const g = gridOf(s)
+    spot = find(g, 1, besideRoad(g), "house")
+    home = homeAt(s, spot.x, spot.y, 1, 4)
+  })
+  t.run(2)
+  const homes = () => t.snapshot().resources["Town/Census"].homes
+  const open = homes()
+  t.edit({ type: "pause", cell: spot, on: true })
+  t.run(2)
+  const emptied = entity(t, home)?.components["Town/House"]?.residents
+  const closedHomes = homes()
+  const closed = Boolean(entity(t, home)?.components["Town/Paused"] !== undefined)
+  t.edit({ type: "pause", cell: spot, on: false })
+  t.run(30)
+  const back = entity(t, home)?.components["Town/House"]?.residents
+  check("closing a home", closed && emptied === 0 && closedHomes === open - 1 && back > 0, `residents 4 → ${emptied} closed (homes ${open} → ${closedHomes}), ${back} after reopening`)
+}
+
+// Fine homes lift their neighbours, not themselves.
+{
+  const t = town()
+  let a = { x: 0, y: 0 }
+  t.change((s) => {
+    const g = gridOf(s)
+    a = find(g, 1, (x, y) => besideRoad(g)(x, y) && canPlace(g.value(), { x: x + 1, y, size: 1 }) && canPlace(g.value(), { x: x - 1, y, size: 1 }), "house")
+    g.claim({ x: a.x + 1, y: a.y, size: 1 }, -1, "house")
+    homeAt(s, a.x, a.y, 3, 12)
+    homeAt(s, a.x + 1, a.y, 1, 4)
+  })
+  t.run(1)
+  const cells = t.snapshot().resources["Town/Appeal"].cells as Array<number>
+  const lone = (() => {
+    const u = town()
+    u.change((s) => {
+      const g = gridOf(s)
+      const b = find(g, 1, (x, y) => x === a.x + 1 && y === a.y, "house")
+      homeAt(s, b.x, b.y, 1, 4)
+    })
+    u.run(1)
+    return u.snapshot().resources["Town/Appeal"].cells as Array<number>
+  })()
+  const lift = cells[key(a.x + 1, a.y)]! - lone[key(a.x + 1, a.y)]!
+  check("fine homes lift the street", lift === 2, `a townhouse next door: ${signedText(lift)} desirability`)
 }
 
 console.log(failures === 0 ? "\nall ends hold" : `\n${failures} failed`)

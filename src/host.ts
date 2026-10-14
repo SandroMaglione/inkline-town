@@ -157,8 +157,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     ["fish", "smoked", "wheat", "flour", "bread"],
     ["wool", "cloth"]
   ]
-  stock.title = "Goods in the town's storage · hover one for what it is for"
+  stock.title = "Goods in the town's storage, and which way each is going · click for what the town makes and uses"
   const goodCells = new Map<GoodId, HTMLElement>()
+  const goodTrends = new Map<GoodId, HTMLElement>()
   for (const group of groups) {
     const cell = el("div", "group")
     for (const g of group) {
@@ -168,9 +169,11 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       const glyph = el("span", "glyph")
       glyph.innerHTML = goodIcon(g, 18)
       const count = el("span", "count", "0")
-      item.append(glyph, count)
+      const trend = el("span", "trend")
+      item.append(glyph, count, trend)
       cell.append(item)
       goodCells.set(g, count)
+      goodTrends.set(g, trend)
     }
     stock.append(cell)
   }
@@ -191,7 +194,14 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const goodsChip = el("button", "card goods-chip")
   goodsChip.title = "The goods in storage"
   topline.append(bar, goodsChip)
-  hud.append(topline, stock, request, alarm, ticker)
+  // Under the goods, on a click: each good's last minute, made against used, and where it is held.
+  const flowCard = el("div", "card flow")
+  stock.onclick = (event) => {
+    event.stopPropagation()
+    flowCard.classList.toggle("open")
+  }
+  flowCard.onclick = () => flowCard.classList.remove("open")
+  hud.append(topline, stock, flowCard, request, alarm, ticker)
   const people = el("div", "hud right")
   const folk = el("div", "card bar folk")
   const approval = el("div", "cell")
@@ -789,7 +799,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     const parks = section(
       "parks",
       "decor",
-      `Lay ground, then set furnishings on it. Ground that touches is one park: the more it holds the nicer the streets around it (citizens need 5, townhouses 15). One furnishing counts for every ${parkRules.cellsPerProp} cells.`
+      `Lay ground, then set furnishings on it. Ground that touches is one park: the more it holds the nicer the streets around it (citizens need ${home.tiers[2].appeal}, townhouses ${home.tiers[3].appeal}). One furnishing counts for every ${parkRules.cellsPerProp} cells.`
     )
     parks.style.borderTop = "3px solid #4f9a6a"
     const pieces: ReadonlyArray<{ readonly id: GroundId | PropId; readonly piece: ParkPiece; readonly pick: () => void; readonly ground: boolean }> = [
@@ -1177,7 +1187,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
             ? "settlers: fish or bread from a market keeps them; they do the rough work"
             : p.tier === 2
               ? "citizens: they need bread, cloth, and faith, and a street with desirability 5; they do the skilled work"
-              : "burghers: a citizens' home on a fine street (desirability 15) that every service calls on"
+              : `burghers: a citizens' home on a fine street (desirability ${home.tiers[3].appeal}) that every service calls on`
     )
     const below = el("div", "")
     below.append(status, about)
@@ -1213,6 +1223,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       }
       syncLines(box, rows, now.lines)
       if (nextBox && now.type === "house") {
+        // A closed home has nobody in it to grow.
+        nextBox.style.display = now.closed ? "none" : ""
         syncLines(nextBox, nextRows, now.blockers)
         nextNote.textContent = now.blockers.length === 0 ? "nothing stands in the way: it grows when the next resident settles in" : ""
         nextNote.style.display = now.blockers.length === 0 ? "" : "none"
@@ -1236,8 +1248,27 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         })
         actions.append(pause)
       }
+      if (p.type === "house") {
+        const close = el("button", "frame", "Close home")
+        close.title = "A closed home stands empty: no taxes, and no cost to the town hall's administration. Reopen it and settlers move back in."
+        close.onclick = () => {
+          const now = ui.panel
+          if (now?.type === "house") ui.edits.push({ type: "pause", cell: now.cell, on: !now.closed })
+        }
+        live.push(() => {
+          const now = ui.panel
+          if (now?.type !== "house") return
+          close.textContent = now.closed ? "Reopen home" : "Close home"
+          close.style.display = now.closable ? "" : "none"
+        })
+        actions.append(close)
+      }
       const remove = el("button", "frame danger", "Remove")
       remove.onclick = () => ui.edits.push({ type: "remove", cell: p.cell })
+      live.push(() => {
+        const now = ui.panel
+        remove.title = now?.type === "building" || now?.type === "house" ? now.salvage : ""
+      })
       actions.append(remove)
       panel.append(actions)
     }
@@ -1731,8 +1762,17 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       }
       for (const [g, count] of goodCells) {
         count.textContent = String(s.stock[g])
-        count.parentElement!.classList.toggle("empty", s.stock[g] === 0)
+        const way = s.flow ? flowTrend(s.flow, g) : 0
+        const trend = goodTrends.get(g)!
+        trend.textContent = s.flow ? trendMark(way) : ""
+        trend.className = `trend ${trendClass(way)}`
+        // Empty storage is only worth dimming when nothing is held anywhere else either.
+        count.parentElement!.classList.toggle("empty", s.stock[g] === 0 && (s.flow?.elsewhere[g] ?? 0) === 0)
+        count.parentElement!.title = `${goods[g].title}: ${goodHelp[g]}` + (s.flow
+          ? `\nLast minute: made ${s.flow.made[g]}, used ${s.flow.used[g]}${s.flow.traded[g] !== 0 ? `, ${s.flow.traded[g] > 0 ? "bought" : "sold"} ${Math.abs(s.flow.traded[g])}` : ""}. ${s.stock[g]} in storage, ${s.flow.elsewhere[g]} about town (in workshops and markets, and on the way).`
+          : "")
       }
+      if (flowCard.classList.contains("open")) setHtml(flowCard, flowHtml(s))
       // The crown's request.
       request.classList.toggle("show", s.crown.open && s.fate.state === "playing")
       if (s.crown.open) {
@@ -1854,4 +1894,32 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   }
 
   return { app, stage, ui, syncPage, resetPage, input, visit, visitFailed, visiting: () => visiting }
+}
+
+/** Which way a good went over the last minute: made and bought against used and sold, past a tenth of the traffic either way. */
+const flowTrend = (flow: NonNullable<Stats["flow"]>, g: GoodId): number => {
+  const net = flow.made[g] + flow.traded[g] - flow.used[g]
+  const room = Math.max(1, Math.round((flow.made[g] + flow.used[g] + Math.abs(flow.traded[g])) / 10))
+  return net > room ? 1 : net < -room ? -1 : 0
+}
+
+/** A good's way over the last minute: up, down, or holding steady. */
+const trendMark = (way: number) => (way > 0 ? "↑" : way < 0 ? "↓" : "→")
+const trendClass = (way: number) => (way > 0 ? "up" : way < 0 ? "down" : "steady")
+
+/** The goods' last minute, side by side: only the goods the town has touched. */
+const flowHtml = (s: Stats): string => {
+  const f = s.flow
+  if (f === null) return `<p class="sub">Counting the town's goods: the first numbers come in half a minute…</p>`
+  const rows = goodIds.filter((g) => f.made[g] + f.used[g] + Math.abs(f.traded[g]) + s.stock[g] + f.elsewhere[g] > 0)
+  if (rows.length === 0) return `<p class="sub">Nothing made or used yet.</p>`
+  const head = `<span></span><b title="Made by workshops and gatherers over the last minute">made</b><b title="Eaten, worked up, built with, rotted, or sent away over the last minute">used</b><b title="Bought (+) or sold (−) over the last minute">traded</b><b title="In the town hall, warehouses, and granaries">storage</b><b title="In workshops and markets, walkers' baskets, and carriers' crates">about town</b>`
+  const cell = (n: number) => `<span>${n === 0 ? `<i>–</i>` : n}</span>`
+  const body = rows.map((g) => {
+    const way = flowTrend(f, g)
+    const traded = f.traded[g] === 0 ? `<i>–</i>` : f.traded[g] > 0 ? `+${f.traded[g]}` : `−${-f.traded[g]}`
+    return `<span class="name">${goodIcon(g, 14)}${goods[g].title}<span class="trend ${trendClass(way)}">${trendMark(way)}</span></span>` +
+      `${cell(f.made[g])}${cell(f.used[g])}<span>${traded}</span>${cell(s.stock[g])}${cell(f.elsewhere[g])}`
+  }).join("")
+  return `<div class="flow-grid">${head}${body}</div>`
 }

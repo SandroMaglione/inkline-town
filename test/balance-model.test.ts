@@ -129,9 +129,10 @@ test("the mathematical plan reaches citizens through ordinary game construction"
   const rules = resolveRules(), { scenario, builds } = buildScenario(rules)
   const r = verifyBuilds({ rules, scenario }, builds)
   assert.deepEqual(r.messages, [])
-  assert.equal(r.actual.at(-1)!.citizens, 32)
+  // 32 in citizens' homes, and 12 more once fine homes lift one of them past the townhouse threshold.
+  assert.equal(r.actual.at(-1)!.citizens, 44)
   assert(r.firstCitizenSecond !== null && r.firstCitizenSecond <= 300)
-  assert.equal(r.prediction.rows.at(-1)!.citizens, 32)
+  assert.equal(r.prediction.rows.at(-1)!.citizens, 44)
   assert(r.prediction.assumptions.length > 0)
   assert.equal(r.errors.length, r.actual.length)
 })

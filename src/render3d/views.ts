@@ -181,6 +181,9 @@ export class BuildingView extends WorldView {
 
 }
 
+/** A closed home, washed a cold grey: nobody lives there. */
+const CLOSED_SHADE = 0xa3abb6
+
 export class HouseView extends WorldView {
   private body: ModelHandle
   private plate: ModelHandle
@@ -214,7 +217,7 @@ export class HouseView extends WorldView {
       this.effects.group.userData.tier=look.tier;this.group.add(this.effects.group)
     }
     this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
-    this.shade=0xffffff
+    this.shade=look.closed?CLOSED_SHADE:0xffffff
     this.viewTint = look.tint ?? null
     this.emphasis(emphasis)
   }

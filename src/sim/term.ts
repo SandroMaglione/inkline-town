@@ -7,7 +7,7 @@ import { shippedRules } from "../rules/config.ts"
  */
 import { crown, HISTORY_TICKS, ticks, WINTER_WARNING, type GoodId } from "../content.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
-import { Building, Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, House, Inventory, Ledger, Mood, Pantry, Policy, Recipe, Rising, Rng, Site, Stock, Storage, Time, Treasury } from "../schema.ts"
+import { Building, Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, House, Inventory, Ledger, Mood, Pantry, Paused, Policy, Recipe, Rising, Rng, Site, Stock, Storage, Time, Treasury } from "../schema.ts"
 import { elapsed, seasonAt, termTicks, write } from "./shared.ts"
 
 // ── Time ──────────────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ export const Requests = Game.System(
 export const Approve = Game.System(
   "Town/Approve",
   {
-    queries: { homes: Game.Query({ selection: { house: Game.Query.read(House) }, without: [Site, Rising] }) },
+    queries: { homes: Game.Query({ selection: { house: Game.Query.read(House) }, without: [Site, Rising, Paused] }) },
     resources: {
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter),

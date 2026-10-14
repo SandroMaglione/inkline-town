@@ -12,7 +12,8 @@ import { amounts, goodIds, RESERVE_MAX, TAX_STEPS, type Amounts, type Kind, type
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
-import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, Inventory, Land, Ledger, Market, Mood, Pantry, Park, Paved, Paused, Policy, Rng, Status, Stock, Storage, Time, TownHall, Treasury, Ui } from "../schema.ts"
+import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rng, Site, Status, Stock, Storage, Time, TownHall, Treasury, Ui } from "../schema.ts"
+import { salvageOf, salvageText } from "../rules/salvage.ts"
 import { elapsed, rollWinters, TileRead, useOf, write } from "./shared.ts"
 import { crownGap, foundedFate } from "./term.ts"
 
@@ -34,7 +35,8 @@ export const ApplyEdits = Game.System(
       paved: Game.Query({ selection: { paved: Game.Query.read(Paved) } }),
       parks: Game.Query({ selection: { park: Game.Query.write(Park) } }),
       halls: Game.Query({ selection: { hall: Game.Query.read(TownHall) } }),
-      buildings: Game.Query({ selection: { building: Game.Query.read(Building), paused: Game.Query.optional(Paused) } }),
+      /** Whatever was built at a cost, standing or a site: what pulling it down gives back. */
+      built: Game.Query({ selection: { building: Game.Query.optional(Building), house: Game.Query.optional(House), site: Game.Query.optional(Site), paused: Game.Query.optional(Paused) } }),
       stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage] })
     },
     resources: {
@@ -100,6 +102,23 @@ export const ApplyEdits = Game.System(
           owed -= n
         }
       }
+    }
+    /** Puts goods into storage at once, where there is most room; returns how many found none. */
+    const stash = (materials: Partial<Record<string, number>>) => {
+      let lost = 0
+      for (const [g, n] of Object.entries(materials) as Array<[keyof Amounts, number]>) {
+        let owed = n
+        for (const { data } of [...queries.stores.each()].sort((a, b) => a.data.inventory.get().stock[g] - b.data.inventory.get().stock[g])) {
+          if (owed <= 0) break
+          const inv = data.inventory.get()
+          const k = Math.max(0, Math.min(owed, inv.cap - inv.stock[g]))
+          if (k > 0) data.inventory.set({ ...inv, stock: { ...inv.stock, [g]: inv.stock[g] + k } })
+          left[g] = (left[g] ?? 0) + k
+          owed -= k
+        }
+        lost += owed
+      }
+      return lost
     }
     /** Fells the trees under a tile about to be built on. */
     const fell = (tile: { x: number; y: number; size: number }) => {
@@ -256,6 +275,20 @@ export const ApplyEdits = Game.System(
             furnished.data.park.set({ ...furnished.data.park.get(), prop: "none" })
             break
           }
+          // A building or a home: a fee, and part of its materials back (a site's, all of it).
+          const built = queries.built.get(owner)
+          if (built.ok && (built.value.data.building.present || built.value.data.house.present)) {
+            const b = maybe(built.value.data.building)
+            const s = salvageOf(b ? kinds[b.kind].cost : home.cost, maybe(built.value.data.site)?.owed ?? null, rules)
+            if (s.fee > 0 && coins < s.fee) {
+              ui.toast(`Pulling it down costs ${s.fee} coins`)
+              break
+            }
+            coins -= s.fee
+            const lost = stash(s.back)
+            const said = salvageText(s)
+            if (said !== "") ui.toast(`${built.value.data.site.present ? "Cancelled" : "Pulled down"} · ${said}${lost > 0 ? ` (${lost} found no room in storage)` : ""}`)
+          }
           // A building's walkers and a farm's fields are its children, and go with it.
           commands.despawn(owner)
           entities.delete(owner)
@@ -281,10 +314,13 @@ export const ApplyEdits = Game.System(
           break
         case "pause": {
           const owner = ownerAt(grid.value(), edit.cell.x, edit.cell.y)
-          const row = queries.buildings.each().find((b) => b.entity.id === owner)
-          if (!row || halls.has(owner) || row.data.paused.present === edit.on) break
-          if (edit.on) commands.insert(row.entity.id, Game.Command.entry(Paused, {}))
-          else commands.remove(row.entity.id, Paused)
+          // A building stops work; a home is closed, and stands empty (see `Households`).
+          const id = entities.get(owner)
+          const row = id === undefined ? undefined : queries.built.get(id)
+          if (!row?.ok || halls.has(owner) || row.value.data.site.present || row.value.data.paused.present === edit.on) break
+          if (!row.value.data.building.present && !row.value.data.house.present) break
+          if (edit.on) commands.insert(row.value.entity.id, Game.Command.entry(Paused, {}))
+          else commands.remove(row.value.entity.id, Paused)
           break
         }
         case "deliver": {
