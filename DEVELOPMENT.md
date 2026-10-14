@@ -28,7 +28,19 @@ drive the approved 3D models. Drag to pan; right-drag or choose **Rotate** to
 turn and tilt. Scroll to zoom. Q/E turn, arrow keys pan, Home resets, and
 the camera toolbar provides the same controls. On touch screens, two fingers
 pan and pinch to zoom; twisting them rotates. Road/home tools still drag to
-build; camera gestures never place anything.
+build; camera gestures never place anything. A finger has no hover, so on
+touch the tap tools (buildings, park pieces, bulldoze) take two taps: the
+first holds the ghost or outline where it landed, a second on the same spot
+commits it. This lives entirely in `src/render3d/input.ts`; the game still
+sees one ordinary press and release.
+
+Phones get their layout from `src/phone.css`, loaded after `factory.css`. It
+only moves and resizes what `factory.css` draws, in three media queries:
+compact (narrow or short screens: icon-only bars, a two-line ticker),
+portrait (chrome stacked top and bottom, the panel as a bottom sheet) and
+touch (bigger targets, no key hints, the hint line pinned above the bars).
+New UI needs nothing there unless it has to move on a phone; check it at
+390×844, 360×640 and 844×390.
 
 `src/render3d/scene.ts` owns the orthographic camera, ground projection and
 frame source. `views.ts` follows live construction, upgrades, resources,

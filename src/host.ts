@@ -298,7 +298,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     toolGroup.append(button)
     return { tool, button }
   })
-  const speedGroup = el("div", "group")
+  const speedGroup = el("div", "group speed")
   toolbar.append(speedGroup)
   const speeds = [
     { speed: 0, label: "", key: "space" },

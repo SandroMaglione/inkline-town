@@ -258,22 +258,6 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 }
 .result.show { display: block; }
 
-@media(max-width:760px){
-  .hud.left {left:10px;right:10px;max-width:none}
-  .hud.right,.panel-open .hud.right {top:64px;left:10px;right:10px;max-width:none;align-items:flex-start}
-  .hud .card .cell {padding:7px 9px}
-  .hud.left .stock {margin-top:48px;max-width:100%;overflow-x:auto;flex:none}
-  .hud .stock .group {flex:none}
-  .hud.right .card {max-width:100%;overflow-x:auto}
-  .toolbar {left:10px;right:10px;bottom:calc(64px + env(safe-area-inset-bottom))}
-  .toolbar .group,.toolbar .town-button {flex:none}
-  .system,.panel-open .system {right:10px;bottom:calc(12px + env(safe-area-inset-bottom))}
-  .camera-controls {left:10px;max-width:calc(100vw - 20px);bottom:calc(118px + env(safe-area-inset-bottom))}
-  .camera-controls button {padding:6px 7px;min-height:34px}
-  .panel {width:calc(100vw - 24px);max-width:360px}
-  .toast {bottom:calc(165px + env(safe-area-inset-bottom));max-width:calc(100vw - 28px)}
-}
-
 /* ── The town ticker, map views and their legend ── */
 .hud .ticker { display: none; flex-direction: column; width: 440px; max-width: 100%; }
 .hud .ticker.show { display: flex; }
