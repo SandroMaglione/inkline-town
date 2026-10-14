@@ -298,9 +298,19 @@ export const createHost = async (
   }
   guideBulb.onclick = () => toggleFold("guide")
   layersButton.onclick = () => toggleFold("views")
-  mount.addEventListener("pointerdown", () => {
-    if (fold !== null) setFold(null)
+  // A tap on the map folds them; a pan or a pinch, to look around with the goods or the guide open, does not.
+  let mapPress: { id: number; x: number; y: number; moved: boolean } | null = null
+  mount.addEventListener("pointerdown", (e) => {
+    mapPress = mapPress === null && e.isPrimary ? { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false } : null
   })
+  mount.addEventListener("pointermove", (e) => {
+    if (mapPress?.id === e.pointerId && Math.hypot(e.clientX - mapPress.x, e.clientY - mapPress.y) > 8) mapPress.moved = true
+  })
+  mount.addEventListener("pointerup", (e) => {
+    if (mapPress?.id === e.pointerId && !mapPress.moved && fold !== null) setFold(null)
+    if (mapPress?.id === e.pointerId) mapPress = null
+  })
+  mount.addEventListener("pointercancel", () => (mapPress = null))
   // The people's card joins the top line on a phone, and goes back to the top right on a wider screen.
   const placeFolk = () => {
     if (phone.matches) topline.insertBefore(folk, goodsChip)
@@ -1831,7 +1841,9 @@ export const createHost = async (
           ? `\nLast minute: made ${s.flow.made[g]}, used ${s.flow.used[g]}${s.flow.traded[g] !== 0 ? `, ${s.flow.traded[g] > 0 ? "bought" : "sold"} ${Math.abs(s.flow.traded[g])}` : ""}. ${s.stock[g]} in storage, ${s.flow.elsewhere[g]} about town (in workshops and markets, and on the way).`
           : "")
       }
-      if (flowCard.classList.contains("open")) setHtml(flowCard, flowHtml(s))
+      // On a phone the goods chip opens the table itself, once there is a minute to show; the plain goods until then.
+      document.body.classList.toggle("flow-ready", s.flow !== null)
+      if (flowCard.classList.contains("open") || (phone.matches && fold === "goods")) setHtml(flowCard, flowHtml(s))
       // The crown's request.
       request.classList.toggle("show", s.crown.open && s.fate.state === "playing")
       if (s.crown.open) {
@@ -1982,7 +1994,7 @@ const flowHtml = (s: Stats): string => {
   const body = rows.map((g) => {
     const way = flowTrend(f, g)
     const traded = f.traded[g] === 0 ? `<i>–</i>` : f.traded[g] > 0 ? `+${f.traded[g]}` : `−${-f.traded[g]}`
-    return `<span class="name">${goodIcon(g, 14)}${goods[g].title}<span class="trend ${trendClass(way)}">${trendMark(way)}</span></span>` +
+    return `<span class="name" title="${goods[g].title}">${goodIcon(g, 14)}<span class="label">${goods[g].title}</span><span class="trend ${trendClass(way)}">${trendMark(way)}</span></span>` +
       `${cell(f.made[g])}${cell(f.used[g])}<span>${traded}</span>${cell(s.stock[g])}${cell(f.elsewhere[g])}`
   }).join("")
   return `<div class="flow-grid">${head}${body}</div>`
