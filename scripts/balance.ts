@@ -59,7 +59,7 @@ import { SAVE_FORMAT, SAVE_VERSION } from "../src/save.ts"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { fingerprint } from "../tools/balance/provenance.ts"
-import { capacity, taxOf } from "../src/rules/households.ts"
+import { capacity, mealsOf, taxOf } from "../src/rules/households.ts"
 
 // ── Options ───────────────────────────────────────────────────────────────
 
@@ -431,6 +431,8 @@ const cottageWorth = (w: World, fed: number) => {
 /** What the bot wants next, in order: the first it can do, it does. */
 const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: boolean }> => {
   const homes = w.homes.length
+  // Food goes by the mouth: a fish or a loaf a visit for every four residents (see `mealsOf`).
+  const meals = w.homes.reduce((n, h) => n + mealsOf(h, rules), 0)
   const basics: ReadonlyArray<{ readonly kind: KindId; readonly when: boolean }> = [
     { kind: "fishery", when: count(w, "fishery") < 1 },
     // Services once their warning signs go up over a few homes; a builder once homes start to run down.
@@ -446,10 +448,10 @@ const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: b
     // A lumberjack that has felled everything in reach is replaced by one in a forest.
     { kind: "lumberjack", when: w.stock.planks < 20 && w.buildings.filter((b) => b.kind === "lumberjack" && b.status !== "starved").length < 1 + Math.floor(homes / 40) && count(w, "lumberjack") < 2 + Math.floor(homes / 30) },
     // Food: a fishery more while homes go hungry (fish rots, so the larder alone is no guide), and a
-    // market for every eighteen homes or so, or what is caught is never handed out.
-    // Each bakery feeds the homes two fisheries would.
-    { kind: "fishery", when: w.census.food! < w.homes.length * 0.6 && count(w, "fishery") < Math.max(2, 1 + Math.floor(homes / 7) - 2 * count(w, "bakery")) },
-    { kind: "market", when: count(w, "market") < 1 + Math.floor(homes / 20) && w.census.food! < w.homes.length * 0.7 }
+    // market for every eighteen meals or so, or what is caught is never handed out.
+    // Each bakery feeds the mouths two fisheries would.
+    { kind: "fishery", when: w.census.food! < w.homes.length * 0.75 && count(w, "fishery") < Math.max(2, 1 + Math.floor(meals / 7) - 2 * count(w, "bakery")) },
+    { kind: "market", when: count(w, "market") < 1 + Math.floor(meals / 20) && w.census.food! < w.homes.length * 0.7 }
   ]
   if (bot === "idle" || bot === "sprawl") return basics
   // The citizens' chains, in proportion to the homes: a bakery bakes for about
@@ -458,7 +460,8 @@ const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: b
   // workshop needs is coming before it stands.
   const plannedHomes = citizenHomeTarget(w)
   const citizenHomes = Math.max(plannedHomes, w.homes.filter(h => !h.site && (h.tier >= 2 || (w.appeal[key(h.tile.x, h.tile.y)] ?? 0) >= home.tiers[2].appeal)).length)
-  const bakeries = Math.max(1, Math.ceil(citizenHomes / 8))
+  // Citizens eat two loaves a visit, burghers three.
+  const bakeries = Math.max(1, Math.ceil(citizenHomes / 4))
   const weavers = Math.max(1, Math.ceil(citizenHomes / 12))
   return [
     ...basics,
@@ -469,7 +472,7 @@ const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: b
     { kind: "bakery", when: count(w, "bakery") < 1 },
     { kind: "sheep", when: count(w, "sheep") < 1 },
     { kind: "weaver", when: count(w, "weaver") < 1 },
-    { kind: "market", when: count(w, "market") < 1 + Math.floor(homes / 18) },
+    { kind: "market", when: count(w, "market") < 1 + Math.floor(meals / 18) },
     { kind: "smithy", when: count(w, "smithy") < 1 },
     { kind: "mine", when: count(w, "mine") < 1 },
     { kind: "chapel", when: count(w, "chapel") < 1 + Math.floor(homes / 35) },
@@ -554,6 +557,13 @@ const decide = (w: World): ReadonlyArray<Edit> => {
   if (bot !== "idle") for (const r of w.ruins) edits.push({ type: "remove", cell: { x: r.tile.x, y: r.tile.y } })
   if (bot === "idle" && residents(w) > 30) return edits
 
+  // A workshop more where what it works piles up in storage (flour with no baker to bake it), before anything else.
+  if (sensible()) {
+    const backlog = (["bakery", "weaver", "mill"] as const).find((k) => w.stock[kinds[k].recipe!.input!] > 40 && unlocked(w, kinds[k]) && affordable(w, kinds[k].cost)
+      && !w.buildings.some((b) => b.kind === k && (b.site || b.status === "unstaffed")))
+    const spot = backlog ? spotFor(w, kinds[backlog]) : null
+    if (backlog && spot) return [...edits, { type: "building", kind: backlog, cell: spot, open: false }]
+  }
   // Establish enough desirable homes before adding more cottages or repeating industrial chains.
   const citizenHomes = citizenHomeTarget(w)
   const eligible = w.homes.filter(h => !h.site && (w.appeal[key(h.tile.x, h.tile.y)] ?? 0) >= content.home.tiers[2].appeal).length
@@ -579,7 +589,8 @@ const decide = (w: World): ReadonlyArray<Edit> => {
   // there are coins to spare; not far past the goal, where upgrading homes pays better than more of them.
   const goal = content.sizes[w.charter.size].goal.residents
   const sprawling = bot === "sprawl" && fed >= 0.5 && w.stock.planks >= 4
-  const short = sprawling || w.census.jobs! + 6 > residents(w) || (fed >= 0.6 && w.stock.planks >= 8 && w.coins > 300 && residents(w) < goal * 1.1 && w.homes.length < Math.ceil(goal / home.tiers[1].residents) && cottageWorth(w, fed) > 2)
+  // Not while the homes there are go hungry: a hungry home holds half its people, and more cottages only spread the food thinner.
+  const short = sprawling || (w.census.jobs! + 6 > residents(w) && fed >= 0.6) || (fed >= 0.6 && w.stock.planks >= 8 && w.coins > 300 && residents(w) < goal * 1.1 && w.homes.length < Math.ceil(goal / home.tiers[1].residents) && cottageWorth(w, fed) > 2)
   if (short && affordable(w, { coins: home.cost.coins * 4, materials: { planks: 4 } })) {
     const spots = homeSpots(w, 4)
     if (spots.length > 0) return [...edits, { type: "homes", cells: spots }]

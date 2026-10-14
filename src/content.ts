@@ -671,12 +671,13 @@ export const WINTER_WARNING = ticks(60)
  * Running a town costs more the bigger it gets: the town hall's
  * administration costs `perHome` coins a minute a home, and a further
  * (homes / `growth`) a home. Each more home costs `perHome` + 2·homes /
- * `growth`: about 7 coins a minute at 80 homes, what a fed cottage pays,
+ * `growth`: about 6 coins a minute at 80 homes, about what a cottage
+ * brings in once its food is paid for, and a full cottage's taxes by 140,
  * so past there a town grows by finer homes, not more of them. It is
  * reckoned by the home, so a townhouse of twelve costs no more than a
  * cottage of four.
  */
-export const admin = { perHome: 0.5, growth: 24 }
+export const admin = { perHome: 0.5, growth: 30 }
 
 /**
  * Approval, -100 → +100: where the town's mood is heading, and how fast it

@@ -191,7 +191,7 @@ test("administration: each more home costs more, and about what a fed cottage pa
   const rules = resolveRules()
   assert(moreAdmin(80, 1, rules) > moreAdmin(20, 1, rules) * 2)
   const cottage = taxOf({ tier: 1, residents: 4, food: 1, bread: 0, cloth: 0, faith: 0 }, { settlers: 100, citizens: 100 }, rules)
-  assert(moreAdmin(80, 1, rules) > cottage * 0.6 && moreAdmin(80, 1, rules) < cottage * 1.2, `${moreAdmin(80, 1, rules)} vs ${cottage}`)
+  assert(moreAdmin(80, 1, rules) > cottage * 0.5 && moreAdmin(80, 1, rules) < cottage, `${moreAdmin(80, 1, rules)} vs ${cottage}`)
   assert(moreAdmin(150, 1, rules) > cottage)
 })
 

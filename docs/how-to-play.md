@@ -51,8 +51,8 @@ six months.
     winter when fields do not grow, fisheries catch half as much, and homes
     eat faster;
   - *administration*: the town hall costs more per home the more homes
-    there are; by about 80 homes another cottage costs about what it pays
-    (the build tooltip says what a home would bring in after it), so a
+    there are; by about 80 homes another cottage costs about what it brings
+    in once its food is paid for (the build tooltip says what a home would bring in after it), so a
     town grows past there by finer homes, which hold two or three times the
     people for the same cost;
   - *food* is eaten by the resident: a walker's visit feeds a cottage one
