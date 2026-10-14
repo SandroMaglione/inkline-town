@@ -21,9 +21,16 @@ export const sharePath = (id: string) => `/t/${id}`
 export const townPath = (id: string) => `/api/towns/${id}`
 export const picturePath = (id: string) => `/api/towns/${id}/picture`
 
-/** The largest town and picture the server takes: a full large town gzips to a tenth of this. */
-export const TOWN_LIMIT = 400_000
-export const PICTURE_LIMIT = 600_000
+/**
+ * The largest town and picture the server takes. A real town gzips to 4 KB
+ * when founded and about 26 KB after 50 minutes on large land; its picture
+ * is 100 to 200 KB. The limits leave room above that and no more, since
+ * they bound what the bucket can be made to hold.
+ */
+export const TOWN_LIMIT = 100_000
+export const PICTURE_LIMIT = 500_000
+/** JPEG quality of the uploaded picture: a preview card shows no difference from higher, and it is about a fifth smaller. */
+export const PICTURE_QUALITY = 0.78
 /** The picture's size: what link previews expect. */
 export const PICTURE_WIDTH = 1200
 export const PICTURE_HEIGHT = 630
