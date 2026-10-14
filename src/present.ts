@@ -13,7 +13,7 @@ import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView, Rui
 import type { DoorSet, OverlayCell } from "./render3d/models.ts"
 import {
   BUILD_TICKS, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
-  PAVE_COST, propIds, props, risk, RISK_MAX, ROAD_COST, tierHome, total, winters, type GoodId, type Kind, type Tier
+  PAVE_COST, propIds, props, risk, RISK_MAX, ROAD_COST, tierHome, total, winters, type GoodId, type Kind, type KindId, type Tier
 } from "./content.ts"
 import { around, canPlace, cellOf, doors, entrances, isRoad, key, lPath, nearest, reach, useAt, type TileLike } from "./grid.ts"
 import { GRID, inside, U, type Point } from "./iso.ts"
@@ -1034,8 +1034,8 @@ export const Interact = Game.System(
     if (census.burning > 0) alerts.push({ tone: "bad", text: `${census.burning} on fire`, at: burningRow?.data.tile.get() ?? null, size: burningRow?.data.tile.get().size ?? 1, id: burningRow?.entity.id ?? null })
     const sickRow = houses.find(({ data }) => data.sick.present)
     if (census.sick > 0) alerts.push({ tone: "warn", text: `${census.sick} home${census.sick > 1 ? "s" : ""} sick`, at: sickRow?.data.tile.get() ?? null, size: 1, id: sickRow?.entity.id ?? null })
-    const waiting = new Map<string, { n: number; at: TileLike; id: number }>()
-    const remote = new Map<string, { n: number; at: TileLike; id: number }>()
+    const waiting = new Map<string, { n: number; at: TileLike; id: number; kind: KindId }>()
+    const remote = new Map<string, { n: number; at: TileLike; id: number; kind: KindId }>()
     const shortStaffed: Array<{ id: number; title: string; cell: Point; size: number; assigned: number; needed: number; nobodyNear: boolean }> = []
     const seen = new Set<number>()
     for (const { entity, data } of buildings) {
@@ -1051,21 +1051,23 @@ export const Interact = Game.System(
         if (tick - since >= ALERT_PATIENCE) {
           const label = `${kind.title.toLowerCase()} (${kind.recipe.input})`
           const was = waiting.get(label)
-          waiting.set(label, was ? { ...was, n: was.n + 1 } : { n: 1, at: tile, id: entity.id })
+          waiting.set(label, was ? { ...was, n: was.n + 1 } : { n: 1, at: tile, id: entity.id, kind: kind.id })
         }
       }
       if (staff.needed > 0 && staff.assigned < staff.needed) shortStaffed.push({ id: entity.id, title: kind.title.toLowerCase(), cell: tile, size: tile.size, assigned: staff.assigned, needed: staff.needed, nobodyNear: staff.nearby === 0 })
       if (status === "unstaffed" && staff.nearby === 0) {
         const label = kind.title.toLowerCase()
         const was = remote.get(label)
-        remote.set(label, was ? { ...was, n: was.n + 1 } : { n: 1, at: tile, id: entity.id })
+        remote.set(label, was ? { ...was, n: was.n + 1 } : { n: 1, at: tile, id: entity.id, kind: kind.id })
       }
     }
     for (const id of [...starvedSince.keys()]) if (!seen.has(id)) starvedSince.delete(id)
     const list = (m: Map<string, { n: number }>) => [...m].map(([k, v]) => `${k}${v.n > 1 ? ` ×${v.n}` : ""}`).join(", ")
     const first = (m: Map<string, { at: TileLike; id: number }>) => [...m.values()][0]
-    if (waiting.size > 0) alerts.push({ tone: "warn", text: `waiting for inputs: ${list(waiting)}`, at: first(waiting)?.at ?? null, size: first(waiting)?.at.size ?? 1, id: first(waiting)?.id ?? null })
-    if (remote.size > 0) alerts.push({ tone: "warn", text: `no workers within ${COMMUTE} road cells: ${list(remote)}`, at: first(remote)?.at ?? null, size: first(remote)?.at.size ?? 1, id: first(remote)?.id ?? null })
+    const placesOf = (m: Map<string, { at: TileLike; id: number; kind: KindId }>) =>
+      Object.fromEntries([...m.values()].map((v) => [v.kind, { at: v.at, size: v.at.size, id: v.id }]))
+    if (waiting.size > 0) alerts.push({ tone: "warn", text: `waiting for inputs: ${list(waiting)}`, at: first(waiting)?.at ?? null, size: first(waiting)?.at.size ?? 1, id: first(waiting)?.id ?? null, places: placesOf(waiting) })
+    if (remote.size > 0) alerts.push({ tone: "warn", text: `no workers within ${COMMUTE} road cells: ${list(remote)}`, at: first(remote)?.at ?? null, size: first(remote)?.at.size ?? 1, id: first(remote)?.id ?? null, places: placesOf(remote) })
     const hallRow = buildings.find(({ data }) => data.hall.present)
     if (census.homes > 0 && larder(stock) === 0) alerts.push({ tone: "bad", text: "no food in store: homes go hungry", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
     const ledger = resources.ledger.get()
@@ -1129,6 +1131,7 @@ export const Interact = Game.System(
       taxed: rates.settlers !== 100 || rates.citizens !== 100,
       most: Math.max(...goodIds.map((g) => stock[g])),
       sawTown: ui.menu === "town",
+      sawHome: houses.some((row) => row.entity.id === ui.selected),
       risk: {
         fire: houses.some((row) => (maybe(row.data.risk)?.fire ?? 0) >= RISK_MAX * 0.35),
         health: houses.some((row) => (maybe(row.data.risk)?.health ?? 0) >= RISK_MAX * 0.35),

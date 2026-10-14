@@ -154,7 +154,9 @@ and a half, which also pops up as it happens. Click a line to go there.
 
 Above them, the **guide** tells a new mayor the next step to take and why,
 one at a time. It opens with homes, food, planks, and stone, one after
-another, each once the last is built. After that it speaks when the town
+another, each once the last is built, and then shows where to look: a
+home's panel, and the town panel. Citizens' needs come as one goal once
+bread can be made, bread first, since settlers want only food. After that it speaks when the town
 needs it (planks or stone running low, the woods thinning, a risk rising)
 and keeps quiet for a while after each step; the crown's request, winter, a
 fire, and the sick do not wait. A step that asks for a building is done when

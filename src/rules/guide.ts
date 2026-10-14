@@ -10,7 +10,8 @@
  *
  * The first steps (`opening`) come one after another, each once the last
  * is built: homes, then food, then planks, then stone, so a new mayor learns
- * the store and its chains. After them, steps come when the town needs them,
+ * the store and its chains; then where to look as the town grows (a home's
+ * panel, the town panel). After them, steps come when the town needs them,
  * not back to back: each waits for a
  * sign (planks running low, the woods thinning, a fire risk rising), and
  * after one is done the guide keeps quiet for `GUIDE_QUIET` seconds. An
@@ -53,8 +54,9 @@ export interface GuideFacts {
   readonly taxed: boolean
   /** The most of any one good in store. */
   readonly most: number
-  /** The page: the town panel has been open. */
+  /** The page: the town panel has been open; a home has been selected. */
   readonly sawTown: boolean
+  readonly sawHome: boolean
   /** A home whose risk of fire, sickness, or theft is rising. */
   readonly risk: { readonly fire: boolean; readonly health: boolean; readonly order: boolean }
   /** A lumberjack with few trees left in reach. */
@@ -166,6 +168,24 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     done: (f) => has(f, "quarry")
   },
   {
+    id: "look",
+    chapter: "Founding",
+    text: "The town is on its feet. Click a home to see who lives there, what it needs, and what it pays; click any building to see what it makes and what holds it back.",
+    focus: "hall",
+    opening: true,
+    when: (f) => has(f, "quarry") && f.builtHomes > 0,
+    done: (f) => f.sawHome
+  },
+  {
+    id: "watch",
+    chapter: "Founding",
+    text: "As the town grows, keep an eye on the store at the top (goods running low), approval and jobs at the top right, and this ticker, which says what needs looking at. The town panel (T) holds the term's goals, trade, and taxes.",
+    focus: null,
+    opening: true,
+    when: (f) => has(f, "quarry") && f.builtHomes > 0,
+    done: (f) => f.sawTown
+  },
+  {
     id: "firewatch",
     kinds: ["firewatch"],
     chapter: "Keeping it standing",
@@ -203,22 +223,22 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     done: (f) => f.finerHomes > 0
   },
   {
-    id: "cloth",
-    kinds: ["sheep", "weaver", "chapel"],
-    chapter: "Growing citizens",
-    text: "Settlers become citizens, who pay twice as much, once they have bread, cloth, and faith. Now open: a sheep farm and a weaver make cloth, and a chapel brings faith.",
-    focus: "hall",
-    when: (f) => f.residents >= 15,
-    done: (f) => has(f, "sheep", "weaver", "chapel")
-  },
-  {
     id: "bread",
     kinds: ["farm", "mill", "bakery"],
     chapter: "Growing citizens",
-    text: "Bread is the last of a citizen's needs. Now open: a farm grows wheat, a mill grinds it into flour, and a bakery bakes the bread.",
+    text: "Settlers become citizens, who pay twice as much, once they have bread, cloth, and faith, all three; settlers want only food until then. Start with bread, the longest chain: a farm grows wheat, a mill grinds it into flour, and a bakery bakes the bread.",
     focus: "hall",
     when: (f) => f.residents >= 30,
     done: (f) => has(f, "farm", "mill", "bakery")
+  },
+  {
+    id: "cloth",
+    kinds: ["sheep", "weaver", "chapel"],
+    chapter: "Growing citizens",
+    text: "Bread alone makes no citizens: they need cloth and faith too. A sheep farm and a weaver make cloth, and a chapel brings faith (and makes its street more desirable).",
+    focus: "hall",
+    when: (f) => has(f, "farm", "mill", "bakery") || f.residents >= 60,
+    done: (f) => has(f, "sheep", "weaver", "chapel")
   },
   {
     id: "goals",

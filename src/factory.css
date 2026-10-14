@@ -15,6 +15,9 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 
 /* ── The top bar: the term and the treasury on the left, the people on the right ── */
 .hud { position: fixed; top: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; max-width: calc(50vw - 24px); z-index: 2; }
+/* The column is as wide as its widest card; the space beside a narrower card is the map, and takes its clicks. */
+.hud { pointer-events: none; }
+.hud > * { pointer-events: auto; }
 .hud.left { left: 16px; align-items: flex-start; }
 .hud.right { right: 16px; align-items: flex-end; cursor: pointer; transition: right 240ms cubic-bezier(.2,.8,.2,1); }
 .panel-open .hud.right { right: 376px; }
@@ -50,7 +53,9 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .toolbar { left: 16px; max-width: calc(100vw - 32px); overflow-x: auto; }
 /* Share, the guide, save, load, new town: icons in the bottom right. With the panel open it moves over, and up above the toolbar it would cover. */
 .system { right: 16px; transition: right 240ms cubic-bezier(.2,.8,.2,1), bottom 240ms cubic-bezier(.2,.8,.2,1); }
-.panel-open .system { right: 376px; bottom: calc(70px + env(safe-area-inset-bottom)); }
+/* With the panel open: a column of icons beside it, above the toolbar. */
+.panel-open .system { right: 376px; bottom: calc(70px + env(safe-area-inset-bottom)); flex-direction: column; }
+.panel-open .system button.labelled { font-size: 0; gap: 0; padding: 6px 9px; }
 @media (max-width: 1210px) { .system { bottom: calc(70px + env(safe-area-inset-bottom)); } }
 .toolbar .group, .system {
   display: flex; gap: 4px; padding: 5px; background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db;
@@ -185,12 +190,19 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .hud .clock .winter { color: #3d6db5; font-weight: 600; }
 .hud .request, .hud .alarm { display: none; }
 .hud .request.show, .hud .alarm.show { display: flex; }
-.hud .request { border-color: #d6ae2e; box-shadow: 0 2px 0 #eadca7; }
+.hud .request { border-color: #d6ae2e; box-shadow: 0 2px 0 #eadca7; width: 440px; max-width: 100%; box-sizing: border-box; }
+.hud .request .cell { flex: 1; min-width: 0; gap: 12px; }
+.hud .request .lines { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hud .request .ask { display: flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 13px; }
+.hud .request .terms { white-space: normal; font-size: 11px; color: #77817a; }
+.hud .request .terms b { color: #3d4943; }
 .hud .request .send {
-  font: inherit; font-size: 12px; margin: 4px 6px 4px 0; padding: 2px 12px; border: 1px solid #3d4943; border-radius: 3px;
-  background: #3d4943; color: #f7f8f4; cursor: pointer;
+  font: inherit; font-size: 12px; margin: 8px 8px 8px 0; padding: 4px 16px; border: 1px solid #3d4943; border-radius: 5px;
+  background: #3d4943; color: #f7f8f4; cursor: pointer; transition: background 120ms ease, box-shadow 120ms ease;
 }
-.hud .request .send:disabled { background: transparent; color: #8a938c; border-color: #c9cec4; cursor: default; }
+.hud .request .send:not(:disabled):hover { background: #26302b; box-shadow: 0 2px 0 #c9b25e; }
+.hud .request .send:not(:disabled):active { transform: translateY(1px); box-shadow: none; }
+.hud .request .send:disabled { background: transparent; color: #8a938c; border-color: #c9cec4; cursor: not-allowed; }
 .hud .alarm { flex-direction: column; border-color: #b04a39; box-shadow: 0 2px 0 #e6c3bc; color: #b04a39; white-space: normal; }
 .hud .alarm .cell + .cell { border-left: 0; border-top: 1px solid #ecd2cc; }
 .hud .alarm.good { border-color: #4f8a3e; box-shadow: 0 2px 0 #cfe0c5; color: #4f8a3e; }
@@ -362,7 +374,8 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   box-shadow: inset 3px 0 0 transparent;
 }
 .hud .ticker .cell + .cell { border-left: none; border-top: 1px dashed #e3e6df; }
-.hud .ticker .cell .mark { margin-top: 2px; }
+/* The icon as tall as a line of text, so it sits centred on the first line. */
+.hud .ticker .cell .mark { height: 1.55em; }
 .hud .ticker .cell .text { flex: 1; min-width: 0; }
 .hud .ticker .cell em { font-style: normal; color: #9aa29b; white-space: nowrap; }
 .hud .ticker .cell.place { cursor: pointer; }
@@ -400,6 +413,9 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .ref.kind { background: #eef3fb; border: 1px solid #c9d6ee; color: #2f5a9c; }
 button.ref.kind { cursor: pointer; }
 button.ref.kind:hover { background: #dce6f5; border-color: #3d6db5; }
+/* A building that stands already: its chip goes there. */
+.ref.kind.go { background: #f4f2ea; border-color: #d9d3bf; color: #5b5338; }
+button.ref.kind.go:hover { background: #ebe7d8; border-color: #8a7d55; }
 kbd.key {
   display: inline-block; min-width: 1.6ch; padding: 0 4px; font: inherit; font-size: 10px; line-height: 1.5; text-align: center;
   color: #3d4943; background: #fbfcf9; border: 1px solid #c9cec4; border-bottom-width: 2px; border-radius: 4px; vertical-align: 1px;

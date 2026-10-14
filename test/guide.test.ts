@@ -32,6 +32,7 @@ const fresh: GuideFacts = {
   taxed: false,
   most: 40,
   sawTown: false,
+  sawHome: false,
   risk: { fire: false, health: false, order: false },
   fewTrees: false
 }
@@ -73,12 +74,27 @@ test("the opening comes step after step, each once the last is built", () => {
   assert.equal(guideStep(fed, new Set(guideDone(fed, none)), { quiet: true })?.id, "planks")
   const sawn = town({ homes: 4, residents: 8 }, ["fishery", "lumberjack", "sawmill"])
   assert.equal(guideStep(sawn, new Set(guideDone(sawn, none)), { quiet: true })?.id, "quarry")
+  // Then where to look: a home's panel, and the town's.
+  const quarried = town({ homes: 4, residents: 8 }, ["fishery", "lumberjack", "sawmill", "quarry"])
+  assert.equal(guideStep(quarried, new Set(guideDone(quarried, none)), { quiet: true })?.id, "look")
+  const looked = { ...quarried, sawHome: true }
+  assert.equal(guideStep(looked, new Set(guideDone(looked, none)), { quiet: true })?.id, "watch")
+})
+
+test("citizens' needs come as one goal, bread first, and not before bread can be made", () => {
+  const ready = town({ homes: 10, residents: 25, sawHome: true, sawTown: true }, ["fishery", "lumberjack", "sawmill", "quarry"])
+  const put = new Set(guideDone(ready, none))
+  assert.notEqual(guideStep(ready, put)?.id, "cloth", "cloth and faith are no use to settlers")
+  const grown = { ...ready, residents: 30 }
+  assert.equal(guideStep(grown, put)?.id, "bread")
+  const baking = town({ homes: 12, residents: 34, sawHome: true, sawTown: true }, ["fishery", "lumberjack", "sawmill", "quarry", "farm", "mill", "bakery"])
+  assert.equal(guideStep(baking, new Set(guideDone(baking, none)))?.id, "cloth")
 })
 
 const founded: ReadonlyArray<KindId> = ["fishery", "lumberjack", "sawmill", "quarry"]
 
 test("after the opening, steps wait for the town to need them", () => {
-  const settled = town({ homes: 4, residents: 8 }, founded)
+  const settled = town({ homes: 4, residents: 8, sawHome: true, sawTown: true }, founded)
   const put = new Set(guideDone(settled, none))
   // Planks in hand, stone in hand, the woods full, no risk: nothing to say.
   assert.equal(guideStep(settled, put), null)
@@ -87,7 +103,7 @@ test("after the opening, steps wait for the town to need them", () => {
 })
 
 test("after a step the guide keeps quiet, but not through a fire or the crown's request", () => {
-  const facts = town({ homes: 8, residents: 16, fewTrees: true }, founded)
+  const facts = town({ homes: 8, residents: 16, fewTrees: true, sawHome: true, sawTown: true }, founded)
   const put = new Set(guideDone(facts, none))
   assert.equal(guideStep(facts, put, { quiet: true }), null)
   assert.equal(guideStep({ ...facts, burning: 1 }, put, { quiet: true })?.id, "firewatch")
@@ -95,7 +111,7 @@ test("after a step the guide keeps quiet, but not through a fire or the crown's 
 })
 
 test("a step once shown stays until it is done, even if its sign fades", () => {
-  const thinning = town({ homes: 4, residents: 8, fewTrees: true }, founded)
+  const thinning = town({ homes: 4, residents: 8, fewTrees: true, sawHome: true, sawTown: true }, founded)
   const put = new Set(guideDone(thinning, none))
   assert.equal(guideStep(thinning, put)?.id, "forester")
   const planted = { ...thinning, fewTrees: false }
@@ -161,7 +177,7 @@ test("every step can be done, and a town that has done them all is told nothing"
   assert.equal(new Set(all).size, all.length, "step ids are unique")
   const finished = town(
     {
-      homes: 200, residents: 400, citizens: 200, finerHomes: 30, crown: { open: true, met: 3 }, trading: true, taxed: true, sawTown: true,
+      homes: 200, residents: 400, citizens: 200, finerHomes: 30, crown: { open: true, met: 3 }, trading: true, taxed: true, sawTown: true, sawHome: true,
       winter: true, worn: true, poorStreet: true, approval: 40, net: -5, most: 120, stock: amounts({ tools: 0 })
     },
     ["fishery", "lumberjack", "sawmill", "forester", "quarry", "granary", "firewatch", "builder", "market", "sheep", "weaver", "chapel", "farm", "mill", "bakery", "healer", "watchhouse", "mine", "smithy"]
