@@ -258,7 +258,7 @@ export interface Stats {
   readonly alerts: ReadonlyArray<Alert>
   /** The mayor's guide: the step to take now (if any, and the guide is on), and how far along it is. */
   readonly guide: {
-    readonly step: (Omit<Alert, "tone"> & { readonly key: string; readonly chapter: string }) | null
+    readonly step: (Omit<Alert, "tone"> & { readonly key: string; readonly chapter: string; readonly goal: string }) | null
     readonly done: number
     readonly total: number
     readonly off: boolean

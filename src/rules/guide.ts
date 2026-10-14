@@ -51,6 +51,8 @@ export interface GuideFacts {
   readonly approval: number
   /** The town buys or sells something; a tax rate is off the usual. */
   readonly trading: boolean
+  /** The town buys tools from traders. */
+  readonly buysTools: boolean
   readonly taxed: boolean
   /** The most of any one good in store. */
   readonly most: number
@@ -77,6 +79,8 @@ export interface GuideStep {
   readonly chapter: Chapter
   /** What to do and why. Building names become chips to place one; a key in brackets, a key. */
   readonly text: string
+  /** When the step is done, in a few words: shown under it, so the mayor knows what closes it. */
+  readonly goal: string
   readonly focus: GuideFocus | null
   readonly when: (f: GuideFacts) => boolean
   /** The buildings it asks for (done when they stand). */
@@ -94,6 +98,7 @@ const has = (f: GuideFacts, ...kinds: ReadonlyArray<KindId>) => kinds.every((k) 
 export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "homes",
+    goal: "a home stands",
     chapter: "Founding",
     text: "Drag a row of homes along the road from the town hall (H), or lay more road first (R). Builders carry planks from the store to each one; once it stands, settlers move in on their own, and every home pays taxes.",
     focus: "hall",
@@ -103,6 +108,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "fishery",
+    goal: "a fishery stands",
     chapter: "Founding",
     text: "The bar at the top is the town's store. Settlers eat fish from it, and the fish there will not last. Build a fishery (B) on a road within two cells of water; the town hall's walker carries the fish to the homes.",
     focus: "water",
@@ -113,6 +119,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "crown",
+    goal: "the goods are sent, with the button on the request",
     chapter: "Governing",
     text: "The crown asks for goods by a deadline. Send them from the bar at the top for coins; an unanswered request is a fine, and three missed in a row and the mayor is dismissed.",
     focus: null,
@@ -122,6 +129,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "winter",
+    goal: "a granary or a smokehouse stands",
     kinds: ["granary", "smokehouse"],
     chapter: "Keeping it standing",
     text: "Winter is coming: fishing slows, homes eat faster, and fish rots in store. A granary keeps fish five times as long, and a smokehouse makes fish that keeps all winter.",
@@ -132,14 +140,16 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "tools",
+    goal: "the town buys tools (town panel, trade), or a smithy stands",
     chapter: "Growing citizens",
-    text: "Tools are scarce until a smithy forges them from ore, and that needs 10 citizens. Keep them for the weaver, the mill, and the bakery (not lamps), or buy them from traders in the town panel (T).",
+    text: "Tools are running low, and only a smithy makes new ones, which opens at 10 citizens. Until then, buy tools from traders in the town panel (T), and keep them for workshops.",
     focus: null,
-    when: (f) => f.residents >= 15 && f.stock.tools <= 3 && !has(f, "weaver", "mill", "bakery"),
-    done: (f) => has(f, "weaver", "mill", "bakery") || has(f, "smithy")
+    when: (f) => f.residents >= 15 && f.stock.tools <= 3 && !has(f, "smithy"),
+    done: (f) => f.buysTools || has(f, "smithy")
   },
   {
     id: "planks",
+    goal: "a lumberjack and a sawmill stand",
     chapter: "Founding",
     text: "Every home and building costs planks from the store, and they run out. Goods come in chains: a lumberjack by the woods fells wood, and a sawmill saws the wood into planks.",
     focus: "trees",
@@ -150,6 +160,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "forester",
+    goal: "a forester stands",
     kinds: ["forester"],
     chapter: "Founding",
     text: "The lumberjack is running out of trees. A forester beside it plants new ones for it to fell.",
@@ -159,6 +170,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "quarry",
+    goal: "a quarry stands",
     chapter: "Founding",
     text: "Storage, workshops, and paving take stone, and the town starts with little. A quarry cuts it from the pale rocks nearby (the dark ones are ore, for later).",
     focus: "stone",
@@ -169,6 +181,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "look",
+    goal: "you click a home",
     chapter: "Founding",
     text: "The town is on its feet. Click a home to see who lives there, what it needs, and what it pays; click any building to see what it makes and what holds it back.",
     focus: "hall",
@@ -178,6 +191,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "watch",
+    goal: "you open the town panel (T)",
     chapter: "Founding",
     text: "As the town grows, keep an eye on the store at the top (goods running low), approval and jobs at the top right, and this ticker, which says what needs looking at. The town panel (T) holds the term's goals, trade, and taxes.",
     focus: null,
@@ -186,7 +200,18 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     done: (f) => f.sawTown
   },
   {
+    id: "grow",
+    goal: "10 homes stand",
+    chapter: "Founding",
+    text: "Now grow. Lay new streets and homes: more residents pay more taxes and open new buildings in the build menu (B). The guide speaks up again when the town needs something.",
+    focus: "hall",
+    opening: true,
+    when: (f) => has(f, "quarry") && f.sawHome && f.sawTown,
+    done: (f) => f.builtHomes >= 10
+  },
+  {
     id: "firewatch",
+    goal: "a fire watch stands",
     kinds: ["firewatch"],
     chapter: "Keeping it standing",
     text: "The risk of fire is rising: wooden cottages catch fire, and a fire spreads to its neighbours. A fire watch sends a watchman along the streets, and firefighters to any blaze. Press F to see the risk.",
@@ -197,6 +222,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "builder",
+    goal: "a builder's yard stands",
     kinds: ["builder"],
     chapter: "Keeping it standing",
     text: "Buildings wear out, and a run-down one works at half pace and may fall. A builder's yard mends what its builder passes, with planks and stone. Press C to see their condition.",
@@ -207,6 +233,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "market",
+    goal: "a market stands",
     kinds: ["market"],
     chapter: "Keeping it standing",
     text: "The town hall's walker only reaches 20 road cells. A market sends a walker with fish, bread, and cloth further along the streets.",
@@ -216,6 +243,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "street",
+    goal: "a home on a fine street holds citizens",
     chapter: "Growing citizens",
     text: "A home here has bread, cloth, and faith, but its street is too poor for citizens: it needs desirability 5. Press D to see it; keep workshops away, and add a chapel, a market, or a park.",
     focus: "poorStreet",
@@ -223,25 +251,48 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     done: (f) => f.finerHomes > 0
   },
   {
-    id: "bread",
-    kinds: ["farm", "mill", "bakery"],
+    id: "wheat",
+    goal: "a farm and a mill stand",
+    kinds: ["farm", "mill"],
     chapter: "Growing citizens",
-    text: "Settlers become citizens, who pay twice as much, once they have bread, cloth, and faith, all three; settlers want only food until then. Start with bread, the longest chain: a farm grows wheat, a mill grinds it into flour, and a bakery bakes the bread.",
+    text: "Settlers become citizens, who pay twice as much, once they have bread, cloth, and faith, all three; until then they want only food. Start with bread, the longest chain: a farm grows wheat, and a mill grinds it into flour.",
     focus: "hall",
     when: (f) => f.residents >= 30,
-    done: (f) => has(f, "farm", "mill", "bakery")
+    done: (f) => has(f, "farm", "mill")
+  },
+  {
+    id: "bakery",
+    goal: "a bakery stands",
+    kinds: ["bakery"],
+    chapter: "Growing citizens",
+    text: "A bakery bakes the mill's flour into bread. Citizens need it, and a settlers' cottage with bread on the table pays half again.",
+    focus: { kind: "mill" },
+    when: (f) => has(f, "farm", "mill"),
+    done: (f) => has(f, "bakery")
   },
   {
     id: "cloth",
-    kinds: ["sheep", "weaver", "chapel"],
+    goal: "a sheep farm and a weaver stand",
+    kinds: ["sheep", "weaver"],
     chapter: "Growing citizens",
-    text: "Bread alone makes no citizens: they need cloth and faith too. A sheep farm and a weaver make cloth, and a chapel brings faith (and makes its street more desirable).",
+    text: "Next, cloth: a sheep farm shears wool, and a weaver weaves it into cloth.",
     focus: "hall",
-    when: (f) => has(f, "farm", "mill", "bakery") || f.residents >= 60,
-    done: (f) => has(f, "sheep", "weaver", "chapel")
+    when: (f) => has(f, "bakery") || f.residents >= 60,
+    done: (f) => has(f, "sheep", "weaver")
+  },
+  {
+    id: "chapel",
+    goal: "a chapel stands",
+    kinds: ["chapel"],
+    chapter: "Growing citizens",
+    text: "The last need is faith: a chapel's walker brings it to the homes it passes, and the chapel makes its street more desirable.",
+    focus: "hall",
+    when: (f) => has(f, "sheep", "weaver"),
+    done: (f) => has(f, "chapel")
   },
   {
     id: "goals",
+    goal: "you open the town panel (T)",
     chapter: "Growing citizens",
     text: "The first citizens have moved in. Open the town panel (T) to see the goals the term is judged by: residents, citizens, approval, and coins.",
     focus: null,
@@ -250,6 +301,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "healer",
+    goal: "a healer stands",
     kinds: ["healer"],
     chapter: "Keeping it standing",
     text: "Sickness is spreading: hunger, crowding, and a quarry's dust make homes sick, and a sick home holds half as many. A healer's physician calls on the homes and cures them. Press A to see the risk.",
@@ -260,6 +312,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "watchhouse",
+    goal: "a watch house stands",
     kinds: ["watchhouse"],
     chapter: "Keeping it standing",
     text: "Thieves are about: poor streets, half-empty homes, and low approval breed them. A watch house sends a constable along the streets to keep order. Press O to see the risk.",
@@ -269,6 +322,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "trade",
+    goal: "the town sells or buys something (town panel, trade)",
     chapter: "Governing",
     text: "The town trades nothing until told to. In the town panel (T), sell what piles up beyond the reserve, and buy what runs short.",
     focus: null,
@@ -277,6 +331,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "taxes",
+    goal: "a tax rate is changed (town panel)",
     chapter: "Governing",
     text: "The town is content, and approval can carry higher taxes. Raise them in the town panel (T); above 125% leaves a grudge that lasts.",
     focus: null,
@@ -285,6 +340,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   },
   {
     id: "smithy",
+    goal: "a mine and a smithy stand",
     kinds: ["mine", "smithy"],
     chapter: "Governing",
     text: "Ore is for one thing: tools. Now open: a mine by the dark, rust-veined rocks digs ore, and a smithy forges it into tools, which every workshop and lamp needs and which wear out.",

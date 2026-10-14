@@ -32,6 +32,13 @@ import { headless, type Snapshot } from "../src/sim/headless.ts"
 
 const town = (charter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }) => {
   const t = headless(charter)
+  // A new town has only the ring road round its hall; these checks were laid out along a stub road out of each side.
+  t.change((s) => {
+    const hall = s.entities.find((e) => e.components["Town/TownHall"])!.components["Town/Tile"]
+    for (let i = 2; i <= 3; i++)
+      for (const cell of [{ x: hall.x + 2 + i, y: hall.y + 1 }, { x: hall.x + 1, y: hall.y + 2 + i }, { x: hall.x - i, y: hall.y + 1 }, { x: hall.x + 1, y: hall.y - i }])
+        s.entities.push({ id: s.nextEntity++, components: { "Town/Tile": { ...cell, size: 1 }, "Town/Road": {} } })
+  })
   const fate = () => t.snapshot().resources["Town/Fate"] as { state: string; reason: string; at: number; governing: boolean }
   return { ...t, fate }
 }

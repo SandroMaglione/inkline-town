@@ -374,8 +374,8 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   box-shadow: inset 3px 0 0 transparent;
 }
 .hud .ticker .cell + .cell { border-left: none; border-top: 1px dashed #e3e6df; }
-/* The icon as tall as a line of text, so it sits centred on the first line. */
-.hud .ticker .cell .mark { height: 1.55em; }
+/* The icon as tall as a line of text, so it sits centred on the first line (a pixel lower: the letters sit low in the line). */
+.hud .ticker .cell .mark { height: 1.55em; transform: translateY(1px); }
 .hud .ticker .cell .text { flex: 1; min-width: 0; }
 .hud .ticker .cell em { font-style: normal; color: #9aa29b; white-space: nowrap; }
 .hud .ticker .cell.place { cursor: pointer; }
@@ -390,6 +390,8 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 }
 .hud .ticker .head.guide .quiet:hover { color: #3d4943; text-decoration: underline; }
 .hud .ticker .cell.guide { background: #f6f8fc; }
+/* What closes the step, under it. */
+.hud .ticker .cell.guide .goal { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; color: #6d7f9c; }
 .hud .ticker .cell.guide.place:hover { background: #eef3fb; }
 .hud .ticker .cell.guide + .head { border-top: 1px dashed #e3e6df; }
 .hud .ticker .alert.warn { box-shadow: inset 3px 0 0 #d9a24e; }

@@ -313,6 +313,11 @@ const legends: Readonly<Record<Exclude<View, "none">, Legend>> = {
 /** When each workshop began waiting for its input: a shelf runs empty for a moment all the time, so the ticker only says so after `ALERT_PATIENCE`. */
 const starvedSince = new Map<number, number>()
 const ALERT_PATIENCE = ticks(30)
+/** Since when the store has held no food (`null`: it has some). Fish comes in and goes out in handfuls, so the ticker waits `HUNGER_PATIENCE` before saying so. */
+let emptySince: number | null = null
+/** Once said, it stays said a while, so a handful of fish arriving does not flick it off and on. */
+let hungryUntil = 0
+const HUNGER_PATIENCE = ticks(8)
 /** A view's colour over a model: pale, so the ink still reads. */
 const TINT = { good: 0xbcd2ee, fair: 0xf3e3a8, bad: 0xf2b9a0, cool: 0xdccbe8, mark: 0xd5dad3, settlers: 0xead7bd, fine: 0xa9c4e8, plain: 0xffffff }
 const needIcons = { food: "food", bread: "bread", cloth: "cloth", faith: "faith" } as const
@@ -1069,7 +1074,12 @@ export const Interact = Game.System(
     if (waiting.size > 0) alerts.push({ tone: "warn", text: `waiting for inputs: ${list(waiting)}`, at: first(waiting)?.at ?? null, size: first(waiting)?.at.size ?? 1, id: first(waiting)?.id ?? null, places: placesOf(waiting) })
     if (remote.size > 0) alerts.push({ tone: "warn", text: `no workers within ${COMMUTE} road cells: ${list(remote)}`, at: first(remote)?.at ?? null, size: first(remote)?.at.size ?? 1, id: first(remote)?.id ?? null, places: placesOf(remote) })
     const hallRow = buildings.find(({ data }) => data.hall.present)
-    if (census.homes > 0 && larder(stock) === 0) alerts.push({ tone: "bad", text: "no food in store: homes go hungry", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
+    const empty = census.homes > 0 && larder(stock) === 0
+    if (!empty || (emptySince !== null && emptySince > tick)) emptySince = null
+    if (empty && emptySince === null) emptySince = tick
+    if (empty && tick - emptySince! >= HUNGER_PATIENCE) hungryUntil = tick + HUNGER_PATIENCE
+    if (hungryUntil > tick + HUNGER_PATIENCE) hungryUntil = 0
+    if (census.homes > 0 && tick < hungryUntil) alerts.push({ tone: "bad", text: "no food in store: homes go hungry", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
     const ledger = resources.ledger.get()
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
@@ -1128,6 +1138,7 @@ export const Interact = Game.System(
       net: steadyNet(resources.history.get().samples, net),
       approval: mood.approval,
       trading: rates.sells.length > 0 || rates.buys.length > 0,
+      buysTools: rates.buys.includes("tools"),
       taxed: rates.settlers !== 100 || rates.citizens !== 100,
       most: Math.max(...goodIds.map((g) => stock[g])),
       sawTown: ui.menu === "town",
@@ -1258,7 +1269,7 @@ export const Interact = Game.System(
       chronicle: resources.chronicle.get().lines,
       alerts,
       guide: {
-        step: step && shown ? { key: step.id, chapter: step.chapter, text: guideBuilding(step, facts) ? `${step.text} Laid: it starts once the builders finish it.` : step.text, at: shown.at, size: shown.at?.size ?? 1, id: shown.id } : null,
+        step: step && shown ? { key: step.id, chapter: step.chapter, goal: step.goal, text: guideBuilding(step, facts) ? `${step.text} Laid: it starts once the builders finish it.` : step.text, at: shown.at, size: shown.at?.size ?? 1, id: shown.id } : null,
         done: guideSteps.filter((s) => put.has(s.id)).length,
         total: guideSteps.length,
         off: guide.off
