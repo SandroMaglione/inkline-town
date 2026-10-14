@@ -148,6 +148,8 @@
   }
   .dialog .sheet > .actions .frame { flex: 1; justify-content: center; padding: 10px 12px; }
   .dialog .sheet > .actions .frame.primary { flex: 2; }
+  /* Room under the last of the content, so it never ends tucked against the buttons. */
+  .dialog .charter { padding-bottom: 18px; }
   .dialog h2 { font-size: 17px; }
   .dialog .sub { font-size: 12px; }
   .dialog section { margin-top: 12px; }

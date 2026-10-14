@@ -38,6 +38,7 @@ import {
   sizes,
   TAX_STEPS,
   TERMS,
+  YEARS_PER_TERM,
   type Category,
   type CharterValue,
   type GoodId,
@@ -1340,36 +1341,34 @@ export const createHost = async (
     ui.founding = true
     dialog.replaceChildren()
     const card = el("div", "sheet wide")
-    card.append(
-      el("h2", "", "found a town"),
-      el(
-        "p",
-        "sub",
-        "Choose the land and how long the term runs. Grow the town until it is complete, or keep it from bankruptcy, revolt, and ruin until the term is out."
-      )
-    )
+    card.append(el("h2", "", "found a town"), el("p", "sub", "Pick the land, then grow the town to its goal before the term runs out."))
     const body = el("div", "charter")
     const options = el("div", "")
     const preview = el("div", "preview")
     const mapBox = el("div", "map")
     const map = document.createElement("canvas")
     mapBox.append(map)
-    const facts = el("p", "sub")
+    const facts = el("p", "note")
     preview.append(mapBox, facts)
     body.append(options, preview)
+    /** A figure of the charter as the town's messages name things: an icon and a few words. */
+    const chip = (glyph: IconName, text: string) => `<span class="ref ware">${icon(glyph, 13)}${escapeHtml(text)}</span>`
     const group = <T extends string | number>(
       title: string,
+      glyph: IconName,
       values: ReadonlyArray<T>,
       label: (v: T) => string,
-      blurb: (v: T) => string,
+      note: (v: T) => string,
+      tip: (v: T) => string,
       get: () => T,
       set: (v: T) => void
     ) => {
-      const box = section(title)
+      const box = section(title, glyph)
       const row = el("div", "choices")
-      const note = el("p", "empty")
+      const said = el("p", "note")
       const buttons = values.map((v) => {
         const b = el("button", "frame choice", label(v))
+        b.title = tip(v)
         b.onclick = () => {
           set(v)
           refresh()
@@ -1377,34 +1376,40 @@ export const createHost = async (
         row.append(b)
         return { v, b }
       })
-      box.append(row, note)
+      box.append(row, said)
       options.append(box)
       return () => {
         for (const { v, b } of buttons) b.classList.toggle("on", v === get())
-        note.textContent = blurb(get())
+        setHtml(said, note(get()))
       }
     }
     const refreshers = [
       group(
         "land",
+        "pave",
         sizeIds,
         (v) => sizes[v].title,
-        (v) => `${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins to complete it`,
+        (v) => `goal ${chip("people", `${sizes[v].goal.residents} residents`)}${chip("coins", `${sizes[v].goal.coins} coins`)}`,
+        (v) => `Complete the town with ${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins`,
         () => choice.size,
         (v) => (choice.size = v)
       ),
       group(
         "term",
+        "clock",
         TERMS,
         (v) => `${v} min`,
-        (v) => `${v} minutes of the town at 1×: six years, a winter at the end of each after the first`,
+        (v) => `${chip("clock", `${YEARS_PER_TERM} years of ${Number((v / YEARS_PER_TERM).toFixed(1))} min`)}${chip("winter", `${YEARS_PER_TERM - 1} winters`)}`,
+        (v) => `${v} minutes at 1×: ${YEARS_PER_TERM} years, a winter at the end of each after the first`,
         () => choice.term,
         (v) => (choice.term = v)
       ),
       group(
         "richness",
+        "wood",
         landIds,
         (v) => lands[v].title,
+        (v) => chip("coins", `${lands[v].coins} coins to start`),
         (v) => lands[v].blurb,
         () => choice.land,
         (v) => (choice.land = v)
@@ -1421,11 +1426,15 @@ export const createHost = async (
       for (const r of refreshers) r()
       const land = drawLand(map)
       reroll.title = `Draw other land (this is seed ${choice.seed})`
-      facts.textContent = `${land.cells} cells of land · ${land.trees.length} trees · ${land.rocks.filter((r) => !r.ore).length} stone · ${land.rocks.filter((r) => r.ore).length} ore · ${lands[choice.land].coins} coins to start`
+      const rocks = land.rocks.filter((r) => !r.ore).length
+      setHtml(
+        facts,
+        chip("pave", `${land.cells} cells`) + chip("wood", `${land.trees.length} trees`) + chip("stone", `${rocks} stone`) + chip("ore", `${land.rocks.length - rocks} ore`)
+      )
     }
     refresh()
     const actions = el("div", "actions")
-    const found = el("button", "frame primary", "Found the town")
+    const found = el("button", "frame primary", cancellable ? "Found the town" : "Start new")
     found.onclick = () => {
       if (visiting) endVisit()
       ui.edits.push({ type: "newTown", charter: { ...choice } })
@@ -1441,7 +1450,7 @@ export const createHost = async (
     // On the way in, a town saved in this browser: carry on with it instead.
     if (!cancellable && savedTown) {
       const saved = savedTown
-      const resume = el("button", "frame", "Continue")
+      const resume = el("button", "frame", "Continue saved")
       resume.title = `Carry on with the town saved in this browser: ${saved.title}`
       resume.onclick = () => {
         const said = persistence().load() ?? "Loaded"
@@ -1454,7 +1463,8 @@ export const createHost = async (
         choose("select")
         setSpeed(1)
       }
-      const note = el("p", "saved", `your town: ${saved.title}${saved.savedAt > 0 ? ` · saved ${ago(saved.savedAt)}` : ""}`)
+      const note = el("p", "saved")
+      note.innerHTML = `${icon("save", 13)}${escapeHtml(saved.title)}${saved.savedAt > 0 ? ` <em>· saved ${ago(saved.savedAt)}</em>` : ""}`
       actions.prepend(note)
       actions.append(resume)
     }
