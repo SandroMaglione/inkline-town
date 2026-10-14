@@ -416,7 +416,22 @@ export const home = {
    */
   street: { room: 12, roomLeast: 0.5, tax: 40, taxMost: 0.25 },
   /** A settlers' cottage with bread on the table pays this much more: bread is worth baking before anyone is a citizen. */
-  breadBonus: 0.5
+  breadBonus: 0.5,
+  /**
+   * A walker's visit feeds a home one fish or loaf for every `perMeal`
+   * residents (rounded up): a cottage one, a citizens' home two, a
+   * townhouse three. Food demand grows with the people, not the roofs.
+   */
+  perMeal: 4,
+  /**
+   * Taxes above 100% drive people away directly, besides what they do to
+   * approval: at x = (rate − 100) / 100, a home holds 1 − `linear`·x −
+   * `square`·x² of its residents (settlers: 80% at 150%, half at 200%);
+   * citizens and burghers mind `citizens` as much. So squeezing harder
+   * empties the homes it squeezes, and the most a rate can bring in
+   * comes well before the top of the slider.
+   */
+  taxFlight: { linear: 0.3, square: 0.2, citizens: 0.6 }
 }
 
 /** What a tier's homes are called, and what its residents are. */
@@ -655,10 +670,13 @@ export const WINTER_WARNING = ticks(60)
 /**
  * Running a town costs more the bigger it gets: the town hall's
  * administration costs `perHome` coins a minute a home, and a further
- * (homes / `growth`) a home, so a large town of poor homes cannot pay
- * its way.
+ * (homes / `growth`) a home. Each more home costs `perHome` + 2·homes /
+ * `growth`: about 7 coins a minute at 80 homes, what a fed cottage pays,
+ * so past there a town grows by finer homes, not more of them. It is
+ * reckoned by the home, so a townhouse of twelve costs no more than a
+ * cottage of four.
  */
-export const admin = { perHome: 0.4, growth: 120 }
+export const admin = { perHome: 0.5, growth: 24 }
 
 /**
  * Approval, -100 → +100: where the town's mood is heading, and how fast it
@@ -715,10 +733,13 @@ export const crown = {
 
 /**
  * The market: each good's price moves with what the town trades. Selling
- * drives it down, buying up; it drifts back by a tenth of the gap every
- * collection. Buying costs half again the price.
+ * drives it down `perUnit` points a unit, buying up `perBought`. A cheap
+ * price drifts back by a tenth of the gap every collection, a dear one by
+ * only 1/`calms` of it: traders top up a shortfall, but a town that lives
+ * on bought food pays more for it every minute. Buying costs half again
+ * the price.
  */
-export const market = { floor: 30, ceiling: 250, perUnit: 1, markup: 1.5 }
+export const market = { floor: 30, ceiling: 250, perUnit: 1, perBought: 3, markup: 1.5, calms: 30 }
 
 /** A paused building pays this share of its upkeep. */
 export const PAUSED_UPKEEP = 0.25

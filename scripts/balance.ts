@@ -6,7 +6,7 @@ import { resolveRules } from "../src/rules/config.ts"
  *
  *   node scripts/balance.ts                          5 seeds, a medium fair town, a 60-minute term
  *   node scripts/balance.ts --size large --term 90 --land harsh
- *   node scripts/balance.ts --bot greedy             sensible (default), crowded, uncovered, greedy, or idle
+ *   node scripts/balance.ts --bot greedy             sensible (default), crowded, uncovered, greedy, sprawl, or idle
  *   node scripts/balance.ts --versus crowded         the bot against another on the same seeds, side by side
  *   node scripts/balance.ts --seeds 10 --from 10     seeds 10 to 19 (to split a sweep across processes)
  *   node scripts/balance.ts --set crown.fine=2 --set kinds.fishery.recipe.seconds=3
@@ -22,7 +22,14 @@ import { resolveRules } from "../src/rules/config.ts"
  * - idle: founds the basics, then leaves the town to itself;
  * - crowded: the sensible mayor, but homes packed in beside the industry,
  *   and no parks or paving;
- * - uncovered: the sensible mayor, but no fire watch, healer, or watch house.
+ * - uncovered: the sensible mayor, but no fire watch, healer, or watch house;
+ * - sprawl: the quick loop the economy should not reward: taxes as high as
+ *   the town will stand (200% while it approves, never so low it is
+ *   pleased), cottages everywhere the coins allow, fish caught or bought to
+ *   keep them fed, and never a bakery, a chapel, or a finer home.
+ *
+ * Every mayor but sprawl stops adding cottages for income once the build
+ * tooltip says another would bring in little after administration.
  *
  * The sensible mayor also keeps homes off squalid streets and dirty
  * workshops a little way from homes, lays out parks and paves streets where
@@ -52,6 +59,7 @@ import { SAVE_FORMAT, SAVE_VERSION } from "../src/save.ts"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { fingerprint } from "../tools/balance/provenance.ts"
+import { capacity, taxOf } from "../src/rules/households.ts"
 
 // ── Options ───────────────────────────────────────────────────────────────
 
@@ -65,8 +73,8 @@ const from = Number(option("from", "0"))
 const size = option("size", "medium") as CharterValue["size"]
 const land = option("land", "fair") as CharterValue["land"]
 const term = Number(option("term", "60"))
-type Bot = "sensible" | "greedy" | "idle" | "crowded" | "uncovered"
-const bots: ReadonlyArray<Bot> = ["sensible", "greedy", "idle", "crowded", "uncovered"]
+type Bot = "sensible" | "greedy" | "idle" | "crowded" | "uncovered" | "sprawl"
+const bots: ReadonlyArray<Bot> = ["sensible", "greedy", "idle", "crowded", "uncovered", "sprawl"]
 /** `--versus <bot>`: run another bot on the same seeds and compare. */
 const versus = option("versus", "") as Bot | ""
 let bot = option("bot", "sensible") as Bot
@@ -77,7 +85,7 @@ const snapshotAt = Number(option("snapshot", "0"))
 const out = option("out", "snapshots")
 if (!sizeIds.includes(size) || !landIds.includes(land) || !bots.includes(bot) || (versus !== "" && !bots.includes(versus))) throw new Error("Unknown --size, --land, --bot, or --versus")
 /** Mayors who look after the neighbourhood: parks, paving, homes away from industry. */
-const zoned = () => bot !== "crowded" && bot !== "idle"
+const zoned = () => bot !== "crowded" && bot !== "idle" && bot !== "sprawl"
 /** Mayors who keep fire watches, healers, and watch houses. */
 const covered = () => bot !== "uncovered" && bot !== "idle"
 /** Mayors who run the town as the sensible one does (taxes, trade, the crown). */
@@ -410,6 +418,16 @@ const roadToward = (w: World, kind: Kind | null, limit = 16): Array<Point> => {
   return []
 }
 
+/**
+ * What another cottage would bring in after what it adds to administration (the build tooltip's sum), if it
+ * were fed as often as the town's homes are now (`fed`, the share of them fed).
+ */
+const cottageWorth = (w: World, fed: number) => {
+  const cottage = { tier: 1 as const, food: 1, bread: 0, cloth: 0, faith: 0, residents: home.tiers[1].residents }
+  const cost = (n: number) => n * (rules.admin.perHome + n / rules.admin.growth)
+  return fed * taxOf({ ...cottage, residents: capacity(cottage, w.mood.approval, 0, rules, w.policy.settlers) }, w.policy, rules) - (cost(w.homes.length + 1) - cost(w.homes.length))
+}
+
 /** What the bot wants next, in order: the first it can do, it does. */
 const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: boolean }> => {
   const homes = w.homes.length
@@ -433,7 +451,7 @@ const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: b
     { kind: "fishery", when: w.census.food! < w.homes.length * 0.6 && count(w, "fishery") < Math.max(2, 1 + Math.floor(homes / 7) - 2 * count(w, "bakery")) },
     { kind: "market", when: count(w, "market") < 1 + Math.floor(homes / 20) && w.census.food! < w.homes.length * 0.7 }
   ]
-  if (bot === "idle") return basics
+  if (bot === "idle" || bot === "sprawl") return basics
   // The citizens' chains, in proportion to the homes: a bakery bakes for about
   // 16 homes and needs a mill, and a mill most of a farm; a weaver weaves for
   // about 14 homes from one sheep farm's wool. Upstream first, so what a
@@ -478,6 +496,18 @@ const decide = (w: World): ReadonlyArray<Edit> => {
     for (const g of goodIds) if (!w.policy.sells.includes(g)) edits.push({ type: "trade", good: g, mode: "sell" })
   }
   const fed = w.homes.length > 0 ? w.census.food! / w.homes.length : 1
+  if (bot === "sprawl") {
+    const rate = w.mood.approval > 25 ? 200 : w.mood.approval > 10 ? 175 : w.mood.approval > 0 ? 150 : w.mood.approval > -20 ? 125 : 100
+    if (w.policy.settlers !== rate) edits.push({ type: "tax", tier: "settlers", rate }, { type: "tax", tier: "citizens", rate })
+    if (w.policy.reserve !== 30) edits.push({ type: "reserve", amount: 30 })
+    // Fish bought whenever the homes go short, planks when building runs short; the crown answered when it can be.
+    for (const [g, low, enough] of [["fish", fed < 0.8 ? 30 : -1, 30], ["planks", 8, 20]] as const) {
+      const buying = w.policy.buys.includes(g)
+      if (!buying && w.stock[g] < low && w.coins > 60) edits.push({ type: "trade", good: g, mode: "buy" })
+      if (buying && (w.stock[g] >= enough || w.coins < 30)) edits.push({ type: "trade", good: g, mode: "none" })
+    }
+    if (w.crown.open && w.stock[w.crown.good] >= w.crown.amount) edits.push({ type: "deliver" })
+  }
   if (sensible()) {
     // Taxes follow the town's mood; once every other goal is met, they come down to win it over.
     const goals = goalsOf(w.charter, {
@@ -548,7 +578,8 @@ const decide = (w: World): ReadonlyArray<Edit> => {
   // Homes when workers run short, or (they are the town's income) when food reaches most of them and
   // there are coins to spare; not far past the goal, where upgrading homes pays better than more of them.
   const goal = content.sizes[w.charter.size].goal.residents
-  const short = w.census.jobs! + 6 > residents(w) || (fed >= 0.6 && w.stock.planks >= 8 && w.coins > 300 && residents(w) < goal * 1.1 && w.homes.length < Math.ceil(goal / home.tiers[1].residents))
+  const sprawling = bot === "sprawl" && fed >= 0.5 && w.stock.planks >= 4
+  const short = sprawling || w.census.jobs! + 6 > residents(w) || (fed >= 0.6 && w.stock.planks >= 8 && w.coins > 300 && residents(w) < goal * 1.1 && w.homes.length < Math.ceil(goal / home.tiers[1].residents) && cottageWorth(w, fed) > 2)
   if (short && affordable(w, { coins: home.cost.coins * 4, materials: { planks: 4 } })) {
     const spots = homeSpots(w, 4)
     if (spots.length > 0) return [...edits, { type: "homes", cells: spots }]

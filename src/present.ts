@@ -86,11 +86,12 @@ import { capacity, CELL_STEPS, elapsed, goalsOf, larder, lockReason, met, season
 import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type Alert as Notice, type HitBox, type Legend, type Line, type View } from "./ui.ts"
 import { blockers as blockersOf, streetAdvice, type InTown, type Served, type Street } from "./rules/explain.ts"
-import { breadBonus, streetTax, suppliedTaxOf } from "./rules/households.ts"
+import { breadBonus, moreAdmin, streetTax, suppliedTaxOf, taxOutlook, type TaxedHome } from "./rules/households.ts"
+import { approvalTarget } from "./rules/approval.ts"
 import { salvageOf, salvageText } from "./rules/salvage.ts"
 import { rockBlocks, type RockPart } from "./render3d/rock-blocks.ts"
 import { GUIDE_QUIET, guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
-import { ticks } from "./content.ts"
+import { TAX_STEPS, ticks } from "./content.ts"
 
 const cellAt = (at: Point): Point => {
   return { x: Math.floor(at.x), y: Math.floor(at.y) }
@@ -416,6 +417,21 @@ export const Interact = Game.System(
       return hit ?? parkAt.get(key(Math.floor(at.x), Math.floor(at.y)))?.entity.id ?? null
     }
     const parkText = (p: ParkValue) => `desirability ${signed(p.value)} out to ${p.reach} cells`
+    /**
+     * What new cottages would bring in, fed, at the settlers' rate on their streets, less what they add to the
+     * town hall's administration (see `moreAdmin`): the sum that turns once a town is large.
+     */
+    const homesWorth = (at: ReadonlyArray<Point>) => {
+      if (at.length === 0) return ""
+      const n = at.length, standing = houses.filter((row) => !row.data.closed.present).length
+      const fed = { tier: 1 as Tier, food: 1, bread: 0, cloth: 0, faith: 0, residents: home.tiers[1].residents }
+      const pays = at.reduce((sum, c) => {
+        const d = appealAt(cells, c.x, c.y)
+        return sum + taxOf({ ...fed, residents: capacity(fed, approval, d, undefined, rates.settlers) }, rates, undefined, d)
+      }, 0)
+      const worth = Math.round(pays - moreAdmin(standing, n))
+      return ` · ${n === 1 ? "this home" : "these homes"}: ${signed(worth)} coins a minute after administration, once fed${worth <= 0 ? " · past what the town hall can run cheaply: finer homes pay better than more of them" : ""}`
+    }
 
     const hits: Array<HitBox> = [
       ...buildings.map(({ entity, data }) => {
@@ -538,7 +554,7 @@ export const Interact = Game.System(
       }
       if (ui.tool === "home" && cell && inside(cell.x, cell.y)) {
         rangeFrom({ ...(ui.dragFrom ?? cell), size: 1 }, COMMUTE + 1, `residents walk to work within ${COMMUTE} road cells`)
-        preview.tooltip = `homes · ${costText(home.cost)} each · along a road · ${preview.rangeNote ?? "touch a road and residents walk to work within " + COMMUTE + " road cells"}`
+        preview.tooltip = `homes · ${costText(home.cost)} each · along a road${homesWorth(preview.ghosts.map((g) => g.cell))} · ${preview.rangeNote ?? "touch a road and residents walk to work within " + COMMUTE + " road cells"}`
       }
       if (ui.tool === "road" && cell) preview.tooltip = `road · ${ROAD_COST} coins a cell · buildings need one at the middle of a side`
       if (ui.dragFrom && cell) {
@@ -547,7 +563,7 @@ export const Interact = Game.System(
           ui.tool === "road"
             ? `${counted(n, "road cell")} · ${costText({ coins: n * ROAD_COST, materials: {} })}`
             : ui.tool === "home"
-              ? `${counted(n, "home")} · ${costText(times(home.cost, n))}`
+              ? `${counted(n, "home")} · ${costText(times(home.cost, n))}${homesWorth(preview.ghosts.map((g) => g.cell))}`
               : `pave ${counted(n, "cell")} · ${costText({ coins: n * PAVE_COST.coins, materials: { stone: n * PAVE_COST.stone } })}`
       }
     } else if (ui.tool === "ground" && cell) {
@@ -808,7 +824,8 @@ export const Interact = Game.System(
       const condition = maybe(row.data.condition)
       const town = inTown()
       const served = servedAt(tile)
-      const cap = capacity(h, approval, desirability)
+      const rate = h.tier === 1 ? rates.settlers : rates.citizens
+      const cap = capacity(h, approval, desirability, undefined, rate)
       const whyFewer =
         cap >= tier.residents
           ? undefined
@@ -818,10 +835,11 @@ export const Interact = Game.System(
               ? "fewer while the town disapproves of its mayor"
               : desirability < 0
                 ? `fewer on a street at ${signed(desirability)}: ${streetAdvice(street)}`
-                : "fewer until every need is met"
+                : rate > 100 && capacity(h, approval, desirability) > cap
+                  ? `fewer while ${tier.title} are taxed at ${rate}%: some move away`
+                  : "fewer until every need is met"
       const taxLine = (() => {
         const factors: Array<string> = []
-        const rate = h.tier === 1 ? rates.settlers : rates.citizens
         if (rate !== 100) factors.push(`taxed at ${rate}%`)
         const st = Math.round((streetTax(desirability) - 1) * 100)
         if (st !== 0) factors.push(`street ${signed(st)}%`)
@@ -1149,9 +1167,21 @@ export const Interact = Game.System(
     const net = ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin
     const mood = resources.mood.get()
     const crown = resources.crown.get()
+    // What the homes would pay at each step of each tier's rate, once settled there (see `taxOutlook`).
+    const taxed: Array<TaxedHome> = []
+    for (const { data } of houses) {
+      if (data.site.present || data.rising.present || data.burning.present || data.closed.present) continue
+      const tile = data.tile.get()
+      taxed.push({ ...data.house.get(), desirability: appealAt(cells, tile.x, tile.y), paying: true })
+    }
     const f = resources.fate.get()
     const pantry = resources.pantry.get()
     const season = seasonAt(Math.min(Math.max(0, t), termTicks(charter) - 1), charter)
+    const approvalAt = (r: { readonly settlers: number; readonly citizens: number }, memory: number) =>
+      approvalTarget(taxed, r, coins, crown.snubs.length, season.winter, undefined, memory).target
+    const outlookOf = (tier: "settlers" | "citizens") => taxed.some((h) => (h.tier === 1) === (tier === "settlers"))
+      ? TAX_STEPS.map((rate) => ({ rate, taxes: Math.round(taxOutlook(taxed, rates, tier, rate, approvalAt)) }))
+      : []
     const seconds = (steps: number) => Math.max(0, Math.ceil(steps / 60))
     const danger = (since: number, minutes: number) => (since < 0 ? null : seconds(since + minutes * 3600 - t))
     // The winter after the coming one, for the almanac.
@@ -1256,6 +1286,7 @@ export const Interact = Game.System(
       coins,
       taxes: ledger.taxes,
       suppliedTaxes: Math.round(suppliedTaxes),
+      taxOutlook: { settlers: outlookOf("settlers"), citizens: outlookOf("citizens") },
       trade: ledger.trade,
       upkeep: ledger.upkeep,
       admin: ledger.admin,

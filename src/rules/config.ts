@@ -49,9 +49,9 @@ export const resolveRules = (patches: ReadonlyArray<RulePatch> = []): Rules => {
     // Structural timing and identifier changes are outside numeric economy experiments.
     if (parts[0] === "transport" || ["size", "stories", "bays"].includes(key)) throw new Error(`Structural rule cannot be patched: ${path}`)
     if (["stepSeconds", "ledgerTicks", "spoilTicks", "yearsPerTerm", "staffTicks", "riskTicks", "spreadTicks", "growTicks"].includes(parts[0]!)) throw new Error(`Structural rule cannot be patched: ${path}`)
-    if ((key === "seconds" || key === "growth" || key === "wear" || key === "every" || key === "lasts") && value === 0) throw new Error(`Rule must be positive: ${path}`)
+    if ((key === "seconds" || key === "growth" || key === "wear" || key === "every" || key === "lasts" || key === "perMeal" || key === "calms") && value === 0) throw new Error(`Rule must be positive: ${path}`)
     if ((path.startsWith("home.lasts.") || path.startsWith("spoils.")) && value === 0) throw new Error(`Rule must be positive: ${path}`)
-    if ((["workers", "batch", "inputs", "cap", "carriers", "range", "residents", "settle"].includes(key) || path.includes(".cost.")) && !Number.isInteger(value)) throw new Error(`Rule must be an integer: ${path}`)
+    if ((["workers", "batch", "inputs", "cap", "carriers", "range", "residents", "settle", "perMeal"].includes(key) || path.includes(".cost.")) && !Number.isInteger(value)) throw new Error(`Rule must be an integer: ${path}`)
     if (path === "apprentice" && value > 1) throw new Error("Apprentice pace must be at most one")
     target[key] = value
   }

@@ -907,7 +907,7 @@ export const createHost = async (
     const treasury = section(
       "treasury",
       "treasury",
-      "Coins a minute. Taxes come only from homes that are fed, in proportion to the needs they have met. Administration grows faster than the town. Three minutes in debt and the town is bankrupt."
+      "Coins a minute. Taxes come only from homes that are fed, in proportion to the needs they have met. Administration is reckoned by the home and grows faster than the town: in a large town another cottage costs about what it pays, while a citizens' home or a townhouse holds two or three times the people for the same cost. Three minutes in debt and the town is bankrupt."
     )
     const taxes = row(treasury, "taxes", "taxes")
     const supplied = row(treasury, "if every home were supplied", "homes")
@@ -926,7 +926,7 @@ export const createHost = async (
     const levers = section(
       "tax rates",
       "taxes",
-      `Lower taxes raise approval, higher ones lower it, weighed by how many of each tier there are. Above ${moodRules.grudge.above}% the town also keeps a grudge that outlasts the rate: cutting taxes at the end does not undo a term of squeezing.`
+      `Lower taxes raise approval, higher ones lower it, weighed by how many of each tier there are. Above 100% some residents also move away, settlers sooner than citizens, so a higher rate does not always bring in more: under each rate is what the homes would pay at each step once they settle there. Above ${moodRules.grudge.above}% the town also keeps a grudge that outlasts the rate: cutting taxes at the end does not undo a term of squeezing.`
     )
     for (const tier of ["settlers", "citizens"] as const) {
       const line = el("div", "row lever")
@@ -940,7 +940,9 @@ export const createHost = async (
       rate.input.title = "Drag to set the rate; double-click for the usual 100%"
       rate.input.ondblclick = () => ui.edits.push({ type: "tax", tier, rate: 100 })
       const effect = el("p", "effect")
-      levers.append(line, rate.input, effect)
+      const outlook = el("p", "effect outlook")
+      outlook.title = "Taxes a minute from every home if this rate stayed there and the homes settled: residents move away above 100%, and approval follows the rate"
+      levers.append(line, rate.input, effect, outlook)
       live.push(() => {
         const now = ui.stats?.policy[tier] ?? 100
         rate.sync(now)
@@ -949,6 +951,13 @@ export const createHost = async (
         const grudge = now > moodRules.grudge.above ? " · a grudge builds while it stays this high, and fades slowly" : ""
         effect.textContent = (sway === 0 ? "the usual rate" : `${signed(sway)} approval`) + grudge
         effect.className = `effect ${sway > 0 ? "up" : sway < 0 ? "down" : ""}`
+        const steps = ui.stats?.taxOutlook[tier] ?? []
+        const best = steps.reduce<{ rate: number; taxes: number } | null>((b, o) => (b === null || o.taxes > b.taxes ? o : b), null)
+        const text = steps.length === 0 || best === null
+          ? ""
+          : `taxes a minute, once settled: ${steps.map((o) => `${o.rate}% ${o.taxes}`).join(" · ")} · most at ${best.rate}%`
+        if (outlook.textContent !== text) outlook.textContent = text
+        outlook.style.display = text ? "" : "none"
       })
     }
     panel.append(levers)
@@ -968,7 +977,7 @@ export const createHost = async (
     const needs = section(
       "homes supplied",
       "homes",
-      "A hungry home pays no taxes. Settlers need food (fish, smoked fish, or bread) from a market, and a cottage with bread besides pays half again; citizens and burghers need bread, cloth, and faith. Cloth is only brought to streets with desirability 5 or more. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
+      "A hungry home pays no taxes. Settlers need food (fish, smoked fish, or bread) from a market, and a cottage with bread besides pays half again; a visit feeds a home a fish or a loaf for every four residents, so a citizens' home eats twice what a cottage does and a townhouse three times; citizens and burghers need bread, cloth, and faith. Cloth is only brought to streets with desirability 5 or more. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
     )
     const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith", IconName>> = {
       food: "fish",
@@ -1007,7 +1016,7 @@ export const createHost = async (
     const store = section(
       "goods and trade",
       "trade",
-      "Traders call every few seconds. Drag a good's slider left to sell it beyond what the town keeps, right to buy it up to that (at half again the price), the further the more each call; the middle neither sells nor buys. Prices fall as the town sells and rise as it buys."
+      "Traders call every few seconds. Drag a good's slider left to sell it beyond what the town keeps, right to buy it up to that (at half again the price), the further the more each call; the middle neither sells nor buys. Prices fall as the town sells and rise, three times as fast, as it buys; a dear price calms only slowly, so buying tops up a shortfall but a town fed on bought food pays more every minute."
     )
     const reserveLine = el("div", "row lever")
     const reserveValue = el("span", "rate")
