@@ -1341,14 +1341,24 @@ export const createHost = async (
     ui.founding = true
     dialog.replaceChildren()
     const card = el("div", "sheet wide")
-    card.append(el("h2", "", "found a town"), el("p", "sub", "Pick the land, then grow the town to its goal before the term runs out."))
+    const title = el("h2", "title", "Inkline Town ")
+    const by = el("small", "by", "by ")
+    const author = el("a", "", "Sandro Maglione") as HTMLAnchorElement
+    author.href = "https://www.sandromaglione.com/"
+    author.target = "_blank"
+    author.rel = "noopener"
+    by.append(author)
+    title.append(by)
+    card.append(title, el("p", "sub", "Pick the land, then grow the town to its goal before the term runs out."))
     const body = el("div", "charter")
     const options = el("div", "")
     const preview = el("div", "preview")
     const mapBox = el("div", "map")
     const map = document.createElement("canvas")
     mapBox.append(map)
-    const facts = el("p", "note")
+    const facts = el("p", "note facts")
+    const cells = el("span", "ref ware cells")
+    mapBox.append(cells)
     preview.append(mapBox, facts)
     body.append(options, preview)
     /** A figure of the charter as the town's messages name things: an icon and a few words. */
@@ -1427,10 +1437,8 @@ export const createHost = async (
       const land = drawLand(map)
       reroll.title = `Draw other land (this is seed ${choice.seed})`
       const rocks = land.rocks.filter((r) => !r.ore).length
-      setHtml(
-        facts,
-        chip("pave", `${land.cells} cells`) + chip("wood", `${land.trees.length} trees`) + chip("stone", `${rocks} stone`) + chip("ore", `${land.rocks.length - rocks} ore`)
-      )
+      setHtml(cells, `${icon("pave", 13)}${land.cells} cells`)
+      setHtml(facts, chip("wood", `${land.trees.length} trees`) + chip("stone", `${rocks} stone`) + chip("ore", `${land.rocks.length - rocks} ore`))
     }
     refresh()
     const actions = el("div", "actions")
@@ -1451,7 +1459,7 @@ export const createHost = async (
     if (!cancellable && savedTown) {
       const saved = savedTown
       const resume = el("button", "frame", "Continue saved")
-      resume.title = `Carry on with the town saved in this browser: ${saved.title}`
+      resume.title = `Carry on with the town saved in this browser: ${saved.title}${saved.savedAt > 0 ? `, saved ${ago(saved.savedAt)}` : ""}`
       resume.onclick = () => {
         const said = persistence().load() ?? "Loaded"
         ui.toast(said)
@@ -1463,9 +1471,6 @@ export const createHost = async (
         choose("select")
         setSpeed(1)
       }
-      const note = el("p", "saved")
-      note.innerHTML = `${icon("save", 13)}${escapeHtml(saved.title)}${saved.savedAt > 0 ? ` <em>· saved ${ago(saved.savedAt)}</em>` : ""}`
-      actions.prepend(note)
       actions.append(resume)
     }
     if (cancellable) {

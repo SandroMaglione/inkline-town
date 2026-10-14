@@ -153,6 +153,7 @@
   .dialog h2 { font-size: 17px; }
   .dialog .sub { font-size: 12px; }
   .dialog section { margin-top: 12px; }
+  .dialog .charter section { margin-top: 18px; }
   .dialog .choices .frame { flex: 1; justify-content: center; padding: 8px 6px; }
   .dialog .chronicle { max-height: none; }
 }
