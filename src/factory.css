@@ -27,6 +27,9 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 }
 .card .cell { display: flex; align-items: center; gap: 10px; padding: 7px 14px; white-space: nowrap; }
 .card .cell + .cell { border-left: 1px solid #e0e3db; }
+.hud .topline { display: flex; gap: 8px; align-items: stretch; }
+/* What only a phone shows (phone.css): the goods chip, the guide and overlay buttons, the speed cycle, the menu. */
+.goods-chip, .fold-buttons, .toolbar .more, .toolbar .speed .cycle, .system .phone-only { display: none; }
 .hud .stack { display: flex; flex-direction: column; line-height: 1.2; }
 .hud .stack b { font-size: 15px; font-weight: 700; }
 .hud .stack small { font-size: 11px; color: #77817a; }
@@ -97,6 +100,7 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 }
 
 .panel {
+  overscroll-behavior: contain;
   position: fixed; top: 0; right: 0; bottom: 0; width: 360px; max-width: 46vw; box-sizing: border-box;
   background: #eef0ea; border-left: 1px solid #c3c8bf; padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
   overflow-y: auto; transform: translateX(100%); transition: transform 240ms cubic-bezier(.2,.8,.2,1);
@@ -226,6 +230,8 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .dialog .sheet {
   background: #f1f3ed; border: 1px solid #c3c8bf; border-radius: 6px; box-shadow: 0 3px 0 #d5d9d0; padding: 22px 26px;
   width: 640px; max-width: 100%; max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; font-size: 14px;
+  /* The visible height, URL bar and all: 100vh alone is the height with the bar hidden, and cut the actions off. */
+  max-height: calc(100dvh - 32px); overscroll-behavior: contain; touch-action: pan-y;
 }
 .dialog .sheet.wide { width: 720px; }
 .dialog .sheet.narrow { width: 460px; }

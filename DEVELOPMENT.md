@@ -15,6 +15,7 @@ pnpm typecheck
 pnpm test       # model-based tests: random mayors, rules that must always hold; and saving
 pnpm check      # every way a term can end, ends it
 pnpm check:browser # the actual 3D game: placement, picking, saves, populated towns and phone layout
+pnpm check:phone   # phone sizes: the picker's found button on screen, the folded HUD opens and closes
 pnpm balance    # a bot plays terms headless and reports the pressure
 ```
 
@@ -34,13 +35,19 @@ first holds the ghost or outline where it landed, a second on the same spot
 commits it. This lives entirely in `src/render3d/input.ts`; the game still
 sees one ordinary press and release.
 
-Phones get their layout from `src/phone.css`, loaded after `factory.css`. It
-only moves and resizes what `factory.css` draws, in three media queries:
-compact (narrow or short screens: icon-only bars, a two-line ticker),
-portrait (chrome stacked top and bottom, the panel as a bottom sheet) and
-touch (bigger targets, no key hints, the hint line pinned above the bars).
-New UI needs nothing there unless it has to move on a phone; check it at
-390×844, 360×640 and 844×390.
+Phones get their layout from `src/phone.css`, loaded after `factory.css`. On
+a narrow or short screen the HUD folds away: one top line (clock, treasury,
+people, and a chip of planks, stone and tools), one tool bar along the bottom
+(town, the tools, pause, a speed button that cycles, and a ⋯ menu holding
+share, guide, save, load, new town and recentre), and two buttons top right
+for the guide and the map overlays. `host.ts` sets `body.fold-goods`,
+`fold-guide`, `fold-views` or `fold-more` while one is open; a tap on the map
+folds it. A new guide step peeks above the tool bar for a few seconds. Sheets
+open from the side on a landscape phone (`max-height: 500px`) and from the
+bottom in portrait. Dialogs take the whole screen with their actions pinned
+to the bottom. The camera bar is hidden: pinch zooms and turns. New UI needs
+nothing there unless it has to move on a phone; check it at 390×844, 360×640
+and 762×330, and run `pnpm check:phone`.
 
 `src/render3d/scene.ts` owns the orthographic camera, ground projection and
 frame source. `views.ts` follows live construction, upgrades, resources,

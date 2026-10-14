@@ -158,9 +158,11 @@ try {
   facts.speedAndPause=true
   facts.liveWalkerMovement=true
   await page.setViewportSize({width:390,height:844})
-  await page.getByRole("button",{name:"Reset camera",exact:true}).click()
+  // A phone has no camera bar (pinch zooms and turns): recentre from the menu.
+  await page.locator(".toolbar .more").click()
+  await page.getByRole("button",{name:"recentre",exact:true}).click()
   await page.keyboard.press("q")
-  assert.equal(await page.evaluate(()=>[...document.querySelectorAll(".camera-controls,.toolbar,.system,.hud")].some(e=>{const r=e.getBoundingClientRect();return r.left<0||r.right>innerWidth+1})),false)
+  assert.equal(await page.evaluate(()=>[...document.querySelectorAll(".toolbar,.hud,.fold-buttons")].some(e=>{const r=e.getBoundingClientRect();return r.left<0||r.right>innerWidth+1})),false)
   facts.phoneViewport=true
   await tool("homes")
   const touch=await page.context().newCDPSession(page),beforeTouch=await snapshot(),cameraBefore=await page.evaluate(()=>window.town.view.stats())
@@ -177,8 +179,10 @@ try {
   assert.notEqual(cameraAfter.heading,cameraBefore.heading)
   facts.touchPinchRotateDoesNotBuild=true
   await tool("select")
-  await page.getByRole("button",{name:"Reset camera",exact:true}).click()
+  await page.locator(".toolbar .more").click()
+  await page.getByRole("button",{name:"recentre",exact:true}).click()
   await capture("phone")
+  await page.setViewportSize({width:1440,height:1000})
   // A saved term that has ended still opens the existing reckoning UI.
   const ended=structuredClone(grown)
   ended.world.resources["Town/Fate"]={...ended.world.resources["Town/Fate"],state:"over",reason:"The term has ended.",at:ended.world.resources["Town/Time"].tick}

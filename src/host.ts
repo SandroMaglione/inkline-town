@@ -186,19 +186,25 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const alarm = el("div", "card alarm")
   // The town ticker: what needs looking at now, and the latest news.
   const ticker = el("div", "card ticker")
-  hud.append(bar, stock, request, alarm, ticker)
+  // The top line: the clock and treasury (on a phone, the people and a chip of the building goods beside them).
+  const topline = el("div", "topline")
+  const goodsChip = el("button", "card goods-chip")
+  goodsChip.title = "The goods in storage"
+  topline.append(bar, goodsChip)
+  hud.append(topline, stock, request, alarm, ticker)
   const people = el("div", "hud right")
-  const folk = el("div", "card bar")
+  const folk = el("div", "card bar folk")
   const approval = el("div", "cell")
   const settlerCell = el("div", "cell")
   const citizenCell = el("div", "cell")
   const jobs = el("div", "cell jobs")
   folk.append(approval, settlerCell, citizenCell, jobs)
   people.append(folk)
-  people.title = "Open the town's numbers, goals, and levers (T)"
-  people.onclick = () => toggleMenu("town")
+  folk.title = "Open the town's numbers, goals, and levers (T)"
+  folk.onclick = () => toggleMenu("town")
   /** Points the page at a place: the camera goes there, it is outlined for a moment, and (when it is a thing) it is selected. */
   const goTo = (at: { readonly x: number; readonly y: number }, size: number, id: number | null) => {
+    setFold(null)
     stage.focus(at.x + size / 2, at.y + size / 2)
     ui.flash = { cell: { x: at.x, y: at.y }, size, until: Date.now() + 4000 }
     if (id !== null) {
@@ -231,7 +237,58 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   // Map views, and the legend of the one shown.
   const views = el("div", "views")
   const legend = el("div", "card legend")
-  document.body.append(hud, people, tooltip, toastBox, toolbar, system, panel, result, dialog, confirmBox, reckoning, shareBox, visitBar, views, legend)
+  // A phone's buttons for what stays folded away: the guide and the map views.
+  const foldButtons = el("div", "fold-buttons")
+  const guideBulb = el("button", "card")
+  guideBulb.title = "The guide, and what needs looking at now"
+  const guideBadge = el("span", "badge")
+  guideBulb.append(iconEl("hint", 16), guideBadge)
+  const layersButton = el("button", "card")
+  layersButton.title = "Map overlays"
+  layersButton.append(iconEl("layers", 16))
+  foldButtons.append(guideBulb, layersButton)
+  document.body.append(hud, people, tooltip, toastBox, toolbar, system, panel, result, dialog, confirmBox, reckoning, shareBox, visitBar, views, legend, foldButtons)
+
+  // ── Phones: the HUD folds away ──
+  // On a small screen only the top line and the tool bar stay out; the goods,
+  // the guide, the map views, and the system buttons each open on a tap, one
+  // at a time, and a tap on the map folds them again.
+  const phone = window.matchMedia("(max-width: 760px), (max-height: 500px)")
+  type Fold = "goods" | "guide" | "views" | "more"
+  let fold: Fold | null = null
+  const setFold = (next: Fold | null) => {
+    fold = next
+    for (const f of ["goods", "guide", "views", "more"] as const) document.body.classList.toggle(`fold-${f}`, f === next)
+    goodsChip.classList.toggle("on", next === "goods")
+    guideBulb.classList.toggle("on", next === "guide")
+    layersButton.classList.toggle("on", next === "views" || ui.view !== "none")
+    moreButton.classList.toggle("on", next === "more")
+    if (next !== null) {
+      ticker.classList.remove("peek")
+      // The panel and a fold would cover each other: the fold wins.
+      if (ui.menu !== null || ui.selected !== null) {
+        ui.menu = null
+        ui.selected = null
+        refreshTools()
+      }
+    }
+  }
+  const toggleFold = (f: Fold) => setFold(fold === f ? null : f)
+  goodsChip.onclick = (event) => {
+    event.stopPropagation()
+    toggleFold("goods")
+  }
+  guideBulb.onclick = () => toggleFold("guide")
+  layersButton.onclick = () => toggleFold("views")
+  mount.addEventListener("pointerdown", () => {
+    if (fold !== null) setFold(null)
+  })
+  // The people's card joins the top line on a phone, and goes back to the top right on a wider screen.
+  const placeFolk = () => {
+    if (phone.matches) topline.insertBefore(folk, goodsChip)
+    else people.append(folk)
+    if (!phone.matches) setFold(null)
+  }
 
   let toastTimer = 0
   const ui: UiValue = {
@@ -298,6 +355,11 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   townButton.title = "The town's goals, numbers, taxes, and trade (T)"
   townButton.append(iconEl("town", 22), el("span", "", "town"), el("kbd", "", "T"))
   townButton.onclick = () => toggleMenu("town")
+  // Everything the bottom-right buttons do, folded into one menu on a phone.
+  const moreButton = el("button", "more")
+  moreButton.title = "Share, the guide, save, load, new town"
+  moreButton.append(iconEl("more"))
+  moreButton.onclick = () => toggleFold("more")
   const toolGroup = el("div", "group")
   toolbar.append(townButton, toolGroup)
   const buttons = tools.map((tool) => {
@@ -323,11 +385,19 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     speedGroup.append(button)
     return { speed, button }
   })
+  // A phone has room for one speed button: it runs a paused town, else goes on to the next speed.
+  const cycle = el("button", "cycle")
+  cycle.title = "Change speed: 1×, 2×, 4×"
+  cycle.onclick = () => setSpeed(ui.speed === 0 ? lastSpeed : ui.speed === 4 ? 1 : ui.speed * 2)
+  speedGroup.append(cycle)
+  toolbar.append(moreButton)
   let lastSpeed = 1
   const setSpeed = (speed: number) => {
     if (speed > 0) lastSpeed = speed
     ui.speed = speed
     for (const s of speeds) s.button.classList.toggle("on", s.speed === speed)
+    cycle.textContent = `${speed === 0 ? lastSpeed : speed}×`
+    cycle.classList.toggle("paused", speed === 0)
   }
   setSpeed(1)
 
@@ -354,6 +424,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const setView = (view: View) => {
     ui.view = view
     for (const v of viewEls) v.button.classList.toggle("on", v.view === view)
+    // On a phone the list folds away once one is chosen, so the map shows.
+    if (fold === "views") setFold(null)
+    layersButton.classList.toggle("on", view !== "none")
   }
   // Share, the guide, save, load, and new town: a row of icons in the bottom
   // right. Founding or loading replaces the town, so each asks first.
@@ -384,6 +457,15 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       openCharter(true)
     )
   )
+  // A phone has no camera bar: this puts the camera back.
+  action("view", "recentre", "Back to the original angle and centre", () => stage.resetCamera())
+  system.lastElementChild!.classList.add("phone-only")
+  // A choice from the menu folds it.
+  system.addEventListener("click", () => {
+    if (fold === "more") setFold(null)
+  })
+  placeFolk()
+  phone.addEventListener("change", placeFolk)
 
   /** Asks before something that replaces the town: save first, go ahead, or stay. */
   const confirmLeave = (title: string, text: string, go: string, run: () => void) => {
@@ -433,6 +515,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     refreshTools()
   }
   const toggleMenu = (menu: "build" | "town") => {
+    setFold(null)
     ui.menu = ui.menu === menu ? null : menu
     if (ui.menu) ui.selected = null
     refreshTools()
@@ -1565,6 +1648,8 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   let tickerLines: { guide: Stats["guide"]["step"]; alerts: Stats["alerts"]; news: Stats["chronicle"] } = { guide: null, alerts: [], news: [] }
   ticker.onclick = (event) => {
     event.stopPropagation()
+    // On a phone the peeking line opens the guide in full.
+    if (ticker.classList.contains("peek")) return setFold("guide")
     const target = event.target as HTMLElement
     const off = target.closest<HTMLElement>("[data-dismiss]")
     if (off) {
@@ -1608,6 +1693,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
 
   /** The last chronicle line announced. */
   let lastNews = ""
+  /** The guide step last shown, and the timer that hides its peek. */
+  let lastStep = ""
+  let peekTimer = 0
   /** Copies the town's numbers and preview into the page, once a frame. */
   const syncPage = () => {
     syncPanel()
@@ -1634,6 +1722,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       jobs.title = short > 0
         ? `Workers at work over workers needed. ${short} workplace${short > 1 ? "s are" : " is"} short: ${s.shortStaffed.slice(0, 5).map((w) => `${w.title} ${w.assigned}/${w.needed}${w.nobodyNear ? " (no homes within 15 road cells)" : ""}`).join(", ")}. Click to visit them in turn.`
         : "Workers at work over workers needed: every workplace has its crew. Residents walk at most 15 road cells to work."
+      const chipHtml = (["planks", "stone", "tools"] as const)
+        .map((g) => `<span class="${s.stock[g] === 0 ? "short" : ""}">${goodIcon(g, 14)}${s.stock[g]}</span>`)
+        .join("")
+      if (goodsChip.dataset.html !== chipHtml) {
+        goodsChip.dataset.html = chipHtml
+        goodsChip.innerHTML = chipHtml
+      }
       for (const [g, count] of goodCells) {
         count.textContent = String(s.stock[g])
         count.parentElement!.classList.toggle("empty", s.stock[g] === 0)
@@ -1714,6 +1809,20 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       guideButton.classList.toggle("on", !s.guide.off)
       guideButton.title = s.guide.off ? "Turn the guide back on: a next step to take, and why, at the top of the ticker" : "Turn the guide off"
       ticker.classList.toggle("show", tickerHtml !== "" && s.fate.state === "playing")
+      // The phone's guide button: the step it is on, or how many things need looking at.
+      const bad = alerts.some((a) => a.tone === "bad")
+      const badge = g ? `${s.guide.done + 1}/${s.guide.total}` : alerts.length > 0 ? String(alerts.length) : ""
+      if (guideBadge.textContent !== badge) guideBadge.textContent = badge
+      guideBulb.classList.toggle("alert", bad)
+      // A new step peeks out above the tool bar for a few seconds.
+      const stepKey = g?.key ?? ""
+      // Not behind the town picker: the step waits until the town is founded.
+      if (stepKey !== lastStep && !ui.founding) {
+        lastStep = stepKey
+        window.clearTimeout(peekTimer)
+        ticker.classList.toggle("peek", stepKey !== "" && phone.matches && fold === null)
+        if (stepKey !== "") peekTimer = window.setTimeout(() => ticker.classList.remove("peek"), 7000)
+      }
       // News as it happens: a toast for each new alarm line.
       const latest = s.chronicle.at(-1)
       const seen = `${s.charter.seed}|${latest?.tick ?? -1}|${s.chronicle.length}`
