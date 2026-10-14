@@ -57,7 +57,7 @@ import { emptyPreview } from "./ui.ts"
 import { GameScene, type CameraView } from "./render3d/scene.ts"
 import { blobOf, cardFacts, drawCard, metaOf, scaled, verdictOf } from "./share/card.ts"
 import { handheld, offerLink, offerPicture, upload } from "./share/client.ts"
-import { PICTURE_HEIGHT, PICTURE_WIDTH } from "./share/format.ts"
+import { PICTURE_HEIGHT, PICTURE_QUALITY, PICTURE_WIDTH } from "./share/format.ts"
 import { MapInput } from "./render3d/input.ts"
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
@@ -1373,7 +1373,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       link.disabled = true
       link.lastChild!.textContent = "Making a link…"
       try {
-        const small = await blobOf(scaled(card, PICTURE_WIDTH, PICTURE_HEIGHT), "image/jpeg", 0.86)
+        const small = await blobOf(scaled(card, PICTURE_WIDTH, PICTURE_HEIGHT), "image/jpeg", PICTURE_QUALITY)
         const made = await upload(persistence().shareFile(stage.view()), small, metaOf(facts))
         link.remove()
         const field = document.createElement("input")

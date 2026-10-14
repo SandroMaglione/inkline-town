@@ -280,7 +280,7 @@ and `towns/<id>.picture`:
 
 | route | does |
 |---|---|
-| `POST /api/towns` | checks the town is gzip under 400 KB, the picture a JPEG/PNG/WebP under 600 KB, and the lines short and plain; keeps them under a new id |
+| `POST /api/towns` | checks the town is gzip under 100 KB, the picture a JPEG/PNG/WebP under 500 KB, and the lines short and plain; keeps them under a new id |
 | `GET /api/towns/<id>` and `/picture` | the files as kept, cached for a year (shares never change) |
 | `GET /t/<id>` | the game's `index.html` with the share's Open Graph and Twitter tags written in, so links unfurl to the card |
 
