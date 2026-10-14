@@ -38,6 +38,7 @@ import {
   sizes,
   TAX_STEPS,
   TERMS,
+  YEARS_PER_TERM,
   type Category,
   type CharterValue,
   type GoodId,
@@ -120,8 +121,15 @@ export interface Persistence {
   readonly shareFile: (camera: CameraView) => string
 }
 
-/** `shared`: the page opened on a shared town's link, so it loads that rather than asking for a charter. */
-export const createHost = async (mount: HTMLElement, persistence: () => Persistence, options: { readonly shared?: boolean } = {}) => {
+/**
+ * `shared`: the page opened on a shared town's link, so it loads that rather than asking for a charter.
+ * `saved`: the newest town saved in this browser, which the first charter offers to carry on with.
+ */
+export const createHost = async (
+  mount: HTMLElement,
+  persistence: () => Persistence,
+  options: { readonly shared?: boolean; readonly saved?: { readonly title: string; readonly savedAt: number } | null } = {}
+) => {
   const app = new Application()
   // Pixi remains an offscreen thumbnail renderer for the unchanged menus.
   await app.init({ width: 64, height: 64, antialias: true, resolution: 2, autoStart: false, backgroundAlpha: 0 })
@@ -288,11 +296,27 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     event.stopPropagation()
     toggleFold("goods")
   }
+  // The treasury opens the same minute the goods do.
+  coins.onclick = (event) => {
+    event.stopPropagation()
+    if (phone.matches) toggleFold("goods")
+    else flowCard.classList.toggle("open")
+  }
   guideBulb.onclick = () => toggleFold("guide")
   layersButton.onclick = () => toggleFold("views")
-  mount.addEventListener("pointerdown", () => {
-    if (fold !== null) setFold(null)
+  // A tap on the map folds them; a pan or a pinch, to look around with the goods or the guide open, does not.
+  let mapPress: { id: number; x: number; y: number; moved: boolean } | null = null
+  mount.addEventListener("pointerdown", (e) => {
+    mapPress = mapPress === null && e.isPrimary ? { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false } : null
   })
+  mount.addEventListener("pointermove", (e) => {
+    if (mapPress?.id === e.pointerId && Math.hypot(e.clientX - mapPress.x, e.clientY - mapPress.y) > 8) mapPress.moved = true
+  })
+  mount.addEventListener("pointerup", (e) => {
+    if (mapPress?.id === e.pointerId && !mapPress.moved && fold !== null) setFold(null)
+    if (mapPress?.id === e.pointerId) mapPress = null
+  })
+  mount.addEventListener("pointercancel", () => (mapPress = null))
   // The people's card joins the top line on a phone, and goes back to the top right on a wider screen.
   const placeFolk = () => {
     if (phone.matches) topline.insertBefore(folk, goodsChip)
@@ -390,8 +414,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   ].map(({ speed, label, key }) => {
     const button = el("button", speed === 0 ? "pause" : "", label)
     if (speed === 0) button.append(iconEl("pause", 14))
-    button.title = speed === 0 ? "Pause the town (space)" : `Run the town at ${label} (${key})`
-    button.onclick = () => setSpeed(speed)
+    button.title = speed === 0 ? "Pause the town, or run it again (space)" : `Run the town at ${label} (${key})`
+    // Pause is a switch: pressed again it runs the town at its last speed.
+    button.onclick = () => setSpeed(speed === 0 && ui.speed === 0 ? lastSpeed : speed)
     speedGroup.append(button)
     return { speed, button }
   })
@@ -406,8 +431,12 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     if (speed > 0) lastSpeed = speed
     ui.speed = speed
     for (const s of speeds) s.button.classList.toggle("on", s.speed === speed)
+    // Paused, the pause button shows play.
+    const pause = speeds[0]!.button
+    pause.replaceChildren(iconEl(speed === 0 ? "play" : "pause", 14))
+    pause.setAttribute("aria-label", speed === 0 ? "Run the town" : "Pause the town")
     cycle.textContent = `${speed === 0 ? lastSpeed : speed}×`
-    cycle.classList.toggle("paused", speed === 0)
+    cycle.title = speed === 0 ? `Run the town at ${lastSpeed}×` : "Change speed: 1×, 2×, 4×"
   }
   setSpeed(1)
 
@@ -564,7 +593,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     if (event.key === "2") setSpeed(2)
     if (event.key === "3") setSpeed(4)
     if (event.key === "Escape") {
-      if (ui.tool !== "select") choose("select")
+      // A stroke being drawn or held is dropped first; the tool stays.
+      if (ui.dragFrom) input.cancelStroke()
+      else if (ui.tool !== "select") choose("select")
       else if (ui.menu) ui.menu = null
       else ui.selected = null
       refreshTools()
@@ -1291,6 +1322,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   }
 
   // ── Founding a town ──
+  const savedTown = options.saved ?? null
   const choice: { -readonly [K in keyof CharterValue]: CharterValue[K] } = defaultCharter((Date.now() & 0x7fffffff) >>> 0)
   /** The land a charter would found, drawn small: a dot a cell. */
   const drawLand = (canvas: HTMLCanvasElement) => {
@@ -1324,35 +1356,45 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   const openCharter = (cancellable: boolean) => {
     ui.founding = true
     dialog.replaceChildren()
-    const card = el("div", "sheet")
-    card.append(
-      el("h2", "", "found a town"),
-      el(
-        "p",
-        "sub",
-        "Choose the land and how long the term runs. Grow the town until it is complete, or keep it from bankruptcy, revolt, and ruin until the term is out."
-      )
-    )
+    const card = el("div", "sheet wide")
+    const title = el("h2", "title", "Inkline Town ")
+    const by = el("small", "by", "by ")
+    const author = el("a", "", "Sandro Maglione") as HTMLAnchorElement
+    author.href = "https://www.sandromaglione.com/"
+    author.target = "_blank"
+    author.rel = "noopener"
+    by.append(author)
+    title.append(by)
+    card.append(title, el("p", "sub", "Pick the land, then grow the town to its goal before the term runs out."))
     const body = el("div", "charter")
     const options = el("div", "")
     const preview = el("div", "preview")
+    const mapBox = el("div", "map")
     const map = document.createElement("canvas")
-    const facts = el("p", "sub")
-    preview.append(map, facts)
+    mapBox.append(map)
+    const facts = el("p", "note facts")
+    const cells = el("span", "ref ware cells")
+    mapBox.append(cells)
+    preview.append(mapBox, facts)
     body.append(options, preview)
+    /** A figure of the charter as the town's messages name things: an icon and a few words. */
+    const chip = (glyph: IconName, text: string) => `<span class="ref ware">${icon(glyph, 13)}${escapeHtml(text)}</span>`
     const group = <T extends string | number>(
       title: string,
+      glyph: IconName,
       values: ReadonlyArray<T>,
       label: (v: T) => string,
-      blurb: (v: T) => string,
+      note: (v: T) => string,
+      tip: (v: T) => string,
       get: () => T,
       set: (v: T) => void
     ) => {
-      const box = section(title)
+      const box = section(title, glyph)
       const row = el("div", "choices")
-      const note = el("p", "empty")
+      const said = el("p", "note")
       const buttons = values.map((v) => {
         const b = el("button", "frame choice", label(v))
+        b.title = tip(v)
         b.onclick = () => {
           set(v)
           refresh()
@@ -1360,57 +1402,63 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         row.append(b)
         return { v, b }
       })
-      box.append(row, note)
+      box.append(row, said)
       options.append(box)
       return () => {
         for (const { v, b } of buttons) b.classList.toggle("on", v === get())
-        note.textContent = blurb(get())
+        setHtml(said, note(get()))
       }
     }
     const refreshers = [
       group(
         "land",
+        "pave",
         sizeIds,
         (v) => sizes[v].title,
-        (v) => `${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins to complete it`,
+        (v) => `goal ${chip("people", `${sizes[v].goal.residents} residents`)}${chip("coins", `${sizes[v].goal.coins} coins`)}`,
+        (v) => `Complete the town with ${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins`,
         () => choice.size,
         (v) => (choice.size = v)
       ),
       group(
         "term",
+        "clock",
         TERMS,
         (v) => `${v} min`,
-        (v) => `${v} minutes of the town at 1×: six years, a winter at the end of each after the first`,
+        (v) => `${chip("clock", `${YEARS_PER_TERM} years of ${Number((v / YEARS_PER_TERM).toFixed(1))} min`)}${chip("winter", `${YEARS_PER_TERM - 1} winters`)}`,
+        (v) => `${v} minutes at 1×: ${YEARS_PER_TERM} years, a winter at the end of each after the first`,
         () => choice.term,
         (v) => (choice.term = v)
       ),
       group(
         "richness",
+        "wood",
         landIds,
         (v) => lands[v].title,
+        (v) => chip("coins", `${lands[v].coins} coins to start`),
         (v) => lands[v].blurb,
         () => choice.land,
         (v) => (choice.land = v)
       )
     ]
-    const seedLine = el("div", "row")
-    const seedText = el("span", "")
-    const reroll = el("button", "frame", "other land")
+    // The land is drawn from a seed: a fresh one on a click; the number itself only on hover, for whoever wants it.
+    const reroll = el("button", "frame reroll", "↻ other land")
     reroll.onclick = () => {
       choice.seed = (Math.random() * 0x7fffffff) >>> 0
       refresh()
     }
-    seedLine.append(seedText, reroll)
-    preview.append(seedLine)
+    mapBox.append(reroll)
     const refresh = () => {
       for (const r of refreshers) r()
       const land = drawLand(map)
-      seedText.textContent = `seed ${choice.seed}`
-      facts.textContent = `${land.cells} cells of land · ${land.trees.length} trees · ${land.rocks.filter((r) => !r.ore).length} stone · ${land.rocks.filter((r) => r.ore).length} ore · ${lands[choice.land].coins} coins to start`
+      reroll.title = `Draw other land (this is seed ${choice.seed})`
+      const rocks = land.rocks.filter((r) => !r.ore).length
+      setHtml(cells, `${icon("pave", 13)}${land.cells} cells`)
+      setHtml(facts, chip("wood", `${land.trees.length} trees`) + chip("stone", `${rocks} stone`) + chip("ore", `${land.rocks.length - rocks} ore`))
     }
     refresh()
     const actions = el("div", "actions")
-    const found = el("button", "frame primary", "Found the town")
+    const found = el("button", "frame primary", "Start new")
     found.onclick = () => {
       if (visiting) endVisit()
       ui.edits.push({ type: "newTown", charter: { ...choice } })
@@ -1423,6 +1471,24 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       setSpeed(1)
     }
     actions.append(found)
+    // On the way in, a town saved in this browser: carry on with it instead.
+    if (!cancellable && savedTown) {
+      const saved = savedTown
+      const resume = el("button", "frame", "Continue saved")
+      resume.title = `Carry on with the town saved in this browser: ${saved.title}${saved.savedAt > 0 ? `, saved ${ago(saved.savedAt)}` : ""}`
+      resume.onclick = () => {
+        const said = persistence().load() ?? "Loaded"
+        ui.toast(said)
+        if (!said.startsWith("Loaded")) return
+        history.length = 0
+        ui.selected = null
+        ui.menu = null
+        closeCharter()
+        choose("select")
+        setSpeed(1)
+      }
+      actions.append(resume)
+    }
     if (cancellable) {
       const cancel = el("button", "frame", "Cancel")
       cancel.onclick = () => closeCharter()
@@ -1667,6 +1733,15 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   }
 
   const input = new MapInput(stage, ui)
+  // A road, a row of homes, or a patch of park let go of on a touch screen is held here until built or
+  // dropped; the tooltip says what it lays and costs.
+  const strokeBar = el("div", "stroke-bar")
+  const strokeBuild = el("button", "primary", "Build")
+  strokeBuild.onclick = () => input.confirmStroke()
+  const strokeDrop = el("button", "", "Cancel")
+  strokeDrop.onclick = () => input.cancelStroke()
+  strokeBar.append(strokeDrop, strokeBuild)
+  document.body.append(strokeBar)
   const resetPage = () => {
     choose("select")
     ui.menu = null
@@ -1732,8 +1807,18 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     syncPanel()
     const s = ui.stats
     if (s) {
-      setHtml(coins, `${icon("coins", 20)}<span class="stack"><b>${s.coins}</b><small class="${s.net >= 0 ? "up" : "down"}">${s.net >= 0 ? "+" : ""}${s.net}/min</small></span>`)
-      coins.title = "Coins in the treasury, and what it gains (or loses) a minute"
+      // The treasury as the goods are shown: which way it went over the last minute, and by how much; the steady rate until a minute is counted.
+      const cf = s.flow?.coins ?? null
+      const change = cf ? cf.made + cf.traded - cf.used : s.net
+      const way = cf ? trendOf(cf.made, cf.used, cf.traded) : 0
+      setHtml(
+        coins,
+        `${icon("coins", 20)}<span class="stack"><b>${s.coins}${cf ? `<span class="trend ${trendClass(way)}">${trendMark(way)}</span>` : ""}</b>` +
+          `<small class="${change >= 0 ? "up" : "down"}">${change >= 0 ? "+" : ""}${change}/min</small></span>`
+      )
+      coins.title = cf
+        ? `Coins in the treasury · click for the town's last minute\nLast minute: ${signed(change)} (made ${cf.made}, used ${cf.used}${cf.traded !== 0 ? `, traded ${signed(cf.traded)}` : ""})\nAt the current rates: ${signed(s.net)}/min (taxes, trade, upkeep, administration)`
+        : `Coins in the treasury, and what it gains (or loses) a minute at the current rates · click for the town's last minute`
       coins.classList.toggle("debt", s.coins < 0)
       const left = Math.max(0, s.charter.term * 60 - Math.floor(s.minute * 60))
       const severity = (w: typeof s.season.coming) => (w === null ? "" : ` (${winters[w].title})`)
@@ -1742,7 +1827,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         : s.season.coming === null
           ? "no more winters this term"
           : `winter in ${clockText(s.season.left)}${severity(s.season.coming)}`
-      setHtml(clock, `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}</b><small class="${s.season.winter ? "winter" : s.season.coming === "hard" ? "down" : ""}">year ${s.season.year} · ${until}</small></span>`)
+      setHtml(clock, `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}${ui.speed === 0 ? `<span class="paused-tag">paused</span>` : ""}</b><small class="${s.season.winter ? "winter" : s.season.coming === "hard" ? "down" : ""}">year ${s.season.year} · ${until}</small></span>`)
       clock.title = `${s.season.winter ? "Winter: fields lie still, fishing is slow, and homes eat faster" : "Time left in the term"}\nThe almanac: the coming winter is ${s.season.coming === null ? "beyond the term" : winters[s.season.coming].title}, the one after ${s.season.after === null ? "beyond the term" : winters[s.season.after].title}.\nMild: fishing at ${Math.round(winters.mild.fishing * 100)}%. Normal: ${Math.round(winters.normal.fishing * 100)}%. Hard: half as long again, fishing at ${Math.round(winters.hard.fishing * 100)}%, and homes heating are a fire risk.`
       const trend = s.mood.target > s.mood.approval ? "↑" : s.mood.target < s.mood.approval ? "↓" : ""
       setHtml(approval, `${icon("approval", 18)}<span class="stack"><b class="${s.mood.approval < 0 ? "down" : ""}">${signed(s.mood.approval)} <span class="${s.mood.target >= s.mood.approval ? "up" : "down"}">${trend}</span></b><small>approval</small></span>`)
@@ -1772,7 +1857,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
           ? `\nLast minute: made ${s.flow.made[g]}, used ${s.flow.used[g]}${s.flow.traded[g] !== 0 ? `, ${s.flow.traded[g] > 0 ? "bought" : "sold"} ${Math.abs(s.flow.traded[g])}` : ""}. ${s.stock[g]} in storage, ${s.flow.elsewhere[g]} about town (in workshops and markets, and on the way).`
           : "")
       }
-      if (flowCard.classList.contains("open")) setHtml(flowCard, flowHtml(s))
+      // On a phone the goods chip opens the table itself, once there is a minute to show; the plain goods until then.
+      document.body.classList.toggle("flow-ready", s.flow !== null)
+      if (flowCard.classList.contains("open") || (phone.matches && fold === "goods")) setHtml(flowCard, flowHtml(s))
       // The crown's request.
       request.classList.toggle("show", s.crown.open && s.fate.state === "playing")
       if (s.crown.open) {
@@ -1883,8 +1970,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       syncReckoning(s)
     }
     input.sync()
-    const screenPointer = input.pointer
-    const text = ui.preview.tooltip
+    const screenPointer = input.tip
+    // A stroke being drawn says what it lays and costs.
+    const text = ui.dragFrom && ui.stroke !== "cancel" && ui.preview.stroke ? ui.preview.stroke : ui.preview.tooltip
+    // A held touch stroke waits for its build button.
+    const held = ui.stroke === "held" && ui.preview.stroke !== null
+    strokeBar.classList.toggle("open", held)
+    document.body.classList.toggle("stroke-held", held)
     if (text && screenPointer) {
       tooltip.textContent = text
       tooltip.style.display = "block"
@@ -1896,12 +1988,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   return { app, stage, ui, syncPage, resetPage, input, visit, visitFailed, visiting: () => visiting }
 }
 
-/** Which way a good went over the last minute: made and bought against used and sold, past a tenth of the traffic either way. */
-const flowTrend = (flow: NonNullable<Stats["flow"]>, g: GoodId): number => {
-  const net = flow.made[g] + flow.traded[g] - flow.used[g]
-  const room = Math.max(1, Math.round((flow.made[g] + flow.used[g] + Math.abs(flow.traded[g])) / 10))
+/** Which way a good (or the treasury) went over the last minute: made and bought against used and sold, past a tenth of the traffic either way. */
+const trendOf = (made: number, used: number, traded: number): number => {
+  const net = made + traded - used
+  const room = Math.max(1, Math.round((made + used + Math.abs(traded)) / 10))
   return net > room ? 1 : net < -room ? -1 : 0
 }
+const flowTrend = (flow: NonNullable<Stats["flow"]>, g: GoodId): number => trendOf(flow.made[g], flow.used[g], flow.traded[g])
 
 /** A good's way over the last minute: up, down, or holding steady. */
 const trendMark = (way: number) => (way > 0 ? "↑" : way < 0 ? "↓" : "→")
@@ -1912,14 +2005,30 @@ const flowHtml = (s: Stats): string => {
   const f = s.flow
   if (f === null) return `<p class="sub">Counting the town's goods: the first numbers come in half a minute…</p>`
   const rows = goodIds.filter((g) => f.made[g] + f.used[g] + Math.abs(f.traded[g]) + s.stock[g] + f.elsewhere[g] > 0)
-  if (rows.length === 0) return `<p class="sub">Nothing made or used yet.</p>`
   const head = `<span></span><b title="Made by workshops and gatherers over the last minute">made</b><b title="Eaten, worked up, built with, rotted, or sent away over the last minute">used</b><b title="Bought (+) or sold (−) over the last minute">traded</b><b title="In the town hall, warehouses, and granaries">storage</b><b title="In workshops and markets, walkers' baskets, and carriers' crates">about town</b>`
   const cell = (n: number) => `<span>${n === 0 ? `<i>–</i>` : n}</span>`
-  const body = rows.map((g) => {
+  const signedCell = (n: number) => `<span>${n === 0 ? `<i>–</i>` : n > 0 ? `+${n}` : `−${-n}`}</span>`
+  // The treasury first: taxes and rewards made, upkeep and building used, trade's coins; it is all in storage.
+  const c = f.coins
+  const way = trendOf(c.made, c.used, c.traded)
+  const treasury = `<span class="name" title="coins">${icon("coins", 14)}<span class="label">coins</span><span class="trend ${trendClass(way)}">${trendMark(way)}</span></span>` +
+    `${cell(c.made)}${cell(c.used)}${signedCell(c.traded)}${cell(s.coins)}<span><i>–</i></span>`
+  const body = treasury + rows.map((g) => {
     const way = flowTrend(f, g)
     const traded = f.traded[g] === 0 ? `<i>–</i>` : f.traded[g] > 0 ? `+${f.traded[g]}` : `−${-f.traded[g]}`
-    return `<span class="name">${goodIcon(g, 14)}${goods[g].title}<span class="trend ${trendClass(way)}">${trendMark(way)}</span></span>` +
+    return `<span class="name" title="${goods[g].title}">${goodIcon(g, 14)}<span class="label">${goods[g].title}</span><span class="trend ${trendClass(way)}">${trendMark(way)}</span></span>` +
       `${cell(f.made[g])}${cell(f.used[g])}<span>${traded}</span>${cell(s.stock[g])}${cell(f.elsewhere[g])}`
   }).join("")
   return `<div class="flow-grid">${head}${body}</div>`
+}
+
+/** How long ago a save was made, roughly: "just now", "12 min ago", "3 h ago", "2 days ago". */
+const ago = (at: number): string => {
+  const minutes = Math.floor((Date.now() - at) / 60000)
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} h ago`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? "yesterday" : `${days} days ago`
 }

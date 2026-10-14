@@ -36,7 +36,17 @@
   /* The goods: folded into the chip; open, every good in a wrapped card under the top line. */
   .hud .stock { display: none; }
   .hud .flow.open { display: none; }
-  .fold-goods .hud .flow.open { display: flex; max-width: min(430px, 100%); }
+  /* Once the town has a minute of goods to show, the chip opens the table straight away: storage is a column of it. */
+  .fold-goods.flow-ready .hud .stock { display: none; }
+  .fold-goods.flow-ready .hud .flow {
+    display: flex; box-sizing: border-box; width: min(430px, 100%); padding: 4px 10px 6px;
+    max-height: calc(100dvh - 190px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto;
+  }
+  /* Narrow: a good by its icon alone, the numbers close. */
+  .hud .flow .flow-grid { grid-template-columns: auto repeat(5, minmax(0, 1fr)); font-size: 12px; }
+  .hud .flow .flow-grid > * { padding: 5px 0 5px 6px; }
+  .hud .flow .flow-grid > b { font-size: 10px; white-space: normal; line-height: 1.2; align-self: end; }
+  .hud .flow .name .label { display: none; }
   .fold-goods .hud .stock { display: flex; flex-wrap: wrap; gap: 4px 0; padding: 5px; max-width: min(430px, 100%); }
   .hud .stock .group { flex-wrap: wrap; gap: 3px; padding: 0 3px; }
   .hud .good { gap: 4px; padding: 3px 7px 3px 4px; }
@@ -107,7 +117,6 @@
   .toolbar .speed { gap: 1px; }
   .toolbar .speed button:not(.pause):not(.cycle) { display: none; }
   .toolbar .speed button.cycle { display: flex; font-size: 12px; font-weight: 700; min-width: 38px; }
-  .toolbar .speed button.cycle.paused { color: #9aa29b; }
   .toolbar button.more { display: flex; }
   .toolbar button.more.on { background: #3d4943; }
   .toolbar button.more.on .icon circle { fill: #f7f8f4; }
@@ -126,7 +135,10 @@
     font-size: 12px; gap: 10px; padding: 7px 12px 7px 9px; min-height: 34px; justify-content: flex-start; color: #3d4943;
   }
 
-  .toast { bottom: calc(100px + env(safe-area-inset-bottom)); max-width: calc(100vw - 28px); white-space: normal; text-align: center; }
+  .toast { bottom: calc(108px + env(safe-area-inset-bottom)); max-width: calc(100vw - 28px); white-space: normal; text-align: center; }
+  .stroke-bar { bottom: calc(56px + env(safe-area-inset-bottom)); }
+  /* A held stroke's buttons take the guide's place above the tool bar. */
+  .stroke-held .hud .ticker.peek { display: none; }
 
   /* ── Dialogs: the whole screen, the body scrolling, the actions pinned to the bottom ── */
   .dialog { padding: 0; }
@@ -146,11 +158,13 @@
   }
   .dialog .sheet > .actions .frame { flex: 1; justify-content: center; padding: 10px 12px; }
   .dialog .sheet > .actions .frame.primary { flex: 2; }
+  /* Room under the last of the content, so it never ends tucked against the buttons. */
+  .dialog .charter { padding-bottom: 18px; }
   .dialog h2 { font-size: 17px; }
   .dialog .sub { font-size: 12px; }
   .dialog section { margin-top: 12px; }
+  .dialog .charter section { margin-top: 18px; }
   .dialog .choices .frame { flex: 1; justify-content: center; padding: 8px 6px; }
-  .dialog .preview canvas { width: 132px; height: 132px; }
   .dialog .chronicle { max-height: none; }
 }
 
@@ -165,7 +179,7 @@
   .panel-open .toolbar { left: calc(8px + env(safe-area-inset-left)); transform: none; max-width: calc(54vw - 16px); }
   .panel-open .hud .ticker.peek { display: none; }
   /* The picker: the options beside the map. */
-  .dialog .charter { grid-template-columns: 1fr 150px; gap: 16px; }
+  .dialog .charter { grid-template-columns: 1fr min(42%, 300px); gap: 16px; }
 }
 
 /* ── Portrait phone: sheets from the bottom, so the town stays in view above them ── */
@@ -184,10 +198,10 @@
   .panel::before { content: ""; position: absolute; top: 8px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: #c9cec4; }
   .panel.open { transform: none; }
   .panel-open .hud .stock, .panel-open .hud .ticker, .panel-open .views, .panel-open .legend { display: none; }
+  /* The land first, the full width of the sheet; the choices under it. */
   .dialog .charter { grid-template-columns: 1fr; gap: 0; }
-  .dialog .preview { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 12px; }
-  .dialog .preview .sub { flex: 1; min-width: 0; margin: 0; }
-  .dialog .preview .row { flex-basis: 100%; }
+  .dialog .preview { order: -1; gap: 6px; margin-top: 4px; }
+  .dialog .preview .sub { margin: 0; }
 }
 
 /* A very narrow phone: the tool bar's buttons a little narrower so it still fits. */
@@ -201,12 +215,14 @@
   /* No hover, so no key hints. */
   .toolbar button kbd, .views button kbd { display: none; }
   .panel .close { min-width: 40px; min-height: 40px; }
-  /* The build hint follows no finger: it sits in one place above the tool bar. */
+  /* The build hint follows no finger: a thin strip the width of the screen, under the top line, clear of the town in the middle. */
   .tooltip {
-    left: 10px !important; right: 10px; top: auto !important; bottom: calc(100px + env(safe-area-inset-bottom));
-    transform: none; white-space: normal; text-align: center; font-size: 12px; line-height: 1.4;
+    left: 0 !important; right: 0; top: calc(52px + env(safe-area-inset-top)) !important; transform: none;
+    white-space: normal; text-align: center; font-size: 9.5px; line-height: 1.3; padding: 3px 8px;
+    background: rgba(47, 70, 57, 0.8); border-radius: 0;
   }
 }
-@media (pointer: coarse) and (max-height: 500px) {
-  .tooltip { left: 25% !important; right: 25%; }
+/* A portrait phone's top line takes two rows: the hint goes under both. */
+@media (pointer: coarse) and (max-width: 760px) and (min-height: 501px) {
+  .tooltip { top: calc(84px + env(safe-area-inset-top)) !important; }
 }

@@ -103,9 +103,11 @@ export interface Preview {
   /** Bulldozing: the hovered thing is tinted. */
   danger: boolean
   tooltip: string | null
+  /** A road, pave, home, or park stroke being dragged: how much it lays and what it costs. */
+  stroke: string | null
 }
 
-export const emptyPreview = (): Preview => ({ plots: [], ghosts: [], roads: [], range: [], rangeNote: null, parks: [], hover: null, danger: false, tooltip: null })
+export const emptyPreview = (): Preview => ({ plots: [], ghosts: [], roads: [], range: [], rangeNote: null, parks: [], hover: null, danger: false, tooltip: null, stroke: null })
 
 /** The side panel: the build menu, the town's numbers and taxes, a building, or a home. */
 export type Panel =
@@ -252,7 +254,14 @@ export interface Stats {
    * rolling minute, reckoned again every ten seconds; `null` for the
    * first half minute.
    */
-  readonly flow: { readonly made: Amounts; readonly used: Amounts; readonly traded: Amounts; readonly elsewhere: Amounts } | null
+  readonly flow: {
+    readonly made: Amounts
+    readonly used: Amounts
+    readonly traded: Amounts
+    readonly elsewhere: Amounts
+    /** The treasury over the same minute: taxes and other income, upkeep and spending, and trade. */
+    readonly coins: { readonly made: number; readonly used: number; readonly traded: number }
+  } | null
   /** Food the town ate, and food that rotted in store, over the last minute. */
   readonly eaten: number
   readonly rotted: number
@@ -301,6 +310,8 @@ export interface UiValue {
   pointerHit?: number | null
   /** Where a road, a row of homes, or a patch of park being dragged started. */
   dragFrom: Point | null
+  /** The stroke from `dragFrom` is held for a tap to confirm (touch), or let go here it would be dropped (off the map). */
+  stroke?: "held" | "cancel" | null
   selected: number | null
   gestures: Array<Gesture>
   edits: Array<Edit>

@@ -218,6 +218,12 @@ with the town, and starts over with a new one.
   ten seconds. Click the bar for each good's minute side by side: made,
   used, traded, in storage, and about town (in workshops, markets, baskets,
   and crates).
+- **The coins** at the top are counted the same way: the arrow and the
+  figure under them are the treasury's last minute, every coin in and out
+  (taxes and refunds made; upkeep, administration, building, and fines used;
+  trade). Click them for the same table, with the treasury on its first row.
+  The goal of not losing coins goes by the steady rate (taxes, trade, upkeep,
+  administration) shown when you hover over them.
 - **Materials** (planks, stone, tools) come from storage: a new building is a
   site until carriers have brought what it costs, then it goes up.
 - **Homes** fill with settlers once a road touches them. Settlers need food

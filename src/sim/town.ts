@@ -130,8 +130,9 @@ export const Collect = Game.System(
     const admin = adminOf(homes, rules)
 
     const stores = queries.stores.each()
+    const before = resources.treasury.get().coins
     const traded = tradeCollection(stores.map(({ data }) => data.inventory.get()), policy, resources.market.get().prices,
-      resources.treasury.get().coins + baseCollection(taxes, upkeep, homes, rules).delta, rules)
+      before + baseCollection(taxes, upkeep, homes, rules).delta, rules)
     // What changed hands, for the minute's flow of goods: bought less sold.
     const moved: Partial<Record<GoodId, number>> = {}
     for (const [i, row] of stores.entries()) {
@@ -141,6 +142,12 @@ export const Collect = Game.System(
       row.data.inventory.set(traded.stores[i]!)
     }
     if (Object.keys(moved).length > 0) resources.flow.update((f) => ({ ...f, traded: amounts(Object.fromEntries(goodIds.map((g) => [g, f.traded[g] + (moved[g] ?? 0)]))) }))
+    // And the treasury's: the taxes came in, trade changed hands; upkeep and administration are left over as used.
+    const collected = Math.round(taxes * share)
+    resources.flow.update((f) => ({
+      ...f,
+      coins: { ...f.coins, made: f.coins.made + collected, traded: f.coins.traded + traded.traded, booked: f.coins.booked + traded.coins - before }
+    }))
     resources.market.set({ prices: traded.prices })
     resources.treasury.set({ coins: traded.coins })
     resources.ledger.set({ taxes: Math.round(taxes), trade: Math.round(traded.traded / share), upkeep: Math.round(upkeep), admin })
