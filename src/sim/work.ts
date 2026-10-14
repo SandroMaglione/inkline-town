@@ -16,7 +16,7 @@ const FLOW_SLICES = 6
 
 const each = (f: (g: (typeof goodIds)[number]) => number): Amounts => Object.fromEntries(goodIds.map((g) => [g, f(g)])) as Amounts
 import { around, doors, GridBuilder, key, ownerAt, reach, roadPrint, useAt } from "../grid.ts"
-import { Building, Burning, Charter, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Tree, maybe, type Status as StatusValue } from "../schema.ts"
+import { Building, Burning, Charter, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Treasury, Tree, maybe, type Status as StatusValue } from "../schema.ts"
 import { connected, elapsed, seasonAt, TileRead, useOf } from "./shared.ts"
 
 import { assignWorkers, equipmentPace, effort, paced } from "../rules/production.ts"
@@ -75,6 +75,7 @@ export const CountStock = Game.System(
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter),
       stock: Game.System.writeResource(Stock),
+      treasury: Game.System.readResource(Treasury),
       flow: Game.System.writeResource(Flow)
     }
   },
@@ -104,26 +105,39 @@ export const CountStock = Game.System(
     const town = `${charter.seed}:${charter.founded}`
     const f = resources.flow.get()
     const now = held as Amounts
+    const treasury = resources.treasury.get().coins
+    const fresh = { start: treasury, made: 0, traded: 0, seen: treasury, booked: 0 }
     // A new or loaded town, or the clock gone back: start counting again from here.
     if (f.town !== town || tick < f.since || f.start === null) {
-      resources.flow.set({ town, since: tick, start: now, made: amounts({}), traded: amounts({}), held: now, slices: [], last: null })
+      resources.flow.set({ town, since: tick, start: now, made: amounts({}), traded: amounts({}), held: now, coins: fresh, slices: [], last: null })
       return
     }
+    // Coins that came in other than by the collection (a reward, a refund) were made; any that went out are left over as used.
+    const other = treasury - f.coins.seen - f.coins.booked
+    const coins = { ...f.coins, made: f.coins.made + Math.max(0, other), seen: treasury, booked: 0 }
     if (tick - f.since < ticks(FLOW_SLICE)) {
-      resources.flow.set({ ...f, held: now })
+      resources.flow.set({ ...f, held: now, coins })
       return
     }
     // A slice is done: the last minute rolls on by one, and is reckoned again.
-    const slices = [...f.slices, { start: f.start, made: f.made, traded: f.traded }].slice(-FLOW_SLICES)
+    const slices = [...f.slices, { start: f.start, made: f.made, traded: f.traded, coins: { start: coins.start, made: coins.made, traded: coins.traded } }].slice(-FLOW_SLICES)
     const enough = slices.length >= FLOW_SLICES / 2
     const scale = FLOW_SLICES / slices.length
     const over = (key: "made" | "traded") => each((g) => slices.reduce((n, s) => n + s[key][g], 0))
     const made = over("made"), traded = over("traded")
     const used = each((g) => Math.max(0, slices[0]!.start[g] + made[g] + traded[g] - now[g]))
     const perMinute = (a: Amounts) => each((g) => Math.round(a[g] * scale))
+    const coinsMade = slices.reduce((n, s) => n + s.coins.made, 0)
+    const coinsTraded = slices.reduce((n, s) => n + s.coins.traded, 0)
+    const coinsUsed = Math.max(0, slices[0]!.coins.start + coinsMade + coinsTraded - treasury)
     resources.flow.set({
-      town, since: tick, start: now, made: amounts({}), traded: amounts({}), held: now, slices,
-      last: enough ? { made: perMinute(made), used: perMinute(used), traded: perMinute(traded) } : null
+      town, since: tick, start: now, made: amounts({}), traded: amounts({}), held: now, coins: fresh, slices,
+      last: enough
+        ? {
+            made: perMinute(made), used: perMinute(used), traded: perMinute(traded),
+            coins: { made: Math.round(coinsMade * scale), used: Math.round(coinsUsed * scale), traded: Math.round(coinsTraded * scale) }
+          }
+        : null
     })
   }
 )

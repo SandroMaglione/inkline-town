@@ -36,6 +36,10 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .hud .stack .of { font-weight: 400; color: #8a938c; font-size: 12px; }
 .hud .coins b { font-size: 17px; }
 .hud .coins.debt b { color: #b04a39; }
+.hud .coins { cursor: pointer; }
+.hud .coins:hover { background: #eef0ea; }
+/* Which way the treasury went over the last minute, as each good shows it. */
+.hud .coins .trend { margin-left: 4px; font-size: 14px; font-weight: 700; }
 .hud .up { color: #4f8a3e; }
 .hud .down { color: #b04a39; }
 .hud .muted { color: #8a938c; }

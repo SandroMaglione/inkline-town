@@ -296,6 +296,12 @@ export const createHost = async (
     event.stopPropagation()
     toggleFold("goods")
   }
+  // The treasury opens the same minute the goods do.
+  coins.onclick = (event) => {
+    event.stopPropagation()
+    if (phone.matches) toggleFold("goods")
+    else flowCard.classList.toggle("open")
+  }
   guideBulb.onclick = () => toggleFold("guide")
   layersButton.onclick = () => toggleFold("views")
   // A tap on the map folds them; a pan or a pinch, to look around with the goods or the guide open, does not.
@@ -1801,8 +1807,18 @@ export const createHost = async (
     syncPanel()
     const s = ui.stats
     if (s) {
-      setHtml(coins, `${icon("coins", 20)}<span class="stack"><b>${s.coins}</b><small class="${s.net >= 0 ? "up" : "down"}">${s.net >= 0 ? "+" : ""}${s.net}/min</small></span>`)
-      coins.title = "Coins in the treasury, and what it gains (or loses) a minute"
+      // The treasury as the goods are shown: which way it went over the last minute, and by how much; the steady rate until a minute is counted.
+      const cf = s.flow?.coins ?? null
+      const change = cf ? cf.made + cf.traded - cf.used : s.net
+      const way = cf ? trendOf(cf.made, cf.used, cf.traded) : 0
+      setHtml(
+        coins,
+        `${icon("coins", 20)}<span class="stack"><b>${s.coins}${cf ? `<span class="trend ${trendClass(way)}">${trendMark(way)}</span>` : ""}</b>` +
+          `<small class="${change >= 0 ? "up" : "down"}">${change >= 0 ? "+" : ""}${change}/min</small></span>`
+      )
+      coins.title = cf
+        ? `Coins in the treasury · click for the town's last minute\nLast minute: ${signed(change)} (made ${cf.made}, used ${cf.used}${cf.traded !== 0 ? `, traded ${signed(cf.traded)}` : ""})\nAt the current rates: ${signed(s.net)}/min (taxes, trade, upkeep, administration)`
+        : `Coins in the treasury, and what it gains (or loses) a minute at the current rates · click for the town's last minute`
       coins.classList.toggle("debt", s.coins < 0)
       const left = Math.max(0, s.charter.term * 60 - Math.floor(s.minute * 60))
       const severity = (w: typeof s.season.coming) => (w === null ? "" : ` (${winters[w].title})`)
@@ -1972,12 +1988,13 @@ export const createHost = async (
   return { app, stage, ui, syncPage, resetPage, input, visit, visitFailed, visiting: () => visiting }
 }
 
-/** Which way a good went over the last minute: made and bought against used and sold, past a tenth of the traffic either way. */
-const flowTrend = (flow: NonNullable<Stats["flow"]>, g: GoodId): number => {
-  const net = flow.made[g] + flow.traded[g] - flow.used[g]
-  const room = Math.max(1, Math.round((flow.made[g] + flow.used[g] + Math.abs(flow.traded[g])) / 10))
+/** Which way a good (or the treasury) went over the last minute: made and bought against used and sold, past a tenth of the traffic either way. */
+const trendOf = (made: number, used: number, traded: number): number => {
+  const net = made + traded - used
+  const room = Math.max(1, Math.round((made + used + Math.abs(traded)) / 10))
   return net > room ? 1 : net < -room ? -1 : 0
 }
+const flowTrend = (flow: NonNullable<Stats["flow"]>, g: GoodId): number => trendOf(flow.made[g], flow.used[g], flow.traded[g])
 
 /** A good's way over the last minute: up, down, or holding steady. */
 const trendMark = (way: number) => (way > 0 ? "↑" : way < 0 ? "↓" : "→")
@@ -1988,10 +2005,15 @@ const flowHtml = (s: Stats): string => {
   const f = s.flow
   if (f === null) return `<p class="sub">Counting the town's goods: the first numbers come in half a minute…</p>`
   const rows = goodIds.filter((g) => f.made[g] + f.used[g] + Math.abs(f.traded[g]) + s.stock[g] + f.elsewhere[g] > 0)
-  if (rows.length === 0) return `<p class="sub">Nothing made or used yet.</p>`
   const head = `<span></span><b title="Made by workshops and gatherers over the last minute">made</b><b title="Eaten, worked up, built with, rotted, or sent away over the last minute">used</b><b title="Bought (+) or sold (−) over the last minute">traded</b><b title="In the town hall, warehouses, and granaries">storage</b><b title="In workshops and markets, walkers' baskets, and carriers' crates">about town</b>`
   const cell = (n: number) => `<span>${n === 0 ? `<i>–</i>` : n}</span>`
-  const body = rows.map((g) => {
+  const signedCell = (n: number) => `<span>${n === 0 ? `<i>–</i>` : n > 0 ? `+${n}` : `−${-n}`}</span>`
+  // The treasury first: taxes and rewards made, upkeep and building used, trade's coins; it is all in storage.
+  const c = f.coins
+  const way = trendOf(c.made, c.used, c.traded)
+  const treasury = `<span class="name" title="coins">${icon("coins", 14)}<span class="label">coins</span><span class="trend ${trendClass(way)}">${trendMark(way)}</span></span>` +
+    `${cell(c.made)}${cell(c.used)}${signedCell(c.traded)}${cell(s.coins)}<span><i>–</i></span>`
+  const body = treasury + rows.map((g) => {
     const way = flowTrend(f, g)
     const traded = f.traded[g] === 0 ? `<i>–</i>` : f.traded[g] > 0 ? `+${f.traded[g]}` : `−${-f.traded[g]}`
     return `<span class="name" title="${goods[g].title}">${goodIcon(g, 14)}<span class="label">${goods[g].title}</span><span class="trend ${trendClass(way)}">${trendMark(way)}</span></span>` +

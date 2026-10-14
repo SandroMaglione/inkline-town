@@ -341,6 +341,17 @@ export interface FlowSlice {
   readonly start: Amounts
   readonly made: Amounts
   readonly traded: Amounts
+  readonly coins: CoinSlice
+}
+/**
+ * Ten seconds of the treasury, counted as goods are: what it held as the
+ * slice began, what came in (taxes, rewards, refunds), and what trade
+ * brought (sold less bought). What went out is what is left over.
+ */
+export interface CoinSlice {
+  readonly start: number
+  readonly made: number
+  readonly traded: number
 }
 /**
  * Where the town's goods go, over the last minute, a slice of `FLOW_SLICE`
@@ -359,10 +370,22 @@ export interface FlowValue {
   readonly made: Amounts
   readonly traded: Amounts
   readonly held: Amounts
+  /**
+   * The treasury's slice under way. `seen` is the treasury the last count
+   * saw, and `booked` what the collection has already counted since (its
+   * taxes and trade): any other change in between is a coin made, or one
+   * left over as used.
+   */
+  readonly coins: CoinSlice & { readonly seen: number; readonly booked: number }
   /** The last minute's slices, oldest first. */
   readonly slices: ReadonlyArray<FlowSlice>
   /** A minute's worth over the slices kept, or `null` before there are enough to say. */
-  readonly last: { readonly made: Amounts; readonly used: Amounts; readonly traded: Amounts } | null
+  readonly last: {
+    readonly made: Amounts
+    readonly used: Amounts
+    readonly traded: Amounts
+    readonly coins: { readonly made: number; readonly used: number; readonly traded: number }
+  } | null
 }
 export const Flow = Descriptor.TransientResource<FlowValue>()("Town/Flow")
 

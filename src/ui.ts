@@ -254,7 +254,14 @@ export interface Stats {
    * rolling minute, reckoned again every ten seconds; `null` for the
    * first half minute.
    */
-  readonly flow: { readonly made: Amounts; readonly used: Amounts; readonly traded: Amounts; readonly elsewhere: Amounts } | null
+  readonly flow: {
+    readonly made: Amounts
+    readonly used: Amounts
+    readonly traded: Amounts
+    readonly elsewhere: Amounts
+    /** The treasury over the same minute: taxes and other income, upkeep and spending, and trade. */
+    readonly coins: { readonly made: number; readonly used: number; readonly traded: number }
+  } | null
   /** Food the town ate, and food that rotted in store, over the last minute. */
   readonly eaten: number
   readonly rotted: number
