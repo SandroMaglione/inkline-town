@@ -13,6 +13,7 @@
     "balance:model:check": "node --test test/balance-model.test.ts",
     "check": "node scripts/check.ts",
     "check:browser": "node scripts/check-browser.ts",
+    "check:phone": "node scripts/check-phone.ts",
     "check:models": "node scripts/check-town-models.ts",
     "check:effects": "node scripts/check-house-effects.ts",
     "check:revisions": "node scripts/check-model-revisions.ts",

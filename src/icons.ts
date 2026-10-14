@@ -59,6 +59,8 @@ const paths: Record<string, string> = {
   load: `<path d="M2 4.5h4.5l1.5 1.5h6v7.5H2z" fill="#f3dca6"/><path d="M8 7v5M5.8 10L8 12.2 10.2 10" fill="none"/>`,
   newTown: `<path d="M4 14.5V2" fill="none"/><path d="M4 2.5h8.5l-2 3 2 3H4z" fill="#a6c48a"/><path d="M9.5 11.5h4M11.5 9.5v4" fill="none"/>`,
   close: `<path d="M4 4l8 8M12 4l-8 8" fill="none"/>`,
+  more: `<circle cx="3.5" cy="8" r="1.1" fill="${ink}"/><circle cx="8" cy="8" r="1.1" fill="${ink}"/><circle cx="12.5" cy="8" r="1.1" fill="${ink}"/>`,
+  layers: `<path d="M8 2.5l6 3.5-6 3.5-6-3.5z" fill="#c9d6ee"/><path d="M2 9l6 3.5L14 9" fill="none"/>`,
   share: `<path d="M3 8.5v5.5h10V8.5" fill="#f7f8f4"/><path d="M8 10.5V2.5M5.3 5.2L8 2.5l2.7 2.7" fill="none"/>`,
   picture: `<path d="M2 3.5h12v9H2z" fill="#f7f8f4"/><path d="M2.5 12l4-4.5 3 3 1.5-1.5 2.5 3" fill="#cfe5b8"/><circle cx="11" cy="6" r="1.2" fill="#f0d98a"/>`,
   link: `<path d="M7 9a2.5 2.5 0 0 0 3.5 0l2.5-2.5a2.5 2.5 0 0 0-3.5-3.5L8.5 4M9 7a2.5 2.5 0 0 0-3.5 0L3 9.5A2.5 2.5 0 0 0 6.5 13l1-1" fill="none"/>`,
