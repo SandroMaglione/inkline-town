@@ -107,7 +107,6 @@
   .toolbar .speed { gap: 1px; }
   .toolbar .speed button:not(.pause):not(.cycle) { display: none; }
   .toolbar .speed button.cycle { display: flex; font-size: 12px; font-weight: 700; min-width: 38px; }
-  .toolbar .speed button.cycle.paused { color: #9aa29b; }
   .toolbar button.more { display: flex; }
   .toolbar button.more.on { background: #3d4943; }
   .toolbar button.more.on .icon circle { fill: #f7f8f4; }
@@ -126,7 +125,8 @@
     font-size: 12px; gap: 10px; padding: 7px 12px 7px 9px; min-height: 34px; justify-content: flex-start; color: #3d4943;
   }
 
-  .toast { bottom: calc(100px + env(safe-area-inset-bottom)); max-width: calc(100vw - 28px); white-space: normal; text-align: center; }
+  .toast { bottom: calc(108px + env(safe-area-inset-bottom)); max-width: calc(100vw - 28px); white-space: normal; text-align: center; }
+  .stroke-bar { bottom: calc(56px + env(safe-area-inset-bottom)); width: max-content; }
 
   /* ── Dialogs: the whole screen, the body scrolling, the actions pinned to the bottom ── */
   .dialog { padding: 0; }
@@ -201,12 +201,14 @@
   /* No hover, so no key hints. */
   .toolbar button kbd, .views button kbd { display: none; }
   .panel .close { min-width: 40px; min-height: 40px; }
-  /* The build hint follows no finger: it sits in one place above the tool bar. */
+  /* The build hint follows no finger: a slim strip at the top, under the top line, clear of the town in the middle. */
   .tooltip {
-    left: 10px !important; right: 10px; top: auto !important; bottom: calc(100px + env(safe-area-inset-bottom));
-    transform: none; white-space: normal; text-align: center; font-size: 12px; line-height: 1.4;
+    left: 50% !important; top: calc(58px + env(safe-area-inset-top)) !important; transform: translateX(-50%);
+    width: max-content; max-width: calc(100vw - 20px); white-space: normal; text-align: center;
+    font-size: 11px; line-height: 1.35; padding: 4px 10px; background: rgba(47, 70, 57, 0.82); border-radius: 6px;
   }
 }
-@media (pointer: coarse) and (max-height: 500px) {
-  .tooltip { left: 25% !important; right: 25%; }
+/* A portrait phone's top line takes two rows: the hint goes under both. */
+@media (pointer: coarse) and (max-width: 760px) and (min-height: 501px) {
+  .tooltip { top: calc(88px + env(safe-area-inset-top)) !important; }
 }

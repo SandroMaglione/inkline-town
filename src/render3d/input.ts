@@ -9,16 +9,28 @@ import type { GameScene } from "./scene.ts"
  * A finger has no hover, so on touch the tap tools (place, prop, bulldoze)
  * take two taps: the first shows the ghost or outline where it lands and
  * holds it there, a second tap on the same spot commits it. The game only
- * ever sees the ordinary press and release of the confirming tap. */
+ * ever sees the ordinary press and release of the confirming tap.
+ *
+ * The drag tools (road, pave, homes, park ground) work the same way on touch:
+ * letting go holds the stroke, and a tap on its end (or the page's build
+ * button) lays it; a tap anywhere else drops it, and dragging again starts a
+ * new one. With any pointer, letting go off the map (over the tool bar, say)
+ * drops the stroke, as a button drops a click released outside it. */
 export class MapInput {
   private scene: GameScene
   private ui: UiValue
   private pointers = new Map<number, Point>()
-  private press: { id: number; start: Point; last: Point; mode: "edit" | "pan" | "rotate"; moved: boolean } | null = null
+  /** `deferred`: a press while a stroke is held, which is a tap on it until it moves. */
+  private press: { id: number; start: Point; last: Point; mode: "edit" | "pan" | "rotate"; moved: boolean; deferred: boolean } | null = null
   private pinch: { distance: number; angle: number; mid: Point } | null = null
   private screen: Point | null = null
   private mode: "pan" | "rotate" = "pan"
   private armed: { tool: string; at: Point; hit: number | null } | null = null
+  /** A touch stroke let go of and waiting for a tap: from `ui.dragFrom` to `at`. */
+  private held: { tool: string; at: Point } | null = null
+  /** The stroke being dragged is over something other than the map: let go, it is dropped. */
+  private offMap = false
+  private touch = false
   readonly controls: HTMLElement
   private abort = new AbortController()
   constructor(scene: GameScene, ui: UiValue) {
@@ -34,13 +46,15 @@ export class MapInput {
         canvas.focus({ preventScroll: true })
         canvas.setPointerCapture(e.pointerId)
         const p = at(e)
+        this.touch = e.pointerType === "touch"
         this.pointers.set(e.pointerId, p)
         this.screen = p
         this.updatePointer()
         if (this.pointers.size === 2) {
           this.pinch = this.spread()
           this.press = null
-          ui.dragFrom = null
+          // Two fingers move the camera under a held stroke; they drop one being drawn.
+          if (!this.held) ui.dragFrom = null
           ui.gestures.length = 0
           return
         }
@@ -55,8 +69,9 @@ export class MapInput {
                 : ui.tool === "road" || ui.tool === "home" || ui.tool === "pave" || ui.tool === "ground"
                   ? "edit"
                   : "pan"
-        this.press = { id: e.pointerId, start: p, last: p, mode, moved: false }
-        if (e.button === 0 && this.mode !== "rotate") ui.gestures.push({ type: "press", at: scene.groundAt(p.x, p.y) })
+        const deferred = mode === "edit" && this.held !== null
+        this.press = { id: e.pointerId, start: p, last: p, mode, moved: false, deferred }
+        if (e.button === 0 && this.mode !== "rotate" && !deferred) ui.gestures.push({ type: "press", at: scene.groundAt(p.x, p.y) })
       },
       { signal }
     )
@@ -65,6 +80,7 @@ export class MapInput {
       (e) => {
         const p = at(e)
         if (e.pointerType === "mouse") this.armed = null
+        if (this.pointers.has(e.pointerId) || e.pointerType === "mouse") this.touch = e.pointerType === "touch"
         if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, p)
         if (this.pinch && this.pointers.size === 2) {
           const next = this.spread()
@@ -83,6 +99,13 @@ export class MapInput {
           if (Math.hypot(p.x - press.start.x, p.y - press.start.y) > 6) press.moved = true
           if (press.mode === "rotate" && press.moved) scene.rotate((p.x - press.last.x) * 0.006, (p.y - press.last.y) * 0.004)
           if (press.mode === "pan" && press.moved) scene.pan(p.x - press.last.x, p.y - press.last.y)
+          // Dragging from a held stroke draws a new one: the held one is dropped.
+          if (press.deferred && press.moved) {
+            this.cancelStroke()
+            press.deferred = false
+            ui.gestures.push({ type: "press", at: scene.groundAt(press.start.x, press.start.y) })
+          }
+          if (press.mode === "edit") this.offMap = this.overPage(p)
           press.last = p
         }
         this.screen = p
@@ -96,15 +119,29 @@ export class MapInput {
       if (this.pinch) {
         if (this.pointers.size < 2) this.pinch = null
         this.press = null
-        ui.dragFrom = null
+        if (!this.held) ui.dragFrom = null
       }
       const press = this.press
       if (press?.id === e.pointerId) {
         const input = scene.inputAt(p.x, p.y, ui.tool)
         const panned = cancelled || press.mode === "rotate" || e.button !== 0 || (press.mode === "pan" && press.moved)
-        const held = e.pointerType === "touch" && !panned && this.arm(input.at, input.hit)
-        if (!held) ui.gestures.push({ type: "release", at: press.mode === "edit" ? scene.groundAt(p.x, p.y) : input.at, hit: input.hit, panned })
-        if (panned) ui.dragFrom = null
+        const ground = scene.groundAt(p.x, p.y)
+        if (press.deferred) {
+          // A tap while a stroke is held: on the stroke's end it lays it, anywhere else it drops it.
+          if (!panned && this.held) {
+            if (Math.floor(ground.x) === Math.floor(this.held.at.x) && Math.floor(ground.y) === Math.floor(this.held.at.y)) this.confirmStroke()
+            else this.cancelStroke()
+          }
+        } else if (press.mode === "edit" && !panned && this.offMap) {
+          ui.dragFrom = null
+        } else if (press.mode === "edit" && !panned && e.pointerType === "touch") {
+          this.held = { tool: ui.tool, at: ground }
+        } else {
+          const held = e.pointerType === "touch" && !panned && this.arm(input.at, input.hit)
+          if (!held) ui.gestures.push({ type: "release", at: press.mode === "edit" ? ground : input.at, hit: input.hit, panned })
+          if (panned) ui.dragFrom = null
+        }
+        this.offMap = false
         this.press = null
       }
       if (e.pointerType !== "mouse") {
@@ -125,7 +162,20 @@ export class MapInput {
       },
       { signal }
     )
-    canvas.addEventListener("contextmenu", (e) => e.preventDefault(), { signal })
+    canvas.addEventListener(
+      "contextmenu",
+      (e) => {
+        e.preventDefault()
+        // A right click during a drag drops the stroke.
+        if (this.press?.mode === "edit") {
+          this.press = null
+          this.offMap = false
+          ui.dragFrom = null
+          this.updatePointer()
+        }
+      },
+      { signal }
+    )
     canvas.addEventListener(
       "wheel",
       (e) => {
@@ -202,10 +252,39 @@ export class MapInput {
     this.updatePointer()
     return true
   }
+  /** Whether a point on the screen is over the page rather than the map. */
+  private overPage(p: Point) {
+    const canvas = this.scene.canvas
+    const box = canvas.getBoundingClientRect()
+    if (p.x < box.left || p.y < box.top || p.x > box.right || p.y > box.bottom) return true
+    return document.elementFromPoint(p.x, p.y) !== canvas
+  }
+  /** Lays the held stroke. */
+  confirmStroke() {
+    const held = this.held
+    if (!held) return
+    this.held = null
+    this.ui.gestures.push({ type: "release", at: held.at, panned: false })
+    this.updatePointer()
+  }
+  /** Drops the stroke being drawn or held. */
+  cancelStroke() {
+    this.held = null
+    this.offMap = false
+    if (this.press?.mode === "edit") this.press = null
+    this.ui.dragFrom = null
+    this.updatePointer()
+  }
   private updatePointer() {
     if (this.armed && this.armed.tool !== this.ui.tool) this.armed = null
+    // A held stroke goes with its tool, or once the page has dropped it (another tool chosen).
+    if (this.held && (this.held.tool !== this.ui.tool || (this.ui.dragFrom === null && !this.ui.gestures.some((g) => g.type === "press")))) this.held = null
+    this.ui.stroke = this.held ? "held" : this.offMap && this.press ? "cancel" : null
     // An armed tap holds the ghost where it landed, even while the map pans under it.
-    if (this.armed) {
+    if (this.held) {
+      this.ui.pointer = this.held.at
+      this.ui.pointerHit = null
+    } else if (this.armed) {
       this.ui.pointer = this.armed.at
       this.ui.pointerHit = this.armed.hit
     } else if (this.screen) {
@@ -219,6 +298,16 @@ export class MapInput {
   }
   get pointer() {
     return this.screen
+  }
+  /** Where the tooltip goes, or `null` for none. A finger shows it only for what it is about to
+   * build (a stroke being drawn, an armed tap), never while it moves the camera or picks a
+   * building, whose panel says the same, nor for a held stroke, whose bar says it; the
+   * stylesheet pins it to the top on touch. */
+  get tip(): Point | null {
+    if (!this.touch) return this.screen
+    if (this.pinch || this.held) return null
+    if (this.armed) return this.screen ?? { x: 0, y: 0 }
+    return this.press?.mode === "edit" ? this.screen : null
   }
   sync() {
     this.updatePointer()
@@ -239,6 +328,8 @@ export class MapInput {
   reset() {
     this.mode = "pan"
     this.armed = null
+    this.held = null
+    this.offMap = false
     this.press = null
     this.pinch = null
     this.pointers.clear()

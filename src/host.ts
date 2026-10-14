@@ -390,8 +390,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   ].map(({ speed, label, key }) => {
     const button = el("button", speed === 0 ? "pause" : "", label)
     if (speed === 0) button.append(iconEl("pause", 14))
-    button.title = speed === 0 ? "Pause the town (space)" : `Run the town at ${label} (${key})`
-    button.onclick = () => setSpeed(speed)
+    button.title = speed === 0 ? "Pause the town, or run it again (space)" : `Run the town at ${label} (${key})`
+    // Pause is a switch: pressed again it runs the town at its last speed.
+    button.onclick = () => setSpeed(speed === 0 && ui.speed === 0 ? lastSpeed : speed)
     speedGroup.append(button)
     return { speed, button }
   })
@@ -406,8 +407,12 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     if (speed > 0) lastSpeed = speed
     ui.speed = speed
     for (const s of speeds) s.button.classList.toggle("on", s.speed === speed)
+    // Paused, the pause button shows play.
+    const pause = speeds[0]!.button
+    pause.replaceChildren(iconEl(speed === 0 ? "play" : "pause", 14))
+    pause.setAttribute("aria-label", speed === 0 ? "Run the town" : "Pause the town")
     cycle.textContent = `${speed === 0 ? lastSpeed : speed}×`
-    cycle.classList.toggle("paused", speed === 0)
+    cycle.title = speed === 0 ? `Run the town at ${lastSpeed}×` : "Change speed: 1×, 2×, 4×"
   }
   setSpeed(1)
 
@@ -564,7 +569,9 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
     if (event.key === "2") setSpeed(2)
     if (event.key === "3") setSpeed(4)
     if (event.key === "Escape") {
-      if (ui.tool !== "select") choose("select")
+      // A stroke being drawn or held is dropped first; the tool stays.
+      if (ui.dragFrom) input.cancelStroke()
+      else if (ui.tool !== "select") choose("select")
       else if (ui.menu) ui.menu = null
       else ui.selected = null
       refreshTools()
@@ -1667,6 +1674,17 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
   }
 
   const input = new MapInput(stage, ui)
+  // A road, a row of homes, or a patch of park let go of on a touch screen is held here until built or dropped.
+  const strokeBar = el("div", "stroke-bar")
+  const strokeText = el("span", "what")
+  const strokeBuild = el("button", "frame primary", "Build")
+  strokeBuild.onclick = () => input.confirmStroke()
+  const strokeDrop = el("button", "frame", "")
+  strokeDrop.append(iconEl("close", 14))
+  strokeDrop.setAttribute("aria-label", "Cancel")
+  strokeDrop.onclick = () => input.cancelStroke()
+  strokeBar.append(strokeText, strokeDrop, strokeBuild)
+  document.body.append(strokeBar)
   const resetPage = () => {
     choose("select")
     ui.menu = null
@@ -1742,7 +1760,7 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
         : s.season.coming === null
           ? "no more winters this term"
           : `winter in ${clockText(s.season.left)}${severity(s.season.coming)}`
-      setHtml(clock, `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}</b><small class="${s.season.winter ? "winter" : s.season.coming === "hard" ? "down" : ""}">year ${s.season.year} · ${until}</small></span>`)
+      setHtml(clock, `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}${ui.speed === 0 ? `<span class="paused-tag">paused</span>` : ""}</b><small class="${s.season.winter ? "winter" : s.season.coming === "hard" ? "down" : ""}">year ${s.season.year} · ${until}</small></span>`)
       clock.title = `${s.season.winter ? "Winter: fields lie still, fishing is slow, and homes eat faster" : "Time left in the term"}\nThe almanac: the coming winter is ${s.season.coming === null ? "beyond the term" : winters[s.season.coming].title}, the one after ${s.season.after === null ? "beyond the term" : winters[s.season.after].title}.\nMild: fishing at ${Math.round(winters.mild.fishing * 100)}%. Normal: ${Math.round(winters.normal.fishing * 100)}%. Hard: half as long again, fishing at ${Math.round(winters.hard.fishing * 100)}%, and homes heating are a fire risk.`
       const trend = s.mood.target > s.mood.approval ? "↑" : s.mood.target < s.mood.approval ? "↓" : ""
       setHtml(approval, `${icon("approval", 18)}<span class="stack"><b class="${s.mood.approval < 0 ? "down" : ""}">${signed(s.mood.approval)} <span class="${s.mood.target >= s.mood.approval ? "up" : "down"}">${trend}</span></b><small>approval</small></span>`)
@@ -1883,8 +1901,13 @@ export const createHost = async (mount: HTMLElement, persistence: () => Persiste
       syncReckoning(s)
     }
     input.sync()
-    const screenPointer = input.pointer
-    const text = ui.preview.tooltip
+    const screenPointer = input.tip
+    // A stroke being drawn says what it lays and costs.
+    const text = ui.dragFrom && ui.stroke !== "cancel" && ui.preview.stroke ? ui.preview.stroke : ui.preview.tooltip
+    // A held touch stroke waits for its build button.
+    const held = ui.stroke === "held" && ui.preview.stroke !== null
+    if (held) strokeText.textContent = ui.preview.stroke
+    strokeBar.classList.toggle("open", held)
     if (text && screenPointer) {
       tooltip.textContent = text
       tooltip.style.display = "block"

@@ -32,13 +32,21 @@ pan and pinch to zoom; twisting them rotates. Road/home tools still drag to
 build; camera gestures never place anything. A finger has no hover, so on
 touch the tap tools (buildings, park pieces, bulldoze) take two taps: the
 first holds the ghost or outline where it landed, a second on the same spot
-commits it. This lives entirely in `src/render3d/input.ts`; the game still
-sees one ordinary press and release.
+commits it. The drag tools (road, pave, homes, park ground) hold the stroke
+on touch too: a bar above the tool bar says what it lays and costs, with
+**Build** and ✕; a tap on the stroke's end builds it, a tap elsewhere drops
+it, and two fingers move the camera under it. With any pointer, a stroke let
+go off the map (over the tool bar, say) is dropped and shows red while it
+would be, as are a right click or Esc mid-drag. On touch the tooltip shows
+only for what is about to be built, never while panning or picking, in a
+strip under the top line. This lives entirely in `src/render3d/input.ts`
+(and the bar in `host.ts`); the game still sees one ordinary press and
+release.
 
 Phones get their layout from `src/phone.css`, loaded after `factory.css`. On
 a narrow or short screen the HUD folds away: one top line (clock, treasury,
 people, and a chip of planks, stone and tools), one tool bar along the bottom
-(town, the tools, pause, a speed button that cycles, and a ⋯ menu holding
+(town, the tools, pause (a switch: play while paused), a speed button that cycles, and a ⋯ menu holding
 share, guide, save, load, new town and recentre), and two buttons top right
 for the guide and the map overlays. `host.ts` sets `body.fold-goods`,
 `fold-guide`, `fold-views` or `fold-more` while one is open; a tap on the map

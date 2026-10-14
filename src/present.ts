@@ -509,7 +509,19 @@ export const Interact = Game.System(
       else ui.flash = null
     }
 
-    if (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave") {
+    /** A cost `n` times over. */
+    const times = (cost: Kind["cost"], n: number): Kind["cost"] => ({
+      coins: cost.coins * n,
+      materials: Object.fromEntries(Object.entries(cost.materials).map(([g, m]) => [g, (m ?? 0) * n]))
+    })
+    const counted = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`
+    // Let go off the map (over the tool bar, say) and the stroke is dropped: it shows as blocked.
+    const dropping = ui.stroke === "cancel" && ui.dragFrom !== null
+    if (dropping && cell && (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave" || ui.tool === "ground")) {
+      for (const c of ui.tool === "ground" ? rectangle(ui.dragFrom!, cell) : lPath(ui.dragFrom!, cell))
+        if (inside(c.x, c.y)) preview.plots.push({ ...c, size: 1, look: "blocked" })
+      preview.tooltip = "let go here to cancel"
+    } else if (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave") {
       const cells = cell === null ? [] : ui.dragFrom ? lPath(ui.dragFrom, cell) : [cell]
       for (const c of cells) {
         if (!inside(c.x, c.y)) continue
@@ -529,6 +541,15 @@ export const Interact = Game.System(
         preview.tooltip = `homes · ${costText(home.cost)} each · along a road · ${preview.rangeNote ?? "touch a road and residents walk to work within " + COMMUTE + " road cells"}`
       }
       if (ui.tool === "road" && cell) preview.tooltip = `road · ${ROAD_COST} coins a cell · buildings need one at the middle of a side`
+      if (ui.dragFrom && cell) {
+        const n = ui.tool === "road" ? preview.roads.length : ui.tool === "home" ? preview.ghosts.length : preview.plots.filter((p) => p.look === "reach").length
+        preview.stroke =
+          ui.tool === "road"
+            ? `${counted(n, "road cell")} · ${costText({ coins: n * ROAD_COST, materials: {} })}`
+            : ui.tool === "home"
+              ? `${counted(n, "home")} · ${costText(times(home.cost, n))}`
+              : `pave ${counted(n, "cell")} · ${costText({ coins: n * PAVE_COST.coins, materials: { stone: n * PAVE_COST.stone } })}`
+      }
     } else if (ui.tool === "ground" && cell) {
       const laid: Array<ParkCell> = []
       for (const c of ui.dragFrom ? rectangle(ui.dragFrom, cell) : [cell]) {
@@ -541,8 +562,9 @@ export const Interact = Game.System(
       const after = laid.length > 0 ? parkOf(laid[0]!, laid) : undefined
       // What the park it joins gives now, if it joins one.
       const before = laid.map((c) => parkOf(c)).find((p) => p !== undefined)
-      const cost = grounds[ui.ground].cost
-      preview.tooltip = `${grounds[ui.ground].title.toLowerCase()} · ${laid.length} cell${laid.length === 1 ? "" : "s"}, ${costText({ coins: cost.coins * laid.length, materials: Object.fromEntries(Object.entries(cost.materials).map(([g, n]) => [g, (n ?? 0) * laid.length])) })}${after ? ` · the park: ${parkText(after)}${before && before.value !== after.value ? ` (now ${signed(before.value)})` : ""}` : ""} · drag a rectangle`
+      const cost = costText(times(grounds[ui.ground].cost, laid.length))
+      if (ui.dragFrom) preview.stroke = `${grounds[ui.ground].title.toLowerCase()} · ${counted(laid.length, "cell")} · ${cost}`
+      preview.tooltip = `${grounds[ui.ground].title.toLowerCase()} · ${counted(laid.length, "cell")}, ${cost}${after ? ` · the park: ${parkText(after)}${before && before.value !== after.value ? ` (now ${signed(before.value)})` : ""}` : ""} · drag a rectangle`
       if (after) preview.plots.push(...reachPlots(after))
     } else if (ui.tool === "prop" && cell && inside(cell.x, cell.y)) {
       const there = parkAt.get(key(cell.x, cell.y))?.data.park.get()
@@ -908,7 +930,7 @@ export const Interact = Game.System(
       const lock = lockReason(kind, resources.census.get())
       if (lock) preview.tooltip = `${kind.title.toLowerCase()} · ${lock}`
       else preview.tooltip = `${kind.title.toLowerCase()}${r !== null ? ` · works ${r} cells around` : ""}${a ? ` · desirability ${signed(a.value)} out to ${a.reach} cells` : ""}${preview.rangeNote ? ` · ${preview.rangeNote}` : ""} · needs a road at the middle of a side`
-    } else if (ui.tool === "pave") preview.tooltip = `drag along a road to pave it · ${PAVE_COST.coins} coins and a stone a cell · carriers and walkers go half again as fast on it, and homes beside it like it a little`
+    } else if (ui.tool === "pave" && !dropping) preview.tooltip = `drag along a road to pave it · ${PAVE_COST.coins} coins and a stone a cell · carriers and walkers go half again as fast on it, and homes beside it like it a little`
     else if (cell && ui.view === "appeal" && inside(cell.x, cell.y)) preview.tooltip = `desirability ${appealAt(cells, cell.x, cell.y)}`
     ui.preview = preview
 
