@@ -1,5 +1,5 @@
 import { amounts, goodIds, type GoodId, type WinterId } from "../../../src/content.ts"
-import { appealAt, appealGrid, buildingSource, landSource, parkSources, parkUpkeep } from "../../../src/appeal.ts"
+import { appealAt, appealGrid, buildingSource, homeSource, landSource, parkSources, parkUpkeep } from "../../../src/appeal.ts"
 import { doors, nearest, reach } from "../../../src/grid.ts"
 import { assignWorkers, type Assignment } from "../../../src/rules/production.ts"
 import { baseCollection, wantsCitizenGoods, mealRate, refreshLevel, taxOf, tierFor } from "../../../src/rules/households.ts"
@@ -33,7 +33,11 @@ export const analyze = ({ rules, scenario: s }: Inputs, options: AnalysisOptions
   for (const l of s.land) if (l.type === "water" || l.type === "tree") sources.push(landSource(l.type === "tree" ? "forest" : "water", l.tile, rules))
   for (const r of s.roads) if (r.paved) sources.push(landSource("paved", r, rules))
   for (const r of s.ruins ?? []) sources.push(landSource("ruin", r, rules))
-  for (const h of s.homes) if (h.condition < rules.condition.worn) sources.push(landSource("worn", h.tile, rules))
+  for (const h of s.homes) {
+    if (h.condition < rules.condition.worn) sources.push(landSource("worn", h.tile, rules))
+    const fine = homeSource(h.tier, h.tile, rules)
+    if (fine) sources.push(fine)
+  }
   const roadCells = new Set(s.roads.map((p) => `${p.x},${p.y}`))
   sources.push(...parkSources(s.parks ?? [], (x, y) => roadCells.has(`${x},${y}`), rules))
   const appeal = appealGrid(sources, rules), findings: Finding[] = []

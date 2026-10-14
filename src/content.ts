@@ -140,7 +140,7 @@ export interface Kind {
   readonly service?: { readonly service: ServiceId; readonly seconds: number; readonly range: number }
   // ── Its neighbourhood ──
   /** What it does to the desirability of the cells around it, fading out to `reach` cells (see `appeal.ts`). */
-  readonly appeal?: { readonly value: number; readonly reach: number }
+  readonly appeal?: { readonly value: number; readonly reach: number; readonly full?: number }
   /** Uses up a tool every `wear` jobs, and works at half pace without one. */
   readonly wear?: number
   /** Ovens and forges: a fire risk to itself and to homes beside it. */
@@ -161,7 +161,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     category: "storage", size: 3, half: 20, stories: 2, roof: "flat", bays: 2, window: 8, topper: "flag",
     cost: { coins: 0, materials: {} }, upkeep: 0, workers: 0, crew: "settlers", unlock: free, buildable: false,
     holds: { accepts: "all", cap: 100 }, carriers: 6,
-    service: { service: "goods", seconds: 8, range: 20 }, appeal: { value: 4, reach: 3 }
+    service: { service: "goods", seconds: 8, range: 20 }, appeal: { value: 4, reach: 4, full: 2 }
   },
   warehouse: {
     id: "warehouse", title: "Warehouse", blurb: "stores goods nearer where they are made and used",
@@ -269,13 +269,13 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     category: "services", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "flag",
     cost: { coins: 120, materials: { planks: 6, stone: 2 } }, upkeep: 6, workers: 2, crew: "citizens", unlock: free, buildable: true,
     holds: { accepts: ["fish", "smoked", "bread", "cloth"], cap: 12 },
-    service: { service: "goods", seconds: 6, range: 18 }, appeal: { value: 2, reach: 3 }
+    service: { service: "goods", seconds: 6, range: 18 }, appeal: { value: 2, reach: 3, full: 2 }
   },
   chapel: {
     id: "chapel", title: "Chapel", blurb: "a walker brings faith to the homes it passes",
     category: "services", size: 2, half: 12, stories: 2, roof: "flat", bays: 2, window: 6, topper: "cupola",
     cost: { coins: 200, materials: { planks: 6, stone: 6 } }, upkeep: 10, workers: 1, crew: "citizens", unlock: { residents: 15, citizens: 0 }, buildable: true,
-    service: { service: "faith", seconds: 8, range: 22 }, appeal: { value: 4, reach: 3 }
+    service: { service: "faith", seconds: 8, range: 22 }, appeal: { value: 4, reach: 4, full: 2 }
   },
   firewatch: {
     id: "firewatch", title: "Fire watch", blurb: "a watchman checks homes and workshops along the way for fire; firefighters run to any blaze",
@@ -293,7 +293,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     id: "hospital", title: "Hospital", blurb: "physicians call more often and walk further",
     category: "services", size: 3, half: 16, stories: 2, roof: "flat", bays: 2, window: 6, topper: "cupola",
     cost: { coins: 400, materials: { planks: 10, stone: 10, tools: 2 } }, upkeep: 16, workers: 4, crew: "citizens", unlock: { residents: 0, citizens: 40 }, buildable: true,
-    service: { service: "health", seconds: 4, range: 40 }, appeal: { value: 2, reach: 3 }
+    service: { service: "health", seconds: 4, range: 40 }, appeal: { value: 2, reach: 3, full: 2 }
   },
   watchhouse: {
     id: "watchhouse", title: "Watch house", blurb: "a constable walks the streets, keeping order in the homes along the way",
@@ -391,7 +391,7 @@ export const home = {
   tiers: {
     1: { title: "settlers", residents: 4, tax: 2.5, height: 14, needs: ["food"], appeal: -100 },
     2: { title: "citizens", residents: 8, tax: 5, height: 26, needs: ["bread", "cloth", "faith"], appeal: 5 },
-    3: { title: "burghers", residents: 12, tax: 6.5, height: 38, needs: ["bread", "cloth", "faith"], appeal: 15 }
+    3: { title: "burghers", residents: 12, tax: 6.5, height: 38, needs: ["bread", "cloth", "faith"], appeal: 12 }
   } as Readonly<Record<Tier, {
     readonly title: string
     readonly residents: number
@@ -445,6 +445,10 @@ export const appeal = {
   paved: { value: 1, reach: 1 },
   ruin: { value: -3, reach: 2 },
   worn: { value: -2, reach: 1 },
+  /** A citizens' home and a townhouse lift the homes beside them (never themselves), all told up to `homesMost`. */
+  citizens: { value: 1, reach: 1 },
+  burghers: { value: 2, reach: 1 },
+  homesMost: 3,
   /** Desirability is reckoned this often. */
   every: 30,
   /** And kept within these bounds. */
@@ -718,6 +722,14 @@ export const market = { floor: 30, ceiling: 250, perUnit: 1, markup: 1.5 }
 
 /** A paused building pays this share of its upkeep. */
 export const PAUSED_UPKEEP = 0.25
+
+/**
+ * Pulling down a standing building or home: a `fee` of what it cost in
+ * coins, and `back` of its materials (rounded down) carried back into
+ * storage. A site not yet going up is cancelled instead: its coins and
+ * whatever was brought to it come back in full.
+ */
+export const salvage = { fee: 0.1, back: 0.5 }
 
 /** How long each end state's danger has to last, in minutes, before the term ends with it. */
 export const fate = {

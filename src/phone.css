@@ -35,6 +35,8 @@
 
   /* The goods: folded into the chip; open, every good in a wrapped card under the top line. */
   .hud .stock { display: none; }
+  .hud .flow.open { display: none; }
+  .fold-goods .hud .flow.open { display: flex; max-width: min(430px, 100%); }
   .fold-goods .hud .stock { display: flex; flex-wrap: wrap; gap: 4px 0; padding: 5px; max-width: min(430px, 100%); }
   .hud .stock .group { flex-wrap: wrap; gap: 3px; padding: 0 3px; }
   .hud .good { gap: 4px; padding: 3px 7px 3px 4px; }

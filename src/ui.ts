@@ -66,7 +66,7 @@ export type Edit =
   | { readonly type: "trade"; readonly good: GoodId; readonly mode: TradeMode; readonly amount?: number }
   /** How much of each good the town keeps before selling, and buys up to. */
   | { readonly type: "reserve"; readonly amount: number }
-  /** Pauses the building on a cell, or sets it back to work. */
+  /** Pauses the building on a cell (or closes the home), or sets it back to work. */
   | { readonly type: "pause"; readonly cell: Point; readonly on: boolean }
   /** Sends the crown what it asked for. */
   | { readonly type: "deliver" }
@@ -122,6 +122,8 @@ export type Panel =
       /** Whether it can be paused (not the town hall, not a site), and whether it is. */
       readonly pausable: boolean
       readonly paused: boolean
+      /** What pulling it down costs and gives back: "pull down: −25 coins · 2 planks back". */
+      readonly salvage: string
       readonly lines: ReadonlyArray<Line>
     }
   | {
@@ -129,6 +131,10 @@ export type Panel =
       readonly id: number
       readonly cell: Point
       readonly tier: Tier
+      /** Whether it can be closed (standing, not on fire), and whether it is: a closed home stands empty and costs nothing. */
+      readonly closable: boolean
+      readonly closed: boolean
+      readonly salvage: string
       readonly lines: ReadonlyArray<Line>
       /** What keeps it from the next tier, a line each; empty when nothing does (or there is no next tier). */
       readonly blockers: ReadonlyArray<Line>
@@ -239,6 +245,14 @@ export interface Stats {
   }
   readonly goals: ReadonlyArray<{ readonly text: string; readonly value: string; readonly met: boolean }>
   readonly larder: number
+  /**
+   * Each good over the last minute: made, used (eaten, worked up, built
+   * with, rotted, sent away), and bought less sold; and how much the town
+   * holds outside storage now (workshops, markets, baskets, crates). A
+   * rolling minute, reckoned again every ten seconds; `null` for the
+   * first half minute.
+   */
+  readonly flow: { readonly made: Amounts; readonly used: Amounts; readonly traded: Amounts; readonly elsewhere: Amounts } | null
   /** Food the town ate, and food that rotted in store, over the last minute. */
   readonly eaten: number
   readonly rotted: number

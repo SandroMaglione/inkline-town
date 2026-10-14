@@ -48,6 +48,26 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .hud .good { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px 4px 6px; background: #eef0ea; border-radius: 6px; cursor: default; }
 .hud .good .count { min-width: 2.5ch; font-weight: 700; font-size: 13px; }
 .hud .good.empty { opacity: 0.55; }
+.hud .stock { cursor: pointer; }
+.hud .stock:hover { border-color: #3d4943; }
+.hud .good { cursor: inherit; }
+/* Which way a good went over the last minute: room kept for it so the bar does not jump. */
+.hud .good .trend { display: inline-block; width: 1ch; margin-left: -3px; font-weight: 700; font-size: 12px; }
+
+/* Under the goods, on a click: the last minute of each, side by side. */
+.hud .flow { display: none; flex-direction: column; align-items: stretch; padding: 6px 14px 8px; cursor: pointer; max-width: 500px; }
+.hud .flow.open { display: flex; }
+.hud .flow .flow-grid { display: grid; grid-template-columns: minmax(9.5em, auto) repeat(5, minmax(6.5ch, auto)); column-gap: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.hud .flow .flow-grid > * { padding: 6px 0 6px 18px; border-top: 1px solid #e6e9e2; }
+.hud .flow .flow-grid > :nth-child(6n + 1) { padding-left: 0; }
+.hud .flow .flow-grid > :nth-child(-n + 6) { border-top: 0; padding-top: 4px; }
+.hud .flow .flow-grid > b { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: #77817a; text-align: right; white-space: nowrap; }
+.hud .flow .flow-grid > span:not(.name) { text-align: right; }
+.hud .flow .flow-grid i { font-style: normal; color: #c3c8c0; }
+.hud .flow .name { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.hud .flow .name .trend { margin-left: 2px; }
+.hud .flow .sub { margin: 4px 0; font-size: 12px; color: #77817a; }
+.hud .trend.steady { color: #a3aaa2; font-weight: 400; }
 
 /* ── The toolbar: the town's panel, the tools, the speed ── */
 .toolbar, .system {

@@ -5,7 +5,8 @@ import { shippedRules, type Rules } from "./rules/config.ts"
  * `appeal` in content): industry pushes homes away, parks and a chapel
  * draw them in. A park is its cells of ground taken together (see
  * `parkSources`): its reach is measured from its nearest cell. Buildings' effects add up; water and woods count
- * once however many are near, and so do paved streets. Plain functions,
+ * once however many are near, and so do paved streets. Fine homes lift the
+ * homes beside them (not themselves), up to `appeal.homesMost`. Plain functions,
  * shared by the simulation (which keeps the whole grid, see `Appraise`) and
  * the page (which explains one cell).
  */
@@ -20,10 +21,16 @@ export interface AppealSource {
   readonly size: number
   readonly value: number
   readonly reach: number
+  /** Rings it gives its whole value out to before it starts to fade (1 when not given). */
+  readonly full?: number
   /** What it is, for the readout: "park", "smithy", "water". */
   readonly label: string
-  /** `sum`: adds up with others; `nature` and `paved`: only the strongest of their kind counts. */
-  readonly mode: "sum" | "nature" | "paved"
+  /**
+   * `sum`: adds up with others; `nature` and `paved`: only the strongest of
+   * their kind counts; `homes`: adds up, to `appeal.homesMost` at most, and
+   * never on the home's own cell.
+   */
+  readonly mode: "sum" | "nature" | "paved" | "homes"
   /** A park: the cells it covers, inside the square (x, y, size) around them. */
   readonly cells?: ReadonlyArray<Point>
 }
@@ -40,17 +47,29 @@ const ringTo = (s: AppealSource, x: number, y: number) => {
   return best
 }
 
-/** What a source does at `ring` cells from its footprint: all of it beside it, fading to a little at its reach. */
-export const effectAt = (source: { readonly value: number; readonly reach: number }, ring: number): number => {
+/**
+ * What a source does at `ring` cells from its footprint: all of it out to
+ * `full` rings (beside it, when not given), then fading to a little at its
+ * reach. A chapel (4, out to 4, full 2) gives 4, 4, 2, 1.
+ */
+export const effectAt = (source: { readonly value: number; readonly reach: number; readonly full?: number }, ring: number): number => {
   if (ring > source.reach) return 0
-  return Math.trunc((source.value * (source.reach - Math.max(1, ring) + 1)) / source.reach)
+  const full = Math.max(1, Math.min(source.reach, source.full ?? 1))
+  if (ring <= full) return source.value
+  return Math.trunc((source.value * (source.reach - ring + 1)) / (source.reach - full + 1))
 }
+/** What a source does to a cell at `ring`: a home's lift is for its neighbours, not itself. */
+const effectOf = (s: AppealSource, ring: number) => (s.mode === "homes" && ring === 0 ? 0 : effectAt(s, ring))
 
 /** A building of a kind as a source, if it has any effect. */
 export const buildingSource = (kind: KindId, tile: { readonly x: number; readonly y: number; readonly size: number }, rules: Rules = shippedRules): AppealSource | null => {
   const a = rules.kinds[kind].appeal
-  return a ? { ...tile, value: a.value, reach: a.reach, label: rules.kinds[kind].title.toLowerCase(), mode: "sum" } : null
+  return a ? { ...tile, value: a.value, reach: a.reach, ...(a.full ? { full: a.full } : {}), label: rules.kinds[kind].title.toLowerCase(), mode: "sum" } : null
 }
+
+/** A citizens' home or a townhouse lifts the homes beside it; a settlers' cottage does nothing. */
+export const homeSource = (tier: 1 | 2 | 3, tile: { readonly x: number; readonly y: number; readonly size?: number }, rules: Rules = shippedRules): AppealSource | null =>
+  tier === 1 ? null : { x: tile.x, y: tile.y, size: tile.size ?? 1, ...(tier === 2 ? rules.appeal.citizens : rules.appeal.burghers), label: "fine homes beside it", mode: "homes" }
 
 export const landSource = (what: "water" | "forest" | "paved" | "ruin" | "worn", cell: { readonly x: number; readonly y: number; readonly size?: number }, rules: Rules = shippedRules): AppealSource => ({
   x: cell.x,
@@ -68,32 +87,35 @@ export const appealGrid = (sources: ReadonlyArray<AppealSource>, rules: Rules = 
   const sum = new Int32Array(GRID * GRID)
   const nature = new Int32Array(GRID * GRID)
   const paved = new Int32Array(GRID * GRID)
+  const homes = new Int32Array(GRID * GRID)
   for (const s of sources) {
-    const into = s.mode === "sum" ? sum : s.mode === "nature" ? nature : paved
+    const into = s.mode === "sum" ? sum : s.mode === "nature" ? nature : s.mode === "paved" ? paved : homes
     for (let y = Math.max(0, s.y - s.reach); y < Math.min(GRID, s.y + s.size + s.reach); y++) {
       for (let x = Math.max(0, s.x - s.reach); x < Math.min(GRID, s.x + s.size + s.reach); x++) {
-        const e = effectAt(s, ringTo(s, x, y))
+        const e = effectOf(s, ringTo(s, x, y))
         if (e === 0) continue
         const k = key(x, y)
-        if (s.mode === "sum") into[k] = into[k]! + e
+        if (s.mode === "sum" || s.mode === "homes") into[k] = into[k]! + e
         else if (e > 0 ? e > into[k]! : e < into[k]!) into[k] = e
       }
     }
   }
-  return Array.from({ length: GRID * GRID }, (_, k) => clamp(sum[k]! + nature[k]! + paved[k]!, rules))
+  return Array.from({ length: GRID * GRID }, (_, k) => clamp(sum[k]! + nature[k]! + paved[k]! + Math.min(rules.appeal.homesMost, homes[k]!), rules))
 }
 
 /** One cell's desirability and what makes it, strongest first: "park +6", "bakery −4". */
 export const appealParts = (sources: ReadonlyArray<AppealSource>, cell: { readonly x: number; readonly y: number }, rules: Rules = shippedRules) => {
   const parts = new Map<string, number>()
   const best = { nature: { label: "", value: 0 }, paved: { label: "", value: 0 } }
+  let homes = { label: "", value: 0 }
   for (const s of sources) {
-    const e = effectAt(s, ringTo(s, cell.x, cell.y))
+    const e = effectOf(s, ringTo(s, cell.x, cell.y))
     if (e === 0) continue
     if (s.mode === "sum") parts.set(s.label, (parts.get(s.label) ?? 0) + e)
+    else if (s.mode === "homes") homes = { label: s.label, value: Math.min(rules.appeal.homesMost, homes.value + e) }
     else if (Math.abs(e) > Math.abs(best[s.mode].value)) best[s.mode] = { label: s.label, value: e }
   }
-  for (const b of [best.nature, best.paved]) if (b.value !== 0) parts.set(b.label, (parts.get(b.label) ?? 0) + b.value)
+  for (const b of [best.nature, best.paved, homes]) if (b.value !== 0) parts.set(b.label, (parts.get(b.label) ?? 0) + b.value)
   const list = [...parts].map(([label, value]) => ({ label, value })).filter((p) => p.value !== 0)
   list.sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
   return { value: clamp(list.reduce((n, p) => n + p.value, 0), rules), parts: list }
@@ -212,7 +234,8 @@ export const parkSources = (cells: ReadonlyArray<ParkCell>, road?: (x: number, y
       const x = Math.min(...xs)
       const y = Math.min(...ys)
       const size = Math.max(Math.max(...xs) - x, Math.max(...ys) - y) + 1
-      return { x, y, size, value: p.value, reach: p.reach, label: "park", mode: "sum", cells: p.cells }
+      // A bigger park gives its whole worth further out: half its reach, rounded down.
+      return { x, y, size, value: p.value, reach: p.reach, full: Math.max(1, Math.floor(p.reach / 2)), label: "park", mode: "sum", cells: p.cells }
     })
 
 /** Per-minute upkeep paid for a park cell, including its furnishing. */

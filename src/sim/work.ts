@@ -9,8 +9,14 @@ import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { fieldDraft, treeDraft } from "../archetypes.ts"
 import { amounts, crewOf, goodIds, ticks, total, type Amounts, type Crew } from "../content.ts"
+
+/** The flow of goods is counted in slices this many seconds long, and the last `FLOW_SLICES` of them (a minute) are kept. */
+const FLOW_SLICE = 10
+const FLOW_SLICES = 6
+
+const each = (f: (g: (typeof goodIds)[number]) => number): Amounts => Object.fromEntries(goodIds.map((g) => [g, f(g)])) as Amounts
 import { around, doors, GridBuilder, key, ownerAt, reach, roadPrint, useAt } from "../grid.ts"
-import { Building, Burning, Charter, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Tree, maybe, type Status as StatusValue } from "../schema.ts"
+import { Building, Burning, Charter, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Tree, maybe, type Status as StatusValue } from "../schema.ts"
 import { connected, elapsed, seasonAt, TileRead, useOf } from "./shared.ts"
 
 import { assignWorkers, equipmentPace, effort, paced } from "../rules/production.ts"
@@ -52,12 +58,25 @@ export const IndexGrid = Game.System(
   }
 )
 
-/** The goods in every storage, summed. */
+/**
+ * The goods in every storage, summed; and everything the town holds,
+ * anywhere, for the minute's `Flow`, which closes every minute.
+ */
 export const CountStock = Game.System(
   "Town/CountStock",
   {
-    queries: { stores: Game.Query({ selection: { inventory: Game.Query.read(Inventory) }, with: [Storage], without: [Site, Rising] }) },
-    resources: { stock: Game.System.writeResource(Stock) }
+    queries: {
+      stores: Game.Query({ selection: { inventory: Game.Query.read(Inventory) }, with: [Storage], without: [Site, Rising] }),
+      shelves: Game.Query({ selection: { inventory: Game.Query.read(Inventory) }, without: [Site, Rising] }),
+      baskets: Game.Query({ selection: { roam: Game.Query.read(Roam) } }),
+      crates: Game.Query({ selection: { errand: Game.Query.read(Errand) } })
+    },
+    resources: {
+      time: Game.System.readResource(Time),
+      charter: Game.System.readResource(Charter),
+      stock: Game.System.writeResource(Stock),
+      flow: Game.System.writeResource(Flow)
+    }
   },
   ({ queries, resources }) => {
     const sum: Record<string, number> = { ...amounts({}) }
@@ -66,6 +85,46 @@ export const CountStock = Game.System(
       for (const g of goodIds) sum[g] = (sum[g] ?? 0) + s[g]
     }
     resources.stock.set(sum as Amounts)
+
+    const held: Record<string, number> = { ...amounts({}) }
+    for (const { data } of queries.shelves.each()) {
+      const s = data.inventory.get().stock
+      for (const g of goodIds) held[g] = held[g]! + s[g]
+    }
+    for (const { data } of queries.baskets.each()) {
+      const b = data.roam.get().basket
+      for (const g of goodIds) held[g] = held[g]! + b[g]
+    }
+    for (const { data } of queries.crates.each()) {
+      const e = data.errand.get()
+      held[e.good] = held[e.good]! + e.count
+    }
+    const tick = resources.time.get().tick
+    const charter = resources.charter.get()
+    const town = `${charter.seed}:${charter.founded}`
+    const f = resources.flow.get()
+    const now = held as Amounts
+    // A new or loaded town, or the clock gone back: start counting again from here.
+    if (f.town !== town || tick < f.since || f.start === null) {
+      resources.flow.set({ town, since: tick, start: now, made: amounts({}), traded: amounts({}), held: now, slices: [], last: null })
+      return
+    }
+    if (tick - f.since < ticks(FLOW_SLICE)) {
+      resources.flow.set({ ...f, held: now })
+      return
+    }
+    // A slice is done: the last minute rolls on by one, and is reckoned again.
+    const slices = [...f.slices, { start: f.start, made: f.made, traded: f.traded }].slice(-FLOW_SLICES)
+    const enough = slices.length >= FLOW_SLICES / 2
+    const scale = FLOW_SLICES / slices.length
+    const over = (key: "made" | "traded") => each((g) => slices.reduce((n, s) => n + s[key][g], 0))
+    const made = over("made"), traded = over("traded")
+    const used = each((g) => Math.max(0, slices[0]!.start[g] + made[g] + traded[g] - now[g]))
+    const perMinute = (a: Amounts) => each((g) => Math.round(a[g] * scale))
+    resources.flow.set({
+      town, since: tick, start: now, made: amounts({}), traded: amounts({}), held: now, slices,
+      last: enough ? { made: perMinute(made), used: perMinute(used), traded: perMinute(traded) } : null
+    })
   }
 )
 
@@ -226,12 +285,13 @@ export const Work = Game.System(
       rocks: Game.Query({ selection: { rock: Game.Query.write(Rock) } }),
       fields: Game.Query({ selection: { field: Game.Query.write(Field) } })
     },
-    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time), charter: Game.System.readResource(Charter) },
+    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time), charter: Game.System.readResource(Charter), flow: Game.System.writeResource(Flow) },
     services: { rules: Game.System.service(Rules) }
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
     const { kinds, winters, grown: GROWN } = rules
+    const made: Record<string, number> = {}
 
     const grid = resources.grid.get()
     const tick = resources.time.get().tick
@@ -312,6 +372,7 @@ export const Work = Game.System(
         if (progress > recipe.period * staff.needed) {
           recipe = { ...recipe, progress: 0, made: recipe.made + 1 }
           stock = { ...stock, [recipe.output]: stock[recipe.output] + recipe.batch }
+          made[recipe.output] = (made[recipe.output] ?? 0) + recipe.batch
           // Every so many jobs wear out a tool.
           if (kind.wear && recipe.made % kind.wear === 0 && stock.tools > 0) stock = { ...stock, tools: stock.tools - 1 }
         } else recipe = { ...recipe, progress }
@@ -333,6 +394,7 @@ export const Work = Game.System(
       if (stock !== inventory.stock) data.inventory.set({ ...inventory, stock })
       if (data.status.get() !== status) data.status.set(status)
     }
+    if (Object.keys(made).length > 0) resources.flow.update((f) => ({ ...f, made: each((g) => f.made[g] + (made[g] ?? 0)) }))
   }
 )
 

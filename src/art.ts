@@ -1064,6 +1064,8 @@ export interface HouseLook {
   readonly worn?: boolean
   /** Its neighbourhood: poor, plain, or fine (see `HouseView`). */
   readonly band?: "poor" | "plain" | "fine"
+  /** Closed by the town: it stands empty, shuttered and greyed. */
+  readonly closed?: boolean
   /** A map view's colour washed over it, when one is shown. */
   readonly tint?: number | undefined
 }
