@@ -165,9 +165,10 @@ try {
   facts.phoneViewport=true
   await tool("homes")
   const touch=await page.context().newCDPSession(page),beforeTouch=await snapshot(),cameraBefore=await page.evaluate(()=>window.town.view.stats())
-  await touch.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[{x:130,y:380,id:1}]})
-  await touch.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[{x:130,y:380,id:1},{x:230,y:420,id:2}]})
-  await touch.send("Input.dispatchTouchEvent",{type:"touchMove",touchPoints:[{x:100,y:350,id:1},{x:290,y:460,id:2}]})
+  // Below the ticker (the guide fills its top half on a phone), on the map itself.
+  await touch.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[{x:130,y:540,id:1}]})
+  await touch.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[{x:130,y:540,id:1},{x:230,y:580,id:2}]})
+  await touch.send("Input.dispatchTouchEvent",{type:"touchMove",touchPoints:[{x:100,y:510,id:1},{x:290,y:620,id:2}]})
   await touch.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]})
   const tf=await page.evaluate(()=>window.town.view.stats().frames)
   await page.waitForFunction(f=>window.town.view.stats().frames>f+5,tf)
