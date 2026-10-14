@@ -290,7 +290,7 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .dialog .choices { display: flex; gap: 6px; flex-wrap: wrap; }
 .dialog .choice { border-color: #c9cec4; color: #6c766f; }
 .dialog .choice.on { border-color: #3d4943; color: #3d4943; font-weight: 700; background: #e6e9e2; }
-.dialog .preview { display: flex; flex-direction: column; gap: 8px; }
+.dialog .preview { display: flex; flex-direction: column; gap: 6px; }
 /* The land is the picture the charter is chosen by: as large as the sheet allows, with its reroll on it. */
 .dialog .preview .map { position: relative; }
 .dialog .preview canvas { display: block; width: 100%; height: auto; aspect-ratio: 1; box-sizing: border-box; background: #e2e9e6; border: 1px solid #c9cec4; border-radius: 4px; image-rendering: pixelated; }
@@ -306,8 +306,10 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .dialog .charter section { margin-top: 22px; }
 .dialog .charter section:first-child { margin-top: 16px; }
 .dialog .preview .cells { position: absolute; left: 8px; bottom: 8px; margin: 0; padding: 3px 7px 3px 5px; font-size: 12px; background: rgba(247, 248, 244, 0.92); border-color: #c9cec4; }
-.dialog .note.facts { display: grid; grid-template-columns: repeat(3, 1fr); }
-.dialog .note.facts .ref { text-align: center; }
+.dialog .note.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 0; }
+.dialog .note.facts .ref { text-align: center; padding: 3px 5px; border-color: #c9cec4; }
+/* Only the title and the chosen options are bold on the founding screen. */
+.dialog .charter .ref { font-weight: 400; }
 .dialog h3 .glyph { display: inline-flex; margin-right: 6px; vertical-align: -3px; }
 .dialog .preview .sub { font-size: 12px; }
 .dialog .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 14px 0; }
