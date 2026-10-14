@@ -42,7 +42,7 @@
     display: flex; box-sizing: border-box; width: min(430px, 100%); padding: 4px 10px 6px;
     max-height: calc(100dvh - 190px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto;
   }
-  /* Narrow: a good by its icon (its name on a long press), the numbers close. */
+  /* Narrow: a good by its icon alone, the numbers close. */
   .hud .flow .flow-grid { grid-template-columns: auto repeat(5, minmax(0, 1fr)); font-size: 12px; }
   .hud .flow .flow-grid > * { padding: 5px 0 5px 6px; }
   .hud .flow .flow-grid > b { font-size: 10px; white-space: normal; line-height: 1.2; align-self: end; }
