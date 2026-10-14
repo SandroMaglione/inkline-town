@@ -124,7 +124,12 @@ try {
   await page.getByRole("button",{name:"load",exact:true}).click()
   await page.getByRole("button",{name:"Load without saving",exact:true}).click()
   await page.waitForFunction(()=>window.town.ui.stats!.settlers>100)
-  assert.deepEqual(await snapshot(),grown.world)
+  // The guide puts away what the bot's town has already done on the page's first frame; the rest loads exactly as saved.
+  const withoutGuide=(w:Snapshot)=>({...w,resources:{...w.resources,"Town/Guide":null}})
+  const loaded=await snapshot()
+  assert.deepEqual(withoutGuide(loaded),withoutGuide(grown.world))
+  assert.ok(["homes","fishery","market"].every(id=>loaded.resources["Town/Guide"].done.includes(id)),"The guide puts away what the town has done")
+  facts.guide=loaded.resources["Town/Guide"]
   const settledFrame=await page.evaluate(()=>window.town.view.stats().frames)
   await page.waitForFunction(start=>window.town.view.stats().frames>start+60,settledFrame)
   facts.populatedTown=await page.evaluate(()=>window.town.view.stats())

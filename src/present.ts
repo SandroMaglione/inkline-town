@@ -35,6 +35,7 @@ import {
   Figure,
   Game,
   Grid,
+  Guide,
   History,
   House,
   HouseNodes,
@@ -85,6 +86,7 @@ import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type Alert as Notice, type HitBox, type Legend, type Line, type View } from "./ui.ts"
 import { blockers as blockersOf, streetAdvice, type InTown, type Served, type Street } from "./rules/explain.ts"
 import { breadBonus, streetTax, suppliedTaxOf } from "./rules/households.ts"
+import { guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
 import { ticks } from "./content.ts"
 
 const cellAt = (at: Point): Point => {
@@ -327,6 +329,7 @@ export const Interact = Game.System(
       parks: ParkRead,
       trees: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Tree] }),
       water: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Water] }),
+      rocks: Game.Query({ selection: { tile: Game.Query.read(Tile), rock: Game.Query.read(Rock) } }),
       paved: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road, Paved] })
     },
     resources: {
@@ -345,7 +348,8 @@ export const Interact = Game.System(
       history: Game.System.readResource(History),
       chronicle: Game.System.readResource(Chronicle),
       appeal: Game.System.readResource(Appeal),
-      pantry: Game.System.readResource(Pantry)
+      pantry: Game.System.readResource(Pantry),
+      guide: Game.System.writeResource(Guide)
     },
     services: { ui: Game.System.service(Ui) }
   },
@@ -1063,16 +1067,6 @@ export const Interact = Game.System(
     if (remote.size > 0) alerts.push({ tone: "warn", text: `no workers within ${COMMUTE} road cells: ${list(remote)}`, at: first(remote)?.at ?? null, size: first(remote)?.at.size ?? 1, id: first(remote)?.id ?? null })
     const hallRow = buildings.find(({ data }) => data.hall.present)
     if (census.homes > 0 && larder(stock) === 0) alerts.push({ tone: "bad", text: "no food in store: homes go hungry", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
-    // A town's first steps, until it has taken them: the ticker is otherwise silent when there is least to go on.
-    const hallAt = { at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: null }
-    const standingKinds = new Set(buildings.filter(({ data }) => !data.site.present && !data.rising.present).map(({ data }) => data.building.get().kind))
-    const placedKinds = new Set(buildings.map(({ data }) => data.building.get().kind))
-    const residents = census.settlers + census.citizens
-    if (census.homes === 0 && houses.length === 0) alerts.push({ tone: "hint", text: "first: lay a road out from the town hall (R), then drag a row of homes along it (H); settlers move in on their own", ...hallAt })
-    else if (!placedKinds.has("fishery") && !placedKinds.has("bakery") && residents < 60) alerts.push({ tone: "hint", text: "settlers eat: build a fishery (B) within two cells of water, on a road; the town hall's walker hands the fish out", ...hallAt })
-    else if (residents >= 20 && !placedKinds.has("lumberjack") && stock.planks < 20) alerts.push({ tone: "hint", text: "planks are running out: a lumberjack by the woods and a sawmill make more; every home and building needs them", ...hallAt })
-    else if (residents >= 40 && !placedKinds.has("market") && standingKinds.has("fishery")) alerts.push({ tone: "hint", text: "the town hall's walker only reaches 20 road cells: a market (B) hands out food further along the streets", ...hallAt })
-
     const ledger = resources.ledger.get()
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
@@ -1093,6 +1087,81 @@ export const Interact = Game.System(
     const danger = (since: number, minutes: number) => (since < 0 ? null : seconds(since + minutes * 3600 - t))
     // The winter after the coming one, for the almanac.
     const comingYear = season.winter || winterOf(charter, season.year) === null ? season.year + 1 : season.year
+
+    // ── The mayor's guide ──
+    // The page writes what the mayor told it; then the guide puts away what the town has done, and picks the step to show.
+    for (const action of ui.guide.splice(0)) {
+      resources.guide.update((g) =>
+        action.type === "skip" ? (g.done.includes(action.id) ? g : { ...g, done: [...g.done, action.id] }) : { ...g, off: action.type === "off" }
+      )
+    }
+    const placedKinds = new Set(buildings.map(({ data }) => data.building.get().kind))
+    const standingKinds = new Set(buildings.filter(({ data }) => !data.site.present && !data.rising.present).map(({ data }) => data.building.get().kind))
+    const finished = (row: { readonly data: { readonly site: { readonly present: boolean }; readonly rising: { readonly present: boolean } } }) => !row.data.site.present && !row.data.rising.present
+    const wornRow = buildings.find((row) => finished(row) && !row.data.hall.present && (maybe(row.data.condition)?.value ?? CONDITION_MAX) < wear.mend)
+    // A settlers' home with bread, cloth, and faith, kept from citizens only by its street.
+    const poorRow = houses.find((row) => {
+      const h = row.data.house.get()
+      if (h.tier !== 1 || !finished(row)) return false
+      const tile = row.data.tile.get()
+      return met(h, "bread") && met(h, "cloth") && met(h, "faith") && appealAt(cells, tile.x, tile.y) < home.tiers[2].appeal
+    })
+    const facts: GuideFacts = {
+      homes: houses.length,
+      residents: census.settlers + census.citizens,
+      citizens: census.citizens,
+      finerHomes: houses.filter((row) => row.data.house.get().tier > 1).length,
+      placed: placedKinds,
+      standing: standingKinds,
+      stock,
+      sick: census.sick,
+      burning: census.burning,
+      winter: season.winter,
+      winterIn: season.coming === null ? null : seconds(season.left),
+      worn: wornRow !== undefined,
+      poorStreet: poorRow !== undefined,
+      crown: { open: crown.open, met: crown.met },
+      net: steadyNet(resources.history.get().samples, net),
+      approval: mood.approval,
+      trading: rates.sells.length > 0 || rates.buys.length > 0,
+      taxed: rates.settlers !== 100 || rates.citizens !== 100,
+      most: Math.max(...goodIds.map((g) => stock[g])),
+      sawTown: ui.menu === "town"
+    }
+    const guide = resources.guide.get()
+    const put = new Set(guide.done)
+    const playing = f.state === "playing" && !ui.founding
+    const newly = playing ? guideDone(facts, put) : []
+    if (newly.length > 0) {
+      resources.guide.update((g) => ({ ...g, done: [...g.done, ...newly] }))
+      for (const id of newly) put.add(id)
+    }
+    const step = guide.off || !playing ? null : guideStep(facts, put)
+    const hallTile = hallRow?.data.tile.get()
+    /** Of some tiles, the one nearest the town hall. */
+    const nearestHall = (tiles: ReadonlyArray<TileLike>): TileLike | undefined => {
+      if (!hallTile) return tiles[0]
+      let best: TileLike | undefined
+      let far = Infinity
+      for (const tile of tiles) {
+        const d = Math.abs(tile.x - hallTile.x) + Math.abs(tile.y - hallTile.y)
+        if (d < far) [best, far] = [tile, d]
+      }
+      return best
+    }
+    const focusOf = (focus: GuideFocus | null): { at: TileLike | null; id: number | null } => {
+      if (focus === null) return { at: null, id: null }
+      if (focus === "hall") return { at: hallTile ?? null, id: null }
+      if (focus === "water") return { at: nearestHall(queries.water.each().map(({ data }) => data.tile.get())) ?? null, id: null }
+      if (focus === "trees") return { at: nearestHall(queries.trees.each().map(({ data }) => data.tile.get())) ?? null, id: null }
+      if (focus === "stone" || focus === "ore") {
+        const ore = focus === "ore"
+        return { at: nearestHall(queries.rocks.each().filter(({ data }) => data.rock.get().ore === ore).map(({ data }) => data.tile.get())) ?? null, id: null }
+      }
+      const row = focus === "worn" ? wornRow : focus === "poorStreet" ? poorRow : buildings.find(({ data }) => data.building.get().kind === focus.kind)
+      return row ? { at: row.data.tile.get(), id: row.entity.id } : { at: null, id: null }
+    }
+    const shown = step ? focusOf(step.focus) : null
     ui.stats = {
       coins,
       taxes: ledger.taxes,
@@ -1166,7 +1235,13 @@ export const Interact = Game.System(
       burning: census.burning,
       history: resources.history.get().samples,
       chronicle: resources.chronicle.get().lines,
-      alerts
+      alerts,
+      guide: {
+        step: step && shown ? { key: step.id, chapter: step.chapter, text: step.text, at: shown.at, size: shown.at?.size ?? 1, id: shown.id } : null,
+        done: guideSteps.filter((s) => put.has(s.id)).length,
+        total: guideSteps.length,
+        off: guide.off
+      }
     }
   }
 )

@@ -73,6 +73,7 @@ export const blankResources = () => ({
   Fate: foundedFate(),
   History: { samples: [] },
   Chronicle: { lines: [] },
+  Guide: { done: [] as Array<string>, off: false },
   Appeal: { cells: [] },
   Pantry: { eaten: 0, rotted: 0, eatenLast: 0, rottedLast: 0, warned: -1_000_000 },
   Fires: { fires: [], next: 1 },
