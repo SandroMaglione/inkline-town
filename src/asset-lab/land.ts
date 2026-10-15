@@ -187,7 +187,7 @@ export function makeRock(ore: boolean, stage: boolean | "worked", variant = 0, w
   const size=w*h>1?`-${w}x${h}`:""
   const state=stage==="worked"?"worked":stage?"full":"quarried",full=stage===true
   const d=new Drawing(`${ore?"ore":"stone"}-${state}${size}`,`${name} · ${state==="worked"?"worked face":state}${size?` · ${w}×${h}`:""}`,state==="worked"
-    ?"Quarried down to a worked face: low cut benches with chisel marks, squared blocks and spoil. It still gives a little, slowly; the bulldozer clears it."
+    ?"Quarried down to a worked face: a low mound with a square-cut bench, squared blocks and spoil. It still gives a little, slowly; the bulldozer clears it."
     :"A clustered deposit with clean shaded facets and seeded silhouettes. Stone is pale rounded boulders; ore is dark slate with rust-red shards.")
   d.asset.category="land";d.asset.reference={type:"rock",x:ore?5:0,y:ore?3:0,ore,amount:state==="worked"?1:full?40:10};d.asset.footprint=Math.max(w,h)
   const A=w*8*U,B=h*8*U,small=Math.min(w,h),grow=1+(small-1)*0.55
@@ -214,7 +214,7 @@ export function makeRock(ore: boolean, stage: boolean | "worked", variant = 0, w
 
 /**
  * A deposit quarried down: a low, rough mound where the boulders stood,
- * with a square-cut bench standing in it, chisel-marked, and a cut block or
+ * with a square-cut bench standing in it, and a cut block or
  * two set down beside it. Ore keeps its slate and a rust seam along the
  * cut. Nothing stands proud, so it reads apart from a half-quarried rock.
  */
@@ -232,10 +232,6 @@ function workedFace(d: Drawing, ore: boolean, variant: number, A: number, B: num
     let start=d.asset.faces.length
     d.box(su,sv,sa,sb,0,h,c.top,c.left,c.right,0.8)
     d.volume(start,0.6)
-    for(const k of [-0.55,-0.1,0.35]){
-      d.line([[su+sa+0.02,sv+k*sb,h*0.25],[su+sa+0.02,sv+k*sb+0.5*U,h*0.75]],0.6,palette.ink,0.5)
-      d.line([[su+k*sa,sv+sb+0.02,h*0.25],[su+k*sa+0.5*U,sv+sb+0.02,h*0.75]],0.6,palette.ink,0.5)
-    }
     if(ore){
       d.face([[su+sa+0.015,sv-sb,h*0.45],[su+sa+0.015,sv+sb,h*0.45],[su+sa+0.015,sv+sb,h*0.6],[su+sa+0.015,sv-sb,h*0.6]],RUST,0)
       d.face([[su-sa,sv+sb+0.015,h*0.45],[su+sa,sv+sb+0.015,h*0.45],[su+sa,sv+sb+0.015,h*0.6],[su-sa,sv+sb+0.015,h*0.6]],RUST,0)
