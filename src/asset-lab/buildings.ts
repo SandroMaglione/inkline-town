@@ -2,6 +2,9 @@ import { kinds, type KindId } from "../content.ts"
 import { U } from "../iso.ts"
 import { Drawing, palette, pale, square, sides, type Vertex, type Side } from "./primitives.ts"
 import { finishTownBuilding, townBuildingNotes, institutionDoor, makeQuarry } from "./services.ts"
+import { isWorkshop, makeWorkshop, workshopSmokeOrigin, townHallEntrance } from "./workshops.ts"
+import { isTradeYard, makeTradeYard, tradeSmokeOrigin, tradeEntrance, millHoist } from "./trades.ts"
+import { chapelPorch, hayBands, isRuralDoor, lumberRack, nursery, ruralEntrance, ruralNotes, sheepTrough } from "./rural.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
   townhall: { accent: 0x8a58a8, glass: 0xf3dca6 },
@@ -38,6 +41,8 @@ export interface BuildingOptions {
   motion?: boolean
 }
 export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
+  if (isWorkshop(id)) return makeWorkshop(id, options)
+  if (isTradeYard(id)) return makeTradeYard(id, options)
   if (id === "quarry") return makeQuarry(options)
   const fit = options.fit ?? 1
   const kind = kinds[id],
@@ -49,12 +54,12 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
   const d = new Drawing(
     id,
     kind.title,
-    townBuildingNotes[id] ?? (id === "mill"
-      ? "Upright lattice sails, a tapered roof and coopered flour barrels in the mill yard."
+    ruralNotes[id] ?? townBuildingNotes[id] ?? (id === "mill"
+      ? "Upright lattice sails and a tapered roof, with braced grain-loading doors, a sack hoist and coopered flour barrels."
       : id === "market"
         ? "Striped canopy, coloured goods crates and roof flag, all built as geometry."
         : id === "townhall"
-          ? "Two storeys, clock faces, violet trim, three skylights and a red flag. Original dimensions throughout."
+          ? "Civic timber double doors beneath stone porches, with broad steps, clocks, violet trim, three skylights and a red flag."
           : "Original footprint, palette and yard details, with complete walls and roof geometry.")
   )
   d.asset.category = "buildings"
@@ -74,6 +79,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
     if (kind.roof === "flat" && fit > 0.4)
       for (let floor = 0; floor < kind.stories; floor++)
         for (const s of positions) {
+          if (id === "granary" && floor === 1) continue
           if (id === "chapel") {
             const z = floor * 32 + 9,
               w = 1 / 16,
@@ -83,7 +89,13 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
           } else d.window(side, a, s, floor * 32 + 12, 8, glass, true)
         }
     if (door && fit > 0.15) {
-      if (id === "chapel" || id === "hospital") institutionDoor(d,side,a,id,fit)
+      if (id === "townhall") townHallEntrance(d, side, a, fit, options.open ?? 0)
+      else if (id === "mill" || id === "watchhouse") tradeEntrance(d, id, side, a, fit, options.open ?? 0)
+      else if (isRuralDoor(id)) ruralEntrance(d, id, side, a, fit, options.open ?? 0)
+      else if (id === "chapel" || id === "hospital") {
+        institutionDoor(d,side,a,id,fit)
+        if (id === "chapel") chapelPorch(d, side, a, fit)
+      }
       else d.door(side, a, Math.max(2, Math.round(Math.min(16, H - 8) * fit)), 5 * U, 6 * U, 2.5 * U, accent, true, options.open ?? 0)
     }
     if (kind.roof === "gable" && !door && fit > 0.4) d.window(side, a, 0, 6)
@@ -114,6 +126,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
     for (let row = 0; row < kind.bays; row++)
       for (let col = 0; col < kind.bays; col++) {
         if (
+          id === "chapel" ||
           (kind.topper === "flag" && row === 0 && col === kind.bays - 1) ||
           (["chimney", "cupola", "crates"].includes(kind.topper) && row === 0 && col === 0)
         )
@@ -189,6 +202,32 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
   return d.asset
 }
 
+/** Shared by catalogue geometry and working-building emitters. Open yards have no flue. */
+export function buildingSmokeOrigin(id: KindId, doors?: BuildingOptions["doors"]): Vertex | null {
+  if (isWorkshop(id)) return workshopSmokeOrigin(id, doors)
+  if (isTradeYard(id)) return tradeSmokeOrigin(id, doors)
+  const kind = kinds[id]
+  if (kind.topper !== "chimney") return null
+  const a = kind.half * U, pitch = 2 * a / kind.bays
+  return [-a + pitch * 0.5, -a + pitch * 0.5, (kind.roof === "gable" ? 20 : kind.stories * 32) + 24.3]
+}
+
+/** Presentation dimensions stay separate from simulation footprints and content costs. */
+export function buildingDimensions(id: KindId) {
+  if (isTradeYard(id)) return {
+    half: (id === "warehouse" ? 21 : 13.5) * U,
+    height: id === "fishery" ? 20 : id === "bakery" ? 28 : id === "weaver" ? 30 : 32,
+    top: id === "warehouse" ? 45 : id === "fishery" ? 30 : id === "bakery" ? 48.3 : 38
+  }
+  const kind = kinds[id], height = kind.roof === "gable" ? 20 : kind.stories * 32
+  const topper = kind.topper === "chimney" || kind.topper === "flag" ? 24 : kind.topper === "cupola" ? 25 : kind.topper === "sails" ? 16 : 0
+  return {
+    half: isWorkshop(id) ? 13.5 * U : kind.half * U,
+    height,
+    top: id === "firewatch" ? 55 : id === "sawmill" ? 36.7 : id === "mine" || id === "smithy" ? 56 : height + topper
+  }
+}
+
 function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number, fit = 1) {
   const kind = kinds[id],
     c = (a + p) / 2,
@@ -223,10 +262,6 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
       ],
       1.5
     )
-  } else if (kind.topper === "crates" && fit > 0.5) {
-    d.crate(u, v, H, 0xd27a34, 3 * U, 12)
-    d.crate(u + 7 * U, v, H, 0x2f8c87, 3 * U, 12)
-    d.crate(u + 3 * U, v, H + 12, 0x8a58a8, 3 * U, 12)
   }
   const post = (x: number, y: number, h: number) =>
     d.line(
@@ -238,19 +273,12 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
     )
   const bush = (x: number, y: number, r: number, shade = 0xc6d4b2, light = 0xe4ecd6) =>
     d.ellipsoid(x, y, r, r / 45.2548, r / 45.2548, r * 0.866, shade, 1, light)
-  const pyramid = (x: number, y: number, half: number, z: number, rise: number, color: number) => {
-    const base = square(x, y, half, z)
-    for (let i = 0; i < 4; i++) d.face([base[i]!, base[(i + 1) % 4]!, [x, y, z + rise]], pale(color, i >= 2 ? 0.7 : 0.52))
-  }
   if (fit <= 0.75) return
   finishTownBuilding(d, id, a, p, H)
+  if (id === "mill") millHoist(d, a)
   switch (id) {
-    case "warehouse":
-      d.crate(c, c - 1.3 * U, 0, 0x2f8c87, 1.1 * U, 6)
-      d.crate(c, c + 1.3 * U, 0, 0xd27a34, 1.1 * U, 6)
-      d.barrel(c, -a - 2 * U, 1.5 * U)
-      break
     case "lumberjack": {
+      lumberRack(d, a, p)
       for (const [du, z] of [
         [-1.6, 0],
         [0, 0],
@@ -258,7 +286,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
         [-0.8, 2.6],
         [0.8, 2.6]
       ])
-        d.log("v", c + du! * U, a + 0.5 * U, p - 0.5 * U, z!, 1.6, 0xb08a5e, 0xe9d2a8)
+        d.log("v", c + du! * U, a + 0.5 * U, p - 0.5 * U, z! + 1.5, 1.6, 0xb08a5e, 0xe9d2a8)
       const y = -a - 1.5 * U
       d.cylinder(c, y, 1.3 * U, 0, 3, 0xb08a5e, 0xe9d2a8, 1.5)
       d.line(
@@ -273,14 +301,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
       break
     }
     case "forester":
-      for (const [x, y, s] of [
-        [c, c, 0.8],
-        [c, -a - 2 * U, 0.6],
-        [-a - 2 * U, c, 0.55]
-      ]) {
-        d.cylinder(x!, y!, 1.2 * U, 0, 3, 0xd5a86c, 0x7d6140, 1.5)
-        d.fir(x!, y!, 3, s!, 2)
-      }
+      nursery(d, a, p)
       break
     case "quarry": {
       for (const [x, y, z] of [
@@ -306,66 +327,6 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
       d.box(c, y, U, U, 4, 4, 0xeeefea, 0xdcded7, 0xc9ccc4)
       break
     }
-    case "mine": {
-      for (const du of [-1, 1])
-        d.line(
-          [
-            [c + du * U, a + 0.5 * U, 0],
-            [c + du * U, p - 0.2 * U, 0]
-          ],
-          1,
-          palette.ink,
-          0.6
-        )
-      d.box(c, c, 1.6 * U, 2 * U, 2, 5, 0x6c7488, 0xd5dae4, 0xbcc3d1)
-      for (const [du, dv] of [
-        [-0.8, -0.5],
-        [0.7, 0.5],
-        [0, 0]
-      ])
-        d.ellipsoid(c + du! * U, c + dv! * U, 7.5, 0.035, 0.035, 1.5, 0x5a6479, 0.75)
-      for (const dv of [-1.2, 1.2]) d.cylinder(c + 1.6 * U, c + dv * U, 0.026, 0, 3, palette.ink, palette.ink, 0.75)
-      pyramid(c - U, -a - 2 * U, 2 * U, 0, 6, 0x5a6479)
-      break
-    }
-    case "fishery": {
-      d.cylinder(c, c, 1.5 * U, 0, 7, 0xc79a5b, 0x9fc9c4, 1.5)
-      const y0 = -a - 4 * U,
-        y1 = -a + 3 * U
-      post(c, y0, 11)
-      post(c, y1, 11)
-      d.line([
-        [c, y0, 11],
-        [c, y1, 11]
-      ])
-      for (let i = 1; i <= 3; i++) {
-        const y = y0 + ((y1 - y0) * i) / 4
-        d.line([
-          [c, y, 11],
-          [c, y, 9]
-        ])
-        d.ellipsoid(c, y, 6, 0.028, 0.045, 3, 0x2f8c87, 1)
-        d.face(
-          [
-            [c, y - 0.04, 4],
-            [c, y + 0.04, 4],
-            [c, y, 3]
-          ],
-          0x2f8c87,
-          1
-        )
-      }
-      break
-    }
-    case "sawmill":
-      for (let i = 0; i < 3; i++) d.box(c, -a + 1.5 * U, 1.1 * U, 3 * U, i * 2.5, 2.5, 0xf0c59a, 0xe2a873, 0xd2945c, 1)
-      d.log("u", c, -a - 3 * U, -a + 4 * U, 0, 2, 0xb08a5e, 0xe9d2a8)
-      break
-    case "smithy":
-      d.cylinder(c, c, U, 0, 3, 0xb08a5e, 0xe9d2a8, 1.5)
-      d.box(c, c, 0.6 * U, 1.4 * U, 3, 3, 0x6d7671, 0x5a625e, 0x4b524e)
-      pyramid(c, -a - 1.5 * U, 1.2 * U, 0, 5, 0x3d4943)
-      break
     case "farm":
       d.cylinder(c + U, -a - 3 * U, 3.5 * U, 0, 28, 0xeeeae0, pale(0xc4523f, 0.6), 1.5)
       {
@@ -386,18 +347,11 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
         [c - 1.2 * U, 0],
         [c + 1.2 * U, 0],
         [c, 5.3]
-      ])
+      ]) {
         d.log("u", y!, a + 2 * U, a + 7 * U, z!, 3, 0xe9cf7c, 0xf3e3a8)
+        hayBands(d, y!, a + 2 * U, a + 7 * U, z!, 3)
+      }
       break
-    case "bakery": {
-      d.barrel(c, -a - U, U, 0, 8, 0xf1e9d5)
-      d.barrel(c, -a + 2 * U, U, 0, 7)
-      post(c, c, 12)
-      const p = (x: number, z: number): Vertex => [c + x / 64, c - x / 64, z]
-      d.face([p(-4, 11), p(4, 11), p(4, 17), p(-4, 17)], 0xfaf3e3, 1)
-      d.ellipsoid(c + 0.015, c + 0.015, 14, 0.05, 0.05, 1.3, 0xc4523f, 0.75)
-      break
-    }
     case "sheep": {
       const s = a + U,
         e = p - U
@@ -408,14 +362,20 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
         [e, e]
       ])
         post(x!, y!, 6)
-      for (const z of [2.5, 5.5])
+      for (const z of [2.5, 5.5]) {
         d.line([
           [s, s, z],
-          [s, e, z],
-          [e, e, z],
           [e, s, z],
+          [e, e, z],
+          [s, e, z],
+          [s, 21 * U, z]
+        ])
+        d.line([
+          [s, 17 * U, z],
           [s, s, z]
         ])
+      }
+      for (const y of [17 * U, 21 * U]) post(s, y, 6)
       for (const [x, y, facing] of [
         [s + 3 * U, s + 4 * U, 1],
         [s + 6 * U, s + 2.5 * U, -1],
@@ -434,32 +394,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
         d.ellipsoid(x! + facing! * 0.1, y!, 5.5, 0.032, 0.032, 1.4, palette.ink, 0)
       }
       d.cylinder(c, -a - 3 * U, 2 * U, 0, 5, 0xe9cf7c, 0xf3e3a8, 1.5)
-      break
-    }
-    case "weaver": {
-      const y0 = -a - 2.5 * U,
-        y1 = -a + 5 * U
-      post(c, y0, 11)
-      post(c, y1, 11)
-      d.line([
-        [c, y0, 11],
-        [c, y1, 11]
-      ])
-      for (const [i, color] of [0x8a58a8, 0xd6ae2e, 0x3d6db5].entries()) {
-        const s = y0 + ((y1 - y0) / 3) * i + 0.4 * U,
-          e = y0 + ((y1 - y0) / 3) * (i + 1) - 0.4 * U
-        d.face(
-          [
-            [c, s, 10.5],
-            [c, e, 10.5],
-            [c, e, 4 + (i % 2)],
-            [c, s, 4 + (i % 2)]
-          ],
-          color
-        )
-      }
-      d.barrel(c, c, U, 0, 7, 0xeceee8)
-      d.face([[c-U,c,7.04],[c+U,c,7.04],[c+U,c+U,6],[c-U,c+U,6]],0xb7a4ca,0.75)
+      sheepTrough(d, a)
       break
     }
     case "chapel":

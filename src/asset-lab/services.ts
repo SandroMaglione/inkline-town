@@ -4,6 +4,7 @@ import { Drawing, palette, pale, sides, square, type Vertex, type Side } from ".
 import { bench, flowerBed } from "./town-props.ts"
 import type { BuildingOptions } from "./buildings.ts"
 import { rockOutcrop } from "./land.ts"
+import { firewatchAccess, granaryVents } from "./rural.ts"
 
 export function institutionDoor(d: Drawing, side: Side, a: number, kind: "chapel" | "hospital", fit: number) {
   const p = (s: number, z: number, out = 0.015) => d.wall(side,a,s,z*fit,out)
@@ -58,7 +59,7 @@ export const townBuildingNotes: Partial<Record<KindId, string>> = {
   firewatch: "A timber lookout and alarm bell above the red roof; ladder, buckets and a water butt below.",
   healer: "An apothecary with a mortar sign, herb beds, medicine jars and a waiting bench.",
   hospital: "Pale green ward windows, a roof lantern, medical emblems and a waiting bench.",
-  watchhouse: "Blue shield, barred windows, a lantern and a street noticeboard.",
+  watchhouse: "A guarded timber entrance with bracing and viewing grilles, beneath a blue shield; barred windows, a lantern and a street noticeboard remain.",
   builder: "Open timber racks, trestle workbench, mallet, ladder and dressed stone."
 }
 
@@ -77,7 +78,7 @@ export function finishTownBuilding(d: Drawing, id: KindId, a: number, p: number,
       const at = (s: number, z: number) => d.wall(side, a, s, z, 0.015)
       for (const x of [-a + U, a - U]) d.line([at(x, 0), at(x, H)], 1.5, 0x9f8b69)
       d.line([at(-a + U, 28), at(0, 40), at(a - U, 28)], 1, 0x9f8b69)
-      for (const z of [47, 50, 53]) d.line([at(-2 * U, z), at(2 * U, z)], 1, 0xa99575)
+      granaryVents(d, side, a)
     }
     post(c, -a * 0.4, 43)
     d.line([[c, -a * 0.4, 43], [c, a * 0.5, 43], [c, a * 0.5, 33]], 1.5, 0x8a6a45)
@@ -106,7 +107,7 @@ export function finishTownBuilding(d: Drawing, id: KindId, a: number, p: number,
     d.cylinder(0, 0, 1.5 * U, z + 5, 1, 0xc2ac70, 0xe4d29a, 1, 12)
     d.ellipsoid(0, 0, z + 7, U, U, 2, 0xd3bd84, 1, undefined, 12)
     d.line([[0, 0, z + 9], [0, 0, z + 14]], 1)
-    ladder(p-U,a+0.003,-a/2,H+7)
+    firewatchAccess(d, a, p, H)
     d.barrel(c, c, 2 * U, 0, 9, 0xc9dde6)
     for (const y of [-2, 1]) d.cylinder(-a - 2 * U, c + y * U, U, 0, 4, 0xbda07a, 0xa9c5d0, 1, 12)
   } else if (id === "healer" || id === "hospital") {
@@ -158,8 +159,7 @@ export function finishTownBuilding(d: Drawing, id: KindId, a: number, p: number,
     d.box(-a / 2, c, 3 * U, 2 * U, 6, 1, 0xe9d2a8, 0xd0b58c, 0xb08a5e, 1)
     d.line([[-a / 2, c, 7], [-a / 2 + U, c, 11]], 1.5, 0x8a6a45)
     d.box(-a / 2 + U, c, U, 0.7 * U, 10, 2, 0x9ca79a, 0xbfc8ba, 0x8f9a8c, 0.75)
-    // Both rails clear the six-unit awning; the rear rack and ground blocks
-    // leave this stretch of wall and the ladder's feet unobstructed.
+    // The ladder stays beside the timber entry, clear of the rack and ground blocks.
     ladder(p-U,a+0.003,a-2*U,18)
     for (const x of [-1, 1]) d.box(c + x * U, c - U, U, U, 0, 3, 0xe4e6df, 0xd6d9cf, 0xc2c9bd, 1)
   }

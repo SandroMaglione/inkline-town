@@ -32,9 +32,9 @@ root.innerHTML = `
   <header><a href="/model-review.html">Model review ↗</a><span>COMPLETE ASSET CATALOGUE</span><a href="/effects-lab.html">Animated house effects ↗</a></header>
   <div class="intro"><div><h1>The same ink.<br>A different angle.</h1><p>Original game drawings and complete 3D assets, side by side.</p></div><span class="tag">Procedural · Orthographic · Rotatable</span></div>
   <div class="filters"><label>Collection <select id="category"></select></label><label>Find <input id="search" type="search" placeholder="Name or material"></label><a href="/service-upgrades.html">Compare service tiers ↗</a><a href="/map-lab.html">See everything on the map ↗</a></div><nav class="assets" aria-label="Choose an asset"></nav>
-  <section class="comparison" aria-label="Compare the original drawing with the 3D model">
-    <div class="view"><div class="view-label"><span>01 / CURRENT GAME</span><span>Fixed isometric drawing</span></div><canvas id="reference" aria-label="Original 2D asset"></canvas><span class="view-foot">Original art.ts drawing</span></div>
-    <div class="view"><div class="view-label"><span>02 / 3D STUDY</span><span id="angle-label">Original angle</span></div><div id="viewer" role="img" aria-label="Rotatable 3D asset. Drag horizontally to rotate."></div><span class="view-foot">Drag to rotate · wheel to zoom</span></div>
+  <section class="comparison" aria-label="Compare the original 2D drawing with the current 3D model">
+    <div class="view"><div class="view-label"><span>01 / ORIGINAL 2D ART</span><span>Fixed isometric drawing</span></div><canvas id="reference" aria-label="Original 2D asset"></canvas><span class="view-foot">Original art.ts drawing</span></div>
+    <div class="view"><div class="view-label"><span>02 / CURRENT 3D MODEL</span><span id="angle-label">Original angle</span></div><div id="viewer" role="img" aria-label="Rotatable 3D asset. Drag horizontally to rotate."></div><span class="view-foot">Drag to rotate · wheel to zoom</span></div>
   </section>
   <section class="controls" aria-label="Camera controls"><button id="reset">Match original view</button><label>Rotation <input id="rotation" type="range" min="-180" max="180" value="0" step="1"><output id="rotation-value">0°</output></label><label>Elevation <input id="elevation" type="range" min="10" max="65" value="30" step="1"><output id="elevation-value">30°</output></label><button id="rear">See the back</button></section>
   <section class="caption"><div><h2 id="asset-title"></h2><p id="asset-note"></p></div><div class="downloads"><button id="download-glb">Download GLB</button><button id="download-source">Download geometry</button><button id="download-png">Save comparison</button></div></section>
@@ -235,9 +235,8 @@ function render() {
   const ref = references.get(selected.id)!
   const model = models.get(selected.id)!
   const effectBounds=selected.smokeEffect||selected.fountains?.length?new THREE.Box3().setFromObject(model.group):null
-  const upgraded = selected.reference?.type === "building" && selected.reference.tier === 2
-  const bounds = upgraded ? new THREE.Box3().setFromObject(model.group).getBoundingSphere(new THREE.Sphere()) : null
-  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds?effectBounds.getSize(new THREE.Vector3()).y*1.45:0, bounds ? bounds.radius * 2.4 * Math.max(1, height / width) : 0) / zoom
+  const bounds = selected.reference?.type === "building" ? new THREE.Box3().setFromObject(model.group).getBoundingSphere(new THREE.Sphere()) : null
+  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds?effectBounds.getSize(new THREE.Vector3()).y*1.45:0, bounds ? bounds.radius * 2.6 * Math.max(1, height / width) : 0) / zoom
   renderer.setSize(width, height, false)
   camera.left = (-vertical * width) / height / 2
   camera.right = -camera.left
