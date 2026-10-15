@@ -118,7 +118,9 @@ const layout: Array<[string, number, number]> = [
   ["smithy", -2, 1],
   ["bakery", 3, 1],
   ["weaver", 7, 1],
-  ["fishery", 13, 1]
+  ["fishery", 13, 1],
+  ["market-hall", -7, -5],
+  ["church", 8, -10]
 ]
 for (const [id, x, y] of layout) place(id, x, y)
 const homes = inkAssets.filter((a) => a.category === "homes")

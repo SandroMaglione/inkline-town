@@ -62,7 +62,8 @@ for (const asset of inkAssets) {
 await writeFile(path.join(output, "manifest.json"), JSON.stringify({ models: manifest.length, assets: manifest }, null, 2))
 for (const [input, directory, filename] of [
   ["asset-lab.html", "viewer", "inkline-3d-study.html"],
-  ["map-lab.html", "map-viewer", "inkline-3d-map.html"]
+  ["map-lab.html", "map-viewer", "inkline-3d-map.html"],
+  ["service-upgrades.html", "service-viewer", "inkline-service-upgrades.html"]
 ]) {
   await build({
     configFile: false,

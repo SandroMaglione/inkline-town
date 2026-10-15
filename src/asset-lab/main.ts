@@ -28,14 +28,14 @@ const root = document.querySelector<HTMLDivElement>("#lab")!
 root.innerHTML = `
   <header><a href="/">Inkline Town</a><span>COMPLETE ASSET STUDY</span></header>
   <div class="intro"><div><h1>The same ink.<br>A different angle.</h1><p>Original game drawings and complete 3D assets, side by side.</p></div><span class="tag">Procedural · Orthographic · Rotatable</span></div>
-  <div class="filters"><label>Collection <select id="category"></select></label><label>Find <input id="search" type="search" placeholder="Name or material"></label><a href="/map-lab.html">See everything on the map ↗</a></div><nav class="assets" aria-label="Choose an asset"></nav>
+  <div class="filters"><label>Collection <select id="category"></select></label><label>Find <input id="search" type="search" placeholder="Name or material"></label><a href="/service-upgrades.html">Compare service tiers ↗</a><a href="/map-lab.html">See everything on the map ↗</a></div><nav class="assets" aria-label="Choose an asset"></nav>
   <section class="comparison" aria-label="Compare the original drawing with the 3D model">
     <div class="view"><div class="view-label"><span>01 / CURRENT GAME</span><span>Fixed isometric drawing</span></div><canvas id="reference" aria-label="Original 2D asset"></canvas><span class="view-foot">Original art.ts drawing</span></div>
     <div class="view"><div class="view-label"><span>02 / 3D STUDY</span><span id="angle-label">Original angle</span></div><div id="viewer" role="img" aria-label="Rotatable 3D asset. Drag horizontally to rotate."></div><span class="view-foot">Drag to rotate · wheel to zoom</span></div>
   </section>
   <section class="controls" aria-label="Camera controls"><button id="reset">Match original view</button><label>Rotation <input id="rotation" type="range" min="-180" max="180" value="0" step="1"><output id="rotation-value">0°</output></label><label>Elevation <input id="elevation" type="range" min="10" max="65" value="30" step="1"><output id="elevation-value">30°</output></label><button id="rear">See the back</button></section>
   <section class="caption"><div><h2 id="asset-title"></h2><p id="asset-note"></p></div><div class="downloads"><button id="download-glb">Download GLB</button><button id="download-source">Download geometry</button><button id="download-png">Save comparison</button></div></section>
-  <footer><span>Same palette, dimensions and two ink weights. New faces complete the volume.</span><span>Three.js prototype · PixiJS 3D integration pending</span></footer>
+  <footer><span>Same palette, dimensions and two ink weights. New faces complete the volume.</span><span>Three.js · shared game geometry</span></footer>
 `
 const viewer = document.querySelector<HTMLDivElement>("#viewer")!
 const reference = document.querySelector<HTMLCanvasElement>("#reference")!
@@ -223,7 +223,9 @@ function render() {
     height = viewer.clientHeight
   if (!width || !height) return
   const ref = references.get(selected.id)!
-  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3) / zoom
+  const upgraded = selected.reference?.type === "building" && selected.reference.tier === 2
+  const bounds = upgraded ? new THREE.Box3().setFromObject(models.get(selected.id)!.group).getBoundingSphere(new THREE.Sphere()) : null
+  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, bounds ? bounds.radius * 2.4 * Math.max(1, height / width) : 0) / zoom
   renderer.setSize(width, height, false)
   camera.left = (-vertical * width) / height / 2
   camera.right = -camera.left
@@ -231,7 +233,7 @@ function render() {
   camera.bottom = -camera.top
   const heading = ((45 + yaw) * Math.PI) / 180,
     altitude = (pitch * Math.PI) / 180
-  const target = new THREE.Vector3(0, -(ref.y + ref.height / 2) / Math.cos(Math.PI / 6), 0)
+  const target = bounds?.center ?? new THREE.Vector3(0, -(ref.y + ref.height / 2) / Math.cos(Math.PI / 6), 0)
   camera.position
     .copy(target)
     .add(

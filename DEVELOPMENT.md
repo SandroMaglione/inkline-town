@@ -68,23 +68,29 @@ and elevation controls also work with a keyboard. The original view uses a
 
 | Collection | Models | Coverage |
 | --- | ---: | --- |
-| Buildings | 16 | Every building kind, with its roof, topper and yard |
+| Buildings | 18 | Every building kind, plus tier 2 market hall and church |
 | Homes | 8 | Both tiers in all four roof palettes |
 | Land | 19 | Three tree shapes at three growth stages, stone and ore in both resource states, four crop stages, roads and water |
 | People | 27 | Carriers, settlers, citizens, market and chapel walkers, all six hats and the sixteen reference-gallery residents |
 | Cargo and vehicles | 69 | Eleven distinct goods and labelled crates; empty handcart/barrow and small/full loads of each good; the approved mixed goods plate |
 | Construction and effects | 10 | Empty/supplied sites, frame/walls, problem sign, smoke and four placement/reach outlines |
 
-The 149 entries cover object families and representative seeded variants.
+The 151 entries cover object families and representative seeded variants.
 Continuous growth, construction progress, walk poses and colours can be
 generated; this is not a list of every possible random seed. Page icons
 remain the game's original 2D UI art.
 
 ![Complete 3D world catalogue at a rotated angle](screenshots/3d-catalogue.webp)
 
-`pnpm assets:build` exports 149 GLBs and editable geometry descriptions,
-a manifest, and two standalone viewers to `output/inkline-3d/`:
-`inkline-3d-study.html` and `inkline-3d-map.html`. It reimports every GLB and
+[`/service-upgrades.html`](http://localhost:5232/service-upgrades.html) compares
+the market with the market hall and the chapel with the church. The four
+models share one scale and synchronized rotation, tilt and zoom. The street
+scale button checks their silhouettes at a smaller size. Each model has a
+GLB download. These are presentation assets; gameplay upgrade rules are separate.
+
+`pnpm assets:build` exports 151 GLBs and editable geometry descriptions,
+a manifest, and three standalone viewers to `output/inkline-3d/`:
+`inkline-3d-study.html`, `inkline-3d-map.html` and `inkline-service-upgrades.html`. It reimports every GLB and
 checks geometry and unlit materials. The viewers work without a dev server;
 their optional web fonts use the network. The game build remains separate.
 

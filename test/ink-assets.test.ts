@@ -3,6 +3,7 @@ import { test } from "node:test"
 import { inkAssets, assetById } from "../src/asset-lab/assets.ts"
 import { kindIds, goodIds, kinds } from "../src/content.ts"
 import { testMap } from "../src/map-lab/map.ts"
+import { U } from "../src/iso.ts"
 
 test("the portable catalogue covers all world object families", () => {
   assert.equal(assetById.size, inkAssets.length, "Asset IDs must be unique")
@@ -41,6 +42,19 @@ test("all geometry is finite, nondegenerate and uses valid ink weights", () => {
       assert.ok(stroke.opacity >= 0 && stroke.opacity <= 1, a.id)
       for (const p of stroke.points) assert.ok(p.every(Number.isFinite), a.id)
     }
+  }
+})
+
+test("service upgrades retain the original plot and declare their family and tier", () => {
+  for (const [id, kind] of [["market-hall", "market"], ["church", "chapel"]] as const) {
+    const asset = assetById.get(id)!, original = assetById.get(kind)!
+    assert.deepEqual(asset.reference, { type: "building", kind, tier: 2 })
+    assert.equal(asset.footprint, original.footprint)
+    const points = [...asset.faces, ...asset.strokes].flatMap(part => part.points)
+    const edge = (kinds[kind].size * 8 - 1) * U
+    assert.ok(points.every(([u, v]) => Math.abs(u) <= edge && Math.abs(v) <= edge), `${id}: geometry leaves its plot`)
+    const height = (a: typeof asset) => Math.max(...a.faces.flatMap(f => f.points.map(p => p[2])))
+    assert.ok(height(asset) > height(original), `${id}: upgrade should have a taller silhouette`)
   }
 })
 

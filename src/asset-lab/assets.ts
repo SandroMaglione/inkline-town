@@ -3,6 +3,7 @@
 import { kindIds, goodIds } from "../content.ts"
 import { makeBuilding } from "./buildings.ts"
 import { house } from "./homes.ts"
+import { marketHall, church } from "./service-upgrades.ts"
 import { U } from "../iso.ts"
 import { makeTree, makeRock, makeField, makeRoadPatch, makeWater } from "./land.ts"
 import { personCatalogue, makeCarrier, makeGoods, makeCrate } from "./people.ts"
@@ -104,7 +105,7 @@ baseFir.footprint = 1
 for (const face of baseFir.faces) if (face.contour) face.contourWidth = 1.5
 approvedAssets.find((asset) => asset.id === "goods")!.category = "cargo"
 approvedAssets.find((asset) => asset.id === "goods")!.footprint = 2
-const additional: Array<InkAsset> = []
+const additional: Array<InkAsset> = [marketHall(), church()]
 for (const kind of kindIds) if (!approvedAssets.some((asset) => asset.id === kind)) additional.push(makeBuilding(kind))
 const names = ["terracotta", "slate", "thatch", "moss"]
 for (const tier of [1, 2] as const)
