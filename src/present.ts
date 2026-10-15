@@ -12,8 +12,8 @@ import { homeHeight, topOf, type Alert, type Load, type Emphasis } from "./art.t
 import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView, RuinView } from "./render3d/views.ts"
 import type { DoorSet, OverlayCell } from "./render3d/models.ts"
 import {
-  amounts, BUILD_TICKS, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
-  PAVE_COST, propIds, props, risk, RISK_MAX, ROAD_COST, tierHome, total, winters, type Amounts, type GoodId, type Kind, type KindId, type Tier
+  amounts, BUILD_TICKS, builtCost, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
+  PAVE_COST, propIds, props, ranks, risk, RISK_MAX, ROAD_COST, tierHome, total, upkeepOf, winters, type Amounts, type GoodId, type Kind, type KindId, type Tier
 } from "./content.ts"
 import { around, canPlace, cellOf, doors, entrances, isRoad, key, lPath, nearest, reach, useAt, type TileLike } from "./grid.ts"
 import { GRID, inside, U, type Point } from "./iso.ts"
@@ -47,6 +47,7 @@ import {
   Pantry,
   Park,
   Paused,
+  Upgraded,
   Paved,
   Policy,
   Recipe,
@@ -82,7 +83,7 @@ import {
   type GridValue,
   type Status as StatusValue
 } from "./schema.ts"
-import { capacity, CELL_STEPS, elapsed, goalsOf, larder, lockReason, met, seasonAt, SITE_SHARE, steadyNet, taxOf, termTicks, winterOf } from "./sim/index.ts"
+import { capacity, CELL_STEPS, elapsed, goalsOf, larder, lockReason, met, seasonAt, SITE_SHARE, steadyNet, taxOf, termTicks, upgradeBlock, winterOf } from "./sim/index.ts"
 import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type Alert as Notice, type HitBox, type Legend, type Line, type View } from "./ui.ts"
 import { blockers as blockersOf, streetAdvice, type InTown, type Served, type Street } from "./rules/explain.ts"
@@ -147,6 +148,8 @@ const problemOf = (kind: Kind, status: StatusValue, growing = false, crewing?: C
     case "paused":
       return "paused: no workers, a quarter of its upkeep"
     case "starved":
+      if (kind.gathers && growing && (kind.gathers.source === "stone" || kind.gathers.source === "ore"))
+        return `the worked faces in reach give a little ${kind.gathers.source} now and then; traders sell it`
       if (kind.gathers && growing) return `the ${kind.gathers.source === "tree" ? "trees" : "fields"} in reach are still growing`
       if (kind.gathers)
         return `no ${sourceTitle[kind.gathers.source]} within ${kind.gathers.radius} cells${kind.gathers.source === "tree" ? ": a forester nearby replants" : ""}`
@@ -159,10 +162,15 @@ const problemOf = (kind: Kind, status: StatusValue, growing = false, crewing?: C
   }
 }
 
-/** A tree or field gatherer has young ones within reach: it is waiting on them to grow, not on a forester. */
-const growingNear = (grid: GridValue, tile: TileLike, kind: Kind): boolean => {
+/**
+ * A tree or field gatherer has young ones within reach: it is waiting on
+ * them to grow, not on a forester. A quarry or mine has rocks in reach,
+ * worked down to their faces: it is waiting on the next one.
+ */
+const growingNear = (grid: GridValue, tile: TileLike, kind: Kind, rocks: ReadonlyMap<number, { readonly ore: boolean }>): boolean => {
   const g = kind.gathers
-  if (!g || (g.source !== "tree" && g.source !== "field")) return false
+  if (!g || g.source === "water") return false
+  if (g.source === "stone" || g.source === "ore") return around(tile, g.radius).some((c) => rocks.get(key(c.x, c.y))?.ore === (g.source === "ore"))
   return around(tile, g.radius).some((c) => useAt(grid, c.x, c.y) === g.source)
 }
 
@@ -180,6 +188,7 @@ const BuildingRead = Game.Query({
     walkers: Game.Query.optionalRelated(WalkerOf),
     hall: Game.Query.optional(TownHall),
     paused: Game.Query.optional(Paused),
+    upgraded: Game.Query.optional(Upgraded),
     risk: Game.Query.optional(Risk),
     condition: Game.Query.optional(Condition),
     burning: Game.Query.optional(Burning)
@@ -370,6 +379,8 @@ export const Interact = Game.System(
     const rates = resources.policy.get()
     const approval = resources.mood.get().approval
     const cells = resources.appeal.get().cells
+    // The rocks by cell: which are ore, and which are worked down to their faces.
+    const rockAt = new Map(queries.rocks.each().map(({ data }) => [key(data.tile.get().x, data.tile.get().y), data.rock.get()]))
     const tick = resources.time.get().tick
     const buildings = queries.buildings.each()
     const houses = queries.houses.each()
@@ -515,8 +526,8 @@ export const Interact = Game.System(
       }
       preview.rangeNote = note
     }
-    const rangeOfKind = (tile: TileLike, kind: Kind) => {
-      if (kind.service) rangeFrom(tile, kind.service.range, `its walkers reach ${kind.service.range} road cells from the door`)
+    const rangeOfKind = (tile: TileLike, kind: Kind, range = kind.service?.range) => {
+      if (kind.service && range !== undefined) rangeFrom(tile, range, `its walkers reach ${range} road cells from the door`)
       else if (kind.workers > 0) rangeFrom(tile, COMMUTE + 1, `its workers come from homes within ${COMMUTE} road cells`)
     }
     // Where the page is pointing (from the ticker): outlined for a few seconds.
@@ -611,6 +622,14 @@ export const Interact = Game.System(
         preview.plots.push({ ...cell, size: 1, look: "blocked" })
       const there = cell ? parkAt.get(key(cell.x, cell.y))?.data.park.get() : undefined
       if (there) preview.tooltip = there.prop !== "none" ? `remove the ${props[there.prop].title.toLowerCase()}` : `remove the ${grounds[there.ground].title.toLowerCase()}`
+      const rock = cell ? rockAt.get(key(cell.x, cell.y)) : undefined
+      if (rock && cell) {
+        const worked = rock.amount <= 1
+        if (worked) preview.plots.push({ ...cell, size: 1, look: "blocked" })
+        preview.tooltip = worked
+          ? `worked ${rock.ore ? "ore" : "stone"} face · clear it for building: it gives no more`
+          : `${rock.ore ? "ore" : "stone"} · ${rock.amount} left · quarry it down to a worked face before it can be cleared`
+      }
     }
     if (ui.selected !== null) {
       const row = buildings.find((b) => b.entity.id === ui.selected)
@@ -623,7 +642,7 @@ export const Interact = Game.System(
       } else if (tile) preview.plots.push({ ...tile, look: "picked" })
       if (row && tile) {
         showReach(tile, kinds[row.data.building.get().kind])
-        rangeOfKind(tile, kinds[row.data.building.get().kind])
+        rangeOfKind(tile, kinds[row.data.building.get().kind], maybe(row.data.service)?.range)
       }
     }
 
@@ -634,7 +653,7 @@ export const Interact = Game.System(
       sources = []
       for (const { data } of buildings) {
         if (data.site.present || data.rising.present) continue
-        const s = buildingSource(data.building.get().kind, data.tile.get())
+        const s = buildingSource(data.building.get().kind, data.tile.get(), undefined, data.upgraded.present)
         if (s) sources.push(s)
       }
       for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get()))
@@ -759,16 +778,19 @@ export const Interact = Game.System(
           value: `${walkers} out · ${service.range} road cells from the door`,
           note: `one sets out every ${Math.round(service.interval / 60)} s while it is staffed, and serves the homes beside its way`
         })
-      if (kind.appeal)
+      const upgraded = row.data.upgraded.present
+      const appealHere = (upgraded ? kind.upgrade?.appeal : undefined) ?? kind.appeal
+      if (appealHere)
         lines.push({
           icon: "appeal",
           label: "desirability around it",
-          value: `${signed(kind.appeal.value)} beside it, fading out to ${kind.appeal.reach} cells`,
-          tone: kind.appeal.value < 0 ? "warn" : "ok",
-          note: kind.appeal.value < 0 ? "homes this close hold fewer people and pay less; citizens need a street at 5 or more" : undefined
+          value: `${signed(appealHere.value)} beside it, fading out to ${appealHere.reach} cells`,
+          tone: appealHere.value < 0 ? "warn" : "ok",
+          note: appealHere.value < 0 ? "homes this close hold fewer people and pay less; citizens need a street at 5 or more" : undefined
         })
-      if (kind.upkeep > 0) lines.push({ icon: "upkeep", label: "upkeep", value: `${kind.upkeep} coins a minute` })
-      const growing = status === "starved" && growingNear(grid, row.data.tile.get(), kind)
+      const upkeep = upkeepOf(kind, upgraded)
+      if (upkeep > 0) lines.push({ icon: "upkeep", label: "upkeep", value: `${upkeep} coins a minute` })
+      const growing = status === "starved" && growingNear(grid, row.data.tile.get(), kind, rockAt)
       const problem = row.data.burning.present ? "on fire!" : problemOf(kind, status, growing, { nearby: staff.nearby, crew: kind.crew })
       return { kind, status, problem, lines }
     }
@@ -924,7 +946,7 @@ export const Interact = Game.System(
     if (hoveredBuilding) {
       const { kind, status, problem } = describeBuilding(hoveredBuilding)
       preview.tooltip = ui.tool === "bulldoze"
-        ? `${kind.title.toLowerCase()} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(kind.cost, maybe(hoveredBuilding.data.site))}`
+        ? `${kind.title.toLowerCase()} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(builtCost(kind, hoveredBuilding.data.upgraded.present), maybe(hoveredBuilding.data.site))}`
         : `${kind.title.toLowerCase()} · ${problem ?? status}`
     } else if (hoveredHouse) {
       const h = hoveredHouse.data.house.get()
@@ -959,7 +981,10 @@ export const Interact = Game.System(
     const picked = pickedPark ? parkOf(pickedPark.data.tile.get()) : undefined
     if (pickedBuilding) {
       const { kind, status, problem, lines } = describeBuilding(pickedBuilding)
-      const pausable = kind.id !== "townhall" && !pickedBuilding.data.site.present && !pickedBuilding.data.rising.present
+      const standing = !pickedBuilding.data.site.present && !pickedBuilding.data.rising.present
+      const pausable = kind.id !== "townhall" && standing
+      const upgraded = pickedBuilding.data.upgraded.present
+      const up = kind.upgrade
       ui.panel = {
         type: "building",
         id: pickedBuilding.entity.id,
@@ -970,7 +995,11 @@ export const Interact = Game.System(
         lines,
         pausable,
         paused: pickedBuilding.data.paused.present,
-        salvage: salvageFor(kind.cost, maybe(pickedBuilding.data.site))
+        salvage: salvageFor(builtCost(kind, upgraded), maybe(pickedBuilding.data.site)),
+        upgraded,
+        upgrade: up && standing && !upgraded
+          ? { title: up.title, cost: costText(up.cost), blocked: upgradeBlock(up, resources.fate.get().rank, { ranks }) }
+          : null
       }
     } else if (pickedHouse) {
       const { h, lines, blockers } = describeHouse(pickedHouse)
@@ -1176,7 +1205,7 @@ export const Interact = Game.System(
     }
     const f = resources.fate.get()
     const pantry = resources.pantry.get()
-    const season = seasonAt(Math.min(Math.max(0, t), termTicks(charter) - 1), charter)
+    const season = seasonAt(Math.min(Math.max(0, t), f.began + termTicks(charter) - 1), charter)
     const approvalAt = (r: { readonly settlers: number; readonly citizens: number }, memory: number) =>
       approvalTarget(taxed, r, coins, crown.snubs.length, season.winter, undefined, memory).target
     const outlookOf = (tier: "settlers" | "citizens") => taxed.some((h) => (h.tier === 1) === (tier === "settlers"))
@@ -1341,14 +1370,23 @@ export const Interact = Game.System(
         state: f.state,
         reason: f.reason,
         at: f.at / 3600,
-        governing: f.governing,
+        term: f.term,
+        began: f.began / 3600,
+        rank: f.rank,
+        rankTitle: ranks[f.rank]?.title ?? "",
+        nextTitle: f.rank + 1 < ranks.length ? ranks[f.rank + 1]!.title : null,
         score: f.score,
         bankrupt: danger(f.debtSince, fate.debt),
         revolt: danger(f.revoltSince, fate.revolt),
-        complete: danger(f.goalSince, fate.hold),
+        rises: danger(f.goalSince, fate.hold),
         peak: f.peak
       },
-      goals: goalsOf(charter, { settlers: census.settlers, citizens: census.citizens, coins, net: steadyNet(resources.history.get().samples, net), approval: mood.approval }),
+      goals: goalsOf(
+        charter,
+        { settlers: census.settlers, citizens: census.citizens, burghers: census.burghers, coins, net: steadyNet(resources.history.get().samples, net), approval: mood.approval },
+        undefined,
+        f.rank
+      ),
       larder: larder(stock),
       flow: flowNow === null ? null : { ...flowNow, elsewhere: amounts(Object.fromEntries(goodIds.map((g) => [g, Math.max(0, flowHeld[g] - stock[g])]))) },
       eaten: pantry.eatenLast,
@@ -1443,14 +1481,14 @@ export const RenderFields = RenderSync.system(Game, {
 export const DrawLand = Game.System(
   "Town/DrawLand",
   {
-    resources: { land: Game.System.readResource(Land), time: Game.System.readResource(Time), charter: Game.System.readResource(Charter) },
+    resources: { land: Game.System.readResource(Land), time: Game.System.readResource(Time), charter: Game.System.readResource(Charter), fate: Game.System.readResource(Fate) },
     services: { stage: Game.System.service(StageService) }
   },
   ({ resources, services }) => {
     const mask = resources.land.get().mask
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
-    services.stage.setLand(mask, t > 0 && seasonAt(Math.min(t, termTicks(charter) - 1), charter).winter)
+    services.stage.setLand(mask, t > 0 && seasonAt(Math.min(t, resources.fate.get().began + termTicks(charter) - 1), charter).winter)
   }
 )
 
@@ -1571,7 +1609,8 @@ export const Animate = Game.System(
           build: buildOf(maybe(data.site), maybe(data.rising)),
           beat: recipe ? recipe.made : maybe(data.service) ? walkers : 0,
           doors: doorsOf(grid, data.tile.get()),
-          site: siteShare(maybe(data.site))
+          site: siteShare(maybe(data.site)),
+          upgraded: data.upgraded.present
         },
         dt,
         emphasis(entity.id)

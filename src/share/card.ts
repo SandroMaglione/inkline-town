@@ -16,7 +16,6 @@ const INK = "#3d4943",
 
 /** What became of a town whose term ran out. */
 export const verdictOf = (s: Stats): string => {
-  if (s.fate.governing) return "complete"
   const residents = s.settlers + s.citizens
   if (s.fate.peak < 40) return "the town never took root"
   if (residents >= sizes[s.charter.size].goal.residents * 0.75) return "flourishing"
@@ -36,13 +35,11 @@ const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)}
 
 export const cardFacts = (s: Stats): CardFacts => {
   const headline =
-    s.fate.state === "won"
-      ? "The town is complete"
-      : s.fate.state === "lost"
-        ? capital(s.fate.reason.split(":")[0]!.toLowerCase())
-        : s.fate.state === "over"
-          ? `The term is over: ${verdictOf(s)}`
-          : `Year ${s.season.year} · ${Math.floor(s.minute)} min in`
+    s.fate.state === "lost"
+      ? capital(s.fate.reason.split(":")[0]!.toLowerCase())
+      : s.fate.state === "over"
+        ? `A ${s.fate.rankTitle}: term ${s.fate.term} is over, ${verdictOf(s)}`
+        : `A ${s.fate.rankTitle} · year ${s.season.year} · term ${s.fate.term}`
   return {
     headline,
     land: `${capital(sizes[s.charter.size].title)}, ${lands[s.charter.land].title} land · ${s.charter.term}-minute term`,

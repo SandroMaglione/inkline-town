@@ -70,8 +70,10 @@ export type Edit =
   | { readonly type: "pause"; readonly cell: Point; readonly on: boolean }
   /** Sends the crown what it asked for. */
   | { readonly type: "deliver" }
-  /** Having completed the town, stays on to govern it to the end of the term. */
-  | { readonly type: "govern" }
+  /** Once a term has run out, stands for another: the same town, a new term. */
+  | { readonly type: "nextTerm" }
+  /** Upgrades the building on a cell where it stands (see `Kind.upgrade`). */
+  | { readonly type: "upgrade"; readonly cell: Point }
   /** Clears everything and founds a new town on the land a charter describes. */
   | { readonly type: "newTown"; readonly charter: CharterValue }
 
@@ -127,6 +129,9 @@ export type Panel =
       /** What pulling it down costs and gives back: "pull down: −25 coins · 2 planks back". */
       readonly salvage: string
       readonly lines: ReadonlyArray<Line>
+      /** Whether it is upgraded; and the upgrade it could have, what it costs, and what keeps it from it now (`null`: nothing). */
+      readonly upgraded: boolean
+      readonly upgrade: { readonly title: string; readonly cost: string; readonly blocked: string | null } | null
     }
   | {
       readonly type: "house"
@@ -202,7 +207,7 @@ export interface Stats {
   /** Workplaces short of workers, to step through from the jobs counter. */
   readonly shortStaffed: ReadonlyArray<{ readonly id: number; readonly title: string; readonly cell: Point; readonly size: number; readonly assigned: number; readonly needed: number; readonly nobodyNear: boolean }>
   readonly charter: CharterValue
-  /** Minutes into the term. */
+  /** Minutes since the town was founded (see `fate.began` for this term's). */
   readonly minute: number
   readonly season: {
     readonly year: number
@@ -234,20 +239,28 @@ export interface Stats {
     readonly next: number
   }
   readonly fate: {
-    readonly state: "playing" | "won" | "lost" | "over"
+    readonly state: "playing" | "lost" | "over"
     readonly reason: string
-    /** Minute the term ended. */
+    /** Minute (since the founding) the term ended. */
     readonly at: number
-    readonly governing: boolean
+    /** Which term this is, from 1, and the minute (since the founding) it began. */
+    readonly term: number
+    readonly began: number
+    /** The rank the town has reached (see `ranks`), and the next one, or `null` at the top. */
+    readonly rank: number
+    readonly rankTitle: string
+    readonly nextTitle: string | null
+    /** This term's score, once it has ended. */
     readonly score: number
     /** Seconds left before each danger ends the term, or `null` when it is not threatening. */
     readonly bankrupt: number | null
     readonly revolt: number | null
-    /** Seconds the goals have to hold still, or `null` when they are not all met. */
-    readonly complete: number | null
+    /** Seconds the next rank's goals have to hold still, or `null` when they are not all met. */
+    readonly rises: number | null
     readonly peak: number
   }
-  readonly goals: ReadonlyArray<{ readonly text: string; readonly value: string; readonly met: boolean }>
+  /** The next rank's goals (see `goalsOf`): what each asks (`target`, in its own unit), how the town stands, and whether it is met. */
+  readonly goals: ReadonlyArray<{ readonly id: string; readonly target: number; readonly text: string; readonly value: string; readonly met: boolean }>
   readonly larder: number
   /**
    * Each good over the last minute: made, used (eaten, worked up, built

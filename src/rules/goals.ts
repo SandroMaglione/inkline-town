@@ -13,22 +13,44 @@ export const steadyNet = (samples: ReadonlyArray<{ readonly net: number }>, now:
   return Math.round(recent.concat(now).reduce((n, v) => n + v, 0) / (recent.length + 1))
 }
 
-/** Each goal the town must hold to be complete, met or not. */
+/** The rank a town reaches next: the one after `rank`, or the last when it has reached the top. */
+export const nextRank = (rank: number, rules: Rules = shippedRules) => Math.min(rank + 1, rules.ranks.length - 1)
+
+/**
+ * What the next rank asks of the town (see `ranks`), each goal met or not:
+ * by default the town rank's, the goals a town founded as a village
+ * plays for. A town at the top rank sees its own.
+ */
 export const goalsOf = (
   charter: { readonly size: keyof Rules["sizes"] },
-  s: { readonly settlers: number; readonly citizens: number; readonly coins: number; readonly net: number; readonly approval: number },
-  rules: Rules = shippedRules
+  s: { readonly settlers: number; readonly citizens: number; readonly burghers?: number; readonly coins: number; readonly net: number; readonly approval: number },
+  rules: Rules = shippedRules,
+  rank = 1
 ) => {
-  const goal = rules.sizes[charter.size].goal
-  const residents = s.settlers + s.citizens
+  const land = rules.sizes[charter.size].goal, r = rules.ranks[nextRank(rank, rules)]!
+  const residents = s.settlers + s.citizens, burghers = s.burghers ?? 0
+  const wanted = { residents: Math.round((land.residents * r.residents) / 10) * 10, coins: Math.round((land.coins * r.coins) / 100) * 100 }
+  const share = (n: number) => (residents > 0 ? Math.round((n / residents) * 100) : 0)
   return [
-    { id: "residents", text: `${goal.residents} residents`, value: `${residents}`, met: residents >= goal.residents },
-    { id: "citizens", text: `${Math.round(rules.fate.citizens * 100)}% of them citizens`, value: `${residents > 0 ? Math.round((s.citizens / residents) * 100) : 0}%`, met: residents > 0 && s.citizens >= residents * rules.fate.citizens },
-    { id: "approval", text: `approval ${rules.fate.approval} or more`, value: `${s.approval}`, met: s.approval >= rules.fate.approval },
-    { id: "coins", text: `${goal.coins} coins, not losing any`, value: `${s.coins}`, met: s.coins >= goal.coins && s.net >= 0 }
-  ] as const
+    { id: "residents", target: wanted.residents, text: `${wanted.residents} residents`, value: `${residents}`, met: residents >= wanted.residents },
+    ...(r.citizens > 0
+      ? [{ id: "citizens", target: Math.round(r.citizens * 100), text: `${Math.round(r.citizens * 100)}% of them citizens`, value: `${share(s.citizens)}%`, met: residents > 0 && s.citizens >= residents * r.citizens }]
+      : []),
+    ...(r.burghers > 0
+      ? [{ id: "burghers", target: Math.round(r.burghers * 100), text: `${Math.round(r.burghers * 100)}% of them burghers`, value: `${share(burghers)}%`, met: residents > 0 && burghers >= residents * r.burghers }]
+      : []),
+    { id: "approval", target: r.approval, text: `approval ${r.approval} or more`, value: `${s.approval}`, met: s.approval >= r.approval },
+    { id: "coins", target: wanted.coins, text: `${wanted.coins} coins, not losing any`, value: `${s.coins}`, met: s.coins >= wanted.coins && s.net >= 0 }
+  ]
 }
 
-/** The town's score at the end of its term. */
-export const scoreOf = (s: { readonly settlers: number; readonly citizens: number; readonly coins: number; readonly approval: number; readonly met: number; readonly missed: number }, won: boolean, minutesLeft: number) =>
-  Math.max(0, Math.round(s.settlers + 3 * s.citizens + Math.max(0, s.coins) / 20 + 2 * s.approval + 40 * s.met - 40 * s.missed + (won ? 500 + 20 * minutesLeft : 0)))
+/**
+ * A term's score: its people (citizens three times, burghers four), coins,
+ * approval, the crown's requests met and missed, and the rank the town
+ * stands at.
+ */
+export const scoreOf = (
+  s: { readonly settlers: number; readonly citizens: number; readonly burghers?: number; readonly coins: number; readonly approval: number; readonly met: number; readonly missed: number },
+  rank: number
+) =>
+  Math.max(0, Math.round(s.settlers + 3 * s.citizens + (s.burghers ?? 0) + Math.max(0, s.coins) / 20 + 2 * s.approval + 40 * s.met - 40 * s.missed + 250 * rank))

@@ -182,12 +182,16 @@ export function oreShard(d: Drawing, u: number, v: number, radius: number, heigh
  * once over the cells it spans). Stone is a heap of rounded boulders; ore is
  * slate rubble with shards standing out of it.
  */
-export function makeRock(ore: boolean, full: boolean, variant = 0, w = 1, h = 1) {
+export function makeRock(ore: boolean, stage: boolean | "worked", variant = 0, w = 1, h = 1) {
   const name=ore?"Ore":"Stone"
   const size=w*h>1?`-${w}x${h}`:""
-  const d=new Drawing(`${ore?"ore":"stone"}-${full?"full":"quarried"}${size}`,`${name} · ${full?"full":"quarried"}${size?` · ${w}×${h}`:""}`,"A clustered deposit with clean shaded facets and seeded silhouettes. Stone is pale rounded boulders; ore is dark slate with rust-red shards.")
-  d.asset.category="land";d.asset.reference={type:"rock",x:ore?5:0,y:ore?3:0,ore,amount:full?40:10};d.asset.footprint=Math.max(w,h)
+  const state=stage==="worked"?"worked":stage?"full":"quarried",full=stage===true
+  const d=new Drawing(`${ore?"ore":"stone"}-${state}${size}`,`${name} · ${state==="worked"?"worked face":state}${size?` · ${w}×${h}`:""}`,state==="worked"
+    ?"Quarried down to a worked face: a low mound with a square-cut bench, squared blocks and spoil. It still gives a little, slowly; the bulldozer clears it."
+    :"A clustered deposit with clean shaded facets and seeded silhouettes. Stone is pale rounded boulders; ore is dark slate with rust-red shards.")
+  d.asset.category="land";d.asset.reference={type:"rock",x:ore?5:0,y:ore?3:0,ore,amount:state==="worked"?1:full?40:10};d.asset.footprint=Math.max(w,h)
   const A=w*8*U,B=h*8*U,small=Math.min(w,h),grow=1+(small-1)*0.55
+  if(state==="worked"){workedFace(d,ore,variant,A,B,grow);return d.asset}
   // The big rock in the middle, then smaller ones around it, inside the footprint.
   const spots:Array<[number,number,number]>=[[0.06,-0.02,1]]
   const around=2+w*h
@@ -206,6 +210,42 @@ export function makeRock(ore: boolean, full: boolean, variant = 0, w = 1, h = 1)
   })
   for(const [fu,fv] of [[-0.55,0.62],[-0.2,0.85],[0.7,-0.5]] as const)rockOutcrop(d,fu*(A-U),fv*(B-U),0.7*U,1.8,ore,variant+Math.round(fu*10))
   return d.asset
+}
+
+/**
+ * A deposit quarried down: a low, rough mound where the boulders stood,
+ * with a square-cut bench standing in it, and a cut block or
+ * two set down beside it. Ore keeps its slate and a rust seam along the
+ * cut. Nothing stands proud, so it reads apart from a half-quarried rock.
+ */
+function workedFace(d: Drawing, ore: boolean, variant: number, A: number, B: number, grow: number) {
+  const c=ore?oreColors:stoneColors
+  const benches=Math.max(1,Math.round((A*B)/(64*U*U)))
+  for(let i=0;i<benches;i++){
+    const t=i*2.4+variant*0.7,far=benches>1?0.45:0
+    const u=Math.cos(t)*(A-5*U)*far+(hash(variant,i)-0.5)*U,v=Math.sin(t)*(B-5*U)*far+(hash(i,variant+4)-0.5)*U
+    const a=(3+hash(i+2,variant)*0.6)*U*grow,b=(2.4+hash(variant+1,i)*0.6)*U*grow
+    // The rough mound that is left, low to the ground.
+    rockOutcrop(d,u,v,a*1.05,2.6*grow,ore,variant+i*5)
+    // The bench: cut square, the stone's own colour on its sawn faces.
+    const su=u+a*0.15,sv=v-b*0.1,sa=a*0.55,sb=b*0.6,h=4.4*Math.sqrt(grow)
+    let start=d.asset.faces.length
+    d.box(su,sv,sa,sb,0,h,c.top,c.left,c.right,0.8)
+    d.volume(start,0.6)
+    if(ore){
+      d.face([[su+sa+0.015,sv-sb,h*0.45],[su+sa+0.015,sv+sb,h*0.45],[su+sa+0.015,sv+sb,h*0.6],[su+sa+0.015,sv-sb,h*0.6]],RUST,0)
+      d.face([[su-sa,sv+sb+0.015,h*0.45],[su+sa,sv+sb+0.015,h*0.45],[su+sa,sv+sb+0.015,h*0.6],[su-sa,sv+sb+0.015,h*0.6]],RUST,0)
+    }
+    // A cut block or two set down beside the mound.
+    for(let k=0;k<2;k++){
+      const s=(0.7+hash(k+i,variant+9)*0.3)*U,bu=u+(k?-0.45:0.5)*a,bv=v+(k?1:-1)*(b+s+0.4*U)
+      start=d.asset.faces.length
+      d.box(bu,bv,s*1.3,s,0,1.7,c.top,c.left,c.right,0.8)
+      d.volume(start,0.6)
+    }
+  }
+  // Spoil: small chips of what was cut.
+  for(const [fu,fv] of [[-0.6,0.55],[0.6,-0.45],[-0.75,-0.2]] as const)rockOutcrop(d,fu*(A-1.5*U),fv*(B-1.5*U),0.55*U,1,ore,variant+Math.round(fv*10))
 }
 
 export function makeField(stage: 0 | 1 | 2 | 3) {

@@ -17,7 +17,7 @@ import { goodIds, risk, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../grid.ts"
 import { counted, placeName, type Landmark } from "../places.ts"
 import type { Point } from "../iso.ts"
-import { Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Rules, Grid, House, Inventory, Mood, Park, Paused, Paved, Rescue, Rising, Risk, Rng, Road, Route, Ruin, Service, Sick, Site, Staff, Storage, Tile, Time, Tree, Treasury, WalkerOf, Water, maybe } from "../schema.ts"
+import { Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Rules, Grid, House, Inventory, Mood, Park, Paused, Paved, Rescue, Rising, Risk, Rng, Road, Route, Ruin, Service, Sick, Site, Staff, Storage, Tile, Time, Tree, Treasury, Upgraded, WalkerOf, Water, maybe } from "../schema.ts"
 import { elapsed, seasonAt, write } from "./shared.ts"
 
 // ── Desirability ──────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ export const Appraise = Game.System(
   "Town/Appraise",
   {
     queries: {
-      buildings: Game.Query({ selection: { tile: Game.Query.read(Tile), building: Game.Query.read(Building) }, without: [Site, Rising] }),
+      buildings: Game.Query({ selection: { tile: Game.Query.read(Tile), building: Game.Query.read(Building), upgraded: Game.Query.optional(Upgraded) }, without: [Site, Rising] }),
       trees: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Tree] }),
       water: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Water] }),
       paved: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road, Paved] }),
@@ -46,7 +46,7 @@ export const Appraise = Game.System(
     if (resources.time.get().tick % appeal.every !== 0 && resources.appeal.get().cells.length > 0) return
     const sources: Array<AppealSource> = []
     for (const { data } of queries.buildings.each()) {
-      const s = buildingSource(data.building.get().kind, data.tile.get(), rules)
+      const s = buildingSource(data.building.get().kind, data.tile.get(), rules, data.upgraded.present)
       if (s) sources.push(s)
     }
     for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get(), rules))

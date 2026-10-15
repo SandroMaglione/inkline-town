@@ -1,26 +1,98 @@
 import { U } from "../iso.ts"
 import { kinds } from "../content.ts"
 import { makeBuilding } from "./buildings.ts"
-import { Drawing, palette, pale, sides, type Side, type Vertex } from "./primitives.ts"
+import { Drawing, palette, pale, sides, type InkAsset, type Side, type Vertex } from "./primitives.ts"
 
 export type ServiceKind = "market" | "chapel"
-
-/** Presentation assets only. Service costs, unlocks and upgrade rules belong to the simulation. */
-export function serviceBuilding(kind: ServiceKind, tier: 1 | 2) {
-  if (tier === 1) return makeBuilding(kind)
-  return kind === "market" ? marketHall() : church()
-}
 
 const blue = 0x3d6db5
 const stone = { top: 0xf0f1eb, left: 0xe1e5dc, right: 0xd3d9cf }
 const timber = { top: 0xeee2c8, left: 0xdcc9a8, right: 0xc6b18e }
 
-function base(kind: ServiceKind, id: string, title: string, note: string) {
+/**
+ * How a tier 2 building is drawn in the town: without its plate (the town
+ * draws plates apart), and turned so its street fronts face the roads.
+ */
+export interface UpgradeOptions {
+  plate?: boolean
+  /** The sides with a road at the door; the model turns a quarter at a time to face the most of them. */
+  doors?: Partial<Record<Side, boolean>>
+}
+
+/** Presentation assets only. Service costs, unlocks and upgrade rules belong to the simulation. */
+export function serviceBuilding(kind: ServiceKind, tier: 1 | 2, options: UpgradeOptions = {}) {
+  if (tier === 1) return makeBuilding(kind)
+  return kind === "market" ? marketHall(options) : church(options)
+}
+
+/** Each upgrade's height to its eaves and to its highest point, for markers and surface effects. */
+export const upgradeHeights: Readonly<Record<ServiceKind, { readonly eave: number; readonly top: number }>> = {
+  market: { eave: 44, top: 62 },
+  chapel: { eave: 52, top: 125 }
+}
+
+/** The sides each upgrade is drawn with its street fronts on: the market hall's arcades, the church's tower door. */
+const fronts: Readonly<Record<ServiceKind, ReadonlyArray<Side>>> = { market: ["right", "left"], chapel: ["left"] }
+
+/** A quarter turn: left (+v) → right (+u) → backLeft (−v) → backRight (−u). */
+const turnSide: Readonly<Record<Side, Side>> = { left: "right", right: "backLeft", backLeft: "backRight", backRight: "left" }
+const turnSides = (side: Side, quarters: number) => Array.from({ length: quarters }).reduce<Side>((s) => turnSide[s], side)
+
+/** Quarter turns (0–3) that put the most of `fronts` on a road; the drawn way round when none does. */
+export const quartersFor = (kind: ServiceKind, doors: Partial<Record<Side, boolean>> | undefined): number => {
+  if (!doors) return 0
+  let best = 0, most = 0
+  for (let q = 0; q < 4; q++) {
+    const n = fronts[kind].filter((f) => doors[turnSides(f, q)]).length
+    if (n > most) (best = q), (most = n)
+  }
+  return best
+}
+
+const lightAndDark = (c: number): [number, number] => [pale(c, 0.7), pale(c, 0.52)]
+/**
+ * The shading is baked in: faces looking +v or −u are lit, +u or −v shaded.
+ * Each pair here is one material lit and shaded, so a turned face can take
+ * the shade of the way it now looks.
+ */
+const shadePairs: ReadonlyArray<readonly [number, number]> = [
+  [palette.left, palette.right],
+  [stone.left, stone.right],
+  [timber.left, timber.right],
+  lightAndDark(0x8a6a45),
+  lightAndDark(blue)
+]
+
+/** Turns an asset a quarter at a time about its plot's middle, keeping its light from the same side. */
+function turned(asset: InkAsset, quarters: number): InkAsset {
+  if (quarters === 0) return asset
+  const turn = ([u, v, z]: Vertex): Vertex => {
+    for (let i = 0; i < quarters; i++) [u, v] = [v, -u]
+    return [u, v, z]
+  }
+  const faces = asset.faces.map((face) => {
+    const points = face.points.map(turn)
+    const pair = shadePairs.find((p) => p.includes(face.color))
+    if (!pair) return { ...face, points }
+    // Which way it looked: its axis from its own plane, the side of that axis from its shade.
+    const [a, b, c] = face.points as [Vertex, Vertex, Vertex]
+    const nu = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1])
+    const nv = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2])
+    if (Math.abs(nu) < 1e-9 && Math.abs(nv) < 1e-9) return { ...face, points }
+    const lit = face.color === pair[0]
+    const was: Vertex = Math.abs(nu) > Math.abs(nv) ? [lit ? -1 : 1, 0, 0] : [0, lit ? 1 : -1, 0]
+    const [u, v] = turn(was)
+    return { ...face, points, color: v > 0.5 || u < -0.5 ? pair[0] : pair[1] }
+  })
+  return { ...asset, faces, strokes: asset.strokes.map((s) => ({ ...s, points: s.points.map(turn) })) }
+}
+
+function base(kind: ServiceKind, id: string, title: string, note: string, options: UpgradeOptions) {
   const d = new Drawing(id, title, note)
   d.asset.category = "buildings"
   d.asset.reference = { type: "building", kind, tier: 2 }
   d.asset.footprint = kinds[kind].size
-  d.plate(kinds[kind].size)
+  if (options.plate !== false) d.plate(kinds[kind].size)
   return d
 }
 
@@ -76,8 +148,8 @@ function churchDoor(d: Drawing, p: Wall) {
   d.line([p(0, bottom, 0.025), p(0, 22, 0.025)], 0.7, 0x7d6140)
 }
 
-export function marketHall() {
-  const d = base("market", "market-hall", "Market hall", "Tier 2 market. A pitched hall above a covered arcade, with the market's striped awnings, blue trim and goods crates. Same 2×2 plot.")
+export function marketHall(options: UpgradeOptions = {}) {
+  const d = base("market", "market-hall", "Market hall", "Tier 2 market. A pitched hall above a covered arcade, with the market's striped awnings, blue trim and goods crates. Same 2×2 plot.", options)
   const a = 9 * U
   d.box(0, 0, 10 * U, 10 * U, 0, 3, stone.top, stone.left, stone.right)
   d.box(0, 0, a, a, 3, 40)
@@ -138,11 +210,11 @@ export function marketHall() {
     d.face([p(-2 * U, 47), p(2 * U, 47), p(2 * U, 51), p(-2 * U, 51)], pale(blue, 0.28), 1)
     for (const s of [-U, 0, U]) d.line([p(s, 48, 0.02), p(s, 50, 0.02)], 0.7, 0xf7f3ea)
   }
-  return d.asset
+  return turned(d.asset, quartersFor("market", options.doors))
 }
 
-export function church() {
-  const d = base("chapel", "church", "Church", "Tier 2 chapel. A slate-blue nave, stone buttresses, arched glass and an open belfry with a bronze bell. Same 2×2 plot.")
+export function church(options: UpgradeOptions = {}) {
+  const d = base("chapel", "church", "Church", "Tier 2 chapel. A slate-blue nave, stone buttresses, arched glass and an open belfry with a bronze bell. Same 2×2 plot.", options)
   const a = 7 * U, b = 11 * U
   d.box(0, 0, 8 * U, 12 * U, 0, 3, stone.top, stone.left, stone.right)
   d.box(0, 0, a, b, 3, 48)
@@ -196,5 +268,5 @@ export function church() {
     d.box(sign * 11 * U, 9 * U, 1.5 * U, 3 * U, 0, 2, stone.top, stone.left, stone.right, 0.8)
     for (const v of [7.5, 10.5]) d.ellipsoid(sign * 11 * U, v * U, 4, 1.5 * U, 1.5 * U, 2.5, 0xccd5ae, 0.7, 0xe8ecd2, 12)
   }
-  return d.asset
+  return turned(d.asset, quartersFor("chapel", options.doors))
 }
