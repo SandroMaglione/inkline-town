@@ -6,6 +6,7 @@ import { groundAsset } from "../render3d/models.ts"
 import { key } from "../grid.ts"
 import { makeBuilding } from "./buildings.ts"
 import { house } from "./homes.ts"
+import { marketHall, church } from "./service-upgrades.ts"
 import { U } from "../iso.ts"
 import { makeTree, makeRock, makeField, makeRoadPatch, makeWater } from "./land.ts"
 import { personCatalogue, makeCarrier, makeGoods, makeCrate } from "./people.ts"
@@ -108,7 +109,7 @@ baseFir.footprint = 1
 for (const face of baseFir.faces) if (face.contour) face.contourWidth = 1.5
 approvedAssets.find((asset) => asset.id === "goods")!.category = "cargo"
 approvedAssets.find((asset) => asset.id === "goods")!.footprint = 2
-const additional: Array<InkAsset> = []
+const additional: Array<InkAsset> = [marketHall(), church()]
 for (const kind of kindIds) if (!approvedAssets.some((asset) => asset.id === kind)) additional.push(makeBuilding(kind))
 const names = ["terracotta", "slate", "thatch", "moss"]
 for (const tier of [1, 2] as const)
@@ -137,7 +138,7 @@ for (const type of ["fir", "broadleaf", "poplar"] as const)
     if (type === "fir" && grown === 1) continue
     additional.push(makeTree(type, grown, `${type}-${grown === 1 ? "grown" : grown >= 0.5 ? "young" : "sapling"}`))
   }
-for (const ore of [false, true]) for (const full of [false, true]) additional.push(makeRock(ore, full))
+for (const ore of [false, true]) for (const stage of [false, true, "worked"] as const) additional.push(makeRock(ore, stage))
 for (const ore of [false, true]) for (const [w, h] of [[2, 1], [2, 2], [3, 3]] as const) additional.push(makeRock(ore, true, 0, w, h))
 for (const stage of [0, 1, 2, 3] as const) additional.push(makeField(stage))
 additional.push(makeRoadPatch(), makeWater(), ...personCatalogue())

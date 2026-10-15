@@ -149,6 +149,34 @@ export interface Kind {
   readonly dusty?: boolean
   /** A storage that keeps food this many times longer. */
   readonly keeps?: number
+  /**
+   * What it becomes when upgraded where it stands, once the town has reached
+   * `rank` (see `ranks`): paid at once from the treasury and the store, as
+   * paving is. Its walker, desirability, and upkeep become these.
+   */
+  readonly upgrade?: Upgrade
+}
+
+/** Coins a minute a building of a kind costs, upgraded or not. */
+export const upkeepOf = (kind: Pick<Kind, "upkeep" | "upgrade">, upgraded: boolean): number => (upgraded && kind.upgrade ? kind.upgrade.upkeep : kind.upkeep)
+
+/** What a building of a kind cost all told, its upgrade included: what pulling it down gives part of back. */
+export const builtCost = (kind: Pick<Kind, "cost" | "upgrade">, upgraded: boolean): Kind["cost"] => {
+  if (!upgraded || !kind.upgrade) return kind.cost
+  const materials: Partial<Record<GoodId, number>> = { ...kind.cost.materials }
+  for (const [g, n] of Object.entries(kind.upgrade.cost.materials) as Array<[GoodId, number]>) materials[g] = (materials[g] ?? 0) + n
+  return { coins: kind.cost.coins + kind.upgrade.cost.coins, materials }
+}
+
+/** A building upgraded where it stands (see `Kind.upgrade`). */
+export interface Upgrade {
+  readonly title: string
+  readonly blurb: string
+  readonly rank: number
+  readonly cost: { readonly coins: number; readonly materials: Partial<Record<GoodId, number>> }
+  readonly upkeep: number
+  readonly service?: { readonly seconds: number; readonly range: number }
+  readonly appeal?: { readonly value: number; readonly reach: number; readonly full?: number }
 }
 
 const free = { residents: 0, citizens: 0 }
@@ -269,13 +297,23 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     category: "services", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "flag",
     cost: { coins: 120, materials: { planks: 6, stone: 2 } }, upkeep: 6, workers: 2, crew: "citizens", unlock: free, buildable: true,
     holds: { accepts: ["fish", "smoked", "bread", "cloth"], cap: 12 },
-    service: { service: "goods", seconds: 6, range: 18 }, appeal: { value: 2, reach: 3, full: 2 }
+    service: { service: "goods", seconds: 6, range: 18 }, appeal: { value: 2, reach: 3, full: 2 },
+    upgrade: {
+      title: "Market hall", blurb: "a covered hall: its walker goes further, more often, and the street around it is finer", rank: 2,
+      cost: { coins: 400, materials: { planks: 6, stone: 12, tools: 2 } }, upkeep: 12,
+      service: { seconds: 4, range: 26 }, appeal: { value: 4, reach: 4, full: 2 }
+    }
   },
   chapel: {
     id: "chapel", title: "Chapel", blurb: "a walker brings faith to the homes it passes",
     category: "services", size: 2, half: 12, stories: 2, roof: "flat", bays: 2, window: 6, topper: "cupola",
     cost: { coins: 200, materials: { planks: 6, stone: 6 } }, upkeep: 10, workers: 1, crew: "citizens", unlock: { residents: 15, citizens: 0 }, buildable: true,
-    service: { service: "faith", seconds: 8, range: 22 }, appeal: { value: 4, reach: 4, full: 2 }
+    service: { service: "faith", seconds: 8, range: 22 }, appeal: { value: 4, reach: 4, full: 2 },
+    upgrade: {
+      title: "Church", blurb: "a church with a tower: its priest walks further, more often, and the streets around it are the finest", rank: 2,
+      cost: { coins: 700, materials: { planks: 8, stone: 20, tools: 3 } }, upkeep: 18,
+      service: { seconds: 6, range: 30 }, appeal: { value: 6, reach: 5, full: 3 }
+    }
   },
   firewatch: {
     id: "firewatch", title: "Fire watch", blurb: "a watchman checks homes and workshops along the way for fire; firefighters run to any blaze",
@@ -576,6 +614,12 @@ export const ROAD_COST = 2
 export const GROWN = { tree: ticks(40), field: ticks(20) }
 /** The most a rock holds (see `lands` for how much each starts with). */
 export const ROCK_AMOUNT = 40
+/**
+ * A rock quarried down to nothing stays as a worked face: it gives one more
+ * stone (or ore) this often, so a quarry or mine beside it keeps going at
+ * about a third of its pace instead of stopping for good.
+ */
+export const FACE_TICKS = ticks(90)
 
 // ── The charter: what a new town is founded on ────────────────────────────
 
@@ -589,7 +633,7 @@ export const TERMS = [45, 60, 90] as const
 /**
  * Sizes of land: its rough radius in cells (the coast wanders in and out of
  * it, with capes reaching further), and what the town must reach to be
- * complete (see `Fate`).
+ * a town (see `ranks`: a village needs less of both, a city more).
  */
 export const sizes: Readonly<Record<SizeId, {
   readonly title: string
@@ -765,10 +809,36 @@ export const fate = {
   /** Abandonment: residents below this share of their peak, once the peak reached `peak`. */
   abandon: 0.15,
   peak: 40,
-  /** The goals besides residents and coins: a share of them citizens, and approval. */
+  /** The town rank's goals besides residents and coins: a share of them citizens, and approval (see `ranks`). */
   citizens: 0.3,
   approval: 15
 }
+
+/**
+ * The town's ranks, from the hamlet it is founded as. It rises to the next
+ * once every goal of that rank has held for `fate.hold` minutes together:
+ * `residents` and `coins` (not losing any) as shares of its land's goal
+ * (see `sizes`), a share of the residents `citizens` (those in townhouses
+ * count), a share `burghers`, and approval. A rank is never lost, and the
+ * crown sends `reward` coins on reaching it. The town rank is the old
+ * "complete" town; nothing ends when a rank is reached.
+ */
+export const ranks: ReadonlyArray<{
+  readonly title: string
+  readonly residents: number
+  readonly coins: number
+  readonly citizens: number
+  readonly burghers: number
+  readonly approval: number
+  readonly reward: number
+}> = [
+  { title: "hamlet", residents: 0, coins: 0, citizens: 0, burghers: 0, approval: 0, reward: 0 },
+  { title: "village", residents: 0.35, coins: 0.3, citizens: 0.1, burghers: 0, approval: 0, reward: 300 },
+  { title: "town", residents: 1, coins: 1, citizens: fate.citizens, burghers: 0, approval: fate.approval, reward: 800 },
+  { title: "city", residents: 1.5, coins: 1.5, citizens: 0.5, burghers: 0.15, approval: 25, reward: 1500 }
+]
+/** The rank the old "complete" town is: the goals a balance run plays for. */
+export const TOWN_RANK = 2
 
 /** The town's history: a sample this often. */
 export const HISTORY_TICKS = ticks(15)

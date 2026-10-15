@@ -61,10 +61,17 @@ export const effectAt = (source: { readonly value: number; readonly reach: numbe
 /** What a source does to a cell at `ring`: a home's lift is for its neighbours, not itself. */
 const effectOf = (s: AppealSource, ring: number) => (s.mode === "homes" && ring === 0 ? 0 : effectAt(s, ring))
 
-/** A building of a kind as a source, if it has any effect. */
-export const buildingSource = (kind: KindId, tile: { readonly x: number; readonly y: number; readonly size: number }, rules: Rules = shippedRules): AppealSource | null => {
-  const a = rules.kinds[kind].appeal
-  return a ? { ...tile, value: a.value, reach: a.reach, ...(a.full ? { full: a.full } : {}), label: rules.kinds[kind].title.toLowerCase(), mode: "sum" } : null
+/** A building of a kind as a source, if it has any effect: an upgraded one's is its upgrade's (see `Kind.upgrade`). */
+export const buildingSource = (
+  kind: KindId,
+  tile: { readonly x: number; readonly y: number; readonly size: number },
+  rules: Rules = shippedRules,
+  upgraded = false
+): AppealSource | null => {
+  const up = upgraded ? rules.kinds[kind].upgrade : undefined
+  const a = up?.appeal ?? rules.kinds[kind].appeal
+  const title = up?.title ?? rules.kinds[kind].title
+  return a ? { ...tile, value: a.value, reach: a.reach, ...(a.full ? { full: a.full } : {}), label: title.toLowerCase(), mode: "sum" } : null
 }
 
 /** A citizens' home or a townhouse lifts the homes beside it; a settlers' cottage does nothing. */

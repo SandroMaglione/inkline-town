@@ -19,12 +19,13 @@ import { makeSails, makeFlag } from "../asset-lab/buildings.ts"
 import { makeMarker } from "../asset-lab/construction.ts"
 import { makeRuin } from "../asset-lab/town-props.ts"
 import { StructureEffects } from "./structure-effects.ts"
+import { upgradeHeights } from "../asset-lab/service-upgrades.ts"
 import { SmokePlume } from "./smoke-effects.ts"
 import { surfaceState, type SurfaceState } from "./surface-state.ts"
 import { makePerson, serviceCostume, type ServiceRole } from "../asset-lab/people.ts"
 import { makeTree, makeRock, makeField, hash } from "../asset-lab/land.ts"
 import { ModelHandle } from "./pool.ts"
-import { buildingAsset, homeAsset, homeKey, doorKey, noDoors, quantizeBuild, plateAsset, treeVariant } from "./models.ts"
+import { buildingAsset, buildingHeight, homeAsset, homeKey, doorKey, noDoors, quantizeBuild, plateAsset, treeVariant } from "./models.ts"
 import type { GameScene, SceneNode } from "./scene.ts"
 
 /** Winter's cold light complements the roof snow shader. */
@@ -123,32 +124,33 @@ export class BuildingView extends WorldView {
     this.pulse = Math.max(0, this.pulse - dt * 3)
     this.opening += (Number(look.working || this.pulse > 0.2) - this.opening) * Math.min(1, dt * 6)
     const open = Math.round(this.opening * 4) / 4
-    this.body.use(`building/${this.kindId}/${build}/${share}/${doorKey(doors)}/${open}`, () =>
-      buildingAsset(this.kindId, build, share, doors, open)
+    // An upgraded building (a market hall, a church) is its own model, turned to face the road.
+    const upgraded = !!look.upgraded && build >= 1
+    this.body.use(`building/${this.kindId}/${upgraded ? 2 : 1}/${build}/${share}/${doorKey(doors)}/${upgraded ? 0 : open}`, () =>
+      buildingAsset(this.kindId, build, share, doors, open, {}, upgraded)
     )
     this.plate.use(`plate/${kind.size}/${build}`, () => plateAsset(kind.size, build))
     this.body.root.scale.set(1 + this.pulse * 0.04, 1 - this.pulse * 0.06, 1 + this.pulse * 0.04)
-    const H = kind.roof === "gable" ? 20 : kind.stories * 32
-    this.marker.root.position.set(
-      0,
-      (H +
-        (kind.topper === "chimney" ? 24 : kind.topper === "cupola" ? 25 : kind.topper === "flag" ? 24 : kind.topper === "sails" ? 16 : 0) +
-        8) /
-        Math.cos(Math.PI / 6),
-      0
-    )
+    const H = buildingHeight(this.kindId, upgraded)
+    const top = upgraded
+      ? upgradeHeights[this.kindId as "market" | "chapel"].top
+      : H + (kind.topper === "chimney" ? 24 : kind.topper === "cupola" ? 25 : kind.topper === "flag" ? 24 : kind.topper === "sails" ? 16 : 0)
+    this.marker.root.position.set(0, (top + 8) / Math.cos(Math.PI / 6), 0)
     const signed = !!look.burning || (look.alert !== null && look.alert !== undefined)
     this.marker.root.visible = look.problem && look.build >= 1 && !signed
     const state = structureState(look,this.stage.frost)
     this.body.effects = build >= 1 ? state : surfaceState()
     this.body.effectBounds.set(kind.half * U * 32 * Math.SQRT2,H/Math.cos(Math.PI/6),this.entity%97/97,1)
+    if(this.effects&&this.effects.group.userData.upgraded!==upgraded){this.effects.dispose();this.effects=null}
     if(!this.effects&&build>=1&&(state.burning||state.fireRisk)){
-      this.effects = new StructureEffects(buildingAsset(this.kindId,1,null,noDoors,0),H)
+      this.effects = new StructureEffects(buildingAsset(this.kindId,1,null,upgraded?doors:noDoors,0,{},upgraded),H)
+      this.effects.group.userData.upgraded=upgraded
       this.group.add(this.effects.group)
     }
     this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
     this.shade = 0xffffff
-    this.motion.root.visible = look.build >= 1 && (kind.topper === "flag" || kind.topper === "sails")
+    // The market hall has no flag of its own: the flag stays on the tier 1 market.
+    this.motion.root.visible = look.build >= 1 && !upgraded && (kind.topper === "flag" || kind.topper === "sails")
     if (kind.topper === "flag") {
       this.wave += dt * (look.working ? 6 : 3)
       this.motion.use("flag/" + this.kindId, () => makeFlag(this.kindId))
@@ -284,8 +286,9 @@ export class RockView extends WorldView {
     this.anchor.x = this.cell.x + w / 2
     this.anchor.y = this.cell.y + h / 2
     this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
-    const full = amount > ROCK_AMOUNT / 2
-    this.body.use(`rock/${ore}/${full}/${this.variant}/${w}x${h}`, () => makeRock(ore, full, this.variant, w, h))
+    // Quarried down to its worked face (see `FACE_TICKS`), it gives one at a time: drawn as cut benches.
+    const stage = amount <= 1 ? "worked" : amount > ROCK_AMOUNT / 2
+    this.body.use(`rock/${ore}/${stage}/${this.variant}/${w}x${h}`, () => makeRock(ore, stage, this.variant, w, h))
   }
 }
 export class FieldView extends WorldView {

@@ -38,7 +38,8 @@ const fresh: GuideFacts = {
   sawHome: false,
   sawBuilding: false,
   roadToWater: false,
-  goalsMet: false,
+  rank: 0,
+  upgraded: new Set(),
   coins: 1900,
   unreached: 0,
   risk: { fire: false, health: false, order: false },
@@ -95,9 +96,10 @@ test("after ten homes the course goes on to citizens, never falling silent, a bu
   const supplied = founded({ residents: 40 }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill", "bakery"])
   assert.equal(next(supplied), "citizens")
   assert.equal(next({ ...supplied, finerHomes: 1, sawTown: false }, { quiet: true }, founding.map((s) => s.id)), "goals")
-  // The last word: every goal, until they are met.
-  assert.equal(next({ ...supplied, finerHomes: 1 }), "complete")
-  assert.equal(next({ ...supplied, finerHomes: 1, goalsMet: true }), undefined)
+  // The last word: the ranks, up to a city.
+  assert.equal(next({ ...supplied, finerHomes: 1 }), "ranks")
+  assert.equal(next({ ...supplied, finerHomes: 1, rank: 2 }), "ranks")
+  assert.equal(next({ ...supplied, finerHomes: 1, rank: 3 }), undefined)
 })
 
 test("the course never asks for a building before the town needs it, and says what comes next", () => {
@@ -112,6 +114,9 @@ test("the course never asks for a building before the town needs it, and says wh
   assert.equal(upcoming(founded(), new Set(guideDone(founded(), none))), `Next: a quarry, once stone falls below ${STONE_LOW} (16 now).`)
   assert.notEqual(next(founded({ residents: 60 }), {}), "market")
   assert.equal(next(founded({ unreached: 3 }), {}), "market")
+  // A town rank town with a market: upgrade it rather than build another.
+  assert.equal(next(founded({ unreached: 3, rank: 2 }, ["market"]), {}), "markethall")
+  assert.notEqual(next(founded({ unreached: 3, rank: 1 }, ["market"]), {}), "markethall", "not before the town rank")
   assert.notEqual(next(founded({ citizens: 12, residents: 80 }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill", "bakery"]), {}), "smithy")
   assert.equal(next(founded({ citizens: 12, residents: 80, stock: amounts({ tools: 3, planks: 40, stone: 20 }) }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill", "bakery"]), {}), "smithy")
 })
@@ -242,7 +247,7 @@ test("every step can be done, and a town that has done them all is told nothing"
   const finished = town(
     {
       homes: 200, residents: 400, citizens: 200, finerHomes: 30, crown: { open: true, met: 3 }, trading: true, taxed: true, sawTown: true, sawHome: true, sawBuilding: true,
-      roadToWater: true, goalsMet: true, unreached: 5, winter: true, worn: true, poorStreet: true, approval: 40, net: -5, most: 120, stock: amounts({ tools: 0 })
+      roadToWater: true, rank: 3, upgraded: new Set<KindId>(["market"]), unreached: 5, winter: true, worn: true, poorStreet: true, approval: 40, net: -5, most: 120, stock: amounts({ tools: 0 })
     },
     ["fishery", "lumberjack", "sawmill", "forester", "quarry", "granary", "firewatch", "builder", "market", "sheep", "weaver", "chapel", "farm", "mill", "bakery", "healer", "watchhouse", "mine", "smithy"]
   )

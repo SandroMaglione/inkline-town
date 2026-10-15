@@ -97,6 +97,8 @@ export const TownHall = Descriptor.Tag("Town/TownHall")
 export const Status = Descriptor.ConstructedComponent(Decode.literal(...statuses))("Town/Status")
 /** Stopped by the town: no workers, a quarter of its upkeep. */
 export const Paused = Descriptor.Tag("Town/Paused")
+/** Upgraded where it stands (see `Kind.upgrade`): its walker, desirability, and upkeep are the upgrade's. */
+export const Upgraded = Descriptor.Tag("Town/Upgraded")
 
 /**
  * Workers it needs, how many came (`apprentices` of them settlers standing
@@ -269,19 +271,22 @@ export const Crown = Descriptor.ConstructedResource(Decode.struct({
   snubs: Decode.array(integer)
 }))("Town/Crown")
 
-export const fateStates = ["playing", "won", "lost", "over"] as const
+export const fateStates = ["playing", "lost", "over"] as const
 /**
- * How the term is going: still `playing`; `won` (every goal held), `lost`
- * (bankrupt, in revolt, abandoned, or dismissed by the crown), or `over` (the term ran out), with
- * why and when. `governing`: won, and carried on anyway. The `since`
- * fields are when each danger (or the goals) began, or -1.
+ * How the term is going: still `playing`; `lost` (bankrupt, in revolt,
+ * abandoned, or dismissed by the crown), or `over` (the term ran out: the
+ * mayor may stand for another), with why and when. `term` is which term
+ * this is, from 1, and `began` the step (since the founding) it began on;
+ * `rank` the highest the town has reached (see `ranks`). The `since`
+ * fields are when each danger (or the next rank's goals) began, or -1.
  */
 export const Fate = Descriptor.ConstructedResource(Decode.struct({
   state: Decode.literal(...fateStates),
   reason: Decode.string,
   at: integer,
-  governing: Decode.boolean,
-  won: integer,
+  term: integer,
+  began: integer,
+  rank: integer,
   debtSince: integer,
   revoltSince: integer,
   goalSince: integer,
@@ -408,7 +413,7 @@ export const Game = Schema.bind(
   Schema.fragment({
     components: {
       Tile, Road, Paved, Park, Ruin, Site, Rising, Tree, Rock, Water, Field, House, Risk, Condition, Burning, Sick, Building, TownHall, Status,
-      Paused, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Patrol, Figure, Route, Errand, Rescue, Roam
+      Paused, Upgraded, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Patrol, Figure, Route, Errand, Rescue, Roam
     },
     resources: {
       Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Guide, Appeal, Pantry, Fires,

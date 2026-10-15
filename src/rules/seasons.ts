@@ -15,17 +15,17 @@ export interface Seasoned {
   readonly winters?: Almanac
 }
 
-/** The winter that ends year `year` (from 1), or `null` for none: the first year's, and any past the term. */
+/** The winter that ends year `year` (from 1), or `null` for none: the first year's, and any past the terms rolled so far. */
 export const winterOf = (charter: Seasoned, year: number, rules: Rules = shippedRules): WinterId | null => {
-  if (year <= 1 || year > rules.yearsPerTerm) return null
+  if (year <= 1 || year > Math.max(rules.yearsPerTerm, charter.winters?.length ?? 0)) return null
   const w = charter.winters?.[year - 1]
   return w === undefined ? "normal" : w === "none" ? null : w
 }
 
-/** Rolls each year's winter from a random number in 0 → 1 a year (the first year's is spared). */
-export const rollWinters = (next: () => number, rules: Rules = shippedRules): Array<WinterId | "none"> =>
+/** Rolls a term's winters from a random number in 0 → 1 a year: the first term's first year is `spared`, a later term's is not. */
+export const rollWinters = (next: () => number, rules: Rules = shippedRules, spared = true): Array<WinterId | "none"> =>
   Array.from({ length: rules.yearsPerTerm }, (_, i) => {
-    if (i === 0) return "none"
+    if (i === 0 && spared) return "none"
     const r = next()
     return r < rules.winters.mild.chance ? "mild" : r < rules.winters.mild.chance + rules.winters.normal.chance ? "normal" : "hard"
   })

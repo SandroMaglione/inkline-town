@@ -13,7 +13,7 @@
  * and counted ("step 3 of 8"). Founding: homes, a road to the water, a
  * fishery, a look at what it needs, a lumberjack, a sawmill, the term's goal,
  * and ten homes. Growing citizens: a quarry, cloth, faith, bread, the first
- * citizens, the goals again. Governing: every goal met. The course always has
+ * citizens, the goals again. Governing: the ranks, up to a city. The course always has
  * something to say, so the guide never falls silent on a mayor who does not
  * know what comes next; a step whose buildings the town cannot build yet
  * says what opens them (`lockedNote`), and the course goes on to one it can.
@@ -84,8 +84,10 @@ export interface GuideFacts {
   readonly sawBuilding: boolean
   /** A road comes within two cells of water, close enough for a fishery on it. */
   readonly roadToWater: boolean
-  /** Every goal of the term is met now. */
-  readonly goalsMet: boolean
+  /** The town's rank: 0 hamlet, 1 village, 2 town, 3 city. */
+  readonly rank: number
+  /** Kinds of building upgraded where they stand (a market hall, a church). */
+  readonly upgraded: ReadonlySet<KindId>
   /** Coins in the treasury. */
   readonly coins: number
   /** Built homes no food walker reaches (the town hall's or a market's). */
@@ -236,7 +238,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     chapter: "Founding",
     course: true,
     action: "Open the [town] panel and read the goals at its top.",
-    why: "Meet every goal before the clock at the top runs out and the town is complete. [pause] stops the clock whenever you need to think.",
+    why: "Meeting them raises the town from hamlet to village, town, and city, each with a reward from the crown. [pause] stops the clock whenever you need to think.",
     goal: "you open the town panel",
     focus: null,
     when: () => true,
@@ -339,22 +341,22 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     chapter: "Growing citizens",
     course: true,
     action: "Open the [town] panel to see how close the goals are.",
-    why: "The first citizens have moved in, and three in ten residents must be citizens to complete the town.",
+    why: "The first citizens have moved in, and each rank asks for a bigger share of them.",
     goal: "you open the town panel",
     focus: null,
     when: (f) => f.finerHomes > 0,
     done: (f) => f.sawTown
   },
   {
-    id: "complete",
+    id: "ranks",
     chapter: "Governing",
     course: true,
-    action: "Grow the town until every goal in the [town] panel is met.",
-    why: "More citizens' homes, approval of 15 or more, and coins to spare. Hold every goal for two minutes and the town is complete. The guide speaks up when something needs you.",
-    goal: "every goal is met",
+    action: "Meet every goal in the [town] panel to raise the town's rank.",
+    why: "Hold them for two minutes and the town rises, up to a city. The town rank opens upgrades for the market and the chapel. The guide speaks up when something needs you.",
+    goal: "the town is a city",
     focus: null,
     when: () => true,
-    done: (f) => f.goalsMet
+    done: (f) => f.rank >= 3
   },
 
   // ── Around the course, when the town needs them ──
@@ -441,6 +443,16 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     when: (f) => f.unreached >= 2,
     done: (f) => has(f, "market"),
     waiting: rising("market")
+  },
+  {
+    id: "markethall",
+    chapter: "Keeping it standing",
+    action: "Select a market and upgrade it to a market hall, from its panel.",
+    why: "Some homes are beyond every food walker. A market hall's walker goes further and more often, without a second market's upkeep.",
+    goal: "a market hall stands",
+    focus: { kind: "market" },
+    when: (f) => f.rank >= 2 && has(f, "market") && f.unreached >= 2,
+    done: (f) => f.upgraded.has("market")
   },
   {
     id: "street",

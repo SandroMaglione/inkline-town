@@ -3,7 +3,7 @@ import { shippedRules } from "../rules/config.ts"
 /**
  * The term in office: the seasons turn, the crown asks for goods, the
  * town's approval follows how it is treated, the town's history is kept,
- * and the term ends: complete, lost, or run out.
+ * the town rises through its ranks, and the term ends: lost, or run out.
  */
 import { crown, HISTORY_TICKS, ticks, WINTER_WARNING, type GoodId } from "../content.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
@@ -123,7 +123,8 @@ export const Requests = Game.System(
     const random = Random.make(resources.rng.get())
     const good = random.pick(options)!
     resources.rng.set(random.state)
-    const progress = Math.min(1, t / termTicks(charter, rules))
+    // Larger the later in this term it is: a new term starts the crown small again.
+    const progress = Math.min(1, Math.max(0, t - resources.fate.get().began) / termTicks(charter, rules))
     const window = (crownGap(charter, rules) * crown.window) / 3600
     const share = crown.share[0] + (crown.share[1] - crown.share[0]) * progress
     // Never more than the town could keep in store.
@@ -174,13 +175,14 @@ export const Approve = Game.System(
 
 // ── The end of the term ───────────────────────────────────────────────────
 
-/** The fate of a town just founded. */
+/** The fate of a town just founded: its first term, a hamlet. */
 export const foundedFate = () => ({
   state: "playing" as const,
   reason: "",
   at: 0,
-  governing: false,
-  won: -1,
+  term: 1,
+  began: 0,
+  rank: 0,
   debtSince: -1,
   revoltSince: -1,
   goalSince: -1,
@@ -188,15 +190,17 @@ export const foundedFate = () => ({
   score: 0
 })
 
-import { goalsOf, larder, scoreOf, steadyNet } from "../rules/goals.ts"
-export { goalsOf, larder, scoreOf, steadyNet } from "../rules/goals.ts"
+import { goalsOf, larder, nextRank, scoreOf, steadyNet } from "../rules/goals.ts"
+export { goalsOf, larder, nextRank, scoreOf, steadyNet } from "../rules/goals.ts"
 
 /**
- * Once a second: does the term end? It is lost to bankruptcy (in debt too
- * long), revolt (approval too low too long), abandonment (the town
- * emptied), or dismissal (the crown's requests missed too many times in a
- * row); won once every goal has held long enough; and over when the
- * term runs out. Dangers write to the chronicle as they begin.
+ * Once a second: does the term end, or the town rise? The term is lost to
+ * bankruptcy (in debt too long), revolt (approval too low too long),
+ * abandonment (the town emptied), or dismissal (the crown's requests
+ * missed too many times in a row); and over when it runs out, when the
+ * mayor may stand for another. The town rises a rank once every goal of
+ * the next has held long enough, and the crown sends a reward; nothing
+ * ends. Dangers write to the chronicle as they begin.
  */
 export const Judge = Game.System(
   "Town/Judge",
@@ -205,7 +209,7 @@ export const Judge = Game.System(
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter),
       census: Game.System.readResource(Census),
-      treasury: Game.System.readResource(Treasury),
+      treasury: Game.System.writeResource(Treasury),
       ledger: Game.System.readResource(Ledger),
       mood: Game.System.readResource(Mood),
       crown: Game.System.readResource(Crown),
@@ -217,7 +221,7 @@ export const Judge = Game.System(
   },
   ({ resources, services }) => {
     const rules = services.rules
-    const { crown, fate } = rules
+    const { crown, fate, ranks } = rules
 
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
@@ -233,11 +237,9 @@ export const Judge = Game.System(
     const net = steadyNet(resources.history.get().samples, ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin)
     const note = (text: string, alarm = false) => write(resources.chronicle, t, text, alarm)
     const minutes = (n: number) => ticks(n * 60)
-    const left = Math.max(0, Math.round((termTicks(charter, rules) - t) / 3600))
-    const score = (won: boolean) => scoreOf({ ...census, coins, approval, met: crownNow.met, missed: crownNow.missed }, won, left)
 
     const next = { ...f, peak: Math.max(f.peak, residents) }
-    for (const mark of [50, 100, 250, 500]) if (f.peak < mark && residents >= mark) note(`${mark} residents.`)
+    for (const mark of [50, 100, 250, 500, 1000]) if (f.peak < mark && residents >= mark) note(`${mark} residents.`)
 
     // Dangers.
     if (coins < 0) {
@@ -249,25 +251,31 @@ export const Judge = Game.System(
       next.revoltSince = f.revoltSince < 0 ? t : f.revoltSince
     } else next.revoltSince = -1
 
-    const end = (state: "won" | "lost" | "over", reason: string) => {
+    const end = (state: "lost" | "over", reason: string) => {
       note(reason)
-      resources.fate.set({ ...next, state, reason, at: t, score: score(state === "won" || f.governing) })
+      resources.fate.set({ ...next, state, reason, at: t, score: scoreOf({ ...census, coins, approval, met: crownNow.met, missed: crownNow.missed }, next.rank) })
     }
     if (next.debtSince >= 0 && t - next.debtSince >= minutes(fate.debt)) return end("lost", "Bankrupt: the crown has taken the treasury out of the mayor's hands.")
     if (next.revoltSince >= 0 && t - next.revoltSince >= minutes(fate.revolt)) return end("lost", "Revolt: the town has turned the mayor out.")
     if (next.peak >= fate.peak && residents < next.peak * fate.abandon) return end("lost", "Abandoned: the people have left the town.")
     if (crownNow.streak >= crown.patience) return end("lost", `Dismissed: the crown has replaced a mayor who left ${crown.patience} of its requests unanswered.`)
-    if (t >= termTicks(charter, rules)) {
-      return end("over", f.governing ? "The term is over: the town stood complete to the end." : "The term is over.")
+    if (t - f.began >= termTicks(charter, rules)) {
+      return end("over", `Term ${f.term} is over; the ${ranks[f.rank]!.title} stands.`)
     }
 
-    // Goals.
-    if (!f.governing) {
-      const goals = goalsOf(charter, { ...census, coins, net, approval }, rules)
+    // The next rank.
+    if (nextRank(f.rank, rules) > f.rank) {
+      const goals = goalsOf(charter, { ...census, coins, net, approval }, rules, f.rank)
       if (goals.every((g) => g.met)) {
-        if (f.goalSince < 0) note("Every goal is met: the town needs only to hold them.")
+        const to = ranks[f.rank + 1]!
+        if (f.goalSince < 0) note(`Every goal of a ${to.title} is met: the town needs only to hold them.`)
         next.goalSince = f.goalSince < 0 ? t : f.goalSince
-        if (t - next.goalSince >= minutes(fate.hold)) return end("won", "The town is complete.")
+        if (t - next.goalSince >= minutes(fate.hold)) {
+          next.rank = f.rank + 1
+          next.goalSince = -1
+          resources.treasury.update((tr) => ({ coins: tr.coins + to.reward }))
+          note(`The town is now a ${to.title}: the crown sends ${to.reward} coins.`, true)
+        }
       } else next.goalSince = -1
     }
     resources.fate.set(next)
