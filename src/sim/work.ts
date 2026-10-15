@@ -8,7 +8,7 @@ import { wildTreeSpots, canSeedTree } from "../rules/land.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { fieldDraft, treeDraft } from "../archetypes.ts"
-import { amounts, crewOf, goodIds, ticks, total, type Amounts, type Crew } from "../content.ts"
+import { amounts, asUpgraded, crewOf, goodIds, ticks, total, upgradeAt, worksNeeded, type Amounts, type Crew } from "../content.ts"
 
 /** The flow of goods is counted in slices this many seconds long, and the last `FLOW_SLICES` of them (a minute) are kept. */
 const FLOW_SLICE = 10
@@ -16,7 +16,7 @@ const FLOW_SLICES = 6
 
 const each = (f: (g: (typeof goodIds)[number]) => number): Amounts => Object.fromEntries(goodIds.map((g) => [g, f(g)])) as Amounts
 import { around, doors, GridBuilder, key, ownerAt, reach, roadPrint, useAt } from "../grid.ts"
-import { Building, Burning, Charter, Chronicle, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Treasury, Tree, maybe, type Status as StatusValue, Water } from "../schema.ts"
+import { Building, Burning, Carriers, Charter, Chronicle, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Service, Site, Staff, Status, Stock, Storage, Tile, Time, Treasury, Tree, Upgraded, maybe, type Status as StatusValue, Water, Works } from "../schema.ts"
 import { connected, elapsed, seasonAt, TileRead, useOf, write } from "./shared.ts"
 
 import { assignWorkers, equipmentPace, effort, paced } from "../rules/production.ts"
@@ -144,6 +144,9 @@ export const CountStock = Game.System(
 
 // ── Going up ──────────────────────────────────────────────────────────────
 
+/** How often a storage under works takes a crate for it from its own shelves. */
+const SELF_SUPPLY_TICKS = ticks(1)
+
 /** Where a site's walls are once its materials are in: it goes on rising from here. */
 export const SITE_SHARE = 0.35
 
@@ -152,13 +155,67 @@ export const Raise = Game.System(
   {
     queries: {
       sites: Game.Query({ selection: { site: Game.Query.read(Site) } }),
-      rising: Game.Query({ selection: { rising: Game.Query.write(Rising), status: Game.Query.optional(Status) } })
+      rising: Game.Query({ selection: { rising: Game.Query.write(Rising), status: Game.Query.optional(Status) } }),
+      works: Game.Query({
+        selection: {
+          works: Game.Query.write(Works),
+          building: Game.Query.read(Building),
+          staff: Game.Query.write(Staff),
+          recipe: Game.Query.optional(Recipe),
+          carriers: Game.Query.optional(Carriers),
+          service: Game.Query.optional(Service)
+        }
+      }),
+      /** A storage under works (the town hall, a warehouse): its own shelves. */
+      stocked: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage, Works] })
+    },
+    resources: {
+      time: Game.System.readResource(Time),
+      charter: Game.System.readResource(Charter),
+      chronicle: Game.System.writeResource(Chronicle)
     },
     services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, commands, services }) => {
+  ({ queries, resources, commands, services }) => {
     const rules = services.rules
     const { buildTicks: BUILD_TICKS } = rules
+
+    // An upgrade whose materials are all in stands upgraded: it works from here on as `asUpgraded` says,
+    // keeping what it holds and what it was in the middle of.
+    const tick = resources.time.get().tick
+    for (const { entity, data } of queries.works.each()) {
+      let works = data.works.get()
+      // A storage under works (the town hall) builds with what it holds itself, a crate at a time.
+      const shelves = queries.stocked.get(entity.id)
+      if (shelves.ok && tick % SELF_SUPPLY_TICKS === 0) {
+        const own = shelves.value.data.inventory.get()
+        const g = goodIds.find((g) => works.owed[g] > 0 && own.stock[g] > 0)
+        if (g) {
+          const n = Math.min(rules.transport.load, works.owed[g], own.stock[g])
+          shelves.value.data.inventory.set({ ...own, stock: { ...own.stock, [g]: own.stock[g] - n } })
+          works = { ...works, owed: { ...works.owed, [g]: works.owed[g] - n } }
+          data.works.set(works)
+        }
+      }
+      // Builders work on as the materials come in, never ahead of them.
+      const needed = worksNeeded(works.total, rules), allowed = needed * (1 - total(works.owed) / Math.max(1, works.total))
+      if (works.done < allowed) {
+        works = { ...works, done: works.done + 1 }
+        data.works.set(works)
+      }
+      if (total(works.owed) > 0 || works.done < needed) continue
+      const base = rules.kinds[data.building.get().kind], kind = asUpgraded(base, works.level)
+      commands.remove(entity.id, Works)
+      commands.insert(entity.id, Game.Command.entry(Upgraded, { level: works.level }))
+      data.staff.set({ ...data.staff.get(), needed: kind.workers })
+      const recipe = maybe(data.recipe), carriers = maybe(data.carriers), service = maybe(data.service)
+      if (recipe && kind.recipe) commands.insert(entity.id, Game.Command.entry(Recipe, { ...recipe, period: ticks(kind.recipe.seconds) }))
+      if (shelves.ok && kind.holds) shelves.value.data.inventory.set({ ...shelves.value.data.inventory.get(), cap: kind.holds.cap })
+      if (carriers && kind.carriers) commands.insert(entity.id, Game.Command.entry(Carriers, { count: kind.carriers }))
+      if (service && kind.service) commands.insert(entity.id, Game.Command.entry(Service, { ...service, interval: ticks(kind.service.seconds), range: kind.service.range }))
+      const was = (upgradeAt(base, works.level - 1)?.title ?? base.title).toLowerCase()
+      write(resources.chronicle, elapsed(resources.time.get(), resources.charter.get()), `The ${was} is now a ${upgradeAt(base, works.level)!.title.toLowerCase()}.`, true)
+    }
 
     for (const { entity, data } of queries.sites.each()) {
       if (total(data.site.get().owed) > 0) continue
@@ -292,7 +349,8 @@ export const Work = Game.System(
           status: Game.Query.write(Status),
           gatherer: Game.Query.optional(Gatherer),
           paused: Game.Query.optional(Paused),
-          condition: Game.Query.optional(Condition)
+          condition: Game.Query.optional(Condition),
+          upgraded: Game.Query.optional(Upgraded)
         },
         without: [Site, Rising]
       }),
@@ -338,7 +396,7 @@ export const Work = Game.System(
       }
 
     /** Takes what a gatherer needs from the land within reach, or says there is none. */
-    const gather = (source: "tree" | "stone" | "ore" | "field" | "water", tile: { x: number; y: number; size: number }, radius: number): boolean => {
+    const gather = (source: "tree" | "stone" | "ore" | "field" | "water", tile: { x: number; y: number; size: number }, radius: number, deep = false): boolean => {
       for (const c of around(tile, radius)) {
         const use = useAt(grid, c.x, c.y)
         const id = ownerAt(grid, c.x, c.y)
@@ -362,7 +420,13 @@ export const Work = Game.System(
           const rock = rocks().get(id)
           if (!rock) continue
           const r = rock.data.rock.get()
-          if (r.ore !== (source === "ore") || r.amount <= 0) continue
+          if (r.ore !== (source === "ore")) continue
+          // A masonry cuts a worked face at full pace (see `Upgrade.deep`); anyone else waits for it.
+          if (r.amount <= 0) {
+            if (!deep) continue
+            used.add(id)
+            return true
+          }
           // Quarried down, a rock stays as a worked face (see `FACE_TICKS`).
           rock.data.rock.set({ ...r, amount: r.amount - 1 })
           if (r.amount === 2 && ![...rocks().values()].some((o) => o !== rock && o.data.rock.get().ore === r.ore && o.data.rock.get().amount >= 2))
@@ -402,7 +466,8 @@ export const Work = Game.System(
       let short = !fed
 
       if (open && staff.assigned > 0 && recipe.progress === 0 && room && fed) {
-        if (gatherer && !gather(gatherer.source, tile, gatherer.radius)) short = true
+        const deep = upgradeAt(kind, maybe(data.upgraded)?.level ?? 0)?.deep ?? false
+        if (gatherer && !gather(gatherer.source, tile, gatherer.radius, deep)) short = true
         else {
           if (recipe.input !== null) stock = { ...stock, [recipe.input]: stock[recipe.input] - recipe.inputs }
           recipe = { ...recipe, progress: 1 }

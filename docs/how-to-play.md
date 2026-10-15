@@ -92,11 +92,25 @@ six months.
   townhouses). Hold every goal of the next rank for two minutes and the town
   rises: the crown sends a reward, and play goes on. A rank is never lost.
   The town panel shows the next rank's goals.
-- **Upgrades**: a town can turn its market into a *market hall*, and its
-  chapel into a *church*, where they stand (the building's panel):
-  paid at once in coins, planks, stone, and tools, the walker goes further
-  and more often, the street around it is finer, and the upkeep is higher.
-  Pulling one down gives back part of what both cost.
+- **Upgrades** are made where a building stands, so they need no more
+  land. The build menu's *upgrades* lists every one, what it gives and
+  what it costs: pick one and the buildings it can go to are outlined;
+  hover one to see the same, and click it to begin (or use the button in
+  its panel). The coins are paid when the works begin; carriers then
+  bring the planks, stone, and tools, builders work them in as they come,
+  and scaffolding rises inside its plot. It goes on working meanwhile.
+  - a village: the town hall becomes a *guildhall* (holds twice as much,
+    more carriers, a longer walk, a tenth less administration), and a
+    warehouse a *depot* (holds 120, two more carriers);
+  - a town: the guildhall a *city hall* (a fifth less administration),
+    the market a *market hall*, the chapel a *church*, the bakery an
+    *ovenworks* (bread every 4 s, a third baker), the farm an *estate*
+    (a third hand, half again as fast), the quarry a *masonry* (cuts
+    worked-out rock at full pace), and the fire watch a *fire brigade*
+    (four firefighters, a longer walk).
+  Every upgrade costs more upkeep. None is ever needed: each pays for
+  itself in under an hour of play, in coins or in what it does. Pulling
+  one down gives back part of what all of it cost.
 - **The end of a term**: it is *lost* to bankruptcy (three minutes in
   debt), revolt (approval at -50 or below for two minutes), abandonment
   (people fall below 15% of their peak), or dismissal (three of the crown's

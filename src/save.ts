@@ -30,7 +30,7 @@ export const SAVE_VERSION = 9
  * done); from 7, its first term, and its rank: a town that was complete
  * (or governed on after) is a town, any other a hamlet that rises as its
  * goals hold. A complete town waiting on its mayor carries on playing;
- * from 8, its water as never fished.
+ * from 8, its water as never fished and its upgrades as the first.
  * Anything else is left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
@@ -38,10 +38,12 @@ const carry = (version: number, world: unknown): unknown | null => {
   const w = world as { resources?: Record<string, unknown>; entities?: Array<{ components?: Record<string, unknown> }> }
   const r = w.resources
   if (!r || typeof r !== "object") return null
-  // From 8, water that was never fished.
+  // From 8, water that was never fished, and an upgraded building upgraded once.
   for (const e of Array.isArray(w.entities) ? w.entities : []) {
     const water = e.components?.["Town/Water"]
     if (water && typeof water === "object" && !("fished" in water)) e.components!["Town/Water"] = { fished: -1_000_000 }
+    const upgraded = e.components?.["Town/Upgraded"]
+    if (upgraded && typeof upgraded === "object" && !("level" in upgraded)) e.components!["Town/Upgraded"] = { level: 1 }
   }
   if (version === 8) return w
   const fate = r["Town/Fate"] as Record<string, unknown> | undefined

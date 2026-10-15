@@ -62,7 +62,8 @@ import { PICTURE_HEIGHT, PICTURE_QUALITY, PICTURE_WIDTH } from "./share/format.t
 import { MapInput } from "./render3d/input.ts"
 import { portrait } from "./render3d/portrait.ts"
 import { serviceBuilding } from "./asset-lab/service-upgrades.ts"
-import { makeBuilding } from "./asset-lab/buildings.ts"
+import { buildingDimensions, makeBuilding } from "./asset-lab/buildings.ts"
+import { dressedBuilding, isDressed, type DressedKind } from "./asset-lab/upgrade-dress.ts"
 import { house } from "./asset-lab/homes.ts"
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
@@ -396,6 +397,7 @@ export const createHost = async (
   const ui: UiValue = {
     tool: "select",
     placing: null,
+    upgrading: null,
     ground: "lawn",
     prop: "lamp",
     menu: null,
@@ -612,7 +614,7 @@ export const createHost = async (
 
   const refreshTools = () => {
     for (const { tool, button } of buttons) {
-      const on = tool.tool === "build" ? ui.menu === "build" || ui.tool === "place" || ui.tool === "ground" || ui.tool === "prop" : tool.tool === ui.tool
+      const on = tool.tool === "build" ? ui.menu === "build" || ui.tool === "place" || ui.tool === "ground" || ui.tool === "prop" || ui.tool === "upgrade" : tool.tool === ui.tool
       button.classList.toggle("on", on)
     }
     townButton.classList.toggle("on", ui.menu === "town")
@@ -621,6 +623,7 @@ export const createHost = async (
     ui.tool = tool
     ui.dragFrom = null
     if (tool !== "place") ui.placing = null
+    if (tool !== "upgrade") ui.upgrading = null
     if (tool !== "select") ui.selected = null
     refreshTools()
   }
@@ -643,6 +646,14 @@ export const createHost = async (
     choose("ground")
     const title = grounds[ground].title.toLowerCase()
     ui.toast(touchScreen() ? `Drag a rectangle to lay ${title}, then tap Build` : `Drag a rectangle to lay ${title} · Esc to stop`)
+  }
+  /** Picks a kind's buildings to upgrade: each one it can go to is outlined, and the tooltip says what it gives and costs. */
+  const upgradeTool = (kind: KindId) => {
+    ui.menu = null
+    choose("upgrade")
+    ui.upgrading = kind
+    const title = kinds[kind].title.toLowerCase()
+    ui.toast(touchScreen() ? `Tap a ${title} to see its upgrade, then tap it again to begin` : `Click a ${title} to begin its upgrade · Esc to stop`)
   }
   const furnish = (prop: PropId) => {
     ui.prop = prop
@@ -736,11 +747,12 @@ export const createHost = async (
     return url
   }
   const both = { right: true, left: true }
-  const picture = (what: KindId | Tier | `park:${GroundId | PropId}`, upgraded = false): HTMLImageElement => {
+  const picture = (what: KindId | Tier | `park:${GroundId | PropId}`, level: number | boolean = 0): HTMLImageElement => {
     const img = document.createElement("img")
     img.className = "thumb"
     img.alt = ""
-    const id = `${String(what)}${upgraded ? "/upgraded" : ""}`
+    const lvl = Number(level), upgraded = lvl > 0
+    const id = `${String(what)}${upgraded ? `/upgraded${lvl}` : ""}`
     let url = pictures.get(id)
     if (!url) {
       if (typeof what === "string" && what.startsWith("park:")) {
@@ -750,6 +762,8 @@ export const createHost = async (
         void url.finally(() => g.destroy())
       } else if (what === 1 || what === 2 || what === 3) url = modelPicture(() => house(what, undefined, undefined, { doors: { right: true } }))
       else if (upgraded && (what === "market" || what === "chapel")) url = modelPicture(() => serviceBuilding(what, 2, { doors: both }))
+      else if (upgraded && isDressed(what as KindId))
+        url = modelPicture(() => dressedBuilding(what as DressedKind, lvl, makeBuilding(what as KindId, { doors: both, motion: false }), buildingDimensions(what as KindId).height))
       else url = modelPicture(() => makeBuilding(what as KindId, { doors: both, motion: false }))
       pictures.set(id, url)
     }
@@ -912,6 +926,41 @@ export const createHost = async (
       }
       panel.append(box)
     }
+    // Upgrades: every building that can be upgraded where it stands, what it becomes, what it gives, and what it costs.
+    const upgrades = section(
+      "upgrades",
+      "build",
+      "An upgrade is made where the building stands, so it needs no more land. Its coins are paid when the works begin; carriers then bring its materials, scaffolding rises around it, and it goes on working meanwhile. Pick one, then click the building."
+    )
+    upgrades.style.borderTop = "3px solid #b39a61"
+    // The town hall's first: it grows with the town; then the rest in the build menu's order.
+    for (const u of [...(ui.stats?.upgrades ?? [])].sort((a, b) => Number(b.kind === "townhall") - Number(a.kind === "townhall"))) {
+      const option = el("button", "option")
+      const cost = costChips({ coins: u.coins, materials: u.materials })
+      cost.box.prepend(el("span", "cap", "cost"))
+      const terms = el("span", "gives")
+      terms.innerHTML = `<span class="cap">gives</span>${u.changes.map((c) => `<span class="change">${c}</span>`).join("")}`
+      const blurb = el("span", "blurb", u.blurb)
+      option.append(picture(u.kind, u.level + 1), el("span", "name", `${u.from} → ${u.to}`), cost.box, terms, blurb)
+      option.title = `${u.from} → ${u.to}: ${u.blurb} · ${u.price} · ${u.changes.join(" · ")}`
+      option.onclick = () => upgradeTool(u.kind)
+      live.push(() => {
+        const now = ui.stats?.upgrades.find((x) => x.kind === u.kind && x.level === u.level)
+        option.style.display = now ? "" : "none"
+        if (!now) return
+        const short = cost.refresh()
+        option.disabled = now.blocked !== null || now.ready === 0
+        option.classList.toggle("short", now.blocked === null && short)
+        option.classList.toggle("on", ui.tool === "upgrade" && ui.upgrading === u.kind)
+        blurb.textContent = now.blocked
+          ? now.blocked
+          : now.ready === 0
+            ? now.underway > 0 ? `under way: ${now.underway}` : `build a ${kinds[u.kind].title.toLowerCase()} first`
+            : `${now.ready} ready${now.underway > 0 ? ` · ${now.underway} under way` : ""} · ${u.blurb}`
+      })
+      upgrades.append(option)
+    }
+    panel.append(upgrades)
     // Parks are laid out piece by piece: ground first, then what stands on it.
     const parks = section(
       "parks",
@@ -1304,14 +1353,13 @@ export const createHost = async (
     if (p.type === "build") return buildMenu()
     if (p.type === "town") return townPanel()
 
-    const upgrade = p.type === "building" && p.upgraded ? kinds[p.kind].upgrade : undefined
-    const title = p.type === "building" ? (upgrade ?? kinds[p.kind]).title.toLowerCase() : p.type === "house" ? tierHome[p.tier] : p.type === "park" ? "park" : "ruin"
+    const title = p.type === "building" ? p.title.toLowerCase() : p.type === "house" ? tierHome[p.tier] : p.type === "park" ? "park" : "ruin"
     const status = el("span", "pill")
     const about = el(
       "p",
       "sub",
       p.type === "building"
-        ? (upgrade ?? kinds[p.kind]).blurb
+        ? p.blurb
         : p.type === "ruin"
           ? "bulldoze it to clear the plot"
           : p.type === "park"
@@ -1324,7 +1372,7 @@ export const createHost = async (
     )
     const below = el("div", "")
     below.append(status, about)
-    panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier, p.type === "building" && p.upgraded), below))
+    panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier, p.type === "building" ? p.level : 0), below))
     // A building or a home: its rows in boxes under headings, kept in step with what the town says each frame.
     // A park or a ruin: one box.
     const holder = el("div", "")
@@ -1369,7 +1417,30 @@ export const createHost = async (
         syncGroups([{ title: "what is left", icon: "condition", lines: now.lines }])
       }
     })
-    if (!(p.type === "building" && p.kind === "townhall")) {
+    // What upgrading it would give and cost, said in full before the mayor pays for it.
+    if (p.type === "building" && p.upgrade) {
+      const box = section(`upgrade to ${p.upgrade.title.toLowerCase()}`, "build", p.upgrade.blurb)
+      box.classList.add("lines")
+      const price = el("p", "sub", p.upgrade.price)
+      const list = el("ul", "changes")
+      for (const c of p.upgrade.changes) list.append(el("li", "", c))
+      const begin = el("button", "frame primary", `Begin the ${p.upgrade.title.toLowerCase()}`)
+      begin.onclick = () => {
+        const now = ui.panel
+        if (now?.type === "building") ui.edits.push({ type: "upgrade", cell: now.cell })
+      }
+      const why = el("p", "sub", "")
+      live.push(() => {
+        const now = ui.panel
+        if (now?.type !== "building" || !now.upgrade) return
+        begin.disabled = now.upgrade.blocked !== null || now.upgrade.short !== null
+        why.textContent = now.upgrade.blocked ?? now.upgrade.short ?? "the coins are paid now; carriers bring the rest, and it goes on working"
+      })
+      box.append(price, list, begin, why)
+      panel.append(box)
+    }
+    if (p.type === "building" && p.kind === "townhall") return
+    {
       const actions = el("div", "actions")
       if (p.type === "building") {
         const pause = el("button", "frame", "Pause work")
@@ -1385,21 +1456,6 @@ export const createHost = async (
           pause.style.display = now.pausable ? "" : "none"
         })
         actions.append(pause)
-        // A building that can be upgraded where it stands (see `Kind.upgrade`).
-        if (p.upgrade) {
-          const up = el("button", "frame primary", `Upgrade: ${p.upgrade.title.toLowerCase()}`)
-          up.onclick = () => {
-            const now = ui.panel
-            if (now?.type === "building") ui.edits.push({ type: "upgrade", cell: now.cell })
-          }
-          live.push(() => {
-            const now = ui.panel
-            if (now?.type !== "building" || !now.upgrade) return
-            up.disabled = now.upgrade.blocked !== null
-            up.title = `${kinds[now.kind].upgrade?.blurb ?? ""} · ${now.upgrade.cost}${now.upgrade.blocked ? ` · ${now.upgrade.blocked}` : ""}`
-          })
-          actions.append(up)
-        }
       }
       if (p.type === "house") {
         const close = el("button", "frame", "Close home")
@@ -1435,7 +1491,7 @@ export const createHost = async (
         ? ""
         : p.type === "build" || p.type === "town"
           ? p.type
-          : `${p.type}|${p.id}|${p.type === "house" ? p.tier : p.type === "building" ? `${p.upgraded}|${p.upgrade !== null}` : ""}`
+          : `${p.type}|${p.id}|${p.type === "house" ? p.tier : p.type === "building" ? `${p.level}|${p.upgrade?.title ?? ""}|${p.works !== null}` : ""}`
     if (next !== shape) {
       shape = next
       // Keep the old contents while the closed panel slides away.

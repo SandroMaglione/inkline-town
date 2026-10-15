@@ -447,7 +447,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "markethall",
     chapter: "Keeping it standing",
-    action: "Select a market and upgrade it to a market hall, from its panel.",
+    action: "Open [build], pick the market hall under upgrades, and {tap|click} a market.",
     why: "Some homes are beyond every food walker. A market hall's walker goes further and more often, without a second market's upkeep.",
     goal: "a market hall stands",
     focus: { kind: "market" },

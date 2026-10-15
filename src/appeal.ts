@@ -10,7 +10,7 @@ import { shippedRules, type Rules } from "./rules/config.ts"
  * shared by the simulation (which keeps the whole grid, see `Appraise`) and
  * the page (which explains one cell).
  */
-import { type GroundId, type KindId, type PropId } from "./content.ts"
+import { upgradeAt, type GroundId, type KindId, type PropId } from "./content.ts"
 import { cellOf, DIRS, key } from "./grid.ts"
 import { GRID, inside, type Point } from "./iso.ts"
 
@@ -67,9 +67,9 @@ export const buildingSource = (
   kind: KindId,
   tile: { readonly x: number; readonly y: number; readonly size: number },
   rules: Rules = shippedRules,
-  upgraded = false
+  level = 0
 ): AppealSource | null => {
-  const up = upgraded ? rules.kinds[kind].upgrade : undefined
+  const up = upgradeAt(rules.kinds[kind], level)
   const a = up?.appeal ?? rules.kinds[kind].appeal
   const title = up?.title ?? rules.kinds[kind].title
   return a ? { ...tile, value: a.value, reach: a.reach, ...(a.full ? { full: a.full } : {}), label: title.toLowerCase(), mode: "sum" } : null

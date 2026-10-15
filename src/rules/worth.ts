@@ -8,9 +8,9 @@
  * rules (or any candidate rules) to the bands these figures should keep.
  * Plain functions over the rules: nothing here knows the ECS.
  */
-import { amounts, foods, goodIds, type GoodId, type Kind, type KindId, type Need, type Tier } from "../content.ts"
+import { amounts, asUpgraded, foods, goodIds, upgradeAt, type GoodId, type Kind, type KindId, type Need, type Tier } from "../content.ts"
 import { shippedRules, type Rules } from "./config.ts"
-import { mealsOf, moreAdmin, taxOf } from "./households.ts"
+import { adminOf, mealsOf, moreAdmin, taxOf } from "./households.ts"
 import { tradeCollection } from "./trade.ts"
 
 const kindIds = (rules: Rules) => Object.keys(rules.kinds) as Array<KindId>
@@ -44,8 +44,8 @@ export interface ProducerWorth {
 /** Jobs a minute a maker does with a full crew, a tool, and good repair. */
 export const jobsPerMinute = (kind: Kind): number => (kind.recipe ? 60 / kind.recipe.seconds : 0)
 
-export const producerWorth = (id: KindId, rules: Rules = shippedRules): ProducerWorth => {
-  const kind = rules.kinds[id], r = kind.recipe!, jobs = jobsPerMinute(kind)
+export const producerWorth = (id: KindId, rules: Rules = shippedRules, level = 0): ProducerWorth => {
+  const kind = asUpgraded(rules.kinds[id], level), r = kind.recipe!, jobs = jobsPerMinute(kind)
   const out = jobs * r.batch * rules.goods[r.output].price
   const inp = r.input ? jobs * r.inputs * rules.goods[r.input].price : 0
   const tools = kind.wear ? (jobs / kind.wear) * rules.goods.tools.price : 0
@@ -224,17 +224,58 @@ export interface ServiceWorth {
   readonly perUpkeep: number
 }
 
-/** Every service building, and each upgraded one as its own entry. */
+/** Every service building, and each upgrade of one as its own entry. */
 export const services = (rules: Rules = shippedRules): Array<ServiceWorth> =>
   kindIds(rules).flatMap((id) => {
-    const k = rules.kinds[id]
-    if (!k.service || !k.buildable) return []
-    const plain = { id, service: k.service.service, cost: costWorth(k.cost, rules), upkeep: k.upkeep, reach: (k.service.range * 60) / k.service.seconds }
-    const out: Array<ServiceWorth> = [{ ...plain, perUpkeep: plain.reach / plain.upkeep }]
-    if (k.upgrade?.service) {
-      const up = { id: `${id}+${k.upgrade.title.toLowerCase()}`, service: k.service.service, cost: plain.cost + costWorth(k.upgrade.cost, rules), upkeep: k.upgrade.upkeep,
-        reach: (k.upgrade.service.range * 60) / k.upgrade.service.seconds }
-      out.push({ ...up, perUpkeep: up.reach / up.upkeep })
+    const base = rules.kinds[id]
+    if (!base.service || !base.buildable) return []
+    const out: Array<ServiceWorth> = []
+    let cost = costWorth(base.cost, rules)
+    for (let level = 0; level <= 2; level++) {
+      if (level > 0 && !upgradeAt(base, level)) break
+      if (level > 0) cost += costWorth(upgradeAt(base, level)!.cost, rules)
+      const k = asUpgraded(base, level), reach = (k.service!.range * 60) / k.service!.seconds
+      out.push({ id: level === 0 ? id : `${id}+${upgradeAt(base, level)!.title.toLowerCase()}`, service: k.service!.service, cost, upkeep: k.upkeep, reach, perUpkeep: reach / k.upkeep })
+    }
+    return out
+  })
+
+// ── Upgrades ──────────────────────────────────────────────────────────────
+
+export interface UpgradeWorth {
+  readonly id: string
+  readonly title: string
+  /** One-off: coins and materials. */
+  readonly cost: number
+  /** Coins a minute more it costs to keep. */
+  readonly upkeep: number
+  /** Coins a minute more it earns or saves (`null`: nothing the ledger can price, a walker or shelves). */
+  readonly gain: number | null
+  /** Minutes until what it earns, less its upkeep, has paid for it (`Infinity`: never). */
+  readonly payback: number | null
+}
+
+/**
+ * What each upgrade earns over what it was, at the usual prices: a
+ * workshop's value added, a masonry's from a third of its pace to all of
+ * it, a guildhall's or a city hall's administration saved for a town at its
+ * land's goal for that rank. A walker or shelves it cannot price.
+ */
+export const upgradeWorths = (rules: Rules = shippedRules, size: keyof Rules["sizes"] = "medium"): Array<UpgradeWorth> =>
+  [...kindIds(rules)].flatMap((id) => {
+    const base = rules.kinds[id], out: Array<UpgradeWorth> = []
+    for (let level = 1; level <= 2; level++) {
+      const up = upgradeAt(base, level)
+      if (!up) break
+      const before = asUpgraded(base, level - 1), cost = costWorth(up.cost, rules), upkeep = up.upkeep - before.upkeep
+      let gain: number | null = null
+      if (up.deep && base.recipe) gain = producerWorth(id, rules, level).adds * (2 / 3)
+      else if (base.recipe && base.buildable) gain = producerWorth(id, rules, level).adds - producerWorth(id, rules, level - 1).adds
+      else if (up.admin !== undefined) {
+        const goal = rules.sizes[size].goal.residents * (rules.ranks[up.rank + 1]?.residents ?? 1)
+        gain = adminOf(goal, rules) * (up.admin - (upgradeAt(base, level - 1)?.admin ?? 0))
+      }
+      out.push({ id: `${id}:${level}`, title: up.title, cost, upkeep, gain, payback: gain === null ? null : gain > upkeep ? cost / (gain - upkeep) : Infinity })
     }
     return out
   })

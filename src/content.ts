@@ -151,24 +151,14 @@ export interface Kind {
   readonly keeps?: number
   /**
    * What it becomes when upgraded where it stands, once the town has reached
-   * `rank` (see `ranks`): paid at once from the treasury and the store, as
-   * paving is. Its walker, desirability, and upkeep become these.
+   * `rank` (see `ranks`), and (`next`) what that becomes in turn: its coins
+   * paid when the works begin, its materials carried to it while it goes on
+   * working (see `Works`). Whatever an upgrade gives replaces the kind's own.
    */
   readonly upgrade?: Upgrade
 }
 
-/** Coins a minute a building of a kind costs, upgraded or not. */
-export const upkeepOf = (kind: Pick<Kind, "upkeep" | "upgrade">, upgraded: boolean): number => (upgraded && kind.upgrade ? kind.upgrade.upkeep : kind.upkeep)
-
-/** What a building of a kind cost all told, its upgrade included: what pulling it down gives part of back. */
-export const builtCost = (kind: Pick<Kind, "cost" | "upgrade">, upgraded: boolean): Kind["cost"] => {
-  if (!upgraded || !kind.upgrade) return kind.cost
-  const materials: Partial<Record<GoodId, number>> = { ...kind.cost.materials }
-  for (const [g, n] of Object.entries(kind.upgrade.cost.materials) as Array<[GoodId, number]>) materials[g] = (materials[g] ?? 0) + n
-  return { coins: kind.cost.coins + kind.upgrade.cost.coins, materials }
-}
-
-/** A building upgraded where it stands (see `Kind.upgrade`). */
+/** A building upgraded where it stands (see `Kind.upgrade`): every field but the first five is what changes. */
 export interface Upgrade {
   readonly title: string
   readonly blurb: string
@@ -177,6 +167,73 @@ export interface Upgrade {
   readonly upkeep: number
   readonly service?: { readonly seconds: number; readonly range: number }
   readonly appeal?: { readonly value: number; readonly reach: number; readonly full?: number }
+  /** Workers it takes, and seconds a job (a recipe's). */
+  readonly workers?: number
+  readonly seconds?: number
+  /** What its shelves hold of each good, and the carriers it sends at once. */
+  readonly cap?: number
+  readonly carriers?: number
+  /** Firefighters it sends out at once (a fire watch's). */
+  readonly crews?: number
+  /** It cuts worked faces at full pace, not a third of it (a quarry's). */
+  readonly deep?: boolean
+  /** The share of the town hall's administration it saves (the town hall's). */
+  readonly admin?: number
+  /** The upgrade after this one. */
+  readonly next?: Upgrade
+}
+
+/** Upgrades a building has had: none, one, or (a town hall) two. */
+export type Level = 0 | 1 | 2
+
+/** The upgrade a building at `level` stands as (`undefined`: none), and the one it could have next. */
+export const upgradeAt = (kind: Pick<Kind, "upgrade">, level: number): Upgrade | undefined =>
+  level <= 0 ? undefined : level === 1 ? kind.upgrade : kind.upgrade?.next
+export const nextUpgrade = (kind: Pick<Kind, "upgrade">, level: number): Upgrade | undefined => upgradeAt(kind, level + 1)
+
+/**
+ * A kind as a building of it stands once upgraded to `level`: its upkeep,
+ * crew, pace, shelves, carriers, walker, and desirability those of its
+ * upgrades. Everything that works a building reads it from here.
+ */
+export const asUpgraded = <K extends Kind>(kind: K, level: number): K => {
+  let k: Kind = kind
+  for (let l = 1; l <= level; l++) {
+    const up = upgradeAt(kind, l)
+    if (!up) break
+    k = {
+      ...k,
+      upkeep: up.upkeep,
+      workers: up.workers ?? k.workers,
+      ...(k.recipe && up.seconds ? { recipe: { ...k.recipe, seconds: up.seconds } } : {}),
+      ...(k.holds && up.cap ? { holds: { ...k.holds, cap: up.cap } } : {}),
+      ...(up.carriers ? { carriers: up.carriers } : {}),
+      ...(k.service && up.service ? { service: { ...k.service, ...up.service } } : {}),
+      ...(up.appeal ? { appeal: up.appeal } : {})
+    }
+  }
+  return k as K
+}
+
+/** Steps of building work an upgrade takes for each good it is made of: a market hall half a minute, a city hall four. */
+export const WORKS_TICKS = ticks(1.5)
+/** The steps of work an upgrade of `total` goods takes. */
+export const worksNeeded = (total: number, rules: { readonly worksTicks: number } = { worksTicks: WORKS_TICKS }) => Math.max(1, total) * rules.worksTicks
+
+/** Coins a minute a building of a kind costs at its level of upgrades. */
+export const upkeepOf = (kind: Pick<Kind, "upkeep" | "upgrade">, level: number): number => upgradeAt(kind, level)?.upkeep ?? kind.upkeep
+
+/** What a building of a kind cost all told, its upgrades included: what pulling it down gives part of back. */
+export const builtCost = (kind: Pick<Kind, "cost" | "upgrade">, level: number): Kind["cost"] => {
+  let coins = kind.cost.coins
+  const materials: Partial<Record<GoodId, number>> = { ...kind.cost.materials }
+  for (let l = 1; l <= level; l++) {
+    const up = upgradeAt(kind, l)
+    if (!up) break
+    coins += up.cost.coins
+    for (const [g, n] of Object.entries(up.cost.materials) as Array<[GoodId, number]>) materials[g] = (materials[g] ?? 0) + n
+  }
+  return { coins, materials }
 }
 
 const free = { residents: 0, citizens: 0 }
@@ -189,13 +246,27 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     category: "storage", size: 3, half: 20, stories: 2, roof: "flat", bays: 2, window: 8, topper: "flag",
     cost: { coins: 0, materials: {} }, upkeep: 0, workers: 0, crew: "settlers", unlock: free, buildable: false,
     holds: { accepts: "all", cap: 100 }, carriers: 6,
-    service: { service: "goods", seconds: 8, range: 20 }, appeal: { value: 4, reach: 4, full: 2 }
+    service: { service: "goods", seconds: 8, range: 20 }, appeal: { value: 4, reach: 4, full: 2 },
+    upgrade: {
+      title: "Guildhall", blurb: "the town hall with a clock tower: it holds twice as much, sends more carriers, its walker goes further, and it runs the town for a tenth less", rank: 1,
+      cost: { coins: 500, materials: { planks: 30, stone: 40, tools: 6 } }, upkeep: 8,
+      cap: 200, carriers: 8, service: { seconds: 6, range: 26 }, appeal: { value: 6, reach: 5, full: 2 }, admin: 0.1,
+      next: {
+        title: "City hall", blurb: "a domed seat of the city: it holds the most, sends the most carriers, walks furthest, and runs the city for a fifth less", rank: 2,
+        cost: { coins: 1200, materials: { planks: 50, stone: 80, tools: 15, cloth: 20 } }, upkeep: 16,
+        cap: 300, carriers: 10, service: { seconds: 5, range: 32 }, appeal: { value: 8, reach: 6, full: 3 }, admin: 0.2
+      }
+    }
   },
   warehouse: {
     id: "warehouse", title: "Warehouse", blurb: "stores goods nearer where they are made and used",
     category: "storage", size: 3, half: 18, stories: 1, roof: "flat", bays: 3, window: 6, topper: "crates",
     cost: { coins: 150, materials: { planks: 8, stone: 4 } }, upkeep: 6, workers: 2, crew: "settlers", unlock: free, buildable: true,
-    holds: { accepts: "all", cap: 50 }, carriers: 4, appeal: { value: -2, reach: 2 }
+    holds: { accepts: "all", cap: 50 }, carriers: 4, appeal: { value: -2, reach: 2 },
+    upgrade: {
+      title: "Depot", blurb: "a loading yard and a hoist: it holds more than twice as much, and sends two more carriers", rank: 1,
+      cost: { coins: 200, materials: { planks: 10, stone: 10 } }, upkeep: 10, cap: 120, carriers: 6
+    }
   },
   granary: {
     id: "granary", title: "Granary", blurb: "stores food, and keeps fish and bread five times as long",
@@ -221,7 +292,11 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     category: "gathering", size: 2, half: 10, stories: 1, roof: "flat", bays: 2, window: 6, topper: "none",
     cost: { coins: 80, materials: { planks: 4 } }, upkeep: 5, workers: 3, crew: "settlers", unlock: free, buildable: true,
     recipe: { input: null, inputs: 0, output: "stone", batch: 1, seconds: 8 }, gathers: { source: "stone", radius: 3 }, carriers: 2,
-    wear: 50, dusty: true, appeal: { value: -8, reach: 4 }
+    wear: 50, dusty: true, appeal: { value: -8, reach: 4 },
+    upgrade: {
+      title: "Masonry", blurb: "a derrick and a mason's shed: it goes on cutting worked-out rock at full pace, not a third of it; a dustier neighbour", rank: 2,
+      cost: { coins: 200, materials: { planks: 6, tools: 2 } }, upkeep: 8, deep: true, appeal: { value: -10, reach: 4 }
+    }
   },
   mine: {
     id: "mine", title: "Mine", blurb: "digs ore from a deposit nearby",
@@ -263,7 +338,11 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     category: "food", size: 3, half: 12, stories: 1, roof: "gable", bays: 2, window: 4, topper: "none",
     cost: { coins: 120, materials: { planks: 4 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: { residents: 60, citizens: 0 }, buildable: true,
     recipe: { input: null, inputs: 0, output: "wheat", batch: 1, seconds: 4 }, gathers: { source: "field", radius: 2 },
-    plants: { what: "field", radius: 2, seconds: 3, max: 8 }, carriers: 2, appeal: { value: -2, reach: 2 }
+    plants: { what: "field", radius: 2, seconds: 3, max: 8 }, carriers: 2, appeal: { value: -2, reach: 2 },
+    upgrade: {
+      title: "Estate", blurb: "a barn and a dovecote: a third hand reaps the same fields half again as fast", rank: 2,
+      cost: { coins: 250, materials: { planks: 8, stone: 6, tools: 1 } }, upkeep: 7, workers: 3, seconds: 2.5
+    }
   },
   mill: {
     id: "mill", title: "Mill", blurb: "grinds wheat into flour",
@@ -277,7 +356,11 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     category: "food", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "chimney",
     cost: { coins: 150, materials: { planks: 4, stone: 4, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 60, citizens: 0 }, buildable: true,
     recipe: { input: "flour", inputs: 1, output: "bread", batch: 2, seconds: 6 }, holds: { accepts: ["flour", "bread"], cap: 8 }, carriers: 2,
-    wear: 60, hot: true, appeal: { value: -4, reach: 3 }
+    wear: 60, hot: true, appeal: { value: -4, reach: 3 },
+    upgrade: {
+      title: "Ovenworks", blurb: "a second oven and a third baker: bread every four seconds instead of six", rank: 2,
+      cost: { coins: 300, materials: { planks: 6, stone: 10, tools: 2 } }, upkeep: 13, workers: 3, seconds: 4
+    }
   },
   sheep: {
     id: "sheep", title: "Sheep farm", blurb: "shears sheep for wool",
@@ -319,7 +402,11 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     id: "firewatch", title: "Fire watch", blurb: "a watchman checks homes and workshops along the way for fire; firefighters run to any blaze",
     category: "services", size: 2, half: 9, stories: 1, roof: "gable", bays: 2, window: 4, topper: "none",
     cost: { coins: 70, materials: { planks: 3 } }, upkeep: 3, workers: 2, crew: "settlers", unlock: free, buildable: true,
-    service: { service: "fire", seconds: 7, range: 30 }
+    service: { service: "fire", seconds: 7, range: 30 },
+    upgrade: {
+      title: "Fire brigade", blurb: "a bell tower and a pump: its watchman walks further, more often, and four firefighters run instead of two", rank: 2,
+      cost: { coins: 200, materials: { planks: 6, stone: 6, tools: 1 } }, upkeep: 5, service: { seconds: 5, range: 36 }, crews: 4
+    }
   },
   healer: {
     id: "healer", title: "Healer", blurb: "a physician calls on the homes along the way and cures the sick",

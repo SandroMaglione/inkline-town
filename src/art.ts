@@ -881,8 +881,10 @@ export interface BuildingLook {
   readonly site: number | null
   /** A map view's colour washed over it, when one is shown. */
   readonly tint?: number | undefined
-  /** Upgraded where it stands (see `Kind.upgrade`): drawn taller. */
-  readonly upgraded?: boolean
+  /** Upgrades it has had where it stands (see `Kind.upgrade`): drawn as its upgrade. */
+  readonly level?: number
+  /** An upgrade under way: the share of its materials in (scaffolding rises with it), else `null`. */
+  readonly works?: number | null
 }
 
 /** A building as drawn: its plate on the floor, its body among the other objects, and its problem marker above everything. */

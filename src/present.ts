@@ -13,7 +13,7 @@ import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView, Rui
 import type { DoorSet, OverlayCell } from "./render3d/models.ts"
 import {
   amounts, BUILD_TICKS, builtCost, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
-  PAVE_COST, propIds, props, ranks, risk, RISK_MAX, ROAD_COST, tierHome, total, upkeepOf, winters, type Amounts, type GoodId, type Kind, type KindId, type Need, type Tier
+  kindOrder, nextUpgrade, worksNeeded, PAVE_COST, propIds, props, ranks, risk, RISK_MAX, ROAD_COST, tierHome, total, upgradeAt, upkeepOf, winters, type Amounts, type GoodId, type Kind, type KindId, type Need, type Tier
 } from "./content.ts"
 import { around, canPlace, cellOf, doors, entrances, isRoad, key, lPath, nearest, reach, useAt, type TileLike } from "./grid.ts"
 import { GRID, inside, U, type Point } from "./iso.ts"
@@ -48,6 +48,7 @@ import {
   Park,
   Paused,
   Upgraded,
+  Works,
   Paved,
   Policy,
   Recipe,
@@ -87,6 +88,7 @@ import { capacity, CELL_STEPS, elapsed, goalsOf, larder, lockReason, met, season
 import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type Alert as Notice, type Group, type HitBox, type Legend, type Line, type View } from "./ui.ts"
 import { blockers as blockersOf, streetAdvice, streetShort, whyUnmet, type InTown, type Served, type Street } from "./rules/explain.ts"
+import { upgradeChanges, upgradePrice } from "./rules/upgrades.ts"
 import { breadBonus, moreAdmin, shortOf, streetTax, suppliedTaxOf, taxOutlook, type TaxedHome } from "./rules/households.ts"
 import { approvalTarget } from "./rules/approval.ts"
 import { salvageOf, salvageText } from "./rules/salvage.ts"
@@ -189,6 +191,7 @@ const BuildingRead = Game.Query({
     hall: Game.Query.optional(TownHall),
     paused: Game.Query.optional(Paused),
     upgraded: Game.Query.optional(Upgraded),
+    works: Game.Query.optional(Works),
     risk: Game.Query.optional(Risk),
     condition: Game.Query.optional(Condition),
     burning: Game.Query.optional(Burning)
@@ -224,6 +227,9 @@ const buildOf = (
   rising: { readonly ticks: number } | undefined
 ) => (site ? PLATE_SHARE + (SITE_SHARE - PLATE_SHARE) * delivered(site) : rising ? rising.ticks / BUILD_TICKS : 1)
 
+/** An upgrade under way: the share of its work done (see `Works`), else `null`. */
+const worksShare = (works: { readonly total: number; readonly done: number } | undefined) =>
+  works ? Math.min(1, works.done / worksNeeded(works.total)) : null
 const siteShare = (site: { readonly owed: Parameters<typeof total>[0]; readonly total: number } | undefined) =>
   site ? delivered(site) : null
 
@@ -520,6 +526,24 @@ export const Interact = Game.System(
           ui.edits.push({ type: "building", kind: ui.placing, cell: at, open: false })
           break
         }
+        case "upgrade": {
+          // A click on a building of the kind being upgraded begins its works.
+          if (gesture.panned) break
+          const hit = pickAt(gesture.at, gesture.hit)
+          const row = hit !== null ? buildings.find((b) => b.entity.id === hit) : undefined
+          const kind = row ? kinds[row.data.building.get().kind] : undefined
+          if (!row || !kind || (ui.upgrading && kind.id !== ui.upgrading)) {
+            const wanted = ui.upgrading ? (upgradeAt(kinds[ui.upgrading], 0) ? kinds[ui.upgrading].title.toLowerCase() : "building") : "building"
+            ui.toast(`Pick a ${wanted} to upgrade`)
+            break
+          }
+          if (row.data.works.present) {
+            ui.toast(`The ${kind.title.toLowerCase()} is already being upgraded`)
+            break
+          }
+          ui.edits.push({ type: "upgrade", cell: row.data.tile.get() })
+          break
+        }
         case "bulldoze": {
           if (gesture.panned) break
           const hit = pickAt(gesture.at, gesture.hit)
@@ -540,7 +564,7 @@ export const Interact = Game.System(
     const preview = emptyPreview()
     const pointer = ui.pointer
     const cell = pointer ? cellAt(pointer) : null
-    preview.hover = pointer && (ui.tool === "select" || ui.tool === "bulldoze") ? pickAt(pointer, ui.pointerHit) : null
+    preview.hover = pointer && (ui.tool === "select" || ui.tool === "bulldoze" || ui.tool === "upgrade") ? pickAt(pointer, ui.pointerHit) : null
     const showReach = (tile: TileLike, kind: Kind) => {
       const r = reachOf(kind)
       if (r !== null) preview.plots.push({ x: tile.x - r, y: tile.y - r, size: tile.size + 2 * r, look: "reach" })
@@ -648,6 +672,26 @@ export const Interact = Game.System(
         // No road at a side's middle: shown red under the ghost, as it will not be laid there.
         if (placeProblem(kind, tile)?.refuse) preview.plots.push({ ...tile, look: "blocked" })
       } else preview.plots.push({ ...tile, look: "blocked" })
+    } else if (ui.tool === "upgrade" && ui.upgrading) {
+      // Every building the upgrade can go to, outlined; the one under the pointer says what it would give and cost.
+      const rank = resources.fate.get().rank, coins = resources.treasury.get().coins
+      for (const row of buildings) {
+        const { data } = row
+        if (data.building.get().kind !== ui.upgrading || data.site.present || data.rising.present) continue
+        const kind = kinds[ui.upgrading], level = maybe(data.upgraded)?.level ?? 0, up = nextUpgrade(kind, level)
+        const tile = data.tile.get()
+        if (!up) continue
+        const blocked = upgradeBlock(up, rank, { ranks })
+        const hovered = preview.hover === row.entity.id
+        preview.plots.push({ ...tile, look: data.works.present || blocked ? "blocked" : hovered ? "picked" : "reach" })
+        if (!hovered) continue
+        const from = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
+        preview.tooltip = data.works.present
+          ? `${from} → ${up.title.toLowerCase()} · under way: carriers are bringing its materials`
+          : [`${from} → ${up.title.toLowerCase()}`, upgradePrice(up), ...upgradeChanges(kind, level).map((c) => `· ${c}`),
+              blocked ?? (coins < up.cost.coins ? `${up.cost.coins - coins} coins short` : "click to begin: it goes on working meanwhile")].join("\n")
+      }
+      if (!preview.tooltip) preview.tooltip = `upgrade: pick a ${kinds[ui.upgrading].title.toLowerCase()} · Esc to stop`
     } else if (ui.tool === "bulldoze") {
       preview.danger = true
       if ((preview.hover === null || useAt(grid, cell?.x ?? -1, cell?.y ?? -1) === "park") && cell && ["road", "tree", "field", "park"].includes(useAt(grid, cell.x, cell.y)))
@@ -683,7 +727,7 @@ export const Interact = Game.System(
       sources = []
       for (const { data } of buildings) {
         if (data.site.present || data.rising.present) continue
-        const s = buildingSource(data.building.get().kind, data.tile.get(), undefined, data.upgraded.present)
+        const s = buildingSource(data.building.get().kind, data.tile.get(), undefined, maybe(data.upgraded)?.level ?? 0)
         if (s) sources.push(s)
       }
       for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get()))
@@ -775,8 +819,8 @@ export const Interact = Game.System(
             : { icon: "tools", label: "tools", value: "none", tone: "bad", note: "half pace until one comes: a smithy makes them, or buy them in the town panel" }
         )
       const running: Array<Line> = []
-      const upgraded = row.data.upgraded.present
-      const upkeep = upkeepOf(kind, upgraded)
+      const level = maybe(row.data.upgraded)?.level ?? 0
+      const upkeep = upkeepOf(kind, level)
       if (upkeep > 0) running.push({ icon: "upkeep", label: "upkeep", value: `${upkeep} coins a minute` })
       const condition = maybe(row.data.condition)
       if (condition)
@@ -796,7 +840,7 @@ export const Interact = Game.System(
           tone: r.fire >= risk.warn ? "bad" : r.fire >= RISK_MAX * 0.35 ? "warn" : "ok",
           note: r.fire >= RISK_MAX * 0.35 ? "a fire watch's watchman lowers it as he passes" : undefined
         })
-      const appealHere = (upgraded ? kind.upgrade?.appeal : undefined) ?? kind.appeal
+      const appealHere = upgradeAt(kind, level)?.appeal ?? kind.appeal
       if (appealHere) running.push({ icon: "appeal", label: "desirability nearby", value: signed(appealHere.value) })
       const help = [
         upkeep > 0 ? "Upkeep is paid every minute it stands, a quarter of it while paused." : "",
@@ -992,11 +1036,15 @@ export const Interact = Game.System(
     const hoveredBuilding = hovered !== null ? buildings.find((row) => row.entity.id === hovered) : undefined
     const hoveredHouse = hovered !== null ? houses.find((row) => row.entity.id === hovered) : undefined
     const hoveredRuin = hovered !== null ? ruins.find((row) => row.entity.id === hovered) : undefined
-    if (hoveredBuilding) {
+    // The upgrade tool says what an upgrade gives and costs instead (see above).
+    if (ui.tool === "upgrade") {
+    } else if (hoveredBuilding) {
       const { kind, status, problem } = describeBuilding(hoveredBuilding)
+      const level = maybe(hoveredBuilding.data.upgraded)?.level ?? 0, works = maybe(hoveredBuilding.data.works)
+      const title = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
       preview.tooltip = ui.tool === "bulldoze"
-        ? `${kind.title.toLowerCase()} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(builtCost(kind, hoveredBuilding.data.upgraded.present), maybe(hoveredBuilding.data.site))}`
-        : `${kind.title.toLowerCase()} · ${problem ?? status}`
+        ? `${title} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(builtCost(kind, level), maybe(hoveredBuilding.data.site))}`
+        : `${title} · ${problem ?? status}${works ? ` · becoming a ${upgradeAt(kind, works.level)!.title.toLowerCase()}, ${Math.round(worksShare(works)! * 100)}% built` : ""}`
     } else if (hoveredHouse) {
       const h = hoveredHouse.data.house.get()
       const t = hoveredHouse.data.tile.get()
@@ -1034,29 +1082,43 @@ export const Interact = Game.System(
       const { kind, status, problem, groups } = describeBuilding(pickedBuilding)
       const standing = !pickedBuilding.data.site.present && !pickedBuilding.data.rising.present
       const pausable = kind.id !== "townhall" && standing
-      const upgraded = pickedBuilding.data.upgraded.present
-      const up = kind.upgrade
-      const upgradeOffer = up && standing && !upgraded ? { title: up.title, cost: costText(up.cost), blocked: upgradeBlock(up, resources.fate.get().rank, { ranks }) } : null
-      // The upgrade it could have, as a box of its own: what it is, what it costs, and what keeps it from it now.
-      if (up && upgradeOffer)
-        groups.push({
-          title: `upgrade to ${up.title.toLowerCase()}`,
+      const level = maybe(pickedBuilding.data.upgraded)?.level ?? 0
+      const now = upgradeAt(kind, level)
+      const works = maybe(pickedBuilding.data.works)
+      const up = works ? undefined : nextUpgrade(kind, level)
+      const upgradeOffer = up && standing
+        ? { title: up.title, blurb: up.blurb, price: upgradePrice(up), changes: upgradeChanges(kind, level),
+            blocked: upgradeBlock(up, resources.fate.get().rank, { ranks }),
+            short: resources.treasury.get().coins < up.cost.coins ? `${up.cost.coins - resources.treasury.get().coins} coins short` : null }
+        : null
+      // An upgrade under way: what it is to become, and what carriers still have to bring.
+      const worksOf = works
+        ? { title: upgradeAt(kind, works.level)!.title, share: worksShare(works)!,
+            left: costText({ coins: 0, materials: Object.fromEntries(goodIds.filter((g) => works.owed[g] > 0).map((g) => [g, works.owed[g]])) }) }
+        : null
+      if (worksOf)
+        groups.unshift({
+          title: `becoming a ${worksOf.title.toLowerCase()}`,
           icon: "build",
-          lines: [{ icon: "coins", label: "costs", value: upgradeOffer.cost, tone: upgradeOffer.blocked ? "dim" : undefined, note: upgradeOffer.blocked ?? up.blurb }]
+          lines: [{ icon: "build", label: "built", value: `${Math.round(worksOf.share * 100)}%`, tone: "warn", note: worksOf.left ? `carriers still bring ${worksOf.left}; it works on meanwhile` : "everything is in: the builders are finishing; it works on meanwhile" }]
         })
       ui.panel = {
         type: "building",
         id: pickedBuilding.entity.id,
         cell: pickedBuilding.data.tile.get(),
         kind: kind.id,
+        title: now?.title ?? kind.title,
+        blurb: now?.blurb ?? kind.blurb,
         status,
         problem,
         groups,
         pausable,
         paused: pickedBuilding.data.paused.present,
-        salvage: salvageFor(builtCost(kind, upgraded), maybe(pickedBuilding.data.site)),
-        upgraded,
-        upgrade: upgradeOffer
+        salvage: salvageFor(builtCost(kind, level), maybe(pickedBuilding.data.site)),
+        level,
+        upgraded: level > 0,
+        upgrade: upgradeOffer,
+        works: worksOf
       }
     } else if (pickedHouse) {
       const { h, summary, trouble, groups } = describeHouse(pickedHouse)
@@ -1245,6 +1307,40 @@ export const Interact = Game.System(
     if (empty && tick - emptySince! >= HUNGER_PATIENCE) hungryUntil = tick + HUNGER_PATIENCE
     if (hungryUntil > tick + HUNGER_PATIENCE) hungryUntil = 0
     if (census.homes > 0 && tick < hungryUntil) alerts.push({ tone: "bad", text: "no food in store, so homes go hungry and pay no taxes: build another fishery, or buy fish in the [town] panel", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
+    // ── Upgrades: what the town could upgrade, kind by kind and level by level ──
+    const rank = resources.fate.get().rank
+    const upgradeRows = new Map<string, { kind: KindId; level: number; ready: number; underway: number; first: (typeof buildings)[number] | null }>()
+    // Every buildable kind's first upgrade is listed, built or not, so the menu says what is to come; the town hall's by where it stands.
+    for (const id of kindOrder) if (kinds[id].upgrade) upgradeRows.set(`${id}:0`, { kind: id, level: 0, ready: 0, underway: 0, first: null })
+    for (const row of buildings) {
+      const { data } = row
+      if (data.site.present || data.rising.present) continue
+      const kind = kinds[data.building.get().kind]
+      const level = maybe(data.upgraded)?.level ?? 0
+      const works = maybe(data.works)
+      const from = works ? works.level - 1 : level
+      if (!nextUpgrade(kind, from)) continue
+      const k = `${kind.id}:${from}`
+      const entry = upgradeRows.get(k) ?? { kind: kind.id, level: from, ready: 0, underway: 0, first: null }
+      if (works) entry.underway += 1
+      else {
+        entry.ready += 1
+        entry.first ??= row
+      }
+      upgradeRows.set(k, entry)
+    }
+    const upgrades = [...upgradeRows.values()].map((r) => {
+      const kind = kinds[r.kind], up = nextUpgrade(kind, r.level)!
+      return {
+        kind: r.kind, level: r.level, from: (upgradeAt(kind, r.level)?.title ?? kind.title).toLowerCase(), to: up.title.toLowerCase(), blurb: up.blurb,
+        coins: up.cost.coins, materials: up.cost.materials, price: upgradePrice(up), changes: upgradeChanges(kind, r.level),
+        blocked: upgradeBlock(up, rank, { ranks }), ready: r.ready, underway: r.underway, first: r.first
+      }
+    })
+    // A word when an upgrade is open and nothing is being upgraded: where they are found.
+    const open = upgrades.find((u) => u.blocked === null && u.ready > 0 && u.first)
+    if (open && !upgrades.some((u) => u.underway > 0) && resources.treasury.get().coins >= open.coins)
+      alerts.push({ tone: "hint", text: `the ${open.from} can become a ${open.to}: [build] → upgrades says what it gives and costs`, at: open.first!.data.tile.get(), size: open.first!.data.tile.get().size, id: open.first!.entity.id })
     const ledger = resources.ledger.get()
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
@@ -1485,6 +1581,7 @@ export const Interact = Game.System(
       history: resources.history.get().samples,
       chronicle: resources.chronicle.get().lines,
       alerts,
+      upgrades: upgrades.map(({ first: _first, ...u }) => u),
       guide: {
         step:
           step && shown
@@ -1717,7 +1814,8 @@ export const Animate = Game.System(
           beat: recipe ? recipe.made : maybe(data.service) ? walkers : 0,
           doors: doorsOf(grid, data.tile.get()),
           site: siteShare(maybe(data.site)),
-          upgraded: data.upgraded.present
+          level: maybe(data.upgraded)?.level ?? 0,
+          works: worksShare(maybe(data.works))
         },
         dt,
         emphasis(entity.id)

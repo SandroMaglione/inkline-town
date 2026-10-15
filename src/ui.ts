@@ -52,7 +52,7 @@ export interface Alert {
   readonly places?: Partial<Record<KindId, { readonly at: Point; readonly size: number; readonly id: number }>>
 }
 
-export type Tool = "select" | "road" | "pave" | "home" | "bulldoze" | "place" | "ground" | "prop"
+export type Tool = "select" | "road" | "pave" | "home" | "bulldoze" | "place" | "ground" | "prop" | "upgrade"
 
 /** What the map shows over the town: nothing, or one of its views, cell by cell. */
 export const viewIds = ["none", "appeal", "workers", "fire", "health", "order", "condition"] as const
@@ -141,9 +141,26 @@ export type Panel =
       /** What pulling it down costs and gives back: "pull down: −25 coins · 2 planks back". */
       readonly salvage: string
       readonly groups: ReadonlyArray<Group>
-      /** Whether it is upgraded; and the upgrade it could have, what it costs, and what keeps it from it now (`null`: nothing). */
+      /** What it is called and what it is for, at its level of upgrades (a market hall, not a market). */
+      readonly title: string
+      readonly blurb: string
+      /** Upgrades it has had (see `Kind.upgrade`), and whether it has had any. */
+      readonly level: number
       readonly upgraded: boolean
-      readonly upgrade: { readonly title: string; readonly cost: string; readonly blocked: string | null } | null
+      /**
+       * The upgrade it could have next (`null`: none, or one under way): what it becomes, what it costs
+       * now and carried in, what changes, and what keeps it from it now (the rank; coins short).
+       */
+      readonly upgrade: {
+        readonly title: string
+        readonly blurb: string
+        readonly price: string
+        readonly changes: ReadonlyArray<string>
+        readonly blocked: string | null
+        readonly short: string | null
+      } | null
+      /** An upgrade under way: what it is to become, the share of its materials in, and what is still owed. */
+      readonly works: { readonly title: string; readonly share: number; readonly left: string } | null
     }
   | {
       readonly type: "house"
@@ -307,6 +324,25 @@ export interface Stats {
   readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly text: string; readonly alarm: boolean; readonly at: Point | null }>
   /** What needs looking at right now, a line each: workshops waiting, workplaces no one can reach, food running out. */
   readonly alerts: ReadonlyArray<Alert>
+  /**
+   * The upgrades the town could make, one for each kind and level (a market to a market hall; the town
+   * hall to a guildhall, or a guildhall to a city hall): what it becomes, what it costs now and carried
+   * in, what changes, what keeps it from it (the rank), and how many buildings are ready for it and under way.
+   */
+  readonly upgrades: ReadonlyArray<{
+    readonly kind: KindId
+    readonly level: number
+    readonly from: string
+    readonly to: string
+    readonly blurb: string
+    readonly coins: number
+    readonly materials: Partial<Record<GoodId, number>>
+    readonly price: string
+    readonly changes: ReadonlyArray<string>
+    readonly blocked: string | null
+    readonly ready: number
+    readonly underway: number
+  }>
   /** The mayor's guide: the step to take now (if any, and the guide is on), and how far along it is. */
   readonly guide: {
     readonly step:
@@ -345,8 +381,9 @@ export interface Legend {
 
 export interface UiValue {
   tool: Tool
-  /** The kind being placed with the `place` tool. */
+  /** The kind being placed with the `place` tool, and the kind whose buildings the `upgrade` tool upgrades. */
   placing: KindId | null
+  upgrading?: KindId | null
   /** The ground laid with the `ground` tool, and the furnishing set with the `prop` tool. */
   ground: GroundId
   prop: PropId

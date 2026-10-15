@@ -76,8 +76,8 @@ export const tierFor = (h: Needs, desirability: number, r: { readonly fire: numb
   return fits(3) && kept(r, rules) ? 3 : 2
 }
 
-/** Coins a minute the town hall's administration costs for `residents` people in its homes. */
-export const adminOf = (residents: number, rules: Rules = shippedRules): number => Math.round(residents * (rules.admin.perResident + residents / rules.admin.growth))
+/** Coins a minute the town hall's administration costs for `residents` people in its homes, less the share a finer hall `saves`. */
+export const adminOf = (residents: number, rules: Rules = shippedRules, saves = 0): number => Math.round(residents * (rules.admin.perResident + residents / rules.admin.growth) * (1 - saves))
 /** What `more` residents add to the administration of a town of `residents`, coins a minute (not rounded). */
 export const moreAdmin = (residents: number, more = 1, rules: Rules = shippedRules): number => {
   const cost = (n: number) => n * (rules.admin.perResident + n / rules.admin.growth)
@@ -195,8 +195,8 @@ export const taxOutlook = (homes: ReadonlyArray<TaxedHome>, rates: Rates, tier: 
 }
 
 /** Actual collection rounding, not rounded ledger display values. */
-export const baseCollection = (taxes: number, upkeep: number, residents: number, rules: Rules = shippedRules) => {
+export const baseCollection = (taxes: number, upkeep: number, residents: number, rules: Rules = shippedRules, saves = 0) => {
   const share = rules.ledgerTicks * rules.stepSeconds / 60
-  const admin = adminOf(residents, rules)
+  const admin = adminOf(residents, rules, saves)
   return { admin, delta: Math.round(taxes * share) - Math.round((upkeep + admin) * share) }
 }

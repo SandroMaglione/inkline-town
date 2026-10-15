@@ -6,7 +6,7 @@ import { tradeCollection } from "../rules/trade.ts"
  */
 import { appealAt, parkUpkeep } from "../appeal.ts"
 import { doors, key, reach } from "../grid.ts"
-import { amounts, goodIds, upkeepOf, type GoodId } from "../content.ts"
+import { amounts, goodIds, upgradeAt, upkeepOf, type GoodId } from "../content.ts"
 import { Appeal, Building, Burning, Census, Charter, Flow, Game, Rules, Grid, House, Inventory, Ledger, Market, Mood, Park, Paused, Policy, Rebuilt, Rising, Risk, Sick, Site, Staff, Storage, Tile, Time, TownHall, Treasury, Upgraded, maybe } from "../schema.ts"
 import { connected, elapsed, seasonAt } from "./shared.ts"
 
@@ -124,7 +124,7 @@ export const Collect = Game.System(
       /** A closed home pays nothing and costs the town hall nothing. */
       homes: Game.Query({ selection: { tile: Game.Query.read(Tile), house: Game.Query.read(House) }, without: [Site, Rising, Paused] }),
       buildings: Game.Query({ selection: { building: Game.Query.read(Building), paused: Game.Query.optional(Paused), upgraded: Game.Query.optional(Upgraded) }, without: [Site] }),
-      halls: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [TownHall] }),
+      halls: Game.Query({ selection: { tile: Game.Query.read(Tile), upgraded: Game.Query.optional(Upgraded) }, with: [TownHall] }),
       stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage], without: [Site, Rising] }),
       parks: Game.Query({ selection: { park: Game.Query.read(Park) } })
     },
@@ -160,14 +160,16 @@ export const Collect = Game.System(
       if (reached) taxes += taxOf(data.house.get(), policy, rules, appealAt(cells, tile.x, tile.y))
     }
     let upkeep = 0
-    for (const { data } of queries.buildings.each()) upkeep += upkeepOf(kinds[data.building.get().kind], data.upgraded.present) * (data.paused.present ? PAUSED_UPKEEP : 1)
+    for (const { data } of queries.buildings.each()) upkeep += upkeepOf(kinds[data.building.get().kind], maybe(data.upgraded)?.level ?? 0) * (data.paused.present ? PAUSED_UPKEEP : 1)
     for (const { data } of queries.parks.each()) upkeep += parkUpkeep(data.park.get(), rules)
-    const admin = adminOf(residents, rules)
+    // A guildhall or a city hall runs the town for less (see `Upgrade.admin`).
+    const saves = (hall ? upgradeAt(kinds.townhall, maybe(hall.data.upgraded)?.level ?? 0)?.admin : undefined) ?? 0
+    const admin = adminOf(residents, rules, saves)
 
     const stores = queries.stores.each()
     const before = resources.treasury.get().coins
     const traded = tradeCollection(stores.map(({ data }) => data.inventory.get()), policy, resources.market.get().prices,
-      before + baseCollection(taxes, upkeep, residents, rules).delta, rules)
+      before + baseCollection(taxes, upkeep, residents, rules, saves).delta, rules)
     // What changed hands, for the minute's flow of goods: bought less sold.
     const moved: Partial<Record<GoodId, number>> = {}
     for (const [i, row] of stores.entries()) {

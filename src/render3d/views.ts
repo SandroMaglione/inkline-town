@@ -19,13 +19,12 @@ import { makeSails, makeFlag, buildingSmokeOrigin, buildingDimensions } from "..
 import { makeMarker } from "../asset-lab/construction.ts"
 import { makeRuin } from "../asset-lab/town-props.ts"
 import { StructureEffects } from "./structure-effects.ts"
-import { upgradeHeights } from "../asset-lab/service-upgrades.ts"
 import { SmokePlume } from "./smoke-effects.ts"
 import { surfaceState, type SurfaceState } from "./surface-state.ts"
 import { makePerson, serviceCostume, type ServiceRole } from "../asset-lab/people.ts"
 import { makeTree, makeRock, makeField, hash } from "../asset-lab/land.ts"
 import { ModelHandle } from "./pool.ts"
-import { buildingAsset, buildingHeight, homeAsset, homeKey, doorKey, noDoors, quantizeBuild, plateAsset, treeVariant } from "./models.ts"
+import { buildingAsset, buildingHeight, buildingTop, homeAsset, homeKey, doorKey, noDoors, quantizeBuild, plateAsset, scaffoldAsset, treeVariant } from "./models.ts"
 import type { GameScene, SceneNode } from "./scene.ts"
 
 /** Winter's cold light complements the roof snow shader. */
@@ -91,6 +90,7 @@ export class BuildingView extends WorldView {
   private plate: ModelHandle
   private marker: ModelHandle
   private motion: ModelHandle
+  private scaffold: ModelHandle
   private smoke: SmokePlume | null = null
   private effectLayout = ""
   private wave = 0
@@ -104,6 +104,7 @@ export class BuildingView extends WorldView {
     this.plate = this.model()
     this.marker = this.model()
     this.motion = this.model()
+    this.scaffold = this.model()
     this.marker.use("problem-marker", makeMarker)
     this.marker.root.visible = false
     this.body.root.add(this.motion.root)
@@ -125,30 +126,37 @@ export class BuildingView extends WorldView {
     this.pulse = Math.max(0, this.pulse - dt * 3)
     this.opening += (Number(look.working || this.pulse > 0.2) - this.opening) * Math.min(1, dt * 6)
     const open = Math.round(this.opening * 4) / 4
-    // An upgraded building (a market hall, a church) is its own model, turned to face the road.
-    const upgraded = !!look.upgraded && build >= 1
-    this.body.use(`building/${this.kindId}/${upgraded ? 2 : 1}/${build}/${share}/${doorKey(doors)}/${upgraded ? 0 : open}`, () =>
-      buildingAsset(this.kindId, build, share, doors, open, {}, upgraded)
+    // An upgraded building is drawn as its upgrade: a market hall or a church its own model, turned to face the
+    // road; anything else its own model with what the upgrade adds (see `upgrade-dress.ts`).
+    const level = build >= 1 ? look.level ?? 0 : 0, upgraded = level > 0
+    this.body.use(`building/${this.kindId}/${level + 1}/${build}/${share}/${doorKey(doors)}/${upgraded ? 0 : open}`, () =>
+      buildingAsset(this.kindId, build, share, doors, open, {}, level)
     )
+    // While an upgrade is under way, scaffolding stands inside its plot, rising with what has been brought.
+    const works = look.works ?? null
+    this.scaffold.root.visible = works !== null && build >= 1
+    if (works !== null && build >= 1) {
+      const step = Math.round(works * 6) / 6, height = buildingHeight(this.kindId, level)
+      this.scaffold.use(`scaffold/${kind.size}/${height}/${step}`, () => scaffoldAsset(kind.size, height, step))
+    }
     this.plate.use(`plate/${kind.size}/${build}`, () => plateAsset(kind.size, build))
     this.body.root.scale.set(1 + this.pulse * 0.04, 1 - this.pulse * 0.06, 1 + this.pulse * 0.04)
-    const dimensions = buildingDimensions(this.kindId), H = buildingHeight(this.kindId, upgraded)
-    const top = upgraded
-      ? upgradeHeights[this.kindId as "market" | "chapel"].top
-      : dimensions.top
+    const dimensions = buildingDimensions(this.kindId), H = buildingHeight(this.kindId, level)
+    const top = buildingTop(this.kindId, level)
     this.marker.root.position.set(0, (top + 8) / Math.cos(Math.PI / 6), 0)
     const signed = !!look.burning || (look.alert !== null && look.alert !== undefined)
     this.marker.root.visible = look.problem && look.build >= 1 && !signed
     const state = structureState(look,this.stage.frost)
     this.body.effects = build >= 1 ? state : surfaceState()
-    this.body.effectBounds.set((upgraded ? kind.half * U : dimensions.half) * 32 * Math.SQRT2,H/Math.cos(Math.PI/6),this.entity%97/97,1)
-    const effectLayout = `${upgraded ? 2 : 1}/${doorKey(doors)}`
+    const serviceModel = upgraded && (this.kindId === "market" || this.kindId === "chapel")
+    this.body.effectBounds.set((serviceModel ? kind.half * U : dimensions.half) * 32 * Math.SQRT2,H/Math.cos(Math.PI/6),this.entity%97/97,1)
+    const effectLayout = `${level + 1}/${doorKey(doors)}`
     if (this.effects && this.effectLayout !== effectLayout) {
       this.effects.dispose()
       this.effects = null
     }
     if(!this.effects&&build>=1&&(state.burning||state.fireRisk)){
-      this.effects = new StructureEffects(buildingAsset(this.kindId,1,null,doors,0,{},upgraded),H)
+      this.effects = new StructureEffects(buildingAsset(this.kindId,1,null,doors,0,{},level),H)
       this.effectLayout = effectLayout
       this.effects.group.userData.upgraded=upgraded
       this.group.add(this.effects.group)
@@ -156,7 +164,7 @@ export class BuildingView extends WorldView {
     this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
     this.shade = 0xffffff
     // The market hall has no flag of its own: the flag stays on the tier 1 market.
-    this.motion.root.visible = look.build >= 1 && !upgraded && (kind.topper === "flag" || kind.topper === "sails")
+    this.motion.root.visible = look.build >= 1 && !serviceModel && (kind.topper === "flag" || kind.topper === "sails")
     if (kind.topper === "flag") {
       this.wave += dt * (look.working ? 6 : 3)
       this.motion.use("flag/" + this.kindId, () => makeFlag(this.kindId))

@@ -101,8 +101,16 @@ export const TownHall = Descriptor.Tag("Town/TownHall")
 export const Status = Descriptor.ConstructedComponent(Decode.literal(...statuses))("Town/Status")
 /** Stopped by the town: no workers, a quarter of its upkeep. */
 export const Paused = Descriptor.Tag("Town/Paused")
-/** Upgraded where it stands (see `Kind.upgrade`): its walker, desirability, and upkeep are the upgrade's. */
-export const Upgraded = Descriptor.Tag("Town/Upgraded")
+/** Upgraded where it stands, `level` times (see `Kind.upgrade`): it works as `asUpgraded` says. */
+export const Upgraded = Descriptor.ConstructedComponent(Decode.struct({ level: Decode.literal(1, 2) }))("Town/Upgraded")
+/**
+ * Being upgraded to `level` where it stands: its coins are paid, and these
+ * materials are still owed, out of `total`; carriers bring them while it
+ * goes on working, and builders put in `done` steps of work as they come,
+ * never ahead of what is in (see `WORKS_TICKS`). Once everything is in and
+ * worked, it stands upgraded.
+ */
+export const Works = Descriptor.ConstructedComponent(Decode.struct({ owed: amounts, total: integer, done: integer, level: Decode.literal(1, 2) }))("Town/Works")
 
 /**
  * Workers it needs, how many came (`apprentices` of them settlers standing
@@ -417,7 +425,7 @@ export const Game = Schema.bind(
   Schema.fragment({
     components: {
       Tile, Road, Paved, Park, Ruin, Site, Rising, Tree, Rock, Water, Field, House, Rebuilt, Risk, Condition, Burning, Sick, Building, TownHall, Status,
-      Paused, Upgraded, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Patrol, Figure, Route, Errand, Rescue, Roam
+      Paused, Upgraded, Works, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Patrol, Figure, Route, Errand, Rescue, Roam
     },
     resources: {
       Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Guide, Appeal, Pantry, Fires,

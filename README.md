@@ -98,9 +98,11 @@ A town is founded as a hamlet. Hold every goal of the next rank for two
 minutes (enough people and coins, a share of them citizens, a town that
 approves of you) and it rises to a **village**, then a **town**, then a
 **city**, whose finest streets must hold burghers in townhouses. Each rank
-brings a reward from the crown, and a town can upgrade its market to a
-market hall and its chapel to a church. Nothing ends when a rank is
-reached.
+brings a reward from the crown and opens upgrades made where buildings
+stand: the town hall becomes a guildhall and then a city hall, the market
+a market hall, the bakery an ovenworks, the quarry a masonry, and more,
+with scaffolding rising while carriers bring their materials. Nothing ends
+when a rank is reached.
 
 Three minutes in debt, two minutes of uproar, a town that empties out, or
 three of the crown's requests ignored, and the term is **lost**. Otherwise
