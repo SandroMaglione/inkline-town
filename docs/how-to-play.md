@@ -122,8 +122,9 @@ Nobody tells you to build it that way; it works best that way.
   so a good quarter keeps itself up. Ruins and run-down homes take a little. Every point
   counts: below 0 a home holds fewer residents (a twentieth fewer a point,
   down to half) and pays less (a fortieth a point, down to three quarters);
-  above 0 it pays more, up to a quarter more. A home's panel says what its
-  street is made of, and what keeps it from the next tier.
+  above 0 it pays more, up to a quarter more. A home's panel lists its needs
+  as one checklist: red for what it lacks now, amber for what it lacks to
+  grow (its street among them), each with its cause.
 - **Parks** are laid out cell by cell from the build menu. Drag a
   rectangle of ground (lawn, flower beds, gravel walks, a paved square),
   then click a cell of it to set a furnishing (a lamp, a fountain once 30
@@ -180,23 +181,39 @@ from spreading, a fire watch near the cottages gets firefighters there in
 time, and industry away from homes keeps them healthy and orderly. The town
 ticker under the top bar lists what needs attention *now* (fires, sickness,
 workshops that have waited half a minute for inputs, workplaces nobody can
-walk to, no food in store) and, under *lately*, the news of the last minute
+walk to, no food in store), each saying what to do about it, and, under *lately*, the news of the last minute
 and a half, which also pops up as it happens. Click a line to go there.
 
-Above them, the **guide** tells a new mayor the next step to take and why,
-one at a time. It opens with homes, food, planks, and stone, one after
-another, each once the last is built, and then shows where to look: a
-home's panel, and the town panel. Citizens' needs come as one goal once
-bread can be made, bread first, since settlers want only food. After that it speaks when the town
-needs it (planks or stone running low, the woods thinning, a risk rising)
-and keeps quiet for a while after each step; the crown's request, winter, a
-fire, and the sick do not wait. A step that asks for a building is done when
-the building stands, not when it is laid. Each building it names is a
-chip that starts placing one, and "show me where" goes to the water, woods,
-or rocks it means. A step is put away for good once the town has done it
-(shown or not), or when the ✕ skips it; *hide guide* turns it off, and the
-**guide** button in the bottom right turns it back on. The guide is saved
-with the town, and starts over with a new one.
+Above them, the **guide** teaches a new mayor the game, one step at a
+time: one thing to do, and one reason for it. It is a course, taught in
+order chapter by chapter and counted (*step 3 of 8*). *Founding*: lay homes
+along the town hall's road, lay a road to the water, build a fishery there,
+open its panel to see its workers, build a lumberjack and a sawmill (once
+planks run low), open the town panel to read the goal, and grow to ten
+homes. *Growing citizens*:
+a quarry, cloth, a chapel, bread, a look at what a home still lacks, and the
+goals again. *Governing*: the ranks, up to a city (and, once the town rank opens it,
+a market hall where homes lie beyond every walker). While a step's homes or building
+are going up it says so (carriers bringing planks to the site), so you know
+you did your part; when the town cannot build what a step asks for yet, it
+says what opens it (*the farm opens at 30 residents*), or that the treasury
+must save up, and goes on to a building it can. It never asks for a
+building before the town needs it, as upkeep starts the day it stands: the
+lumberjack and sawmill wait until planks fall below 25, the quarry until
+stone falls below 8, a market until homes lie beyond the town hall's walker,
+a smithy until tools run low. Meanwhile the course goes on, and the card
+says what comes next and when. Around the course, it speaks up when the town needs
+something (stone running low, the woods thinning, a risk rising), ahead of
+the course once the town is founded, and keeps quiet about such signs for a
+while after each one; the crown's request, winter, a fire, and the sick do
+not wait. Each building it asks for is a chip that starts placing one, each
+tool, panel, or map view it names is a chip that picks it, and "show me
+where" goes to the water, woods, rocks, or building it means. Its words
+suit the screen: *tap* on a phone, *click* and the key on a computer. A
+step is put away for good once the town has done it (shown or not), or when
+the ✕ skips it; *hide guide* turns it off, and the **guide** button in the
+bottom right turns it back on. The guide is saved with the town, and starts
+over with a new one.
 
 ## Wear, spoilage, and winters
 
@@ -267,7 +284,10 @@ with the town, and starts over with a new one.
   **closed** from its panel: it stands empty, pays nothing, and costs the
   town hall nothing, until it is reopened.
 - **Buildings** need a road at the middle of a side and workers of their
-  crew from homes within 15 road cells. While one is placed (or selected),
+  crew from homes within 15 road cells. A building is not laid where no road
+  touches the middle of a side (the ghost shows red, and says why), and a
+  gatherer placed with nothing in reach (no water for a fishery, say) says
+  so before it is laid. While one is placed (or selected),
   the roads its walkers or its workers would use are shown; the homes tool
   shows how far its residents would walk to work. Parks need no road and no
   workers; their stone comes straight out of storage. Gatherers work the land within their reach (trees, rocks, water,

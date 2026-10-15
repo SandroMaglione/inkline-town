@@ -1,14 +1,16 @@
 /**
- * The mayor's guide (`src/rules/guide.ts`): it starts at the first step,
- * goes in order of priority, puts away what the town has already done
- * (shown or not), and never tells the mayor to build what the town cannot
- * build yet.
+ * The mayor's guide (`src/rules/guide.ts`): it teaches a course in order,
+ * chapter by chapter, and never falls silent before the town is complete;
+ * signs from the town go ahead of the course once it is founded; it puts
+ * away what the town has already done (shown or not); it says what opens a
+ * building the town cannot build yet; and its words fit a finger as well as
+ * a mouse.
  */
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import { amounts, kinds, type KindId } from "../src/content.ts"
-import { guideDone, guideStep, guideSteps, type GuideFacts } from "../src/rules/guide.ts"
+import { courseCount, courseSteps, guideDone, guideStep, guideSteps, lockedNote, PLANKS_LOW, STONE_LOW, upcoming, type GuideFacts } from "../src/rules/guide.ts"
 
 const fresh: GuideFacts = {
   homes: 0,
@@ -34,6 +36,12 @@ const fresh: GuideFacts = {
   most: 40,
   sawTown: false,
   sawHome: false,
+  sawBuilding: false,
+  roadToWater: false,
+  rank: 0,
+  upgraded: new Set(),
+  coins: 1900,
+  unreached: 0,
   risk: { fire: false, health: false, order: false },
   fewTrees: false
 }
@@ -45,139 +53,186 @@ const town = (over: Partial<GuideFacts>, built: ReadonlyArray<KindId> = []): Gui
   ...over
 })
 const none = new Set<string>()
+/** What the guide says next for a town, with what it has done put away. */
+const next = (facts: GuideFacts, pace: { readonly shown?: string | null; readonly quiet?: boolean } = { quiet: true }, skipped: ReadonlyArray<string> = []) =>
+  guideStep(facts, new Set([...guideDone(facts, none), ...skipped]), pace)?.id
+const founding = courseSteps.filter((s) => s.chapter === "Founding")
+/** A town through the Founding chapter. */
+const founded = (over: Partial<GuideFacts> = {}, built: ReadonlyArray<KindId> = []) =>
+  town({ homes: 10, residents: 30, roadToWater: true, sawBuilding: true, sawTown: true, ...over }, ["fishery", "lumberjack", "sawmill", ...built])
 
-test("a new town is told to lay homes, then to feed them", () => {
+const low = amounts({ planks: PLANKS_LOW - 5, stone: 16, tools: 10, fish: 20 })
+
+test("a new town is founded in order: homes, a road to the water, a fishery, its panel, planks (once low), the goal, ten homes", () => {
+  assert.deepEqual(
+    founding.map((s) => s.id),
+    ["homes", "road", "fishery", "look", "lumberjack", "sawmill", "term", "grow"]
+  )
   assert.equal(guideStep(fresh, none)?.id, "homes")
-  assert.equal(guideStep(town({ homes: 6, residents: 12 }), new Set(["homes"]))?.id, "fishery")
-  assert.equal(guideStep(town({ homes: 6, residents: 12 }, ["fishery"]), new Set(["homes", "fishery"]))?.id, "planks")
+  assert.equal(next(town({ homes: 4, residents: 8 })), "road", "no quiet in the opening")
+  assert.equal(next(town({ homes: 4, residents: 8, roadToWater: true })), "fishery")
+  assert.equal(next(town({ homes: 4, residents: 8, roadToWater: true }, ["fishery"])), "look")
+  assert.equal(next(town({ homes: 4, residents: 8, roadToWater: true, sawBuilding: true, stock: low }, ["fishery"])), "lumberjack")
+  assert.equal(next(town({ homes: 4, residents: 8, roadToWater: true, sawBuilding: true }, ["fishery", "lumberjack"])), "sawmill", "a lumberjack wants its sawmill")
+  assert.equal(next(town({ homes: 4, residents: 8, roadToWater: true, sawBuilding: true }, ["fishery", "lumberjack", "sawmill"])), "term")
+  assert.equal(next(town({ homes: 4, residents: 8, roadToWater: true, sawBuilding: true, sawTown: true }, ["fishery", "lumberjack", "sawmill"])), "grow")
+  assert.ok(guideDone(founded(), none).includes("grow"))
+  assert.deepEqual(courseCount(founding[2]!), { at: 3, of: 8 })
 })
 
-test("what the town has done is put away, shown or not", () => {
-  const experienced = town({ homes: 20, residents: 60, citizens: 0 }, ["fishery", "lumberjack", "sawmill", "forester", "quarry", "firewatch"])
-  const put = guideDone(experienced, none)
-  for (const id of ["homes", "fishery", "planks", "forester", "quarry", "firewatch"]) assert.ok(put.includes(id), id)
-  const next = guideStep(experienced, new Set(put))
-  assert.ok(next && !put.includes(next.id), "the next step is one not yet done")
+test("after ten homes the course goes on to citizens, never falling silent, a building the town can build first", () => {
+  // Ten homes stand, and quiet or not, the guide has the next step. Stone in store: no quarry yet.
+  assert.equal(next(founded()), "cloth")
+  assert.equal(next(founded({ stock: amounts({ planks: 30, stone: STONE_LOW - 2 }) })), "quarry", "a quarry once stone runs low")
+  // Cloth and faith open at 15 residents, bread at 30: with 20, cloth comes first.
+  const twenty = founded({ residents: 20 }, ["quarry"])
+  assert.equal(next(twenty), "cloth")
+  assert.equal(next(founded({ residents: 20 }, ["quarry", "sheep", "weaver"])), "chapel")
+  // Bread cannot be made yet: the step says what opens it.
+  const short = founded({ residents: 20 }, ["quarry", "sheep", "weaver", "chapel"])
+  assert.equal(next(short), "wheat")
+  assert.match(lockedNote(guideSteps.find((s) => s.id === "wheat")!, short)!, /opens at 30 residents \(20 now\)/)
+  assert.equal(next(founded({ residents: 30 }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill"])), "bakery")
+  const supplied = founded({ residents: 40 }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill", "bakery"])
+  assert.equal(next(supplied), "citizens")
+  assert.equal(next({ ...supplied, finerHomes: 1, sawTown: false }, { quiet: true }, founding.map((s) => s.id)), "goals")
+  // The last word: the ranks, up to a city.
+  assert.equal(next({ ...supplied, finerHomes: 1 }), "ranks")
+  assert.equal(next({ ...supplied, finerHomes: 1, rank: 2 }), "ranks")
+  assert.equal(next({ ...supplied, finerHomes: 1, rank: 3 }), undefined)
 })
 
-test("the opening comes step after step, each once the last is built", () => {
-  assert.equal(guideStep(fresh, none, { quiet: true })?.id, "homes")
-  const laid = town({ homes: 4, builtHomes: 0 })
-  assert.equal(guideStep(laid, new Set(guideDone(laid, none)))?.id, "homes", "laid homes are not yet done")
-  const housed = town({ homes: 4, residents: 8 })
-  const put = new Set(guideDone(housed, none))
-  assert.equal(guideStep(housed, put, { quiet: true })?.id, "fishery", "no quiet in the opening")
-  const building = { ...housed, placed: new Set<KindId>(["fishery"]) }
-  assert.equal(guideStep(building, put)?.id, "fishery", "a laid fishery is not done until it stands")
-  const fed = town({ homes: 4, residents: 8 }, ["fishery"])
-  assert.equal(guideStep(fed, new Set(guideDone(fed, none)), { quiet: true })?.id, "planks")
-  const sawn = town({ homes: 4, residents: 8 }, ["fishery", "lumberjack", "sawmill"])
-  assert.equal(guideStep(sawn, new Set(guideDone(sawn, none)), { quiet: true })?.id, "quarry")
-  // Then where to look: a home's panel, and the town's.
-  const quarried = town({ homes: 4, residents: 8 }, ["fishery", "lumberjack", "sawmill", "quarry"])
-  assert.equal(guideStep(quarried, new Set(guideDone(quarried, none)), { quiet: true })?.id, "look")
-  const looked = { ...quarried, sawHome: true }
-  assert.equal(guideStep(looked, new Set(guideDone(looked, none)), { quiet: true })?.id, "watch")
-  // And last, the go-ahead to grow, until ten homes stand.
-  const told = { ...looked, sawTown: true }
-  assert.equal(guideStep(told, new Set(guideDone(told, none)), { quiet: true })?.id, "grow")
-  const grown = { ...told, homes: 10, builtHomes: 10 }
-  assert.ok(guideDone(grown, none).includes("grow"))
+test("the course never asks for a building before the town needs it, and says what comes next", () => {
+  // Plenty of planks: past the lumberjack and sawmill to the goal, saying when they come.
+  const plenty = town({ homes: 4, residents: 8, roadToWater: true, sawBuilding: true, stock: amounts({ planks: 31, stone: 16 }) }, ["fishery"])
+  assert.equal(next(plenty), "term")
+  assert.equal(upcoming(plenty, new Set(guideDone(plenty, none))), `Next: a lumberjack and a sawmill, once planks fall below ${PLANKS_LOW} (31 now).`)
+  // A laid lumberjack stays asked for while it goes up, whatever the planks.
+  const laying = { ...plenty, placed: new Set<KindId>(["fishery", "lumberjack"]) }
+  assert.equal(next(laying), "lumberjack")
+  // The quarry waits for stone; the market for homes beyond the walkers; the smithy for tools.
+  assert.equal(upcoming(founded(), new Set(guideDone(founded(), none))), `Next: a quarry, once stone falls below ${STONE_LOW} (16 now).`)
+  assert.notEqual(next(founded({ residents: 60 }), {}), "market")
+  assert.equal(next(founded({ unreached: 3 }), {}), "market")
+  // A town rank town with a market: upgrade it rather than build another.
+  assert.equal(next(founded({ unreached: 3, rank: 2 }, ["market"]), {}), "markethall")
+  assert.notEqual(next(founded({ unreached: 3, rank: 1 }, ["market"]), {}), "markethall", "not before the town rank")
+  assert.notEqual(next(founded({ citizens: 12, residents: 80 }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill", "bakery"]), {}), "smithy")
+  assert.equal(next(founded({ citizens: 12, residents: 80, stock: amounts({ tools: 3, planks: 40, stone: 20 }) }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill", "bakery"]), {}), "smithy")
 })
 
-test("citizens' needs come bread first, a building or two at a time, and not before bread can be made", () => {
-  const ready = town({ homes: 12, residents: 25, sawHome: true, sawTown: true }, ["fishery", "lumberjack", "sawmill", "quarry"])
-  const put = new Set(guideDone(ready, none))
-  assert.notEqual(guideStep(ready, put)?.id, "cloth", "cloth and faith are no use to settlers")
-  const grown = { ...ready, residents: 30 }
-  assert.equal(guideStep(grown, put)?.id, "wheat")
-  // One or two buildings at a time: wheat and flour, then the bakery, then cloth, then the chapel.
-  const chain: ReadonlyArray<[ReadonlyArray<KindId>, string]> = [[["farm", "mill"], "bakery"], [["farm", "mill", "bakery"], "cloth"], [["farm", "mill", "bakery", "sheep", "weaver"], "chapel"]]
-  for (const [more, next] of chain) {
-    const facts = town({ homes: 12, residents: 34, sawHome: true, sawTown: true }, ["fishery", "lumberjack", "sawmill", "quarry", ...more])
-    assert.equal(guideStep(facts, new Set(guideDone(facts, none)))?.id, next)
+test("a step the treasury cannot pay for says to save up, and gives way to one it can", () => {
+  const poor = founded({ residents: 20, coins: 120 }, [])
+  const chapel = guideSteps.find((s) => s.id === "chapel")!
+  assert.match(lockedNote(chapel, poor)!, /Save up: the chapel costs 200 coins \(120 now\)/)
+  // The sheep farm (100) can be paid for, the weaver (150) not yet: the cloth step asks, the cheaper first.
+  assert.equal(lockedNote(guideSteps.find((s) => s.id === "cloth")!, poor), null)
+})
+
+test("every course step is one thing to do and one reason, short enough for a phone", () => {
+  for (const step of courseSteps) {
+    assert.ok(step.action.length <= 110, `${step.id}: the action fits a phone's peek`)
+    assert.equal(step.action.match(/[.!?](\s|$)/g)?.length, 1, `${step.id}: the action is one sentence`)
+    assert.ok(step.why.length <= 180, `${step.id}: the reason is short`)
   }
 })
 
-const founded: ReadonlyArray<KindId> = ["fishery", "lumberjack", "sawmill", "quarry"]
-
-test("after the opening, steps wait for the town to need them", () => {
-  const settled = town({ homes: 10, residents: 20, sawHome: true, sawTown: true }, founded)
-  const put = new Set(guideDone(settled, none))
-  // Planks in hand, stone in hand, the woods full, no risk: nothing to say.
-  assert.equal(guideStep(settled, put), null)
-  assert.equal(guideStep({ ...settled, fewTrees: true }, put)?.id, "forester")
-  assert.equal(guideStep({ ...settled, risk: { fire: true, health: false, order: false } }, put)?.id, "firewatch")
+test("no step names a key: tools are chips, and words fit both a finger and a mouse", () => {
+  for (const step of guideSteps) {
+    for (const text of [step.action, step.why, step.goal, step.waiting?.(fresh) ?? "", lockedNote(step, fresh) ?? ""]) {
+      assert.doesNotMatch(text, /\([A-Z]\)|\bpress [A-Z]\b|\bEsc\b/i, `${step.id}: no keys`)
+      assert.doesNotMatch(text.replace(/\{[^}]*\}/g, ""), /\bclick/i, `${step.id}: "click" only as {tap|click}`)
+      for (const [, tool] of text.matchAll(/\[([a-z:]+)\]/g)) {
+        assert.ok(
+          ["select", "road", "pave", "homes", "build", "bulldoze", "town", "speed", "pause"].includes(tool!) || /^view:(appeal|workers|fire|health|order|condition)$/.test(tool!),
+          `${step.id}: [${tool}] is a tool`
+        )
+      }
+    }
+  }
 })
 
-test("after a step the guide keeps quiet, but not through a fire or the crown's request", () => {
-  const facts = town({ homes: 10, residents: 20, fewTrees: true, sawHome: true, sawTown: true }, founded)
-  const put = new Set(guideDone(facts, none))
-  assert.equal(guideStep(facts, put, { quiet: true }), null)
-  assert.equal(guideStep({ ...facts, burning: 1 }, put, { quiet: true })?.id, "firewatch")
-  assert.equal(guideStep({ ...facts, crown: { open: true, met: 0 } }, put, { quiet: true })?.id, "crown")
+test("a step under way says what the town is doing about it", () => {
+  const homes = guideSteps.find((s) => s.id === "homes")!
+  assert.equal(homes.waiting!(fresh), null, "nothing laid: nothing under way")
+  assert.match(homes.waiting!(town({ homes: 4, builtHomes: 0 }))!, /planks/)
+  assert.match(homes.waiting!(town({ homes: 4, builtHomes: 0, stock: amounts({ planks: 0 }) }))!, /no(ne| planks)/)
+  const fishery = guideSteps.find((s) => s.id === "fishery")!
+  const laid = { ...town({ homes: 4, residents: 8 }), placed: new Set<KindId>(["fishery"]) }
+  assert.equal(guideStep(laid, new Set(["homes", "road"]))?.id, "fishery", "a laid fishery is not done until it stands")
+  assert.match(fishery.waiting!(laid)!, /building site/)
+  assert.equal(fishery.waiting!(town({ homes: 4 }, ["fishery"])), null, "standing: no longer under way")
 })
 
-test("a step once shown stays until it is done, even if its sign fades", () => {
-  const thinning = town({ homes: 10, residents: 20, fewTrees: true, sawHome: true, sawTown: true }, founded)
-  const put = new Set(guideDone(thinning, none))
-  assert.equal(guideStep(thinning, put)?.id, "forester")
+test("a mayor who already knows the game is not walked through it", () => {
+  const experienced = founded({ residents: 40 }, ["quarry"])
+  const put = new Set(guideDone(experienced, none))
+  for (const step of founding) assert.ok(put.has(step.id), step.id)
+  assert.ok(put.has("quarry"))
+  // A skipped step stays away, and the next comes.
+  assert.equal(guideStep(fresh, new Set(["homes"]))?.id, "road")
+})
+
+test("the founding goes on past a step that cannot apply yet", () => {
+  // The fishery was skipped: no panel to look at, so on to the lumberjack.
+  assert.equal(next(town({ homes: 4, residents: 8, roadToWater: true, stock: low }), {}, ["fishery"]), "lumberjack")
+})
+
+test("signs wait while the town is founded, then go ahead of the course", () => {
+  const fire = { fire: true, health: false, order: false }
+  assert.equal(next(town({ homes: 4, residents: 8, risk: fire })), "road", "founding first")
+  assert.equal(next(founded({ risk: fire }), {}), "firewatch")
+  assert.equal(next(founded({ fewTrees: true }), {}), "forester")
+  // While the guide keeps quiet, the course speaks instead.
+  assert.equal(next(founded({ fewTrees: true }), { quiet: true }), "cloth")
+})
+
+test("after a step the guide keeps quiet about signs, but not through a fire or the crown's request", () => {
+  const facts = founded({ fewTrees: true })
+  assert.notEqual(next(facts, { quiet: true }), "forester")
+  assert.equal(next({ ...facts, burning: 1 }, { quiet: true }), "firewatch")
+  assert.equal(next({ ...facts, crown: { open: true, met: 0 } }, { quiet: true }), "crown")
+})
+
+test("a sign once shown stays until it is done, even if it fades", () => {
+  const thinning = founded({ fewTrees: true })
+  assert.equal(next(thinning, {}), "forester")
   const planted = { ...thinning, fewTrees: false }
-  assert.equal(guideStep(planted, put), null)
-  assert.equal(guideStep(planted, put, { shown: "forester" })?.id, "forester")
+  assert.equal(next(planted, {}), "cloth")
+  assert.equal(next(planted, { shown: "forester" }), "forester")
 })
 
-test("a step the mayor skipped stays away", () => {
-  assert.notEqual(guideStep(fresh, new Set(["homes"]))?.id, "homes")
-})
-
-test("the crown's deadline goes ahead of a chain that takes minutes", () => {
-  const facts = town({ homes: 20, residents: 40, crown: { open: true, met: 0 } }, ["fishery"])
-  assert.equal(guideStep(facts, new Set(guideDone(facts, none)))?.id, "crown")
+test("the crown's deadline goes ahead of everything", () => {
+  assert.equal(next(town({ homes: 2, residents: 8, crown: { open: true, met: 0 } })), "crown")
 })
 
 test("winter is foretold before it comes, and not long before", () => {
-  const ready = new Set(["homes", "fishery"])
-  const built: ReadonlyArray<KindId> = ["fishery", "lumberjack", "sawmill", "forester", "quarry"]
-  assert.notEqual(guideStep(town({ homes: 10, residents: 30, winterIn: 400 }, built), ready)?.id, "winter")
-  assert.equal(guideStep(town({ homes: 10, residents: 30, winterIn: 90 }, built), ready)?.id, "winter")
-  assert.equal(guideStep(town({ homes: 10, residents: 30, winter: true, winterIn: 300 }, built), ready)?.id, "winter")
+  assert.notEqual(next(founded({ winterIn: 400 })), "winter")
+  assert.equal(next(founded({ winterIn: 90 })), "winter")
+  assert.equal(next(founded({ winter: true, winterIn: 300 })), "winter")
 })
 
 test("a town that runs short of tools before its workshops is told to keep them", () => {
-  const facts = town({ homes: 12, residents: 30, stock: amounts({ tools: 2, planks: 30, stone: 10 }) }, ["fishery", "sheep"])
-  assert.equal(guideStep(facts, new Set(guideDone(facts, none)))?.id, "tools")
+  assert.equal(next(founded({ stock: amounts({ tools: 2, planks: 30, stone: 10 }) }, ["sheep"]), {}), "tools")
 })
 
-test("the guide never asks for a building before the town can build it", () => {
-  // Each step that names buildings, and what it asks for.
-  const asks: Record<string, ReadonlyArray<KindId>> = {
-    fishery: ["fishery"],
-    winter: ["granary", "smokehouse"],
-    planks: ["lumberjack", "sawmill"],
-    forester: ["forester"],
-    quarry: ["quarry"],
-    firewatch: ["firewatch"],
-    builder: ["builder"],
-    market: ["market"],
-    cloth: ["sheep", "weaver"],
-    wheat: ["farm", "mill"],
-    bakery: ["bakery"],
-    chapel: ["chapel"],
-    healer: ["healer"],
-    watchhouse: ["watchhouse"],
-    smithy: ["mine", "smithy"]
-  }
+test("the guide never sends the mayor to place a building the town cannot build yet", () => {
   // Whatever else is true, a town just short of each unlock.
   const everything = (residents: number, citizens: number) =>
-    town({ homes: 30, residents, citizens, winter: true, winterIn: 60, worn: true, sick: 3, burning: 1, risk: { fire: true, health: true, order: true }, fewTrees: true }, ["fishery", "lumberjack", "sawmill"])
+    founded({ homes: 30, residents, citizens, winter: true, winterIn: 60, worn: true, sick: 3, burning: 1, risk: { fire: true, health: true, order: true }, fewTrees: true, poorStreet: true, unreached: 5, stock: amounts({ tools: 1 }) })
   for (const step of guideSteps) {
-    for (const kind of asks[step.id] ?? []) {
+    for (const kind of step.asks ?? []) {
       const { residents, citizens } = kinds[kind].unlock
-      if (residents > 0) assert.equal(step.when(everything(residents - 1, citizens)), false, `${step.id} asks for a ${kind} before ${residents} residents`)
-      if (citizens > 0) assert.equal(step.when(everything(residents + 200, citizens - 1)), false, `${step.id} asks for a ${kind} before ${citizens} citizens`)
       assert.ok(kinds[kind].buildable, `${kind} can be built`)
-      assert.match(step.text.toLowerCase(), new RegExp(kinds[kind].title.toLowerCase()), `${step.id} names the ${kind}, so it becomes a chip`)
+      assert.match(step.action.toLowerCase(), new RegExp(kinds[kind].title.toLowerCase()), `${step.id} names the ${kind}, so it becomes a chip`)
+      // Short of the unlock: either the step does not apply, or it says what opens it.
+      for (const short of [residents > 0 ? everything(residents - 1, citizens) : null, citizens > 0 ? everything(residents + 200, citizens - 1) : null]) {
+        if (!short) continue
+        if (!step.when(short)) continue
+        // A step asking for one of several (a granary or a smokehouse) is fine while one of them is open.
+        const any = step.asks!.some((k) => kinds[k].unlock.residents <= short.residents && kinds[k].unlock.citizens <= short.citizens)
+        assert.ok(step.course ? lockedNote(step, short) !== null : any, `${step.id} asks for a ${kind} before it opens, and says nothing`)
+      }
     }
   }
 })
@@ -187,12 +242,12 @@ test("every step says what closes it", () => {
 })
 
 test("every step can be done, and a town that has done them all is told nothing", () => {
-  const all = guideSteps.flatMap((s) => [s.id])
+  const all = guideSteps.map((s) => s.id)
   assert.equal(new Set(all).size, all.length, "step ids are unique")
   const finished = town(
     {
-      homes: 200, residents: 400, citizens: 200, finerHomes: 30, crown: { open: true, met: 3 }, trading: true, taxed: true, sawTown: true, sawHome: true,
-      winter: true, worn: true, poorStreet: true, approval: 40, net: -5, most: 120, stock: amounts({ tools: 0 })
+      homes: 200, residents: 400, citizens: 200, finerHomes: 30, crown: { open: true, met: 3 }, trading: true, taxed: true, sawTown: true, sawHome: true, sawBuilding: true,
+      roadToWater: true, rank: 3, upgraded: new Set<KindId>(["market"]), unreached: 5, winter: true, worn: true, poorStreet: true, approval: 40, net: -5, most: 120, stock: amounts({ tools: 0 })
     },
     ["fishery", "lumberjack", "sawmill", "forester", "quarry", "granary", "firewatch", "builder", "market", "sheep", "weaver", "chapel", "farm", "mill", "bakery", "healer", "watchhouse", "mine", "smithy"]
   )

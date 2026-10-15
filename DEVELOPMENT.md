@@ -52,7 +52,12 @@ for the guide and the map overlays. `host.ts` sets `body.fold-goods`,
 `fold-guide`, `fold-views` or `fold-more` while one is open; a tap on the map
 folds it, a pan or pinch does not. Once the town has a minute of goods
 (`body.flow-ready`), the goods chip opens the made/used table straight away,
-each good by its icon. A new guide step peeks above the tool bar for a few seconds. Sheets
+each good by its icon. The guide's step stays above the tool bar until tucked away
+(its ✕); tucked, the bulb pulses, and a new step (or the same one under way)
+comes out again. Guide texts in `src/rules/guide.ts` name tools,
+panels and map views as `[homes]`, `[town]` or `[view:fire]` and verbs as
+`{tap|click}`, never keys, so they read right on either screen;
+`test/guide.test.ts` checks it. Sheets
 open from the side on a landscape phone (`max-height: 500px`) and from the
 bottom in portrait. Dialogs take the whole screen with their actions pinned
 to the bottom. The camera bar is hidden: pinch zooms and turns. New UI needs
