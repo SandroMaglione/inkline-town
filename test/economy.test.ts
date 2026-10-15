@@ -1,0 +1,171 @@
+/**
+ * The economy's rules that must hold however the numbers are tuned: no
+ * piece a mayor can lay down gives back far more than its kind usually
+ * does for what it costs, and nothing comes for free. The figures come
+ * from `src/rules/worth.ts`; the bands are the design's, so a change to
+ * one number that opens a hole a player could play over and over fails
+ * here.
+ *
+ * A rule the shipped game breaks today is marked `todo` with what breaks
+ * it: the suite stays green, and `node --test` lists each one, so this
+ * file is also the list of holes still open. Once a hole is closed, drop
+ * its `todo` and the rule holds from then on.
+ */
+import assert from "node:assert/strict"
+import { test } from "node:test"
+import { amounts, type GoodId, type GroundId, type Need, type PropId } from "../src/content.ts"
+import { parksOf } from "../src/appeal.ts"
+import { shippedRules } from "../src/rules/config.ts"
+import { tierFor } from "../src/rules/households.ts"
+import { chainWorth, crownMargin, dominates, homes, median, openingKit, producers, services } from "../src/rules/worth.ts"
+import { district } from "../tools/balance/scenario.ts"
+import { component, fixture } from "../tools/balance/verify/fixture.ts"
+
+const rules = shippedRules
+/** Fails with every offender listed, not just the first. */
+const none = (offenders: ReadonlyArray<string>, rule: string) => assert.deepEqual(offenders, [], `${rule}:\n  ${offenders.join("\n  ")}`)
+const round = (n: number) => Math.round(n * 100) / 100
+
+// ── Producers ─────────────────────────────────────────────────────────────
+
+/** A producer adds between half and twice what producers usually add for each coin of upkeep. */
+const PRODUCER_BAND = [0.5, 2] as const
+
+test("every producer adds about what producers usually do for its upkeep", { todo: "fishery ×2.8 and bakery ×2.0 of the usual; mill ×0.29 and mine ×0.47" }, () => {
+  const all = producers(rules), usual = median(all.map((p) => p.perUpkeep))
+  none(all.filter((p) => p.perUpkeep < usual * PRODUCER_BAND[0] || p.perUpkeep > usual * PRODUCER_BAND[1])
+    .map((p) => `${p.id}: adds ${round(p.adds)}/min for ${p.upkeep} upkeep, ×${round(p.perUpkeep / usual)} of the usual ${round(usual)}`), "producer outside the band")
+})
+
+// ── Food ──────────────────────────────────────────────────────────────────
+
+const foods: ReadonlyArray<GoodId> = ["fish", "smoked", "bread"]
+/** Goods that meet the same need cost within this many times one another to keep making. */
+const SUBSTITUTES = 3
+
+test("no way of making a food is cheaper on every count than another that meets the same needs", () => {
+  const chains = foods.map((g) => chainWorth(g, rules))
+  const same = (a: ReadonlyArray<Need>, b: ReadonlyArray<Need>) => a.length === b.length && a.every((n) => b.includes(n))
+  none(chains.flatMap((a) => chains.filter((b) => a !== b && same(a.meets, b.meets) && dominates(a, b)).map((b) => `${a.good} dominates ${b.good}`)), "dominated food")
+})
+
+test("foods that all meet a need cost within a few times one another to keep making", { todo: "bread's chain costs 4.8× fish's upkeep a unit, and stops in winter" }, () => {
+  const chains = foods.map((g) => chainWorth(g, rules))
+  const out: Array<string> = []
+  for (const need of ["food"] as const) {
+    const meeting = chains.filter((c) => c.meets.includes(need))
+    const cheap = meeting.reduce((a, b) => (a.upkeep <= b.upkeep ? a : b))
+    for (const c of meeting) if (c.upkeep > cheap.upkeep * SUBSTITUTES) out.push(`${need}: ${c.good} ${round(c.upkeep)}/unit upkeep vs ${cheap.good} ${round(cheap.upkeep)}`)
+  }
+  none(out, "substitutes too far apart")
+})
+
+test("a tier's staple is needed to keep the tier: a citizens' home fed fish instead of bread steps down", { todo: "a citizens' home keeps its tier on fish, cloth, and faith (2 of 3 needs)" }, () => {
+  const fish = { tier: 2 as const, food: 100, bread: 0, cloth: 100, faith: 100 }
+  assert.equal(tierFor(fish, rules.home.tiers[3].appeal, { fire: 0, health: 0, order: 0 }, rules), 1)
+})
+
+test("fisheries sharing one stretch of water share its catch", { todo: "water never runs out: every fishery on it catches at full pace" }, () => {
+  const base = district("shared-water", [1, 1, 1, 1], ["fishery", "fishery"], false, rules)
+  const [a, b] = base.buildings.filter((x) => x.kind === "fishery")
+  // One cell of water, within reach of both.
+  const water = { x: b!.tile.x, y: a!.tile.y + a!.tile.size + 1, size: 1 }
+  const scenario = { ...base, homes: base.homes.map((h) => ({ ...h, food: 10_000_000 })), land: [{ tile: water, type: "water" as const, amount: 1, growth: 0 }] }
+  const town = fixture(scenario, rules)
+  for (let s = 0; s < 60; s++) {
+    town.change((snap) => { for (const f of [a!, b!]) component(snap, f.id, "Town/Inventory").stock.fish = 0 })
+    town.run(1)
+  }
+  const made = [a!, b!].map((f) => component(town.snapshot(), f.id, "Town/Recipe").made as number)
+  const alone = 60 / rules.kinds.fishery.recipe!.seconds
+  assert(made[0]! > 0 && made[1]! > 0, `both fish: ${made}`)
+  assert(made[0]! + made[1]! <= alone * 1.25, `two fisheries on one cell of water caught ${made.join(" + ")}, one alone catches ${alone}`)
+})
+
+// ── Homes ─────────────────────────────────────────────────────────────────
+
+/** Minutes of what it adds that laying a home, or raising it a tier, should cost at least. */
+const HOME_PAYBACK = 2
+
+test("a home, and each tier it rises to, costs a few minutes of what it brings in", { todo: "a cottage pays back in 1.5 min; rising to citizens or burghers costs nothing" }, () => {
+  none(homes(rules).filter((h) => h.payback < HOME_PAYBACK)
+    .map((h) => `tier ${h.tier}: costs ${h.cost}, adds ${round(h.gain)}/min, pays back in ${round(h.payback)} min`), "home too cheap")
+})
+
+test("administration weighs on finer homes as it does on cottages", { todo: "a citizens' home pays its way to the 490th home, a townhouse to the 1020th; a cottage only to the 123rd" }, () => {
+  const [cottage, ...finer] = homes(rules)
+  none(finer.filter((h) => h.breakEven > cottage!.breakEven * 2).map((h) => `tier ${h.tier}: pays its way to home ${h.breakEven}, a cottage to ${cottage!.breakEven}`), "administration too light")
+})
+
+// ── The opening ───────────────────────────────────────────────────────────
+
+/** The share of the first citizens' buildings a new town's treasury pays for, at most; and the homes they need, at least. */
+const OPENING_SHARE = 0.7
+const OPENING_HOMES = 15
+
+test("a new town's treasury pays for only part of the first citizens' buildings", { todo: "every land's treasury buys the whole kit (1260 coins): rich 190%, fair 151%, harsh 119%" }, () => {
+  const kit = openingKit(10, rules)
+  none((Object.entries(rules.lands) as Array<[string, { coins: number }]>).filter(([, l]) => l.coins > kit.cost * OPENING_SHARE)
+    .map(([id, l]) => `${id}: ${l.coins} coins for a ${kit.cost}-coin kit (${kit.kinds.join(", ")}), ${Math.round((l.coins / kit.cost) * 100)}%`), "opening paid for")
+})
+
+test("the first citizens' buildings open only once the town has grown", { todo: "all of them open by the 8th cottage" }, () => {
+  const kit = openingKit(10, rules)
+  assert(kit.unlockHomes >= OPENING_HOMES, `the ${kit.kinds.join(", ")} all open at ${kit.unlockHomes} cottages`)
+})
+
+// ── The crown ─────────────────────────────────────────────────────────────
+
+test("answering the crown with bought goods does not pay", { todo: "the reward (2× price + 50) beats buying at 1.5× on requests of 10 to 30" }, () => {
+  const goods = (Object.keys(rules.goods) as Array<GoodId>).filter((g) => rules.spoils[g] === undefined)
+  none(goods.flatMap((g) => [10, 20, 30].map((n) => crownMargin(g, n, rules))).filter((m) => m.margin > 0)
+    .map((m) => `${m.amount} ${m.good}: reward ${m.reward}, bought for ${m.bought}, +${m.margin}`), "crown pays for bought goods")
+})
+
+// ── Services ──────────────────────────────────────────────────────────────
+
+test("a bigger building for a service walks at least as far for its upkeep as a smaller one", { todo: "a hospital walks 37.5 cells a coin of upkeep, a healer 56" }, () => {
+  const all = services(rules), out: Array<string> = []
+  for (const big of all) for (const small of all)
+    if (big.service === small.service && big.cost > small.cost && big.perUpkeep < small.perUpkeep)
+      out.push(`${big.id} ${round(big.perUpkeep)} cells/upkeep < ${small.id} ${round(small.perUpkeep)}`)
+  none(out, "a dearer service building does less a coin")
+})
+
+// ── Parks ─────────────────────────────────────────────────────────────────
+
+/** The most a park of one cell gives: no more than a street or a little more. */
+const ONE_CELL_MOST = 2
+const road = (_x: number, y: number) => y === 0
+
+test("a park of one cell gives little, whatever stands on it", { todo: "a lamp makes it 3, a fountain 6, a statue 7: more than a chapel" }, () => {
+  const out: Array<string> = []
+  for (const ground of ["lawn", "flowers", "path", "square"] as Array<GroundId>)
+    for (const prop of ["none", "lamp", "fountain", "statue"] as Array<PropId | "none">) {
+      const [park] = parksOf([{ x: 5, y: 1, ground, prop }], road, rules)
+      if (park && park.value > ONE_CELL_MOST) out.push(`${ground} + ${prop}: ${park.value}`)
+    }
+  none(out, "one-cell park too fine")
+})
+
+test("cells laid as separate parks give no more than the same cells as one", { todo: "parks touching only at a corner are separate, and their values add up" }, () => {
+  const out: Array<string> = []
+  for (const n of [2, 3, 4, 5])
+    for (const prop of ["none", "lamp"] as const) {
+      // A diagonal of cells (each its own park) against a row of them (one park), both beside the road.
+      const apart = Array.from({ length: n }, (_, i) => ({ x: 2 * i, y: 1 + (i % 2), ground: "path" as const, prop }))
+      const joined = Array.from({ length: n }, (_, i) => ({ x: i, y: 1, ground: "path" as const, prop }))
+      const value = (cells: typeof apart) => parksOf(cells, road, rules).reduce((s, p) => s + p.value, 0)
+      if (value(apart) > value(joined)) out.push(`${n} paths${prop === "none" ? "" : ` with ${prop}s`}: ${value(apart)} apart, ${value(joined)} as one`)
+    }
+  none(out, "splitting a park pays")
+})
+
+// ── The ledger itself ─────────────────────────────────────────────────────
+
+test("the ledger's figures follow the rules it is given", () => {
+  assert.equal(chainWorth("fish", rules).buildings.fishery, 1 / 15)
+  const dearer = { ...rules, kinds: { ...rules.kinds, fishery: { ...rules.kinds.fishery, upkeep: 9 } } }
+  assert(chainWorth("fish", dearer).upkeep > chainWorth("fish", rules).upkeep)
+  assert.equal(amounts({}).fish, 0)
+})
