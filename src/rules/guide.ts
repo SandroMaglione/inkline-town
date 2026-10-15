@@ -473,7 +473,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     goal: "a carpenter stands",
     asks: ["carpenter"],
     focus: "hall",
-    when: (f) => f.citizens >= 20 && f.finerHomes >= 3,
+    when: (f) => f.citizens >= 60 && f.finerHomes >= 8,
     done: (f) => has(f, "carpenter"),
     waiting: rising("carpenter")
   },

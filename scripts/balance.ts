@@ -486,8 +486,8 @@ const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: b
     { kind: "bakery", when: count(w, "bakery") < Math.min(bakeries, count(w, "mill")) },
     { kind: "sheep", when: count(w, "sheep") < weavers },
     { kind: "weaver", when: count(w, "weaver") < Math.min(weavers, count(w, "sheep")) },
-    // Townhouses want furniture: a carpenter once there are citizens to rise.
-    { kind: "carpenter", when: w.census.citizens! >= 20 && count(w, "carpenter") < 1 + Math.floor(w.census.burghers! / 120) },
+    // Townhouses want furniture: a carpenter once homes are fit to rise to them, not before.
+    { kind: "carpenter", when: (readyFor(w, 3) >= 2 || w.census.burghers! > 0) && count(w, "carpenter") < 1 + Math.floor(w.census.burghers! / 120) },
     { kind: "warehouse", when: count(w, "warehouse") < Math.floor(homes / 25) },
     // Fish and bread rot: a granary keeps them, and smoked fish keeps.
     { kind: "granary", when: homes >= 40 && count(w, "granary") < 1 + Math.floor(homes / 70) },
@@ -524,8 +524,9 @@ const decide = (w: World): ReadonlyArray<Edit> => {
       settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: net(w), approval: w.mood.approval, hall: w.hall
     }, rules)
     // Closing in on a complete town: everything but approval and the larder met. Cut taxes, buy food.
-    const closing = goals.every((g) => g.met || g.id === "approval") && w.coins > 1000
-    const rate = closing || w.mood.approval < 0 ? 50 : w.mood.approval < 15 ? 75 : w.mood.approval > 45 ? 125 : 100
+    // Not by cutting into the income the goals want too: only approval short, and to three-quarters, not half.
+    const closing = goals.every((g) => g.met || g.id === "approval") && !goals.find((g) => g.id === "approval")!.met && w.coins > 1000
+    const rate = w.mood.approval < 0 ? 50 : closing || w.mood.approval < 15 ? 75 : w.mood.approval > 45 ? 125 : 100
     if (w.policy.settlers !== rate) edits.push({ type: "tax", tier: "settlers", rate }, { type: "tax", tier: "citizens", rate })
     // Keep enough to answer the crown, buying what is short of its request.
     const asked = w.crown.open ? w.crown.amount : 0
@@ -537,7 +538,11 @@ const decide = (w: World): ReadonlyArray<Edit> => {
     // Buy what runs short, while the treasury can bear it; stop once there is enough.
     // Never at any price: buying drives it up, so stop at half again the usual.
     const civicShort = w.coins > 600 && count(w, "mill") > 0 && count(w, "weaver") > 0 && count(w, "chapel") > 0 && w.census.citizens! < Math.max(content.sizes[w.charter.size].goal.residents, residents(w)) * content.fate.citizens
-    const shortages: ReadonlyArray<readonly [GoodId, number, number]> = [["bread", civicShort ? 8 : -1, 20], ["cloth", civicShort ? 4 : -1, 12], ["planks", Math.max(6, wanted(w, "planks")), Math.max(14, wanted(w, "planks") + 8)], ["stone", Math.max(4, wanted(w, "stone")), Math.max(12, wanted(w, "stone") + 6)], ["tools", 3, 6], ["fish", (fed < 0.5 && w.stock.fish < 10) || (closing && fed < 0.7 && w.stock.fish < 20) ? 1000 : -1, 24]]
+    // Winter: the fields lie fallow, so flour (which keeps) is laid in for the bakeries before it, and fish bought while it lasts.
+    const season = seasonAt(w.tick - w.charter.founded, w.charter, rules)
+    const bracing = w.coins > 800 && count(w, "bakery") > 0 && (season.winter || (season.coming !== null && season.left < content.ticks(180)))
+    const wintry = season.winter && w.coins > 800 && fed < 0.8 && w.stock.fish < 20
+    const shortages: ReadonlyArray<readonly [GoodId, number, number]> = [["flour", bracing ? 15 : -1, 40], ["bread", civicShort ? 8 : -1, 20], ["cloth", civicShort ? 4 : -1, 12], ["planks", Math.max(6, wanted(w, "planks")), Math.max(14, wanted(w, "planks") + 8)], ["stone", Math.max(4, wanted(w, "stone")), Math.max(12, wanted(w, "stone") + 6)], ["tools", 3, 6], ["fish", (fed < 0.5 && w.stock.fish < 10) || (closing && fed < 0.7 && w.stock.fish < 20) || wintry ? 1000 : -1, 24]]
     for (const [g, low, enough] of shortages) {
       if (g === crownBuy) continue
       const buying = w.policy.buys.includes(g)
@@ -568,7 +573,10 @@ const decide = (w: World): ReadonlyArray<Edit> => {
   // A workshop more where what it works piles up in storage (flour with no baker to bake it), before anything else.
   if (sensible()) {
     const backlog = (["bakery", "weaver", "mill"] as const).find((k) => w.stock[kinds[k].recipe!.input!] > 40 && unlocked(w, kinds[k]) && affordable(w, kinds[k].cost)
-      && !w.buildings.some((b) => b.kind === k && (b.site || b.status === "unstaffed")))
+      && !w.buildings.some((b) => b.kind === k && (b.site || b.status === "unstaffed"))
+      // Not past what feeds it: a mill for every farm and one more, a bakery for every mill and one more, a weaver for every sheep farm and one more.
+      && (k !== "mill" || count(w, "mill") <= count(w, "farm")) && (k !== "bakery" || count(w, "bakery") <= count(w, "mill"))
+      && (k !== "weaver" || count(w, "weaver") <= count(w, "sheep")))
     const spot = backlog ? spotFor(w, kinds[backlog]) : null
     if (backlog && spot) return [...edits, { type: "building", kind: backlog, cell: spot, open: false }]
   }
@@ -605,6 +613,10 @@ const decide = (w: World): ReadonlyArray<Edit> => {
     const road = roadToward(w, null)
     if (road.length > 0 && w.coins > road.length * ROAD_COST + 60) return [...edits, { type: "roads", cells: road }]
   }
+  // An upgrade where it pays, once the coins and the store can bear it (the store is stocked for it meanwhile, see `wanted`).
+  const wish = upgradeWish(w)
+  if (wish && spare(w) >= wish.up.cost.coins + 300 && (Object.entries(wish.up.cost.materials) as Array<[GoodId, number]>).every(([g, n]) => w.stock[g] >= n))
+    return [...edits, { type: "upgrade", cell: { x: wish.tile.x, y: wish.tile.y } }]
   if (process.env.DEBUG_PLAN) console.log(`  t ${w.tick} coins ${w.coins} planks ${w.stock.planks} stone ${w.stock.stone} tools ${w.stock.tools} wants ${plan(w).filter((p) => p.when).map((p) => p.kind).join(",")}`)
   for (const want of plan(w)) {
     if (!want.when) continue
@@ -672,8 +684,40 @@ const savingFor = (w: World): Kind | null => {
 const spare = (w: World) => w.coins - (savingFor(w)?.cost.coins ?? 0)
 /** Homes ready to rise a tier but for its rebuilding (their needs met, their street fine enough). */
 const readyToRise = (w: World) => w.homes.filter((h) => !h.site && h.provided && h.tier < 3 && (w.appeal[key(h.tile.x, h.tile.y)] ?? 0) >= home.tiers[(h.tier + 1) as 2 | 3].appeal).length
-/** Of a good, what the building saved for and a few homes' rebuilding need from the store. */
-const wanted = (w: World, g: GoodId) => (savingFor(w)?.cost.materials[g] ?? 0) + Math.min(3, readyToRise(w)) * (home.tiers[2].rise.materials[g] ?? 0)
+/** Homes ready to rise to a tier. */
+const readyFor = (w: World, tier: 2 | 3) => w.homes.filter((h) => !h.site && h.provided && h.tier === tier - 1 && (w.appeal[key(h.tile.x, h.tile.y)] ?? 0) >= home.tiers[tier].appeal).length
+/** Of a good, what the building saved for, the upgrade wished for, and a few homes' rebuilding need from the store. */
+const wanted = (w: World, g: GoodId) => {
+  const wish = upgradeWish(w)
+  return (savingFor(w)?.cost.materials[g] ?? 0)
+    + (wish && w.coins >= wish.up.cost.coins + 300 ? wish.up.cost.materials[g] ?? 0 : 0)
+    + Math.min(3, readyFor(w, 2)) * (home.tiers[2].rise.materials[g] ?? 0)
+    + Math.min(3, readyFor(w, 3)) * (home.tiers[3].rise.materials[g] ?? 0)
+}
+/**
+ * The upgrade the mayor means to make next: a guildhall once a village
+ * (administration a tenth cheaper, more shelves and carriers); then, once a
+ * town, an ovenworks where bread runs short, an estate where the bakeries
+ * wait on wheat, and a masonry where the quarry has worked its rocks down.
+ * One at a time.
+ */
+const upgradeWish = (w: World): { readonly tile: Tile; readonly up: content.Upgrade } | null => {
+  if (!sensible() || w.buildings.some((b) => b.works)) return null
+  const finer = w.homes.filter((h) => h.tier >= 2).length
+  const wishes: ReadonlyArray<readonly [KindId, (b: World["buildings"][number]) => boolean]> = [
+    ["townhall", () => residents(w) >= 120],
+    ["bakery", (b) => b.status === "working" && w.census.bread! < finer * 0.9],
+    ["farm", (b) => b.status === "working" && w.stock.wheat + w.stock.flour < 10 && w.census.bread! < finer * 0.9],
+    ["quarry", (b) => b.status !== "working" && w.stock.stone < 20]
+  ]
+  for (const [kind, ok] of wishes)
+    for (const b of w.buildings) {
+      if (b.kind !== kind || b.site || b.works) continue
+      const up = content.nextUpgrade(kinds[kind], b.level)
+      if (up && up.rank <= w.fate.rank && ok(b)) return { tile: b.tile, up }
+    }
+  return null
+}
 /** Roads laid towards each kind since one was last built, and until when a kind with no room is left alone. */
 const roading = new Map<KindId, number>()
 const resting = new Map<KindId, number>()
