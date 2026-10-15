@@ -534,7 +534,8 @@ const decide = (w: World): ReadonlyArray<Edit> => {
     for (const [g, low, enough] of shortages) {
       if (g === crownBuy) continue
       const buying = w.policy.buys.includes(g)
-      const dear = w.prices[g] > 150
+      // Unless the town has none at all and coins enough: then it pays what it must to build at all.
+      const dear = w.prices[g] > 150 && !(w.stock[g] === 0 && w.coins > 2000)
       if (!buying && w.stock[g] < low && w.coins > 150 && !dear) edits.push({ type: "trade", good: g, mode: "buy" })
       if (buying && (w.stock[g] >= enough || w.coins < 50 || dear)) edits.push({ type: "trade", good: g, mode: "none" })
     }
@@ -559,7 +560,7 @@ const decide = (w: World): ReadonlyArray<Edit> => {
 
   // A workshop more where what it works piles up in storage (flour with no baker to bake it), before anything else.
   if (sensible()) {
-    const backlog = (["bakery", "weaver", "mill"] as const).find((k) => w.stock[kinds[k].recipe!.input!] > 40 && unlocked(w, kinds[k]) && affordable(w, kinds[k].cost)
+    const backlog = (["sawmill", "bakery", "weaver", "mill"] as const).find((k) => w.stock[kinds[k].recipe!.input!] > 40 && unlocked(w, kinds[k]) && affordable(w, kinds[k].cost)
       && !w.buildings.some((b) => b.kind === k && (b.site || b.status === "unstaffed")))
     const spot = backlog ? spotFor(w, kinds[backlog]) : null
     if (backlog && spot) return [...edits, { type: "building", kind: backlog, cell: spot, open: false }]
