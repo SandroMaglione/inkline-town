@@ -4,11 +4,47 @@
  * preview, and edits; the simulation applies the edits on its next step.
  * None of it is saved: it is host state, handed to systems as a service.
  */
-import type { Amounts, CharterValue, GoodId, KindId, Tier } from "./content.ts"
+import type { Amounts, CharterValue, GoodId, GroundId, KindId, PropId, Tier, WinterId } from "./content.ts"
+import type { IconName } from "./icons.ts"
 import type { Point } from "./iso.ts"
 import type { Status } from "./schema.ts"
+import type { OverlayCell } from "./render3d/models.ts"
 
-export type Tool = "select" | "road" | "home" | "bulldoze" | "place"
+/** How a line of a panel reads: fine, worth a look, wrong, or an aside. */
+export type Tone = "ok" | "warn" | "bad" | "dim"
+/**
+ * A line of a building's or home's description: an icon, what it is about,
+ * its value, and (when something is wrong, or worth knowing) a note
+ * underneath saying why and what to do. `goods` are shown as icon chips.
+ */
+export interface Line {
+  readonly icon: IconName | GoodId
+  readonly label: string
+  readonly value?: string | undefined
+  readonly note?: string | undefined
+  readonly tone?: Tone | undefined
+  readonly goods?: ReadonlyArray<{ readonly good: GoodId; readonly count: number }> | undefined
+}
+
+/** Something that needs looking at now, and where (when it is somewhere). */
+export interface Alert {
+  /** A next step to take, something going wrong, or something that costs the town now. */
+  readonly tone: "hint" | "warn" | "bad"
+  readonly text: string
+  readonly at: Point | null
+  /** The footprint there, cells a side, for the outline. */
+  readonly size: number
+  /** The entity to select on the way there, if there is one. */
+  readonly id: number | null
+  /** Buildings the line names, by kind: where one of each stands, so its chip goes there rather than placing another. */
+  readonly places?: Partial<Record<KindId, { readonly at: Point; readonly size: number; readonly id: number }>>
+}
+
+export type Tool = "select" | "road" | "pave" | "home" | "bulldoze" | "place" | "ground" | "prop"
+
+/** What the map shows over the town: nothing, or one of its views, cell by cell. */
+export const viewIds = ["none", "appeal", "workers", "fire", "health", "order", "condition"] as const
+export type View = (typeof viewIds)[number]
 
 /** A change to the town, applied by the simulation (see `ApplyEdits`). */
 export type Edit =
@@ -16,15 +52,21 @@ export type Edit =
   | { readonly type: "building"; readonly kind: KindId; readonly cell: Point; readonly open: boolean }
   | { readonly type: "homes"; readonly cells: ReadonlyArray<Point> }
   | { readonly type: "roads"; readonly cells: ReadonlyArray<Point> }
-  /** Removes whatever stands on a cell (not rocks, water, or the town hall). */
+  /** Paves the road on each cell (coins, and stone from storage). */
+  | { readonly type: "pave"; readonly cells: ReadonlyArray<Point> }
+  /** Lays park ground on each empty cell (or relays a park cell's ground). */
+  | { readonly type: "ground"; readonly ground: GroundId; readonly cells: ReadonlyArray<Point> }
+  /** Sets a furnishing on a cell of park. */
+  | { readonly type: "prop"; readonly prop: PropId; readonly cell: Point }
+  /** Removes whatever stands on a cell (not rocks, water, or the town hall); on a park, its furnishing first. */
   | { readonly type: "remove"; readonly cell: Point }
   /** Sets a tier's tax rate, in percent of the usual. */
   | { readonly type: "tax"; readonly tier: "settlers" | "citizens"; readonly rate: number }
-  /** Sells a good to traders beyond the reserve, buys it up to the reserve, or neither. */
-  | { readonly type: "trade"; readonly good: GoodId; readonly mode: TradeMode }
+  /** Sells a good to traders beyond the reserve, buys it up to the reserve, or neither; `amount`, up to how much a collection. */
+  | { readonly type: "trade"; readonly good: GoodId; readonly mode: TradeMode; readonly amount?: number }
   /** How much of each good the town keeps before selling, and buys up to. */
   | { readonly type: "reserve"; readonly amount: number }
-  /** Pauses the building on a cell, or sets it back to work. */
+  /** Pauses the building on a cell (or closes the home), or sets it back to work. */
   | { readonly type: "pause"; readonly cell: Point; readonly on: boolean }
   /** Sends the crown what it asked for. */
   | { readonly type: "deliver" }
@@ -50,14 +92,22 @@ export interface Preview {
   ghosts: Array<{ readonly what: KindId | "home"; readonly cell: Point }>
   /** Road cells about to be laid. */
   roads: Array<Point>
+  /** Road cells a thing being placed would reach: a service's walkers, or the commute its workers (or a home's residents) make. */
+  range: Array<Point>
+  /** What `range` shows, for the tooltip. */
+  rangeNote: string | null
+  /** Park cells about to be laid or furnished, as they will look. */
+  parks: Array<{ readonly x: number; readonly y: number; readonly ground: GroundId; readonly prop: PropId | "none" }>
   /** The entity under the pointer. */
   hover: number | null
   /** Bulldozing: the hovered thing is tinted. */
   danger: boolean
   tooltip: string | null
+  /** A road, pave, home, or park stroke being dragged: how much it lays and what it costs. */
+  stroke: string | null
 }
 
-export const emptyPreview = (): Preview => ({ plots: [], ghosts: [], roads: [], hover: null, danger: false, tooltip: null })
+export const emptyPreview = (): Preview => ({ plots: [], ghosts: [], roads: [], range: [], rangeNote: null, parks: [], hover: null, danger: false, tooltip: null, stroke: null })
 
 /** The side panel: the build menu, the town's numbers and taxes, a building, or a home. */
 export type Panel =
@@ -74,14 +124,39 @@ export type Panel =
       /** Whether it can be paused (not the town hall, not a site), and whether it is. */
       readonly pausable: boolean
       readonly paused: boolean
-      readonly lines: ReadonlyArray<string>
+      /** What pulling it down costs and gives back: "pull down: −25 coins · 2 planks back". */
+      readonly salvage: string
+      readonly lines: ReadonlyArray<Line>
     }
   | {
       readonly type: "house"
       readonly id: number
       readonly cell: Point
       readonly tier: Tier
-      readonly lines: ReadonlyArray<string>
+      /** Whether it can be closed (standing, not on fire), and whether it is: a closed home stands empty and costs nothing. */
+      readonly closable: boolean
+      readonly closed: boolean
+      readonly salvage: string
+      readonly lines: ReadonlyArray<Line>
+      /** What keeps it from the next tier, a line each; empty when nothing does (or there is no next tier). */
+      readonly blockers: ReadonlyArray<Line>
+    }
+  | {
+      readonly type: "park"
+      readonly id: number
+      readonly cell: Point
+      /** Cells, and the desirability it gives out to how far. */
+      readonly cells: number
+      readonly value: number
+      readonly reach: number
+      readonly lines: ReadonlyArray<Line>
+    }
+  | {
+      readonly type: "ruin"
+      readonly id: number
+      readonly cell: Point
+      readonly cause: "burnt" | "collapsed" | "derelict"
+      readonly lines: ReadonlyArray<Line>
     }
 
 /** A thing's hit area for the pointer, nearest first. */
@@ -95,6 +170,10 @@ export interface HitBox {
 export interface Stats {
   readonly coins: number
   readonly taxes: number
+  /** What the same homes would pay a minute with every need met: taxes left on the table when it is more. */
+  readonly suppliedTaxes: number
+  /** Taxes a minute at each step of a tier's rate, once the homes settle at it; empty while the tier has no homes. */
+  readonly taxOutlook: Readonly<Record<"settlers" | "citizens", ReadonlyArray<{ readonly rate: number; readonly taxes: number }>>>
   readonly trade: number
   readonly upkeep: number
   readonly admin: number
@@ -109,18 +188,31 @@ export interface Stats {
     readonly sells: ReadonlyArray<GoodId>
     readonly buys: ReadonlyArray<GoodId>
     readonly reserve: number
+    readonly loads: Amounts
   }
   readonly stock: Amounts
   /** Each good's price with traders, in percent of the usual. */
   readonly prices: Amounts
   readonly settlers: number
+  /** Citizens in citizens' homes and townhouses; of them, `burghers` in townhouses. */
   readonly citizens: number
+  readonly burghers: number
   readonly jobs: number
   readonly employed: number
+  /** Workplaces short of workers, to step through from the jobs counter. */
+  readonly shortStaffed: ReadonlyArray<{ readonly id: number; readonly title: string; readonly cell: Point; readonly size: number; readonly assigned: number; readonly needed: number; readonly nobodyNear: boolean }>
   readonly charter: CharterValue
   /** Minutes into the term. */
   readonly minute: number
-  readonly season: { readonly year: number; readonly winter: boolean; readonly left: number }
+  readonly season: {
+    readonly year: number
+    readonly winter: boolean
+    readonly left: number
+    /** This winter's severity, while it lasts; and the next one the almanac foresees, and the one after. */
+    readonly severity: WinterId | null
+    readonly coming: WinterId | null
+    readonly after: WinterId | null
+  }
   readonly mood: {
     readonly approval: number
     readonly target: number
@@ -157,6 +249,27 @@ export interface Stats {
   }
   readonly goals: ReadonlyArray<{ readonly text: string; readonly value: string; readonly met: boolean }>
   readonly larder: number
+  /**
+   * Each good over the last minute: made, used (eaten, worked up, built
+   * with, rotted, sent away), and bought less sold; and how much the town
+   * holds outside storage now (workshops, markets, baskets, crates). A
+   * rolling minute, reckoned again every ten seconds; `null` for the
+   * first half minute.
+   */
+  readonly flow: {
+    readonly made: Amounts
+    readonly used: Amounts
+    readonly traded: Amounts
+    readonly elsewhere: Amounts
+    /** The treasury over the same minute: taxes and other income, upkeep and spending, and trade. */
+    readonly coins: { readonly made: number; readonly used: number; readonly traded: number }
+  } | null
+  /** Food the town ate, and food that rotted in store, over the last minute. */
+  readonly eaten: number
+  readonly rotted: number
+  /** Homes sick, and homes and buildings on fire, right now. */
+  readonly sick: number
+  readonly burning: number
   readonly history: ReadonlyArray<{
     readonly tick: number
     readonly coins: number
@@ -165,21 +278,42 @@ export interface Stats {
     readonly approval: number
     readonly net: number
   }>
-  readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly text: string }>
+  readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly text: string; readonly alarm: boolean; readonly at: Point | null }>
+  /** What needs looking at right now, a line each: workshops waiting, workplaces no one can reach, food running out. */
+  readonly alerts: ReadonlyArray<Alert>
+  /** The mayor's guide: the step to take now (if any, and the guide is on), and how far along it is. */
+  readonly guide: {
+    readonly step: (Omit<Alert, "tone"> & { readonly key: string; readonly chapter: string; readonly goal: string }) | null
+    readonly done: number
+    readonly total: number
+    readonly off: boolean
+  }
+}
+
+/** A map view's legend: what each colour means. */
+export interface Legend {
+  readonly title: string
+  readonly keys: ReadonlyArray<{ readonly color: number; readonly label: string }>
+  readonly note: string
 }
 
 export interface UiValue {
   tool: Tool
   /** The kind being placed with the `place` tool. */
   placing: KindId | null
+  /** The ground laid with the `ground` tool, and the furnishing set with the `prop` tool. */
+  ground: GroundId
+  prop: PropId
   /** Which side panel the toolbar opened, when nothing is selected. */
   menu: "build" | "town" | null
   /** The pointer on the grid, or `null` off the canvas. */
   pointer: Point | null
   /** Camera-ray entity hit. Undefined allows grid-only headless interaction. */
   pointerHit?: number | null
-  /** Where a road or a row of homes being dragged started. */
+  /** Where a road, a row of homes, or a patch of park being dragged started. */
   dragFrom: Point | null
+  /** The stroke from `dragFrom` is held for a tap to confirm (touch), or let go here it would be dropped (off the map). */
+  stroke?: "held" | "cancel" | null
   selected: number | null
   gestures: Array<Gesture>
   edits: Array<Edit>
@@ -193,5 +327,15 @@ export interface UiValue {
   speed: number
   /** The new-town dialog is open: the town waits. */
   founding: boolean
+  /** The map view shown over the town, its cells (rebuilt as the town changes), and its legend. */
+  view: View
+  overlay: { readonly key: string; readonly cells: ReadonlyArray<OverlayCell> }
+  /** The view's colour for each building and home, washed over the model itself so it reads from above. */
+  tints: ReadonlyMap<number, number>
+  legend: Legend | null
+  /** A place the page points at (from the ticker): outlined until `until`, in the clock's seconds. */
+  flash: { readonly cell: Point; readonly size: number; readonly until: number } | null
+  /** What the mayor told the guide since the last frame: put a step away, or turn the guide off or on (see `Guide`). */
+  guide: Array<{ readonly type: "skip"; readonly id: string } | { readonly type: "off" | "on" }>
   toast: (message: string) => void
 }

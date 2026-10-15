@@ -3,6 +3,7 @@ import {
   carrierDress,
   cartLook,
   serviceDress,
+  type Alert,
   type BuildingLook,
   type HouseLook,
   type PersonDress,
@@ -10,17 +11,33 @@ import {
   type Load,
   type Emphasis
 } from "../art.ts"
-import { kinds, GROWN, ROCK_AMOUNT, type KindId } from "../content.ts"
+import { kinds, home, GROWN, ROCK_AMOUNT, type KindId } from "../content.ts"
 import { U, type Point } from "../iso.ts"
 import { vertex3 } from "../asset-lab/renderer.ts"
 import { Drawing, type Vertex } from "../asset-lab/primitives.ts"
 import { makeSails, makeFlag } from "../asset-lab/buildings.ts"
 import { makeMarker } from "../asset-lab/construction.ts"
-import { makePerson } from "../asset-lab/people.ts"
+import { makeRuin } from "../asset-lab/town-props.ts"
+import { StructureEffects } from "./structure-effects.ts"
+import { SmokePlume } from "./smoke-effects.ts"
+import { surfaceState, type SurfaceState } from "./surface-state.ts"
+import { makePerson, serviceCostume, type ServiceRole } from "../asset-lab/people.ts"
 import { makeTree, makeRock, makeField, hash } from "../asset-lab/land.ts"
 import { ModelHandle } from "./pool.ts"
 import { buildingAsset, homeAsset, homeKey, doorKey, noDoors, quantizeBuild, plateAsset, treeVariant } from "./models.ts"
 import type { GameScene, SceneNode } from "./scene.ts"
+
+/** Winter's cold light complements the roof snow shader. */
+const FROST = 0xe4ecf6
+const multiply = (a: number, b: number) => {
+  const c = (shift: number) => Math.round((((a >> shift) & 0xff) * ((b >> shift) & 0xff)) / 255)
+  return (c(16) << 16) | (c(8) << 8) | c(0)
+}
+
+/** Surface parameters are independent of shared architectural geometry. */
+export function structureState(look: {worn?: boolean; band?: "poor" | "plain" | "fine"; alert?: Alert | null; burning?: boolean; effects?: Partial<SurfaceState>}, winter: boolean) {
+  return surfaceState({wear: look.worn?0.9:look.band==="poor"?0.55:0, care: look.band==="fine"?1:0, snow:Number(winter), burning:Number(!!look.burning), fireRisk:look.alert==="fire"?1:0, health:look.alert==="health"?1:0, order:look.alert==="order"?1:0,sick:look.alert==="sick"?1:0,...look.effects})
+}
 
 export class WorldView implements SceneNode {
   readonly group = new THREE.Group()
@@ -28,6 +45,7 @@ export class WorldView implements SceneNode {
   readonly stage: GameScene
   readonly entity: number
   protected models: Array<ModelHandle> = []
+  protected effects: StructureEffects | null = null
   private disposed = false
   private opacity = 1
   constructor(stage: GameScene, entity: number) {
@@ -48,13 +66,19 @@ export class WorldView implements SceneNode {
     for (const m of this.models) m.alpha = value
   }
   orient() {}
+  /** A tint for what it is like now (run down, a poor street), before winter's frost. */
+  protected shade = 0xffffff
+  /** A map view's colour over the whole model, so the view reads from the buildings and not only the ground under them. */
+  protected viewTint: number | null = null
   protected emphasis(emphasis: Emphasis) {
-    for (const m of this.models) m.tint.setHex(emphasis === "danger" ? 0xf3b5aa : 0xffffff)
+    const tint = emphasis === "danger" ? 0xf3b5aa : this.viewTint !== null ? multiply(this.viewTint, this.stage.frost ? FROST : 0xffffff) : multiply(this.shade, this.stage.frost ? FROST : 0xffffff)
+    for (const m of this.models) m.tint.setHex(tint)
   }
   destroy() {
     if (this.disposed) return
     this.disposed = true
     for (const m of this.models) m.dispose()
+    this.effects?.dispose()
     this.group.removeFromParent()
     this.stage.remove(this)
   }
@@ -66,9 +90,7 @@ export class BuildingView extends WorldView {
   private plate: ModelHandle
   private marker: ModelHandle
   private motion: ModelHandle
-  private smokes: Array<ModelHandle>
-  private rings: Array<number> = []
-  private puff = 0
+  private smoke: SmokePlume | null = null
   private wave = 0
   private opening = 0
   private beat = -1
@@ -83,8 +105,7 @@ export class BuildingView extends WorldView {
     this.marker.use("problem-marker", makeMarker)
     this.marker.root.visible = false
     this.body.root.add(this.motion.root)
-    this.smokes = [this.model(false), this.model(false), this.model(false)]
-    for (const s of this.smokes) s.root.visible = false
+
   }
   place(x: number, y: number) {
     const size = kinds[this.kindId].size
@@ -116,7 +137,17 @@ export class BuildingView extends WorldView {
         Math.cos(Math.PI / 6),
       0
     )
-    this.marker.root.visible = look.problem && look.build >= 1
+    const signed = !!look.burning || (look.alert !== null && look.alert !== undefined)
+    this.marker.root.visible = look.problem && look.build >= 1 && !signed
+    const state = structureState(look,this.stage.frost)
+    this.body.effects = build >= 1 ? state : surfaceState()
+    this.body.effectBounds.set(kind.half * U * 32 * Math.SQRT2,H/Math.cos(Math.PI/6),this.entity%97/97,1)
+    if(!this.effects&&build>=1&&(state.burning||state.fireRisk)){
+      this.effects = new StructureEffects(buildingAsset(this.kindId,1,null,noDoors,0),H)
+      this.group.add(this.effects.group)
+    }
+    this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
+    this.shade = 0xffffff
     this.motion.root.visible = look.build >= 1 && (kind.topper === "flag" || kind.topper === "sails")
     if (kind.topper === "flag") {
       this.wave += dt * (look.working ? 6 : 3)
@@ -132,46 +163,26 @@ export class BuildingView extends WorldView {
       this.motion.root.position.copy(vertex3([kind.half * U + 3 * U, 0, H - 6]))
       this.motion.root.rotation.x = this.wave
     }
-    this.puff -= dt
-    if (look.working && kind.topper === "chimney" && look.build >= 1 && this.puff <= 0) {
-      this.rings.push(0)
-      if (this.rings.length > 3) this.rings.shift()
-      this.puff = 0.7
+    const smoking=look.working&&kind.topper==="chimney"&&look.build>=1&&!look.burning
+    if(smoking&&!this.smoke){
+      this.smoke=new SmokePlume()
+      const a=kind.half*U,pitch=2*a/kind.bays
+      this.smoke.group.position.copy(vertex3([-a+pitch*0.5,-a+pitch*0.5,H+24.3]))
+      this.group.add(this.smoke.group)
     }
-    this.rings = this.rings.map((age) => age + dt / 1.8).filter((age) => age < 1)
-    const a = kind.half * U,
-      pitch = (2 * a) / kind.bays,
-      u = -a + pitch * 0.5,
-      v = -a + pitch * 0.5
-    this.smokes.forEach((smoke, i) => {
-      const t = this.rings[i]
-      smoke.root.visible = t !== undefined
-      if (t === undefined) return
-      const r = Math.round(4 + t * 7)
-      smoke.use("smoke-ring/" + r, () => {
-        const d = new Drawing("smoke-ring", "Smoke", "")
-        d.line(
-          Array.from({ length: 25 }, (_, j): Vertex => [
-            (Math.cos((j / 24) * Math.PI * 2) * r) / 64,
-            (-Math.cos((j / 24) * Math.PI * 2) * r) / 64,
-            Math.sin((j / 24) * Math.PI * 2) * r
-          ]),
-          1,
-          0x3d4943,
-          0.55
-        )
-        return d.asset
-      })
-      smoke.alpha = 1 - t
-      smoke.root.position.copy(vertex3([u + (Math.sin(t * 5) * 1.5) / 64, v - (Math.sin(t * 5) * 1.5) / 64, H + 24 + t * 34]))
-    })
+    this.smoke?.update(performance.now()/1000,Number(smoking))
+    this.viewTint = look.tint ?? null
     this.emphasis(emphasis)
   }
   override orient() {
     this.marker.root.rotation.y = this.stage.heading - Math.PI / 4
-    for (const smoke of this.smokes) smoke.root.rotation.y = this.stage.heading - Math.PI / 4
   }
+  override destroy() { this.smoke?.dispose();this.smoke=null;super.destroy() }
+
 }
+
+/** A closed home, washed a cold grey: nobody lives there. */
+const CLOSED_SHADE = 0xa3abb6
 
 export class HouseView extends WorldView {
   private body: ModelHandle
@@ -196,6 +207,38 @@ export class HouseView extends WorldView {
       homeAsset(look.tier, this.n, build, share, doors)
     )
     this.plate.use(`plate/1/${build}`, () => plateAsset(1, build))
+    const state=structureState(look,this.stage.frost), H=home.tiers[look.tier].height
+    this.body.effects=build>=1?state:surfaceState()
+    this.body.effectBounds.set((home.half+(look.tier>=2?1:0))*U*32*Math.SQRT2,H/Math.cos(Math.PI/6),this.n,1)
+    // Recreate emitters only if an actual architectural upgrade changes the roof.
+    if(this.effects&&this.effects.group.userData.tier!==look.tier){this.effects.dispose();this.effects=null}
+    if(!this.effects&&build>=1&&(state.burning||state.fireRisk)){
+      this.effects=new StructureEffects(homeAsset(look.tier,this.n,1,null,noDoors),H)
+      this.effects.group.userData.tier=look.tier;this.group.add(this.effects.group)
+    }
+    this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
+    this.shade=look.closed?CLOSED_SHADE:0xffffff
+    this.viewTint = look.tint ?? null
+    this.emphasis(emphasis)
+  }
+}
+
+/** What is left of a home or building, until it is cleared. */
+export class RuinView extends WorldView {
+  private body: ModelHandle
+  private cause: "burnt" | "collapsed" | "derelict"
+  constructor(cause: "burnt" | "collapsed" | "derelict", stage: GameScene, entity: number) {
+    super(stage, entity)
+    this.cause = cause
+    this.body = this.model()
+  }
+  place(x: number, y: number, size: number) {
+    this.anchor.x = x + size / 2
+    this.anchor.y = y + size / 2
+    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
+    this.body.use(`ruin/${this.cause}/${size}`, () => makeRuin(size, this.cause))
+  }
+  update(emphasis: Emphasis) {
     this.emphasis(emphasis)
   }
 }
@@ -224,18 +267,25 @@ export class TreeView extends WorldView {
 }
 export class RockView extends WorldView {
   private body: ModelHandle
+  private variant = 0
+  private cell = { x: 0, y: 0 }
   constructor(stage: GameScene, entity: number) {
     super(stage, entity)
     this.body = this.model()
   }
   place(x: number, y: number) {
-    this.anchor.x = x + 0.5
-    this.anchor.y = y + 0.5
-    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
+    this.variant = Math.floor(hash(x,y)*6)
+    this.cell = { x, y }
   }
-  update(ore: boolean, amount: number) {
+  /** `w` × `h`: the cells of the outcrop this rock draws (see `rock-blocks.ts`); 0, drawn by a neighbour. */
+  update(ore: boolean, amount: number, w = 1, h = 1) {
+    this.group.visible = w > 0
+    if (w === 0) return
+    this.anchor.x = this.cell.x + w / 2
+    this.anchor.y = this.cell.y + h / 2
+    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
     const full = amount > ROCK_AMOUNT / 2
-    this.body.use(`rock/${ore}/${full}`, () => makeRock(ore, full))
+    this.body.use(`rock/${ore}/${full}/${this.variant}/${w}x${h}`, () => makeRock(ore, full, this.variant, w, h))
   }
 }
 export class FieldView extends WorldView {
@@ -261,6 +311,7 @@ export class WalkerView extends WorldView {
   private cart: CartLook | null
   private faithDress: PersonDress | null = null
   private currentDress: PersonDress | null = null
+  private serviceDresses = new Map<ServiceRole, PersonDress>()
   constructor(stage: GameScene, entity: number, dress: PersonDress, cart: CartLook | null) {
     super(stage, entity)
     this.dress = dress
@@ -279,7 +330,8 @@ export class WalkerView extends WorldView {
     return view
   }
   update(x: number, y: number, dir: Point, phase: number, load: Load) {
-    const dress = load.kind === "bell" && this.faithDress ? this.faithDress : this.dress
+    if (load.kind === "service" && !this.serviceDresses.has(load.role)) this.serviceDresses.set(load.role, serviceCostume(this.dress, load.role))
+    const dress = load.kind === "service" ? this.serviceDresses.get(load.role)! : load.kind === "bell" && this.faithDress ? this.faithDress : this.dress
     // Costume colours vary per person without duplicating the same geometry.
     const canonicalDress = { ...dress, coat: 0xff0001, skin: 0xff0003, trim: dress.trim === 0xf7f8f4 ? dress.trim : 0xff0002 },
       canonicalCart = this.cart ? { ...this.cart, wood: { top: 0xff0004, left: 0xff0005, right: 0xff0006 } } : null

@@ -2,13 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#f0f2ec" />
     <title>Inkline Town</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/src/factory.css" />
+    <link rel="stylesheet" href="/src/phone.css" />
+    <!-- The loading card is styled here, not in the game's CSS, so it shows before anything else arrives. -->
+    <style>
+      #loading { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #f0f2ec; color: #3d4943; font: 13px ui-monospace, "SF Mono", Menlo, monospace; transition: opacity 0.35s; }
+      #loading.done { opacity: 0; pointer-events: none; }
+      #loading b { font-size: 17px; letter-spacing: 0.04em; }
+      #loading .ink { width: 120px; height: 2px; background: #dfe3da; overflow: hidden; border-radius: 1px; }
+      #loading .ink::after { content: ""; display: block; width: 40%; height: 100%; background: #3d4943; animation: ink 1.1s ease-in-out infinite; }
+      @keyframes ink { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+      @media (prefers-reduced-motion: reduce) { #loading .ink::after { animation: none; width: 100%; } }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="loading" role="status"><b>Inkline Town</b><div class="ink"></div><span>drawing the town…</span></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -4,6 +4,7 @@ import { inkAssets, assetById } from "../src/asset-lab/assets.ts"
 import { kindIds, goodIds, kinds } from "../src/content.ts"
 import { testMap } from "../src/map-lab/map.ts"
 import { U } from "../src/iso.ts"
+import { makeRock } from "../src/asset-lab/land.ts"
 
 test("the portable catalogue covers all world object families", () => {
   assert.equal(assetById.size, inkAssets.length, "Asset IDs must be unique")
@@ -19,9 +20,10 @@ test("the portable catalogue covers all world object families", () => {
   }
   const hats = new Set(inkAssets.flatMap((a) => (a.reference?.type === "walker" ? [a.reference.dress.hat] : [])))
   assert.deepEqual([...hats].sort(), ["bonnet", "brim", "cap", "hood", "none", "top"])
-  for (const tier of [1, 2]) assert.equal(inkAssets.filter((a) => a.reference?.type === "house" && a.reference.tier === tier).length, 4)
+  for (const tier of [1, 2]) assert.equal(inkAssets.filter((a) => a.reference?.type === "house" && a.reference.tier === tier && !a.appearance).length, 4)
   assert.equal(inkAssets.filter((a) => a.reference?.type === "tree").length, 9)
-  assert.equal(inkAssets.filter((a) => a.reference?.type === "rock").length, 4)
+  // Stone and ore, full and quarried, one cell; and full outcrops over 2×1, 2×2, and 3×3 cells.
+  assert.equal(inkAssets.filter((a) => a.reference?.type === "rock").length, 10)
   assert.equal(inkAssets.filter((a) => a.reference?.type === "field").length, 4)
 })
 
@@ -62,4 +64,12 @@ test("the review map includes every catalogue model at least once", () => {
   const represented = new Set(testMap.buildings.map((p) => p.asset))
   assert.deepEqual([...represented].sort(), inkAssets.map((a) => a.id).sort())
   assert.equal(testMap.coverage, inkAssets.length)
+})
+
+test("buildings, homes and resource deposits stay inside their plates", () => {
+  const models = [...inkAssets.filter(a=>a.reference?.type==="building"||a.reference?.type==="house"),...Array.from({length:6},(_,i)=>[makeRock(false,true,i),makeRock(true,true,i)]).flat()]
+  for(const a of models){
+    const half=(a.footprint!*8-1)*U
+    for(const p of [...a.faces.flatMap(f=>f.points),...a.strokes.flatMap(s=>s.points)])assert.ok(Math.abs(p[0])<=half+0.0001&&Math.abs(p[1])<=half+0.0001,`${a.id}: geometry outside the ${a.footprint}-cell plate`)
+  }
 })

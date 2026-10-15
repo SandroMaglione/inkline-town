@@ -5,7 +5,8 @@
  * the same snapshots it saves.
  */
 import { STEP_SECONDS, type CharterValue } from "../content.ts"
-import { Game, Ui } from "../schema.ts"
+import { resolveRules, type Rules as RuleInputs } from "../rules/config.ts"
+import { Game, Rules, Ui } from "../schema.ts"
 import { emptyPreview, type Edit, type UiValue } from "../ui.ts"
 import { blankResources, simulate } from "./index.ts"
 
@@ -19,14 +20,15 @@ export interface Snapshot {
   machines: Record<string, string>
 }
 
-export const headless = (charter: CharterValue, options: { readonly toast?: (message: string) => void } = {}) => {
+export const headless = (charter: CharterValue, options: { readonly toast?: (message: string) => void; readonly rules?: RuleInputs } = {}) => {
   const ui: UiValue = {
-    tool: "select", placing: null, menu: null, pointer: null, dragFrom: null, selected: null, gestures: [],
+    tool: "select", placing: null, ground: "lawn", prop: "lamp", menu: null, pointer: null, dragFrom: null, selected: null, gestures: [], guide: [],
     edits: [{ type: "newTown", charter }],
     preview: emptyPreview(), hits: [], panel: null, centres: new Map(), stats: null, speed: 1, founding: false,
+    view: "none", overlay: { key: "", cells: [] }, tints: new Map(), legend: null, flash: null,
     toast: options.toast ?? (() => {})
   }
-  const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Ui, ui)), resources: blankResources() })
+  const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Ui, ui), Game.Runtime.service(Rules, options.rules ?? resolveRules())), resources: blankResources() })
   if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
   const runtime = made.value
   const step = () => {

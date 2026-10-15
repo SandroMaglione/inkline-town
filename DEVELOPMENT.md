@@ -15,6 +15,7 @@ pnpm typecheck
 pnpm test       # model-based tests: random mayors, rules that must always hold; and saving
 pnpm check      # every way a term can end, ends it
 pnpm check:browser # the actual 3D game: placement, picking, saves, populated towns and phone layout
+pnpm check:phone   # phone sizes: the picker's found button on screen, the folded HUD opens and closes
 pnpm balance    # a bot plays terms headless and reports the pressure
 ```
 
@@ -28,7 +29,35 @@ drive the approved 3D models. Drag to pan; right-drag or choose **Rotate** to
 turn and tilt. Scroll to zoom. Q/E turn, arrow keys pan, Home resets, and
 the camera toolbar provides the same controls. On touch screens, two fingers
 pan and pinch to zoom; twisting them rotates. Road/home tools still drag to
-build; camera gestures never place anything.
+build; camera gestures never place anything. A finger has no hover, so on
+touch the tap tools (buildings, park pieces, bulldoze) take two taps: the
+first holds the ghost or outline where it landed, a second on the same spot
+commits it. The drag tools (road, pave, homes, park ground) hold the stroke
+on touch too: **Cancel** and **Build** sit above the tool bar (in the guide's
+place) and the tooltip says what it lays and costs; a tap on the stroke's end builds it, a tap elsewhere drops
+it, and two fingers move the camera under it. With any pointer, a stroke let
+go off the map (over the tool bar, say) is dropped and shows red while it
+would be, as are a right click or Esc mid-drag. On touch the tooltip shows
+only for what is about to be built, never while panning or picking, in a
+thin full-width strip under the top line. This lives entirely in `src/render3d/input.ts`
+(and the bar in `host.ts`); the game still sees one ordinary press and
+release.
+
+Phones get their layout from `src/phone.css`, loaded after `factory.css`. On
+a narrow or short screen the HUD folds away: one top line (clock, treasury,
+people, and a chip of planks, stone and tools), one tool bar along the bottom
+(town, the tools, pause (a switch: play while paused), a speed button that cycles, and a ⋯ menu holding
+share, guide, save, load, new town and recentre), and two buttons top right
+for the guide and the map overlays. `host.ts` sets `body.fold-goods`,
+`fold-guide`, `fold-views` or `fold-more` while one is open; a tap on the map
+folds it, a pan or pinch does not. Once the town has a minute of goods
+(`body.flow-ready`), the goods chip opens the made/used table straight away,
+each good by its icon. A new guide step peeks above the tool bar for a few seconds. Sheets
+open from the side on a landscape phone (`max-height: 500px`) and from the
+bottom in portrait. Dialogs take the whole screen with their actions pinned
+to the bottom. The camera bar is hidden: pinch zooms and turns. New UI needs
+nothing there unless it has to move on a phone; check it at 390×844, 360×640
+and 762×330, and run `pnpm check:phone`.
 
 `src/render3d/scene.ts` owns the orthographic camera, ground projection and
 frame source. `views.ts` follows live construction, upgrades, resources,
@@ -66,16 +95,16 @@ compares the complete world catalogue with the actual drawings from
 and elevation controls also work with a keyboard. The original view uses a
 30-degree orthographic camera with the game's 64×32 projection.
 
-| Collection | Models | Coverage |
+| Collection | Entries | Coverage |
 | --- | ---: | --- |
-| Buildings | 18 | Every building kind, plus tier 2 market hall and church |
-| Homes | 8 | Both tiers in all four roof palettes |
-| Land | 19 | Three tree shapes at three growth stages, stone and ore in both resource states, four crop stages, roads and water |
-| People | 27 | Carriers, settlers, citizens, market and chapel walkers, all six hats and the sixteen reference-gallery residents |
-| Cargo and vehicles | 69 | Eleven distinct goods and labelled crates; empty handcart/barrow and small/full loads of each good; the approved mixed goods plate |
-| Construction and effects | 10 | Empty/supplied sites, frame/walls, problem sign, smoke and four placement/reach outlines |
+| Buildings | 39 | Every building kind, tier 2 market hall and church, plus winter and worn material presets of the seven town services and stores |
+| Homes | 21 | Four settler and citizen roof palettes, townhouse, and fine/poor/worn/winter material presets of every tier |
+| Land | 30 | Trees, single-cell rocks and larger outcrops, crops, roads, water, raised stone paving, three retained park furnishings and the park layout |
+| People | 32 | Carriers, residents, market and chapel walkers, and five equipped service workers |
+| Cargo and vehicles | 75 | Twelve distinct goods and labelled crates; empty handcart/barrow and small/full loads of each good; the approved mixed goods plate |
+| Construction and effects | 14 | Sites, frame/walls, problem sign, smoke, placement outlines and three kinds of ruin |
 
-The 151 entries cover object families and representative seeded variants.
+The 211 entries cover object families and representative seeded variants.
 Continuous growth, construction progress, walk poses and colours can be
 generated; this is not a list of every possible random seed. Page icons
 remain the game's original 2D UI art.
@@ -84,15 +113,19 @@ remain the game's original 2D UI art.
 
 [`/service-upgrades.html`](http://localhost:5232/service-upgrades.html) compares
 the market with the market hall and the chapel with the church. The four
-models share one scale and synchronized rotation, tilt and zoom. The street
-scale button checks their silhouettes at a smaller size. Each model has a
-GLB download. These are presentation assets; gameplay upgrade rules are separate.
+models share one scale and synchronized rotation, tilt and zoom. Each model
+has a GLB download. [The integration handoff](docs/service-upgrade-assets.md)
+describes the asset API and the gameplay work still needed.
 
-`pnpm assets:build` exports 151 GLBs and editable geometry descriptions,
-a manifest, and three standalone viewers to `output/inkline-3d/`:
-`inkline-3d-study.html`, `inkline-3d-map.html` and `inkline-service-upgrades.html`. It reimports every GLB and
+`pnpm assets:build` exports 211 GLBs and editable geometry descriptions,
+a manifest, and six standalone viewers to `output/inkline-3d/`:
+`inkline-3d-study.html`, `inkline-3d-map.html`, and
+`inkline-town-model-review.html`, `inkline-house-effects.html`, `inkline-park.html`, and `inkline-service-upgrades.html`. It reimports every GLB and
 checks geometry and unlit materials. The viewers work without a dev server;
 their optional web fonts use the network. The game build remains separate.
+Material effects render in the viewers and live game. Ordinary GLB viewers
+show the underlying mesh; effect parameters are preserved as GLB extras and
+in the editable geometry descriptions, rather than baked into duplicate meshes.
 
 - `src/asset-lab/primitives.ts`: renderer-independent polygon/stroke schema
   and reusable modelling operations in the game's cell units and pixel heights.
@@ -119,7 +152,7 @@ Double-click the ground to focus the camera there.
 ![Every model together on the review island](screenshots/3d-map-complete.webp)
 
 District shortcuts focus the town, workshops, homes, people, cargo yard or
-forest. Inspect selects any of the 149 models and links to its original
+forest. Inspect selects any of the 203 entries and links to its original
 drawing comparison. Eight additional people walk along the street using two
 procedural poses; pause them for review. Smoke and the problem sign face
 the camera so they stay readable when the map turns.
@@ -148,12 +181,70 @@ That is how the README's screenshots of grown towns were made.
 - `src/archetypes.ts`: content to components.
 - `src/mapgen.ts`: the land of a new town, from its charter.
 - `src/schema.ts`: the ECS world: components, relations, resources, services.
+- `src/appeal.ts`: desirability: what buildings and the land do to the cells around them, the whole grid, and one cell explained.
+- `src/places.ts`: street names for the news ("Mill Lane"), from the nearest landmark.
 - `src/grid.ts`: occupancy, entrances, reach, and road paths.
-- `src/sim/`: the fixed-step simulation (no renderer access): edits, work, logistics, walkers, town, and the term
-  (seasons, the crown, approval, the end of the term, history).
+- `src/sim/`: the fixed-step simulation (no renderer access): edits, work (staffing by crew and commute, tools,
+  pace), logistics, walkers (services, mending), town (households and tiers), hazards (desirability, risk
+  meters, fire and firefighters, sickness, theft), decay (wear, collapse, spoilage, the pantry), and the term
+  (seasons and the almanac, the crown, approval, the end of the term, history).
 - `src/present.ts`: per-frame interaction, panel, and view sync.
 - `src/art.ts`: all drawing: buildings and their yards, homes, the land, roads, carts, and figures.
-- `src/render3d/`: live world renderer, model instances, camera and map input.
+- `src/render3d/`: live world renderer, model instances, camera and map input,
+  overlays, ruins, surface shaders and roof particle emitters.
+- `src/asset-lab/town-props.ts`: parks (ground and furnishings, drawn cell by cell), stone paving and ruins.
+- `src/asset-lab/services.ts`: grain hoist, fish racks, watch tower, herbs,
+  medical signs, street noticeboard and builder's equipment.
+- `src/share/`: sharing a town: the card it is shared as (`card.ts`), the format and limits the page and the
+  server agree on (`format.ts`), and the page's side: uploading, fetching, and the device's share sheet (`client.ts`).
+- `src/server/`: the only server code: the routes behind shared towns (`handler.ts`), the Cloudflare Worker that
+  runs them (`worker.ts`), and the same routes under `pnpm dev`, over a bucket in memory (`dev.ts`).
+- `src/asset-lab/appearance.ts`: material state metadata for catalogue presets.
+  Wear, neighbourhood, hazards and winter are per-instance attributes in the
+  live renderer. A state change does not change the geometry cache key.
+
+### Reviewing the new town models
+
+Open [`/model-review.html`](http://localhost:5232/model-review.html) for
+the models added for PR #3. Collections cover buildings, parks,
+home tiers and neighbourhoods, winter, hazards, people/cargo and building
+condition. Drag any model or use the rotation slider to turn the collection.
+**Inspect** opens the full asset viewer. **Download GLB** exports one model;
+**Save model sheet** captures a labelled sheet of the selected collection.
+`pnpm check:models` checks every collection, camera controls, sheet exports
+and phone layout, and saves PNGs to `output/inkline-3d/town-review/`.
+
+The **Review fixes** collection groups the revised storage props, entrances,
+hay stack, townhouse, quarry, stone deposits, markers and emitters. All building
+and house geometry is checked against its plate bounds. Natural rock deposits
+use six seeded silhouettes while retaining their simulation cell footprints.
+`pnpm check:revisions` renders every catalogue entry, checks the exclamation
+mark from both sides and verifies animated smoke through rendered pixels.
+The chimney plume uses `render3d/smoke-effects.ts` in both the catalogue and
+working buildings. Smoke's GLB stores emitter metadata; particles run at runtime.
+
+Open [`/effects-lab.html`](http://localhost:5232/effects-lab.html) to inspect
+eight conditions on the same house geometry. Select any home tier, rotate,
+adjust effect strength or pause animation. Dirt, masonry, cracks, snow,
+glazing damage and fire light come from `surface-shader.ts`. `structure-effects.ts`
+samples the roof triangles for animated fire, smoke and ember emitters.
+`pnpm check:effects` captures all tiers, verifies that animation changes the
+rendered pixels, checks phone layout and exports a five-second MP4 to
+`output/inkline-3d/house-effects/`. The runtime and this preview share the
+same instanced renderer and effect code.
+
+The original 2D menu drawings remain in `art.ts` for comparison. The live
+3D town uses the new geometry, including equipped service workers and cured
+fish cargo. The game has no audio, so winter music is outside this model work.
+
+Open `/park-lab.html` for a park assembled from 25 cells using the current
+park layout system, with two street entrances. The three retained furnishings
+are lamps, fountains and statues. The statue is a simple bust and pedestal;
+`render3d/fountain-effects.ts` supplies moving droplets and impact ripples in
+the actual basin. Park rendering in the game, catalogue, map and preview shares
+the same emitter metadata and water renderer. `pnpm check:park` verifies the
+rendered animation, pause, camera controls and phone layout, and captures stills
+and a five-second MP4 in `output/inkline-3d/park-review/`.
 - `src/townsfolk.ts`: residents out walking, for looking at only: not simulated, not saved.
 - `src/icons.ts`: the page's line-drawn icons.
 - `src/gallery.ts`: the dev-only art gallery (see above).
@@ -182,17 +273,70 @@ averaged over the seeds still in office every few minutes.
 
 ```sh
 pnpm balance -- --size large --term 90 --land harsh
-pnpm balance -- --bot greedy          # sensible (default), greedy (taxes at 200%, sells everything, ignores the crown), idle
+pnpm balance -- --bot greedy          # sensible (default), greedy (taxes at 200%, sells everything, ignores the crown), idle,
+                                      # crowded (homes packed beside industry, no parks), uncovered (no fire, health, or order services),
+                                      # sprawl (taxes as high as the town stands, cottages everywhere, fish caught or bought, no finer homes)
+pnpm balance -- --versus crowded      # the bot against another on the same seeds: citizens, burghers, homes lost
+pnpm balance -- --versus uncovered
+pnpm balance -- --set kinds.sawmill.crew=settlers --set risk.fire.wooden=0   # content changes, numbers or words
+CHRONICLE=1 pnpm balance -- --seeds 1                                         # each seed's chronicle too
 pnpm balance -- --seeds 4 --from 4    # seeds 4 to 7, to split a sweep across processes
 pnpm balance -- --set crown.fine=2 --set kinds.fishery.recipe.seconds=3
 pnpm balance -- --seeds 1 --verbose --every 1   # minute by minute
 pnpm balance -- --snapshot 40                   # save each seed's town at minute 40 (see above)
 ```
 
+The economy is tuned so that spreading cottages stops paying: food goes by the
+resident, administration per home climbs (each more home costs about 6 coins a
+minute at 80 homes), taxes above 100% empty homes directly, and bought goods
+grow dear fast and calm slowly. On a medium fair 60-minute term (10 seeds for
+sensible, 5 for the rest), the sensible bot wins about 7 in 10, crowded wins
+rarely, and sprawl and greedy always lose (sprawl to bankruptcy around minute
+20, greedy to revolt). Under the old numbers sprawl lasted the whole term with
+10,000+ coins.
+
+## Sharing a town
+
+**share** (bottom right, and on the reckoning) draws the town as the camera
+sees it into a 1200 × 630 card (at 2×), with the term's state and numbers on a
+strip of paper. **Save the picture** downloads it; on a phone it goes to the
+share sheet instead. **Make a link** uploads the town (its save file, gzipped,
+with the camera) and a JPEG of the card; `/t/<id>` then opens the game on that
+town, running, with the building tools put away until the visitor chooses
+**Play from here** (the town becomes theirs and autosaves) or founds their own.
+A shared town loads through `loadText` in `src/save.ts`, so it is checked and
+carried forward between save versions exactly as a save is.
+
+The server (`src/server/handler.ts`) keeps each share as two files in an R2
+bucket, `towns/<id>.json.gz` (its preview's title and description as metadata)
+and `towns/<id>.picture`:
+
+| route | does |
+|---|---|
+| `POST /api/towns` | checks the town is gzip under 100 KB, the picture a JPEG/PNG/WebP under 500 KB, and the lines short and plain; keeps them under a new id |
+| `GET /api/towns/<id>` and `/picture` | the files as kept, cached for a year (shares never change) |
+| `GET /t/<id>` | the game's `index.html` with the share's Open Graph and Twitter tags written in, so links unfurl to the card |
+
+The Worker runs only for `/t/*` and `/api/*`; everything else is a static
+file, served free and unmetered. Shares are deleted after 180 days by a
+lifecycle rule on the bucket. Uploads are limited per visitor, by a hash of
+their IP: 3 a minute through Cloudflare's rate-limit binding (`SHARE_BURST`,
+declared in `deploy/alchemy.run.ts`; no resource behind it), and 20 a day
+counted in the same bucket under `limits/<day>/<visitor>`, which a second
+lifecycle rule clears after a day. Either answers 429 with a line the page
+shows. Under `pnpm dev` the same routes run in Vite
+over a bucket in memory (shares last until the server stops), so sharing
+works locally and `pnpm check:browser` checks it end to end.
+
 ## Testing
 
 The simulation has no renderer in it: it runs headless (`src/sim/headless.ts`),
 about 60 to 80 times faster than real time, so the tests play real towns.
+
+`pnpm test` also runs `test/legibility.test.ts`: when a home is stuck, the
+panel's reasons (`src/rules/explain.ts`) must name the cause in words,
+checked against the usual dead ends and a real town with cottages beside a
+quarry. The bots know the thresholds; the player only has the panel.
 
 `pnpm test` runs model-based tests built on Effect's `Schema` and
 `Arbitrary`. They generate sequences of what a mayor can do (roads, homes,
@@ -208,16 +352,29 @@ breaks a rule. A second property checks that the same charter and commands
 always make the same town. `RUNS=200 pnpm test` searches harder;
 `SEED=…` replays.
 
+`test/share.test.ts` checks the server's routes and what they refuse, and
+carries a real town through them into another headless town, which must
+then play on step for step the same as the original.
+
 `pnpm check` puts the real simulation into each way a term can end
 (complete, bankrupt, revolt, abandoned, dismissed, run out), checks an unanswered
-crown request, and checks that a town saved mid-term loads back the same.
+crown request, and checks that a town saved mid-term loads back the same. It
+also checks the neighbourhood: a citizens' home next to a smithy goes back to
+settlers; an unwatched row of cottages catches fire and the fire spreads, and
+firefighters from a fire watch stop it at one home; fish rots in the town
+hall and keeps in a granary; a workplace with no homes within reach stays
+unstaffed until a cottage goes up on its road; citizens will not do settlers'
+work while settlers stand in for citizens as apprentices; and a home nobody
+mends falls down while one by a builder's yard is kept.
 
 ## Releasing to Cloudflare
 
 The game is deployed with [Alchemy](https://alchemy.run/) as a Cloudflare
-Worker serving the Vite build. The separate `deploy/` package keeps its
-dependencies out of the game, and Cloudflare stores the deployment state.
-Saves stay in the player's browser.
+Worker serving the Vite build, with an R2 bucket (`Shares`) for shared
+towns. The separate `deploy/` package keeps its dependencies out of the game,
+and Cloudflare stores the deployment state. Saves stay in the player's
+browser; only towns a player shares go to the bucket. R2 needs a payment
+method on the account even within its free tier.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -228,8 +385,10 @@ pnpm release --profile admin --yes --no-input
 
 Release from an up-to-date `main`. The release command checks the game's
 types and simulation and the deployment config, then Alchemy builds and
-deploys the game. It prints the live URL; check that the game opens and
-save/load works there after each release.
+deploys the game to <https://inkline.typeonce.dev>. Alchemy attaches that
+custom domain to the `prod` Worker and creates its DNS record and certificate
+in the `typeonce.dev` Cloudflare zone. Check that the game opens, save/load
+works, and a shared link opens and unfurls there after each release.
 
 `admin` is the existing local Alchemy Cloudflare profile. On another
 machine, use your own logged-in profile or set `CLOUDFLARE_ACCOUNT_ID` and
@@ -243,4 +402,10 @@ pnpm --dir deploy exec alchemy deploy --stage preview --profile admin
 pnpm --dir deploy exec alchemy destroy --stage preview --profile admin
 ```
 
-The second command removes the preview. Each stage has its own Worker.
+The second command removes the preview. Each stage has its own Worker;
+previews stay on their `workers.dev` URL and never claim the custom domain.
+
+The production build includes the game and all review pages. On any deployed
+stage, use `/asset-lab.html` for the complete catalogue, `/model-review.html`
+for the PR #3 collections, `/effects-lab.html` for animated house states, and
+`/map-lab.html` to inspect all models together in a town.

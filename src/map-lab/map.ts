@@ -78,6 +78,7 @@ function place(id: string, x: number, y: number, scale = 1, record = true, heigh
   const asset = inkAssets.find((asset) => asset.id === id)!
   const transform = ([u, v, z]: Vertex): Vertex => [x + u * scale, y + v * scale, z * scale + height]
   const groups = new Map<number, number>()
+  for(const fountain of asset.fountains??[])(town.fountains??=[]).push({...fountain,origin:transform(fountain.origin),radius:fountain.radius*scale,level:fountain.level*scale,nozzle:fountain.nozzle*scale})
   const effect = id === "smoke" || id === "problem-marker"
   if (effect) effects.push({ asset: id, x, y, height })
   for (const polygon of asset.faces) {
@@ -120,17 +121,40 @@ const layout: Array<[string, number, number]> = [
   ["weaver", 7, 1],
   ["fishery", 13, 1],
   ["market-hall", -7, -5],
-  ["church", 8, -10]
+  ["church", -6.5, -8]
 ]
 for (const [id, x, y] of layout) place(id, x, y)
+// Services, food stores and a park along the south-west street.
+const quarter: Array<[string, number, number]> = [
+  ["firewatch", -17, -2],
+  ["healer", -17, 1],
+  ["watchhouse", -10.5, -8],
+  ["builder", -17, -5],
+  ["granary", -9.5, 1],
+  ["smokehouse", 10, 1],
+  ["hospital", 9.5, -11],
+  ["park-sample", 2.5, -8],
+  ["park-lamp", -13.5, -8],
+  ["park-statue", 9.5, -8],
+  ["park-fountain", 11, -8]
+]
+for (const [id, x, y] of quarter) place(id, x, y)
+// The review annex gives seasonal/condition variants their own ground,
+// keeping them apart from the functioning town streets.
+face([[-20, 17, -0.5], [18, 17, -0.5], [18, 31, -0.5], [-20, 31, -0.5]], 0xf0f2ec, true)
+inkAssets.filter(a => a.category === "buildings" && a.appearance).forEach((a, i) => place(a.id, -17 + (i % 7) * 5, 18 + Math.floor(i / 7) * 5))
 const homes = inkAssets.filter((a) => a.category === "homes")
 homes.forEach((a, i) => place(a.id, -7 + (i % 4) * 1.8, 6 + Math.floor(i / 4) * 2))
 const trees = inkAssets.filter((a) => a.reference?.type === "tree")
 trees.forEach((a, i) => place(a.id, -17 + (i % 3) * 1.3, -11 + Math.floor(i / 3) * 1.4))
 for (let i = 0; i < 18; i++) place(trees[i % trees.length]!.id, -8 + (i % 9) * 2.4, -14 + Math.floor(i / 9) * 1.2, 1, false)
-inkAssets.filter((a) => a.reference?.type === "rock").forEach((a, i) => place(a.id, -16 + (i % 2) * 1.5, 4 + Math.floor(i / 2) * 1.5))
+// Single-cell rocks in a pair of rows; the bigger outcrops (2×1, 2×2, 3×3, stone then ore) in a row along the annex.
+const rocks = inkAssets.filter((a) => a.reference?.type === "rock")
+rocks.filter((a) => a.footprint === 1).forEach((a, i) => place(a.id, -16 + (i % 2) * 1.5, 4 + Math.floor(i / 2) * 1.5))
+rocks.filter((a) => a.footprint! > 1).forEach((a, i) => place(a.id, -17 + i * 4.5, 28.5))
 inkAssets.filter((a) => a.reference?.type === "field").forEach((a, i) => place(a.id, -8 + (i % 2) * 1.2, -10 + Math.floor(i / 2) * 1.2))
 place("roads", 15, 8)
+place("paved-street", 15, 12)
 place("water", 7, 14)
 
 // A cargo yard at the quay. Every product has a handcart and a barrow,
@@ -205,6 +229,7 @@ export const districts = {
   homes: { title: "Homes", x: -4, y: 7, zoom: 5 },
   people: { title: "People", x: 0, y: -2, zoom: 7 },
   cargo: { title: "Cargo yard", x: 7, y: 7, zoom: 4 },
-  forest: { title: "Forest & farms", x: -10, y: -11, zoom: 3.2 }
+  forest: { title: "Forest & farms", x: -10, y: -11, zoom: 3.2 },
+  variants: { title: "Winter & wear", x: -2, y: 21, zoom: 2.3 }
 } as const
 export const testMap = { asset: town, buildings, effects, trees: trees.length + 18, roads: roads.size, coverage: represented.size }

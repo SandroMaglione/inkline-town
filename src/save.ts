@@ -10,9 +10,40 @@
  */
 import { Clock, Context, Effect, Schema } from "effect"
 
+import { goodIds, TRADE_LOAD } from "./content.ts"
+
 export const SAVE_FORMAT = "inkline-town/save"
-/** 2: the charter's towns. Older saves (a square map, no term) cannot be loaded. */
-export const SAVE_VERSION = 2
+/**
+ * 2: the charter's towns. 3: neighbourhoods and their dangers (desirability, crews, risks, wear, ruins,
+ * winters). 4: parks and patrols. 5: the grudge over taxes, and where each piece of news happened.
+ * 6: how much of each good may be traded at a collection. 7: the mayor's guide.
+ * Version 4, 5, and 6 saves are carried forward (see `carry`); older ones cannot be loaded.
+ */
+export const SAVE_VERSION = 7
+
+/**
+ * Fills in what a save from an earlier version lacks, so a town in progress
+ * survives an update: from 4, the mood's grudge (none yet) and the news's
+ * places (unknown); from 5, trade at full loads, as it was; from 6, the
+ * guide from its start (it puts away at once what the town has already
+ * done). Anything else is left to the world's own validation.
+ */
+const carry = (version: number, world: unknown): unknown | null => {
+  if ((version !== 4 && version !== 5 && version !== 6) || typeof world !== "object" || world === null) return null
+  const w = world as { resources?: Record<string, unknown> }
+  const r = w.resources
+  if (!r || typeof r !== "object") return null
+  if (!("Town/Guide" in r)) r["Town/Guide"] = { done: [], off: false }
+  if (version === 6) return w
+  const policy = r["Town/Policy"]
+  if (policy && typeof policy === "object" && !("loads" in policy)) r["Town/Policy"] = { ...policy, loads: Object.fromEntries(goodIds.map((g) => [g, TRADE_LOAD])) }
+  if (version === 5) return w
+  const mood = r["Town/Mood"]
+  if (mood && typeof mood === "object" && !("grudge" in mood)) r["Town/Mood"] = { ...mood, grudge: 0, memory: 0 }
+  const chronicle = r["Town/Chronicle"] as { lines?: Array<Record<string, unknown>> } | undefined
+  if (chronicle && Array.isArray(chronicle.lines)) r["Town/Chronicle"] = { ...chronicle, lines: chronicle.lines.map((l) => ({ at: null, ...l })) }
+  return w
+}
 
 export type Slot = "manual" | "auto"
 export const slots: ReadonlyArray<Slot> = ["manual", "auto"]
@@ -96,10 +127,9 @@ export const memoryStorage = (files = new Map<string, string>()): Storage["Servi
 
 // ── Saving and loading ────────────────────────────────────────────────────
 
-/** Writes the town to a slot. */
-export const save = (slot: Slot) =>
+/** The town as a save file, written nowhere: what a slot keeps, and what a shared town carries. */
+export const fileOf = (slot: Slot) =>
   Effect.gen(function* () {
-    const storage = yield* Storage
     const world = yield* World
     const file: SaveFile = {
       format: SAVE_FORMAT,
@@ -109,6 +139,14 @@ export const save = (slot: Slot) =>
       title: world.title(),
       world: world.snapshot()
     }
+    return file
+  })
+
+/** Writes the town to a slot. */
+export const save = (slot: Slot) =>
+  Effect.gen(function* () {
+    const storage = yield* Storage
+    const file = yield* fileOf(slot)
     yield* Effect.try({
       try: () => storage.set(keyOf(slot), JSON.stringify(file)),
       catch: (cause) => new StorageFailed({ slot, reason: cause instanceof Error ? cause.message : String(cause) })
@@ -131,7 +169,12 @@ export const read = (slot: Slot) =>
       return { format: SAVE_FORMAT, version: SAVE_VERSION, slot, savedAt: 0, title: "an earlier save", world: parsed } satisfies SaveFile
     }
     const version = (parsed as { version?: unknown } | null)?.version
-    if (typeof version === "number" && version !== SAVE_VERSION) return yield* new WrongVersion({ slot, version })
+    if (typeof version === "number" && version !== SAVE_VERSION) {
+      const carried = carry(version, (parsed as { world?: unknown }).world)
+      if (carried === null) return yield* new WrongVersion({ slot, version })
+      const file = yield* decodeEnvelope({ ...(parsed as object), version: SAVE_VERSION, world: carried }).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
+      return file
+    }
     return yield* decodeEnvelope(parsed).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
   })
 
@@ -145,11 +188,21 @@ export const load = (slot: Slot) =>
     return file
   })
 
+/** The slot saved last that can still be read (the mayor's own save, or the autosave), without loading it; `null` when there is none. */
+export const latest = Effect.gen(function* () {
+  const files = yield* Effect.forEach(slots, (slot) => read(slot).pipe(Effect.option))
+  return files.flatMap((f) => (f._tag === "Some" ? [f.value] : [])).sort((a, b) => b.savedAt - a.savedAt)[0] ?? null
+})
+
 /** Loads whichever slot was saved last: the mayor's own save, or the autosave. */
 export const loadLatest = Effect.gen(function* () {
-  const files = yield* Effect.forEach(slots, (slot) => read(slot).pipe(Effect.option))
-  const newest = files
-    .flatMap((f) => (f._tag === "Some" ? [f.value] : []))
-    .sort((a, b) => b.savedAt - a.savedAt)[0]
+  const newest = yield* latest
   return yield* load(newest?.slot ?? "manual")
 })
+
+/**
+ * Loads a save file handed over as text (a shared town), checked and
+ * carried forward as a load from a slot is, without touching the slots.
+ */
+export const loadText = (text: string) =>
+  load("manual").pipe(Effect.provideService(Storage, memoryStorage(new Map([[keyOf("manual"), text]]))))

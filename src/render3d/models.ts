@@ -7,6 +7,8 @@ import { kinds, home, type KindId, type Tier } from "../content.ts"
 import { GRID, U, type Point } from "../iso.ts"
 import { key, cellOf, DIRS } from "../grid.ts"
 import type { Preview } from "../ui.ts"
+import { withAppearance, type Appearance } from "../asset-lab/appearance.ts"
+import { setts } from "../asset-lab/town-props.ts"
 
 export type DoorSet = Record<Side, boolean>
 export const noDoors: DoorSet = { right: false, left: false, backRight: false, backLeft: false }
@@ -60,15 +62,17 @@ export function constructionAsset(size: number, half: number, height: number, bu
   if (stage.walls > 0) d.box(0, 0, a, a, 0, Math.max(2, Math.round(height * stage.walls)))
   return d.asset
 }
-export function buildingAsset(id: KindId, build: number, share: number | null, doors: DoorSet, open: number) {
+export function buildingAsset(id: KindId, build: number, share: number | null, doors: DoorSet, open: number, appearance: Appearance = {}) {
   const kind = kinds[id],
     stage = buildStages(build)
   if (build < 0.78) return constructionAsset(kind.size, kind.half, kind.roof === "gable" ? 20 : kind.stories * 32, build, share)
-  return makeBuilding(id, { doors, open, fit: stage.fit, plate: false, motion: false } satisfies BuildingOptions)
+  const asset = makeBuilding(id, { doors, open, fit: stage.fit, plate: false, motion: false } satisfies BuildingOptions)
+  return build >= 1 ? withAppearance(asset, kind.half * U, kind.roof === "gable" ? 20 : kind.stories * 32, appearance) : asset
 }
-export function homeAsset(tier: Tier, n: number, build: number, share: number | null, doors: DoorSet) {
-  if (build < 0.78) return constructionAsset(1, home.half + (tier === 2 ? 1 : 0), home.tiers[tier].height, build, share)
-  return house(tier, n, "home", { doors, fit: buildStages(build).fit, plate: false })
+export function homeAsset(tier: Tier, n: number, build: number, share: number | null, doors: DoorSet, appearance: Appearance = {}) {
+  if (build < 0.78) return constructionAsset(1, home.half + (tier >= 2 ? 1 : 0), home.tiers[tier].height, build, share)
+  const asset = house(tier, n, "home", { doors, fit: buildStages(build).fit, plate: false })
+  return build >= 1 ? withAppearance(asset, (home.half + (tier >= 2 ? 1 : 0)) * U, home.tiers[tier].height, appearance, true) : asset
 }
 export function homeKey(n: number) {
   return JSON.stringify(homeVariant(n))
@@ -114,7 +118,7 @@ export function treeVariant(x: number, y: number) {
   return { id, type, seed, scale, offset: [dx / 64 + dy / 32, -dx / 64 + dy / 32, 0] as Vertex }
 }
 
-export function landAsset(mask: string) {
+export function landAsset(mask: string, frost = false) {
   const d = new Drawing("land", "Land", ""),
     land = (x: number, y: number) => x >= 0 && y >= 0 && x < GRID && y < GRID && mask[key(x, y)] === "1"
   for (let y = 0; y < GRID; y++)
@@ -127,9 +131,15 @@ export function landAsset(mask: string) {
           [x + 1, y + 1, -0.3],
           [x, y + 1, -0.3]
         ],
-        0xf0f2ec,
+        frost ? 0xf7f9fb : 0xf0f2ec,
         0
       )
+      // Windblown flecks complement the material snow on roofs.
+      if (frost && hash(x * 7 + 3, y * 5 + 1) < 0.18) {
+        const u = x + 0.2 + hash(x, y * 3) * 0.6,
+          v = y + 0.2 + hash(y, x * 3) * 0.6
+        d.line([[u - 0.05, v, -0.26], [u + 0.05, v, -0.26]], 1, 0xc9d6e4)
+      }
       if (land(x + 1, y))
         d.line(
           [
@@ -180,7 +190,7 @@ export function landAsset(mask: string) {
     }
   return d.asset
 }
-export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<number>, preview = false) {
+export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<number>, preview = false, paved: ReadonlySet<number> = new Set()) {
   const d = new Drawing("ground", "Ground", ""),
     z = preview ? 0.16 : -0.14
   for (const k of roads) {
@@ -188,7 +198,9 @@ export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<numbe
       x = cell.x + 0.5,
       y = cell.y + 0.5,
       half = 0.375,
-      color = hash(cell.x, cell.y) < 0.25 ? 0xe2e4dd : 0xe6e8e2
+      stone = paved.has(k),
+      color = stone ? (hash(cell.x, cell.y) < 0.25 ? 0xd3d6cf : 0xd8dbd4) : hash(cell.x, cell.y) < 0.25 ? 0xe2e4dd : 0xe6e8e2
+    if (stone) setts(d, x, y, half, z + 0.015)
     d.face(square(x, y, half, z), color, 0)
     for (const { x: dx, y: dy } of DIRS) {
       const q = (along: number, across: number, height = z + 0.02): Vertex => [
@@ -198,6 +210,11 @@ export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<numbe
       ]
       if (roads.has(key(cell.x + dx, cell.y + dy))) {
         d.face([q(half, -half, z), q(0.5, -half, z), q(0.5, half, z), q(half, half, z)], color, 0)
+        if (stone) {
+          // Complete the short joining strip as a pair of stone kerbs.
+          const center = q((half + 0.5) / 2, 0, z + 0.015)
+          d.box(center[0], center[1], dx ? 0.0575 : half - 0.005, dy ? 0.0575 : half - 0.005, center[2], 0.22, 0xe0e4dc, 0xc6ccc3, 0xbfc6bc, 0.5, 0xa0aaa0)
+        }
         d.line([q(half, -half), q(0.5, -half)], 1.5)
         d.line([q(half, half), q(0.5, half)], 1.5)
         d.line([q(0.0625, 0), q(0.1875, 0)], 1, 0xb4b9b1)
@@ -275,6 +292,8 @@ export function groundAsset(roads: ReadonlySet<number>, water: ReadonlySet<numbe
 }
 export function previewAsset(preview: Preview, time: number) {
   const d = new Drawing("preview", "Preview", "")
+  // The roads a thing being placed would reach: a faint wash along them.
+  for (const c of preview.range) d.face(square(c.x + 0.5, c.y + 0.5, 0.5, 0.11), 0x3d6db5, 0, palette.ink, 0.24)
   for (const { x, y, size, look } of preview.plots) {
     const color = look === "blocked" ? 0xc4523f : look === "picked" ? 0x3d6db5 : palette.ink,
       half = size / 2,
@@ -306,3 +325,24 @@ export function previewAsset(preview: Preview, time: number) {
   return d.asset
 }
 export const quantizeBuild = (build: number) => Math.min(1, Math.round(build * 32) / 32)
+
+/** A footprint washed in a colour, for a map view. */
+export interface OverlayCell {
+  readonly x: number
+  readonly y: number
+  readonly size: number
+  readonly color: number
+  readonly alpha: number
+  /** Outlined, for what the view is about (a workplace and its homes). */
+  readonly ring?: boolean
+}
+export function overlayAsset(cells: ReadonlyArray<OverlayCell>) {
+  const d = new Drawing("overlay", "Map view", "")
+  for (const c of cells) {
+    const half = c.size / 2,
+      ring = square(c.x + half, c.y + half, half - 0.03, 0.12)
+    d.face(ring, c.color, 0, palette.ink, c.alpha)
+    if (c.ring) d.line([...ring, ring[0]!], 1.5, c.color, 0.95)
+  }
+  return d.asset
+}

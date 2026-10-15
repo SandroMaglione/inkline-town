@@ -47,6 +47,27 @@ cottages grow into two-story citizens' homes that hold and pay twice as
 much. Then they come out in long coats and top hats, each household dressed
 in the colour of its roof.
 
+## A town that looks and works like a real one
+
+Every street has a desirability. A smithy or a quarry drags it down for
+several cells around; parks you lay out yourself (lawns, flower beds,
+walks in from the street, lamps, a fountain, a statue), a chapel, and paved streets
+lift it. Citizens will only live on a decent street, and the
+finest streets, with every service calling, grow three-storey townhouses.
+Settlers do the rough work and citizens the skilled, and nobody walks more
+than fifteen road cells to a job, so the far-off mine needs its own
+workers' cottages. Zone the town well and it sorts itself into a fine
+centre, an industrial edge, and cottages by the mill.
+
+Then keep it standing. A fire watch, a healer, and a watch house send
+walkers to keep down the risk of fire, sickness, and theft; a sign goes up
+over a home long before disaster, and a fire watch's firefighters race to
+any blaze. Fish and bread rot unless a granary keeps them, tools wear out,
+and a builder's yard has to mend what runs down. Each year's winter is
+mild, normal, or hard, and the almanac tells you which a year ahead. Map
+views show desirability, workers, fire, health, order, and condition across
+the town.
+
 ## Govern under pressure
 
 The bigger the town, the harder it pulls. Winters stop the fields and thin
@@ -106,7 +127,8 @@ different on every cell.
 ## Play
 
 Inkline Town runs in the browser. Saves stay in your browser, and the town
-autosaves every two minutes of play.
+autosaves every two minutes of play. Share a picture of your town, or a link
+that opens it running for anyone, who can then play on from where you left it.
 
 ```sh
 pnpm install

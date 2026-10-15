@@ -1,52 +1,73 @@
+import { approvalTarget, nextApproval } from "../rules/approval.ts"
+import { shippedRules } from "../rules/config.ts"
 /**
  * The term in office: the seasons turn, the crown asks for goods, the
  * town's approval follows how it is treated, the town's history is kept,
  * and the term ends: complete, lost, or run out.
  */
-import {
-  crown, fate, goods, HISTORY_TICKS, mood, sizes, ticks, type GoodId
-} from "../content.ts"
+import { crown, HISTORY_TICKS, ticks, WINTER_WARNING, type GoodId } from "../content.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
-import {
-  Building, Census, Charter, Chronicle, Crown, Fate, Game, History, House, Inventory, Ledger, Mood, Policy, Recipe, Rising, Rng, Site,
-  Storage, Time, Treasury
-} from "../schema.ts"
-import { elapsed, seasonAt, termTicks } from "./shared.ts"
-import { satisfaction } from "./town.ts"
+import { Building, Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, House, Inventory, Ledger, Mood, Pantry, Paused, Policy, Recipe, Rising, Rng, Site, Stock, Storage, Time, Treasury } from "../schema.ts"
+import { elapsed, seasonAt, termTicks, write } from "./shared.ts"
 
 // ── Time ──────────────────────────────────────────────────────────────────
 
-/** A line in the chronicle. */
-const write = (chronicle: { update: (f: (c: { readonly lines: ReadonlyArray<{ tick: number; text: string }> }) => { lines: ReadonlyArray<{ tick: number; text: string }> }) => void }, tick: number, text: string) =>
-  chronicle.update((c) => ({ lines: [...c.lines, { tick, text }].slice(-200) }))
-
-/** Winter comes and goes, and the chronicle says so. */
+/**
+ * Winter comes and goes, and the chronicle says so. A minute before it
+ * comes, the almanac warns the town how hard it will be, and how long the
+ * food in store would last.
+ */
 export const Seasons = Game.System(
   "Town/Seasons",
   {
     resources: {
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter),
+      stock: Game.System.readResource(Stock),
+      pantry: Game.System.readResource(Pantry),
       chronicle: Game.System.writeResource(Chronicle)
-    }
+    },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ resources }) => {
-    const t = elapsed(resources.time.get(), resources.charter.get())
+  ({ resources, services }) => {
+    const rules = services.rules
+    const { winters } = rules
+
+    const charter = resources.charter.get()
+    const t = elapsed(resources.time.get(), charter)
     if (t <= 0) return
-    const now = seasonAt(t, resources.charter.get())
-    const before = seasonAt(t - 1, resources.charter.get())
-    if (now.winter && !before.winter) write(resources.chronicle, t, `Winter of year ${now.year}: the fields lie still and the fish are few.`)
+    const now = seasonAt(t, charter, rules)
+    const before = seasonAt(t - 1, charter, rules)
+    if (now.winter && !before.winter) {
+      const w = now.severity ?? "normal"
+      write(
+        resources.chronicle,
+        t,
+        `A ${winters[w].title} winter, year ${now.year}: the fields lie still and fisheries catch ${Math.round(winters[w].fishing * 100)}%${winters[w].heating ? "; homes burn fires to keep warm" : ""}.`
+      )
+    }
     if (!now.winter && before.winter) write(resources.chronicle, t, `Spring of year ${now.year}.`)
+    if (!now.winter && now.coming !== null && now.left === WINTER_WARNING) {
+      const w = winters[now.coming]
+      const eats = resources.pantry.get().eatenLast
+      write(
+        resources.chronicle,
+        t,
+        `Winter in a minute, and the almanac says it will be ${w.title}: ${larder(resources.stock.get())} food in store; the town eats ${eats} a minute.`,
+        true
+      )
+    }
   }
 )
 
 // ── The crown ─────────────────────────────────────────────────────────────
 
 /** Steps between the crown's requests. */
-export const crownGap = (charter: { readonly term: number }) => Math.round(termTicks(charter) / (crown.perTerm + 1))
+export const crownGap = (charter: { readonly term: number }, rules = shippedRules) => Math.round(termTicks(charter, rules) / (rules.crown.perTerm + 1))
 
 /**
- * Every so often the crown asks for something the town makes: a share of
+ * Every so often the crown asks for something the town makes, and that
+ * keeps (never fish or bread): a share of
  * what its workshops and gatherers could make in the time given, larger the
  * later in the term it is. A request not sent in time is a fine and a snub
  * the town's approval remembers.
@@ -66,9 +87,13 @@ export const Requests = Game.System(
       treasury: Game.System.writeResource(Treasury),
       rng: Game.System.writeResource(Rng),
       chronicle: Game.System.writeResource(Chronicle)
-    }
+    },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources }) => {
+  ({ queries, resources, services }) => {
+    const rules = services.rules
+    const { goods, crown, spoils } = rules
+
     if (resources.fate.get().state !== "playing") return
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
@@ -80,7 +105,7 @@ export const Requests = Game.System(
       const fine = Math.round(((c.reward - crown.bonus) / crown.reward) * crown.fine) + crown.bonus
       resources.treasury.update((tr) => ({ coins: tr.coins - fine }))
       resources.crown.set({ ...c, open: false, missed: c.missed + 1, streak: c.streak + 1, snubs: [...remembered, t] })
-      write(resources.chronicle, t, `The crown's request for ${c.amount} ${goods[c.good].title} went unanswered: a fine of ${fine} coins.`)
+      write(resources.chronicle, t, `The crown's request for ${c.amount} ${goods[c.good].title} went unanswered: a fine of ${fine} coins.`, true)
       return
     }
     if (c.open || t < c.next) return
@@ -92,22 +117,23 @@ export const Requests = Game.System(
       const r = data.recipe.get()
       rates.set(r.output, (rates.get(r.output) ?? 0) + (r.batch * 3600) / r.period)
     }
-    const options = [...rates.keys()].sort()
+    // Only what keeps: fish and bread would rot on the way.
+    const options = [...rates.keys()].filter((g) => spoils[g] === undefined).sort()
     if (options.length === 0) return
     const random = Random.make(resources.rng.get())
     const good = random.pick(options)!
     resources.rng.set(random.state)
-    const progress = Math.min(1, t / termTicks(charter))
-    const window = (crownGap(charter) * crown.window) / 3600
+    const progress = Math.min(1, t / termTicks(charter, rules))
+    const window = (crownGap(charter, rules) * crown.window) / 3600
     const share = crown.share[0] + (crown.share[1] - crown.share[0]) * progress
     // Never more than the town could keep in store.
     const room = queries.stores.each().reduce((sum, { data }) => sum + data.inventory.get().cap, 0)
     const amount = Math.max(4, Math.min(Math.round(room * crown.room), Math.round(rates.get(good)! * window * share)))
     const reward = Math.round(amount * goods[good].price * crown.reward) + crown.bonus
-    const gap = crownGap(charter)
+    const gap = crownGap(charter, rules)
     const due = t + Math.round(gap * crown.window)
     resources.crown.set({ ...c, snubs: remembered, open: true, good, amount, issued: t, due, reward, next: t + gap })
-    write(resources.chronicle, t, `The crown asks for ${amount} ${goods[good].title} within ${Math.round(((due - t) / 3600) * 10) / 10} minutes, for ${reward} coins.`)
+    write(resources.chronicle, t, `The crown asks for ${amount} ${goods[good].title} within ${Math.round(((due - t) / 3600) * 10) / 10} minutes, for ${reward} coins.`, true)
   }
 )
 
@@ -121,7 +147,7 @@ export const Requests = Game.System(
 export const Approve = Game.System(
   "Town/Approve",
   {
-    queries: { homes: Game.Query({ selection: { house: Game.Query.read(House) }, without: [Site, Rising] }) },
+    queries: { homes: Game.Query({ selection: { house: Game.Query.read(House) }, without: [Site, Rising, Paused] }) },
     resources: {
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter),
@@ -129,37 +155,20 @@ export const Approve = Game.System(
       treasury: Game.System.readResource(Treasury),
       crown: Game.System.readResource(Crown),
       mood: Game.System.writeResource(Mood)
-    }
+    },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources }) => {
+  ({ queries, resources, services }) => {
+    const rules = services.rules
+
     const t = elapsed(resources.time.get(), resources.charter.get())
     if (t % ticks(10) !== 0) return
     const policy = resources.policy.get()
-    let people = 0
-    let pleased = 0
-    let taxed = 0
-    let fed = 0
-    let homes = 0
-    for (const { data } of queries.homes.each()) {
-      const h = data.house.get()
-      homes += 1
-      if (h.food > 0) fed += 1
-      people += h.residents
-      pleased += h.residents * satisfaction(h)
-      taxed += h.residents * (h.tier === 1 ? policy.settlers : policy.citizens)
-    }
-    const share = people > 0 ? pleased / people : 0.5
-    const rate = people > 0 ? taxed / people : 100
-    const needs = Math.round(mood.needs[0] + (mood.needs[1] - mood.needs[0]) * share)
-    const taxes = Math.round((100 - rate) * mood.perTaxPoint)
-    const debt = resources.treasury.get().coins < 0 ? mood.debt : 0
-    const crownPart = resources.crown.get().snubs.length * mood.snub
-    const winter = seasonAt(t, resources.charter.get()).winter && homes > 0 && fed / homes < 0.5 ? mood.winterHunger : 0
-    const target = Math.max(-100, Math.min(100, mood.base + needs + taxes + debt + crownPart + winter))
-    resources.mood.update((m) => {
-      const approval = m.approval + Math.max(-mood.step, Math.min(mood.step, target - m.approval))
-      return { approval, target, base: mood.base, needs, taxes, debt, crown: crownPart, winter }
-    })
+    const m = resources.mood.get()
+    const parts = approvalTarget(queries.homes.each().map(({ data }) => data.house.get()), policy,
+      resources.treasury.get().coins, resources.crown.get().snubs.length, seasonAt(t, resources.charter.get(), rules).winter, rules, m.memory)
+    resources.mood.set({ approval: nextApproval(m.approval, parts.target, rules), ...parts })
+
   }
 )
 
@@ -179,27 +188,8 @@ export const foundedFate = () => ({
   score: 0
 })
 
-/** Food in storage: what would carry the town through a winter. */
-export const larder = (stock: { readonly fish: number; readonly bread: number }) => stock.fish + stock.bread
-
-/** Each goal the town must hold to be complete, met or not. */
-export const goalsOf = (
-  charter: { readonly size: keyof typeof sizes },
-  s: { readonly settlers: number; readonly citizens: number; readonly coins: number; readonly net: number; readonly approval: number }
-) => {
-  const goal = sizes[charter.size].goal
-  const residents = s.settlers + s.citizens
-  return [
-    { id: "residents", text: `${goal.residents} residents`, value: `${residents}`, met: residents >= goal.residents },
-    { id: "citizens", text: `${Math.round(fate.citizens * 100)}% of them citizens`, value: `${residents > 0 ? Math.round((s.citizens / residents) * 100) : 0}%`, met: residents > 0 && s.citizens >= residents * fate.citizens },
-    { id: "approval", text: `approval ${fate.approval} or more`, value: `${s.approval}`, met: s.approval >= fate.approval },
-    { id: "coins", text: `${goal.coins} coins, not losing any`, value: `${s.coins}`, met: s.coins >= goal.coins && s.net >= 0 }
-  ] as const
-}
-
-/** The town's score at the end of its term. */
-export const scoreOf = (s: { readonly settlers: number; readonly citizens: number; readonly coins: number; readonly approval: number; readonly met: number; readonly missed: number }, won: boolean, minutesLeft: number) =>
-  Math.max(0, Math.round(s.settlers + 3 * s.citizens + Math.max(0, s.coins) / 20 + 2 * s.approval + 40 * s.met - 40 * s.missed + (won ? 500 + 20 * minutesLeft : 0)))
+import { goalsOf, larder, scoreOf, steadyNet } from "../rules/goals.ts"
+export { goalsOf, larder, scoreOf, steadyNet } from "../rules/goals.ts"
 
 /**
  * Once a second: does the term end? It is lost to bankruptcy (in debt too
@@ -219,11 +209,16 @@ export const Judge = Game.System(
       ledger: Game.System.readResource(Ledger),
       mood: Game.System.readResource(Mood),
       crown: Game.System.readResource(Crown),
+      history: Game.System.readResource(History),
       fate: Game.System.writeResource(Fate),
       chronicle: Game.System.writeResource(Chronicle)
-    }
+    },
+    services: { rules: Game.System.service(Rules) }
   },
-  ({ resources }) => {
+  ({ resources, services }) => {
+    const rules = services.rules
+    const { crown, fate } = rules
+
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
     if (t <= 0 || t % 60 !== 0) return
@@ -235,10 +230,10 @@ export const Judge = Game.System(
     const approval = resources.mood.get().approval
     const crownNow = resources.crown.get()
     const residents = census.settlers + census.citizens
-    const net = ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin
-    const note = (text: string) => write(resources.chronicle, t, text)
+    const net = steadyNet(resources.history.get().samples, ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin)
+    const note = (text: string, alarm = false) => write(resources.chronicle, t, text, alarm)
     const minutes = (n: number) => ticks(n * 60)
-    const left = Math.max(0, Math.round((termTicks(charter) - t) / 3600))
+    const left = Math.max(0, Math.round((termTicks(charter, rules) - t) / 3600))
     const score = (won: boolean) => scoreOf({ ...census, coins, approval, met: crownNow.met, missed: crownNow.missed }, won, left)
 
     const next = { ...f, peak: Math.max(f.peak, residents) }
@@ -246,11 +241,11 @@ export const Judge = Game.System(
 
     // Dangers.
     if (coins < 0) {
-      if (f.debtSince < 0) note("The treasury is empty: wages go unpaid.")
+      if (f.debtSince < 0) note("The treasury is empty: wages go unpaid.", true)
       next.debtSince = f.debtSince < 0 ? t : f.debtSince
     } else next.debtSince = -1
     if (approval <= fate.revoltAt) {
-      if (f.revoltSince < 0) note("The town is in uproar.")
+      if (f.revoltSince < 0) note("The town is in uproar.", true)
       next.revoltSince = f.revoltSince < 0 ? t : f.revoltSince
     } else next.revoltSince = -1
 
@@ -262,13 +257,13 @@ export const Judge = Game.System(
     if (next.revoltSince >= 0 && t - next.revoltSince >= minutes(fate.revolt)) return end("lost", "Revolt: the town has turned the mayor out.")
     if (next.peak >= fate.peak && residents < next.peak * fate.abandon) return end("lost", "Abandoned: the people have left the town.")
     if (crownNow.streak >= crown.patience) return end("lost", `Dismissed: the crown has replaced a mayor who left ${crown.patience} of its requests unanswered.`)
-    if (t >= termTicks(charter)) {
+    if (t >= termTicks(charter, rules)) {
       return end("over", f.governing ? "The term is over: the town stood complete to the end." : "The term is over.")
     }
 
     // Goals.
     if (!f.governing) {
-      const goals = goalsOf(charter, { ...census, coins, net, approval })
+      const goals = goalsOf(charter, { ...census, coins, net, approval }, rules)
       if (goals.every((g) => g.met)) {
         if (f.goalSince < 0) note("Every goal is met: the town needs only to hold them.")
         next.goalSince = f.goalSince < 0 ? t : f.goalSince

@@ -1,6 +1,9 @@
 /** Portable polygon-and-stroke assets. Floor coordinates remain in cells;
  * heights remain in the original drawing's pixels. No renderer types here. */
-import { kindIds, goodIds } from "../content.ts"
+import { kindIds, goodIds, kinds, home, propIds } from "../content.ts"
+import { withAppearance } from "./appearance.ts"
+import { groundAsset } from "../render3d/models.ts"
+import { key } from "../grid.ts"
 import { makeBuilding } from "./buildings.ts"
 import { house } from "./homes.ts"
 import { marketHall, church } from "./service-upgrades.ts"
@@ -8,6 +11,7 @@ import { U } from "../iso.ts"
 import { makeTree, makeRock, makeField, makeRoadPatch, makeWater } from "./land.ts"
 import { personCatalogue, makeCarrier, makeGoods, makeCrate } from "./people.ts"
 import { makeSite, makeConstruction, makeMarker, makeSmoke, makePlot } from "./construction.ts"
+import { makeParkProp, makeRuin, makeSamplePark } from "./town-props.ts"
 
 import { Drawing, mix, pale, square, sides, palette, type InkAsset, type Vertex } from "./primitives.ts"
 export * from "./primitives.ts"
@@ -115,14 +119,38 @@ for (const tier of [1, 2] as const)
     asset.title = `${tier === 1 ? "Cottage" : "Citizen home"} · ${names[i]}`
     additional.push(asset)
   }
+additional.push(house(3))
+for (const tier of [1, 2, 3] as const) for (const appearance of ["fine", "poor", "worn", "winter"] as const) {
+  const base = house(tier), a = (home.half + (tier >= 2 ? 1 : 0)) * U
+  const model = withAppearance(base, a, home.tiers[tier].height, { band: appearance === "fine" || appearance === "poor" ? appearance : "plain", worn: appearance === "worn", winter: appearance === "winter" }, true)
+  model.id = `${base.id}-${appearance}`; model.title = `${base.title} · ${appearance}`; model.appearance = appearance
+  model.note = appearance === "winter" ? "Snow settles on roof surfaces through the material shader." : appearance === "fine" ? "Fresh plaster and warm windows on the same house mesh." : "Dirt, exposed brick, cracks and roof moss through the material shader."
+  additional.push(model)
+}
+for (const id of ["granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder"] as const) for (const appearance of ["winter", "worn"] as const) {
+  const kind = kinds[id], base = makeBuilding(id)
+  const model = withAppearance(base, kind.half * U, kind.roof === "gable" ? 20 : kind.stories * 32, { winter: appearance === "winter", worn: appearance === "worn" })
+  model.id = `${id}-${appearance}`; model.title = `${kind.title} · ${appearance}`; model.appearance = appearance
+  additional.push(model)
+}
 for (const type of ["fir", "broadleaf", "poplar"] as const)
   for (const grown of [0.3, 0.6, 1]) {
     if (type === "fir" && grown === 1) continue
     additional.push(makeTree(type, grown, `${type}-${grown === 1 ? "grown" : grown >= 0.5 ? "young" : "sapling"}`))
   }
 for (const ore of [false, true]) for (const full of [false, true]) additional.push(makeRock(ore, full))
+for (const ore of [false, true]) for (const [w, h] of [[2, 1], [2, 2], [3, 3]] as const) additional.push(makeRock(ore, true, 0, w, h))
 for (const stage of [0, 1, 2, 3] as const) additional.push(makeField(stage))
 additional.push(makeRoadPatch(), makeWater(), ...personCatalogue())
+{
+  const cells = new Set([key(8, 8), key(7, 8), key(9, 8), key(8, 7), key(8, 9)])
+  const asset = groundAsset(cells, new Set(), false, cells)
+  const shift = ([u, v, z]: Vertex): Vertex => [u - 8.5, v - 8.5, z]
+  asset.faces.forEach(f => { f.points = f.points.map(shift) }); asset.strokes.forEach(s => { s.points = s.points.map(shift) })
+  asset.id = "paved-street"; asset.title = "Paved street"; asset.note = "Raised stone setts with staggered joints and joined edges."; asset.category = "land"; asset.reference = { type: "roads" }; asset.footprint = 3
+  additional.push(asset)
+}
+additional.push(makeSamplePark(), ...propIds.map(makeParkProp))
 for (const barrow of [false, true]) {
   additional.push(makeCarrier(null, barrow))
   for (const good of goodIds) for (const count of [1, 4]) additional.push(makeCarrier(good, barrow, count))
@@ -135,6 +163,8 @@ additional.push(
   makeConstruction("warehouse", 0.65),
   makeMarker(),
   makeSmoke(),
+  ...(["burnt", "collapsed", "derelict"] as const).map((cause) => makeRuin(1, cause)),
+  makeRuin(2, "burnt"),
   ...["hover", "picked", "blocked", "reach"].map((look) => makePlot(look as "hover" | "picked" | "blocked" | "reach"))
 )
 export const inkAssets: ReadonlyArray<InkAsset> = [...approvedAssets, ...additional]

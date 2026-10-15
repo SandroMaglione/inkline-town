@@ -9,7 +9,18 @@ import { key } from "../grid.ts"
 import { kinds } from "../content.ts"
 import type { Preview, UiValue } from "../ui.ts"
 import { ModelHandle, ModelPool } from "./pool.ts"
-import { groundAsset, landAsset, previewAsset } from "./models.ts"
+import { groundAsset, landAsset, overlayAsset, previewAsset, type OverlayCell } from "./models.ts"
+import { parkAsset } from "../asset-lab/town-props.ts"
+import type { ParkCell } from "../appeal.ts"
+
+/** Where the camera stands: the grid cell it looks at, its zoom, and its angles. */
+export interface CameraView {
+  readonly x: number
+  readonly y: number
+  readonly zoom: number
+  readonly heading: number
+  readonly elevation: number
+}
 
 export interface SceneNode {
   readonly group: THREE.Group
@@ -31,11 +42,18 @@ export class GameScene {
   elevation = Math.PI / 6
   generation = 0
   groundDirty = true
+  /** Winter: the land is frosted and everything standing tinted cold. */
+  frost = false
+  private overlayKey = ""
+  private overlay: BuiltAsset | null = null
   private landKey: string | null = null
   private groundKey = ""
   private previewKey = ""
   private land: BuiltAsset | null = null
   private ground: BuiltAsset | null = null
+  private parks: BuiltAsset | null = null
+  private parksKey = ""
+  private parkPreview: BuiltAsset | null = null
   private overlays: BuiltAsset | null = null
   private roadPreview: BuiltAsset | null = null
   private ghostHandles: Array<ModelHandle> = []
@@ -192,25 +210,42 @@ export class GameScene {
     this.scene.add(model.group)
     return model
   }
-  setLand(mask: string) {
-    if (mask === this.landKey) return
-    this.landKey = mask
-    this.land = this.replace(this.land, landAsset(mask))
+  setLand(mask: string, frost = false) {
+    const id = `${frost}|${mask}`
+    if (id === this.landKey) return
+    this.landKey = id
+    this.frost = frost
+    this.renderer.setClearColor(frost ? 0xe6edf1 : 0xe2e9e6)
+    this.land = this.replace(this.land, landAsset(mask, frost))
   }
-  setGround(roads: ReadonlySet<number>, water: ReadonlySet<number>) {
-    const id = [...roads].join(",") + "|" + [...water].join(",")
+  setGround(roads: ReadonlySet<number>, water: ReadonlySet<number>, paved: ReadonlySet<number> = new Set()) {
+    const id = [...roads].join(",") + "|" + [...water].join(",") + "|" + [...paved].join(",")
     if (!this.groundDirty && id === this.groundKey) return
     this.groundDirty = false
     this.groundKey = id
-    this.ground = this.replace(this.ground, groundAsset(roads, water))
+    this.ground = this.replace(this.ground, groundAsset(roads, water, false, paved))
+  }
+  /** The parks, redrawn whenever a cell of one (or a road beside one) changes. */
+  setParks(cells: ReadonlyMap<number, ParkCell>, roads: ReadonlySet<number>) {
+    const id = [...cells].map(([k, c]) => `${k}:${c.ground}:${c.prop}`).join(",") + "|" + [...roads].join(",")
+    if (id === this.parksKey) return
+    this.parksKey = id
+    this.parks = this.replace(this.parks, parkAsset(cells, roads))
+  }
+  /** A map view: each cell (or footprint) washed in a colour, or nothing. */
+  setOverlay(id: string, cells: ReadonlyArray<OverlayCell>) {
+    if (id === this.overlayKey) return
+    this.overlayKey = id
+    this.overlay = this.replace(this.overlay, overlayAsset(cells))
   }
   setPreview(preview: Preview, time: number) {
     const beat = preview.plots.some((p) => p.look === "picked" || p.look === "blocked") ? Math.floor(time * 8) : 0
-    const id = JSON.stringify([preview.plots, preview.ghosts, preview.roads, beat])
+    const id = JSON.stringify([preview.plots, preview.ghosts, preview.roads, preview.parks, beat])
     if (id === this.previewKey) return
     this.previewKey = id
     this.overlays = this.replace(this.overlays, previewAsset(preview, time))
     this.roadPreview = this.replace(this.roadPreview, groundAsset(new Set(preview.roads.map((p) => key(p.x, p.y))), new Set(), true))
+    this.parkPreview = this.replace(this.parkPreview, parkAsset(new Map(preview.parks.map((c) => [key(c.x, c.y), c])), new Set(), true))
     for (const handle of this.ghostHandles) handle.dispose()
     this.ghostHandles = []
     for (const ghost of preview.ghosts) {
@@ -227,13 +262,17 @@ export class GameScene {
     this.generation++
     this.landKey = null
     this.groundDirty = true
+    this.parksKey = ""
     this.previewKey = ""
     for (const node of [...this.nodes]) node.destroy()
     this.nodes.clear()
     for (const handle of this.ghostHandles) handle.dispose()
     this.ghostHandles = []
     this.overlays = this.replace(this.overlays, { id: "empty", title: "", note: "", faces: [], strokes: [] })
+    this.overlayKey = ""
+    this.overlay = this.replace(this.overlay, { id: "empty", title: "", note: "", faces: [], strokes: [] })
     this.roadPreview = this.replace(this.roadPreview, { id: "empty", title: "", note: "", faces: [], strokes: [] })
+    this.parkPreview = this.replace(this.parkPreview, { id: "empty", title: "", note: "", faces: [], strokes: [] })
   }
   subscribe(onTick: (tick: { deltaMS: number }) => void) {
     this.previous = 0
@@ -244,6 +283,9 @@ export class GameScene {
       onTick({ deltaMS: delta })
       for (const node of this.nodes) node.orient()
       this.camera.getWorldDirection(this.pool.viewDirection).negate()
+      this.pool.time.value = now / 1000
+      this.parks?.updateEffects(now/1000)
+      this.parkPreview?.updateEffects(now/1000)
       this.pool.flush()
       this.renderer.render(this.scene, this.camera)
       this.frames++
@@ -269,11 +311,55 @@ export class GameScene {
   capture() {
     return this.canvas.toDataURL("image/webp", 0.94)
   }
+  /** Where the camera looks from, to share along with the town. */
+  view(): CameraView {
+    return { x: this.target.x / floorScale, y: this.target.z / floorScale, zoom: this.camera.zoom, heading: this.heading, elevation: this.elevation }
+  }
+  /** Looks from a shared view, kept within the limits the controls keep to. */
+  setView(view: CameraView) {
+    const finite = (n: number, fallback: number) => (Number.isFinite(n) ? n : fallback)
+    this.target.set(THREE.MathUtils.clamp(finite(view.x, GRID / 2), 0, GRID) * floorScale, 0, THREE.MathUtils.clamp(finite(view.y, GRID / 2), 0, GRID) * floorScale)
+    this.camera.zoom = THREE.MathUtils.clamp(finite(view.zoom, 1), 0.35, 4)
+    this.heading = finite(view.heading, Math.PI / 4)
+    this.elevation = THREE.MathUtils.clamp(finite(view.elevation, Math.PI / 6), Math.PI / 12, (Math.PI / 180) * 65)
+    this.camera.updateProjectionMatrix()
+    this.placeCamera()
+  }
+  /**
+   * The town as the camera sees it, drawn afresh at `width` × `height`
+   * (times `scale`) into a canvas of its own. The view is widened or
+   * narrowed so all of what the mayor sees on screen fits the picture.
+   * The drawing buffer is read right after the render, so this works
+   * without keeping the buffer between frames.
+   */
+  picture(width: number, height: number, scale = 2): HTMLCanvasElement {
+    const ratio = this.renderer.getPixelRatio(),
+      zoom = this.camera.zoom,
+      fit = Math.min(width / this.width, height / this.height)
+    this.renderer.setPixelRatio(scale)
+    this.renderer.setSize(width, height, false)
+    this.camera.left = -width / 2
+    this.camera.right = width / 2
+    this.camera.top = height / 2
+    this.camera.bottom = -height / 2
+    this.camera.zoom = Math.max(0.3, zoom * fit)
+    this.camera.updateProjectionMatrix()
+    this.renderer.render(this.scene, this.camera)
+    const out = document.createElement("canvas")
+    out.width = width * scale
+    out.height = height * scale
+    out.getContext("2d")!.drawImage(this.canvas, 0, 0, out.width, out.height)
+    this.camera.zoom = zoom
+    this.renderer.setPixelRatio(ratio)
+    this.resize()
+    this.renderer.render(this.scene, this.camera)
+    return out
+  }
   dispose() {
     this.renderer.setAnimationLoop(null)
     this.observer.disconnect()
     this.resetPresentation()
-    for (const model of [this.land, this.ground]) model?.dispose()
+    for (const model of [this.land, this.ground, this.parks]) model?.dispose()
     this.pool.dispose()
     this.renderer.dispose()
   }

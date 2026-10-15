@@ -1,35 +1,42 @@
 /**
  * The player's edits, applied at the start of a step: building, laying
- * roads and homes, bulldozing, pausing, the town's policy, answering the
+ * roads and homes, laying out parks, bulldozing, pausing, the town's policy, answering the
  * crown, and founding a new town. Costs are checked against the treasury
  * and the town's stock and paid up front in coins; the materials are
  * carried to the site afterwards. Once the term has ended, only a new town
  * (or carrying on after completing this one) is taken.
  */
-import {
-  buildingDraft, houseDraft, houseStart, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft
-} from "../archetypes.ts"
-import { amounts, goodIds, goods, home, kinds, lands, ROAD_COST, sizes, trade, type Amounts, type Kind } from "../content.ts"
+import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft } from "../archetypes.ts"
+import * as Random from "@typeonce/bevy-ts-math/Random"
+import { amounts, goodIds, RESERVE_MAX, TAX_STEPS, type Amounts, type Kind, type ParkPiece } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
-import {
-  Building, Census, Charter, Chronicle, Crown, Fate, Game, History, Inventory, Land, Ledger, Market, Mood, Paused, Policy, Rng, Status, Stock,
-  Storage, Time, TownHall, Treasury, Ui
-} from "../schema.ts"
-import { elapsed, TileRead, useOf } from "./shared.ts"
+import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rng, Site, Status, Stock, Storage, Time, TownHall, Treasury, Ui } from "../schema.ts"
+import { salvageOf, salvageText } from "../rules/salvage.ts"
+import { elapsed, rollWinters, TileRead, useOf, write } from "./shared.ts"
 import { crownGap, foundedFate } from "./term.ts"
 
-export const unlocked = (kind: Kind, census: { readonly settlers: number; readonly citizens: number }) =>
+export const unlocked = (kind: Pick<Kind, "unlock"> | ParkPiece, census: { readonly settlers: number; readonly citizens: number }) =>
   census.settlers + census.citizens >= kind.unlock.residents && census.citizens >= kind.unlock.citizens
+/** What a town still lacks before it can build `kind`, or `null` when it can. */
+export const lockReason = (kind: Pick<Kind, "unlock"> | ParkPiece, census: { readonly settlers: number; readonly citizens: number }): string | null => {
+  const residents = census.settlers + census.citizens
+  if (residents < kind.unlock.residents) return `needs ${kind.unlock.residents} residents (the town has ${residents})`
+  if (census.citizens < kind.unlock.citizens) return `needs ${kind.unlock.citizens} citizens (the town has ${census.citizens})`
+  return null
+}
 
 export const ApplyEdits = Game.System(
   "Town/ApplyEdits",
   {
     queries: {
       tiles: TileRead,
+      paved: Game.Query({ selection: { paved: Game.Query.read(Paved) } }),
+      parks: Game.Query({ selection: { park: Game.Query.write(Park) } }),
       halls: Game.Query({ selection: { hall: Game.Query.read(TownHall) } }),
-      buildings: Game.Query({ selection: { building: Game.Query.read(Building), paused: Game.Query.optional(Paused) } }),
+      /** Whatever was built at a cost, standing or a site: what pulling it down gives back. */
+      built: Game.Query({ selection: { building: Game.Query.optional(Building), house: Game.Query.optional(House), site: Game.Query.optional(Site), paused: Game.Query.optional(Paused) } }),
       stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage] })
     },
     resources: {
@@ -47,11 +54,18 @@ export const ApplyEdits = Game.System(
       crown: Game.System.writeResource(Crown),
       fate: Game.System.writeResource(Fate),
       history: Game.System.writeResource(History),
-      chronicle: Game.System.writeResource(Chronicle)
+      chronicle: Game.System.writeResource(Chronicle),
+      guide: Game.System.writeResource(Guide),
+      appeal: Game.System.writeResource(Appeal),
+      pantry: Game.System.writeResource(Pantry),
+      fires: Game.System.writeResource(Fires)
     },
-    services: { ui: Game.System.service(Ui) }
+    services: { ui: Game.System.service(Ui), rules: Game.System.service(Rules) }
   },
   ({ queries, resources, services, commands }) => {
+    const rules = services.rules
+    const { kinds, home, goods, grounds, props, lands, sizes, trade, roadCost: ROAD_COST, paveCost: PAVE_COST } = rules
+
     const ui = services.ui
     if (ui.edits.length === 0) return
     const grid = new GridBuilder(resources.land.get().mask)
@@ -76,6 +90,36 @@ export const ApplyEdits = Game.System(
       coins -= cost.coins
       for (const [g, n] of Object.entries(cost.materials)) left[g] = (left[g] ?? 0) - (n ?? 0)
     }
+    /** Takes goods out of storage at once, fullest first. */
+    const take = (materials: Partial<Record<string, number>>) => {
+      for (const [g, n] of Object.entries(materials) as Array<[keyof Amounts, number]>) {
+        let owed = n
+        for (const { data } of [...queries.stores.each()].sort((a, b) => b.data.inventory.get().stock[g] - a.data.inventory.get().stock[g])) {
+          if (owed <= 0) break
+          const inv = data.inventory.get()
+          const n = Math.min(owed, inv.stock[g])
+          data.inventory.set({ ...inv, stock: { ...inv.stock, [g]: inv.stock[g] - n } })
+          owed -= n
+        }
+      }
+    }
+    /** Puts goods into storage at once, where there is most room; returns how many found none. */
+    const stash = (materials: Partial<Record<string, number>>) => {
+      let lost = 0
+      for (const [g, n] of Object.entries(materials) as Array<[keyof Amounts, number]>) {
+        let owed = n
+        for (const { data } of [...queries.stores.each()].sort((a, b) => a.data.inventory.get().stock[g] - b.data.inventory.get().stock[g])) {
+          if (owed <= 0) break
+          const inv = data.inventory.get()
+          const k = Math.max(0, Math.min(owed, inv.cap - inv.stock[g]))
+          if (k > 0) data.inventory.set({ ...inv, stock: { ...inv.stock, [g]: inv.stock[g] + k } })
+          left[g] = (left[g] ?? 0) + k
+          owed -= k
+        }
+        lost += owed
+      }
+      return lost
+    }
     /** Fells the trees under a tile about to be built on. */
     const fell = (tile: { x: number; y: number; size: number }) => {
       for (const c of cellsOf(tile)) {
@@ -84,7 +128,7 @@ export const ApplyEdits = Game.System(
         if (tree !== undefined) commands.despawn(tree)
       }
     }
-    const spawn = (draft: Parameters<typeof commands.spawn>[0], tile: { x: number; y: number; size: number }, use: "building" | "house" | "road") => {
+    const spawn = (draft: Parameters<typeof commands.spawn>[0], tile: { x: number; y: number; size: number }, use: "building" | "house" | "road" | "park") => {
       fell(tile)
       const id = commands.spawn(draft)
       grid.claim(tile, id, use)
@@ -103,7 +147,7 @@ export const ApplyEdits = Game.System(
           const tile = { ...edit.cell, size: kind.size }
           if (!kind.buildable) break
           if (!unlocked(kind, resources.census.get())) {
-            ui.toast(`${kind.title} needs a bigger town`)
+            ui.toast(`${kind.title} ${lockReason(kind, resources.census.get())}`)
             break
           }
           if (!canPlace(grid.value(), tile)) {
@@ -117,7 +161,7 @@ export const ApplyEdits = Game.System(
           }
           pay(kind.cost)
           const id = spawn(buildingDraft(kind, edit.cell), tile, "building")
-          commands.insert(id, startOf(kind), ...rolesOf(kind))
+          commands.insert(id, startOf(kind), ...rolesOf(kind, rules))
           if (edit.open) ui.selected = id
           break
         }
@@ -130,7 +174,7 @@ export const ApplyEdits = Game.System(
             if (short) break
             pay(home.cost)
             const id = spawn(houseDraft(cell), tile, "house")
-            commands.insert(id, houseStart())
+            commands.insert(id, ...houseStart(rules))
           }
           if (short) ui.toast(short)
           break
@@ -150,6 +194,72 @@ export const ApplyEdits = Game.System(
           if (short) ui.toast("Not enough coins")
           break
         }
+        case "pave": {
+          // Stone comes out of storage at once, fullest first.
+          const paved = new Set<number>(queries.paved.each().map((row) => row.entity.id))
+          let short: string | null = null
+          let stone = 0
+          for (const cell of edit.cells) {
+            if (!inside(cell.x, cell.y) || useAt(grid.value(), cell.x, cell.y) !== "road") continue
+            const road = entities.get(ownerAt(grid.value(), cell.x, cell.y))
+            if (road === undefined || paved.has(road)) continue
+            short = afford({ coins: PAVE_COST.coins, materials: { stone: PAVE_COST.stone } })
+            if (short) break
+            coins -= PAVE_COST.coins
+            left.stone = (left.stone ?? 0) - PAVE_COST.stone
+            stone += PAVE_COST.stone
+            paved.add(road)
+            commands.insert(road, Game.Command.entry(Paved, {}))
+          }
+          take({ stone })
+          if (short) ui.toast(short)
+          break
+        }
+        case "ground": {
+          // Park needs no road: it is laid at once, its materials straight out of storage.
+          const piece = grounds[edit.ground]
+          const parks = new Map(queries.parks.each().map((row) => [row.entity.id as number, row] as const))
+          let short: string | null = null
+          const spent: Record<string, number> = {}
+          for (const cell of edit.cells) {
+            const tile = { ...cell, size: 1 }
+            const relay = useAt(grid.value(), cell.x, cell.y) === "park" ? parks.get(ownerAt(grid.value(), cell.x, cell.y)) : undefined
+            if (relay ? relay.data.park.get().ground === edit.ground : !canPlace(grid.value(), tile)) continue
+            short = afford(piece.cost)
+            if (short) break
+            pay(piece.cost)
+            for (const [g, n] of Object.entries(piece.cost.materials)) spent[g] = (spent[g] ?? 0) + (n ?? 0)
+            if (relay) relay.data.park.set({ ...relay.data.park.get(), ground: edit.ground })
+            else spawn(parkDraft(cell, edit.ground), tile, "park")
+          }
+          take(spent)
+          if (short) ui.toast(short)
+          break
+        }
+        case "prop": {
+          const piece = props[edit.prop]
+          if (!unlocked(piece, resources.census.get())) {
+            ui.toast(`${piece.title} needs a bigger town`)
+            break
+          }
+          const row = useAt(grid.value(), edit.cell.x, edit.cell.y) === "park"
+            ? queries.parks.each().find((r) => r.entity.id === ownerAt(grid.value(), edit.cell.x, edit.cell.y))
+            : undefined
+          if (!row) {
+            ui.toast("Lay park ground first")
+            break
+          }
+          if (row.data.park.get().prop === edit.prop) break
+          const short = afford(piece.cost)
+          if (short) {
+            ui.toast(short)
+            break
+          }
+          pay(piece.cost)
+          take(piece.cost.materials)
+          row.data.park.set({ ...row.data.park.get(), prop: edit.prop })
+          break
+        }
         case "remove": {
           if (!inside(edit.cell.x, edit.cell.y)) break
           const use = useAt(grid.value(), edit.cell.x, edit.cell.y)
@@ -158,6 +268,26 @@ export const ApplyEdits = Game.System(
           if (halls.has(owner)) {
             ui.toast("The town hall stays")
             break
+          }
+          // A park's furnishing goes before its ground.
+          const furnished = use === "park" ? queries.parks.each().find((r) => r.entity.id === owner && r.data.park.get().prop !== "none") : undefined
+          if (furnished) {
+            furnished.data.park.set({ ...furnished.data.park.get(), prop: "none" })
+            break
+          }
+          // A building or a home: a fee, and part of its materials back (a site's, all of it).
+          const built = queries.built.get(owner)
+          if (built.ok && (built.value.data.building.present || built.value.data.house.present)) {
+            const b = maybe(built.value.data.building)
+            const s = salvageOf(b ? kinds[b.kind].cost : home.cost, maybe(built.value.data.site)?.owed ?? null, rules)
+            if (s.fee > 0 && coins < s.fee) {
+              ui.toast(`Pulling it down costs ${s.fee} coins`)
+              break
+            }
+            coins -= s.fee
+            const lost = stash(s.back)
+            const said = salvageText(s)
+            if (said !== "") ui.toast(`${built.value.data.site.present ? "Cancelled" : "Pulled down"} · ${said}${lost > 0 ? ` (${lost} found no room in storage)` : ""}`)
           }
           // A building's walkers and a farm's fields are its children, and go with it.
           commands.despawn(owner)
@@ -172,21 +302,25 @@ export const ApplyEdits = Game.System(
           break
         }
         case "tax":
-          resources.policy.update((p) => ({ ...p, [edit.tier]: edit.rate }))
+          resources.policy.update((p) => ({ ...p, [edit.tier]: Math.max(TAX_STEPS[0], Math.min(TAX_STEPS.at(-1)!, Math.round(edit.rate))) }))
           break
         case "trade":
           resources.policy.update((p) => ({
             ...p,
             sells: edit.mode === "sell" ? [...p.sells.filter((g) => g !== edit.good), edit.good] : p.sells.filter((g) => g !== edit.good),
-            buys: edit.mode === "buy" ? [...p.buys.filter((g) => g !== edit.good), edit.good] : p.buys.filter((g) => g !== edit.good)
+            buys: edit.mode === "buy" ? [...p.buys.filter((g) => g !== edit.good), edit.good] : p.buys.filter((g) => g !== edit.good),
+            loads: edit.amount === undefined ? p.loads : { ...p.loads, [edit.good]: Math.max(0, Math.min(rules.tradeLoad, Math.round(edit.amount))) }
           }))
           break
         case "pause": {
           const owner = ownerAt(grid.value(), edit.cell.x, edit.cell.y)
-          const row = queries.buildings.each().find((b) => b.entity.id === owner)
-          if (!row || halls.has(owner) || row.data.paused.present === edit.on) break
-          if (edit.on) commands.insert(row.entity.id, Game.Command.entry(Paused, {}))
-          else commands.remove(row.entity.id, Paused)
+          // A building stops work; a home is closed, and stands empty (see `Households`).
+          const id = entities.get(owner)
+          const row = id === undefined ? undefined : queries.built.get(id)
+          if (!row?.ok || halls.has(owner) || row.value.data.site.present || row.value.data.paused.present === edit.on) break
+          if (!row.value.data.building.present && !row.value.data.house.present) break
+          if (edit.on) commands.insert(row.value.entity.id, Game.Command.entry(Paused, {}))
+          else commands.remove(row.value.entity.id, Paused)
           break
         }
         case "deliver": {
@@ -207,7 +341,7 @@ export const ApplyEdits = Game.System(
           left[c.good] = (left[c.good] ?? 0) - c.amount
           coins += c.reward
           resources.crown.set({ ...c, open: false, met: c.met + 1, streak: 0 })
-          resources.chronicle.update((ch) => ({ lines: [...ch.lines, { tick: t, text: `Sent the crown ${c.amount} ${goods[c.good].title}, for ${c.reward} coins.` }].slice(-200) }))
+          write(resources.chronicle, t, `Sent the crown ${c.amount} ${goods[c.good].title}, for ${c.reward} coins.`)
           ui.toast(`Sent · +${c.reward} coins`)
           break
         }
@@ -215,40 +349,47 @@ export const ApplyEdits = Game.System(
           const f = resources.fate.get()
           if (f.state !== "won") break
           resources.fate.set({ ...f, state: "playing", governing: true, won: f.at, reason: "" })
-          resources.chronicle.update((ch) => ({ lines: [...ch.lines, { tick: t, text: "The mayor stays on to govern the town to the end of the term." }].slice(-200) }))
+          write(resources.chronicle, t, "The mayor stays on to govern the town to the end of the term.")
           break
         }
         case "reserve":
-          resources.policy.update((p) => ({ ...p, reserve: edit.amount }))
+          resources.policy.update((p) => ({ ...p, reserve: Math.max(0, Math.min(RESERVE_MAX, Math.round(edit.amount))) }))
           break
         case "newTown": {
           for (const id of entities.values()) commands.despawn(id)
           entities.clear()
           const charter = edit.charter
           const richness = lands[charter.land]
-          const land = generate(charter)
+          const land = generate(charter, rules)
           for (const c of land.water) commands.spawn(waterDraft(c))
           for (const tree of land.trees) commands.spawn(treeDraft(tree.cell, tree.growth))
           for (const r of land.rocks) commands.spawn(rockDraft(r.cell, r.ore, r.amount))
           for (const c of land.roads) commands.spawn(roadDraft(c))
           const hall = kinds.townhall
           const id = commands.spawn(buildingDraft(hall, land.hall))
-          commands.insert(id, ...rolesOf(hall))
+          commands.insert(id, ...rolesOf(hall, rules))
           const stock: Amounts = amounts(richness.stock)
           commands.insert(id, Game.Command.entry(TownHall, {}), Game.Command.entry(Status, "idle"), Game.Command.entry(Inventory, { stock, accepts: goodIds, cap: hall.holds?.cap ?? 60 }))
           coins = richness.coins
           const founded = resources.time.get().tick
-          resources.charter.set({ ...charter, founded })
+          // The almanac: each year's winter, from the seed (on its own stream, so the land's randomness is untouched).
+          const almanac = Random.make((charter.seed ^ 0x5a17c3) >>> 0)
+          resources.charter.set({ ...charter, founded, winters: rollWinters(() => almanac.next(), rules) })
+          resources.appeal.set({ cells: [] })
+          resources.pantry.set({ eaten: 0, rotted: 0, eatenLast: 0, rottedLast: 0, warned: -1_000_000 })
+          resources.fires.set({ fires: [], next: 1 })
+          // A new town starts the guide over, unless the mayor turned it off.
+          resources.guide.update((g) => ({ done: [], off: g.off }))
           resources.land.set({ mask: land.mask, cells: land.cells })
           resources.ledger.set({ taxes: 0, trade: 0, upkeep: 0, admin: 0 })
-          resources.policy.set({ settlers: 100, citizens: 100, sells: trade.sells, buys: [], reserve: trade.reserve })
+          resources.policy.set({ settlers: 100, citizens: 100, sells: trade.sells, buys: [], reserve: trade.reserve, loads: amounts(Object.fromEntries(goodIds.map((g) => [g, rules.tradeLoad]))) })
           resources.market.set({ prices: amounts(Object.fromEntries(goodIds.map((g) => [g, 100]))) })
-          resources.mood.set({ approval: 10, target: 10, base: 0, needs: 0, taxes: 0, debt: 0, crown: 0, winter: 0 })
-          resources.crown.set({ open: false, good: "wood", amount: 0, issued: 0, due: 0, reward: 0, next: crownGap(charter), met: 0, missed: 0, streak: 0, snubs: [] })
+          resources.mood.set({ approval: 10, target: 10, base: 0, needs: 0, taxes: 0, debt: 0, crown: 0, winter: 0, grudge: 0, memory: 0 })
+          resources.crown.set({ open: false, good: "wood", amount: 0, issued: 0, due: 0, reward: 0, next: crownGap(charter, rules), met: 0, missed: 0, streak: 0, snubs: [] })
           resources.fate.set(foundedFate())
           resources.history.set({ samples: [] })
           resources.chronicle.set({
-            lines: [{ tick: 0, text: `Founded on ${sizes[charter.size].title}, ${richness.title} land, for a term of ${charter.term} minutes.` }]
+            lines: [{ tick: 0, text: `Founded on ${sizes[charter.size].title}, ${richness.title} land, for a term of ${charter.term} minutes.`, alarm: false, at: null }]
           })
           resources.rng.set(charter.seed)
           ui.selected = null

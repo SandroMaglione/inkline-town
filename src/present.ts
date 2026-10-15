@@ -1,23 +1,32 @@
 /**
  * What runs once a frame, after the simulation's steps: the pointer's
  * gestures become a selection, a preview, and edits for the next step; the
- * panel, tooltip, and top bar are filled in; and the views follow the world.
+ * panel, tooltip, top bar, map views, and the town's alerts are filled in;
+ * and the views follow the world.
  */
 import { RenderSync } from "@typeonce/bevy-ts-render"
+import { hazardStrength } from "./render3d/surface-state.ts"
 
-import { homeHeight, topOf, type Load, type Emphasis } from "./art.ts"
-import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView } from "./render3d/views.ts"
-import type { DoorSet } from "./render3d/models.ts"
-import { BUILD_TICKS, crown as crownRules, fate, goodIds, goods, home, kinds, needTitle, total, type Kind } from "./content.ts"
-import { around, canPlace, entrances, isRoad, key, lPath, useAt, type TileLike } from "./grid.ts"
-import { inside, U, type Point } from "./iso.ts"
+import { appealAt, appealParts, buildingSource, homeSource, landSource, parkSources, parksOf, type AppealSource, type ParkCell, type ParkValue } from "./appeal.ts"
+import { homeHeight, topOf, type Alert, type Load, type Emphasis } from "./art.ts"
+import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView, RuinView } from "./render3d/views.ts"
+import type { DoorSet, OverlayCell } from "./render3d/models.ts"
 import {
+  amounts, BUILD_TICKS, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
+  PAVE_COST, propIds, props, risk, RISK_MAX, ROAD_COST, tierHome, total, winters, type Amounts, type GoodId, type Kind, type KindId, type Tier
+} from "./content.ts"
+import { around, canPlace, cellOf, doors, entrances, isRoad, key, lPath, nearest, reach, useAt, type TileLike } from "./grid.ts"
+import { GRID, inside, U, type Point } from "./iso.ts"
+import {
+  Appeal,
   Building,
   BuildingNodes,
+  Burning,
   Census,
   Charter,
   Chronicle,
   Clock,
+  Condition,
   Crown,
   Errand,
   Fate,
@@ -26,6 +35,7 @@ import {
   Figure,
   Game,
   Grid,
+  Guide,
   History,
   House,
   HouseNodes,
@@ -34,21 +44,30 @@ import {
   Ledger,
   Market,
   Mood,
+  Pantry,
+  Park,
   Paused,
+  Paved,
   Policy,
   Recipe,
+  Rescue,
   Rising,
+  Risk,
   Road,
   Roam,
   Rock,
   RockNodes,
   Route,
+  Ruin,
+  RuinNodes,
   Service,
+  Sick,
   Site,
   Staff,
   StageService,
   Status,
   Stock,
+  Flow,
   Tile,
   Time,
   TownHall,
@@ -63,9 +82,16 @@ import {
   type GridValue,
   type Status as StatusValue
 } from "./schema.ts"
-import { capacity, CELL_STEPS, elapsed, goalsOf, larder, met, seasonAt, SITE_SHARE, taxOf, termTicks } from "./sim/index.ts"
+import { capacity, CELL_STEPS, elapsed, goalsOf, larder, lockReason, met, seasonAt, SITE_SHARE, steadyNet, taxOf, termTicks, winterOf } from "./sim/index.ts"
 import { Townsfolk } from "./townsfolk.ts"
-import { emptyPreview, type HitBox } from "./ui.ts"
+import { emptyPreview, type Alert as Notice, type HitBox, type Legend, type Line, type View } from "./ui.ts"
+import { blockers as blockersOf, streetAdvice, type InTown, type Served, type Street } from "./rules/explain.ts"
+import { breadBonus, moreAdmin, streetTax, suppliedTaxOf, taxOutlook, type TaxedHome } from "./rules/households.ts"
+import { approvalTarget } from "./rules/approval.ts"
+import { salvageOf, salvageText } from "./rules/salvage.ts"
+import { rockBlocks, type RockPart } from "./render3d/rock-blocks.ts"
+import { GUIDE_QUIET, guideDone, guideStep, guideSteps, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
+import { TAX_STEPS, ticks } from "./content.ts"
 
 const cellAt = (at: Point): Point => {
   return { x: Math.floor(at.x), y: Math.floor(at.y) }
@@ -101,13 +127,21 @@ const reachOf = (kind: Kind): number | null => kind.gathers?.radius ?? kind.plan
 
 const sourceTitle = { tree: "grown trees", stone: "stone", ore: "ore", field: "ripe fields", water: "water" } as const
 
+/** What a building's crew is short of, for its problem line. */
+interface Crewing {
+  readonly nearby: number
+  readonly crew: "settlers" | "citizens"
+}
+
 /** Why a building is not working, in a line, or `null` when it is fine. */
-const problemOf = (kind: Kind, status: StatusValue, growing = false): string | null => {
+const problemOf = (kind: Kind, status: StatusValue, growing = false, crewing?: Crewing): string | null => {
   switch (status) {
     case "unconnected":
       return "needs a road at the middle of one of its sides"
     case "unstaffed":
-      return "no workers: the town needs more residents"
+      if (crewing && crewing.nearby === 0)
+        return `no workers nearby: no ${crewing.crew === "citizens" ? "citizens' (or settlers') homes" : "settlers' cottages"} within ${COMMUTE} road cells`
+      return "no workers: every one nearby already has a job"
     case "blocked":
       return "full: nowhere to take what it makes"
     case "paused":
@@ -118,6 +152,7 @@ const problemOf = (kind: Kind, status: StatusValue, growing = false): string | n
         return `no ${sourceTitle[kind.gathers.source]} within ${kind.gathers.radius} cells${kind.gathers.source === "tree" ? ": a forester nearby replants" : ""}`
       if (kind.recipe?.input) return `waiting for ${kind.recipe.input}`
       if (kind.service?.service === "goods") return "nothing to hand out: no fish, bread, or cloth here"
+      if (kind.service?.service === "repair") return "no planks to mend with"
       return "waiting"
     default:
       return null
@@ -144,7 +179,10 @@ const BuildingRead = Game.Query({
     service: Game.Query.optional(Service),
     walkers: Game.Query.optionalRelated(WalkerOf),
     hall: Game.Query.optional(TownHall),
-    paused: Game.Query.optional(Paused)
+    paused: Game.Query.optional(Paused),
+    risk: Game.Query.optional(Risk),
+    condition: Game.Query.optional(Condition),
+    burning: Game.Query.optional(Burning)
   }
 })
 const HouseRead = Game.Query({
@@ -152,9 +190,23 @@ const HouseRead = Game.Query({
     tile: Game.Query.read(Tile),
     house: Game.Query.read(House),
     site: Game.Query.optional(Site),
-    rising: Game.Query.optional(Rising)
+    rising: Game.Query.optional(Rising),
+    risk: Game.Query.optional(Risk),
+    condition: Game.Query.optional(Condition),
+    burning: Game.Query.optional(Burning),
+    sick: Game.Query.optional(Sick),
+    closed: Game.Query.optional(Paused)
   }
 })
+const RuinRead = Game.Query({ selection: { tile: Game.Query.read(Tile), ruin: Game.Query.read(Ruin) } })
+const ParkRead = Game.Query({ selection: { tile: Game.Query.read(Tile), park: Game.Query.read(Park) } })
+
+/** Every cell between two corners, both included. */
+const rectangle = (a: Point, b: Point): Array<Point> => {
+  const out: Array<Point> = []
+  for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++) for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) out.push({ x, y })
+  return out
+}
 
 /** How far up a building or home is: a site rises to its frame as materials come in, then the rest of the way. */
 const buildOf = (
@@ -171,16 +223,132 @@ const PLATE_SHARE = 0.12
 const delivered = (site: { readonly owed: Parameters<typeof total>[0]; readonly total: number }) =>
   1 - total(site.owed) / Math.max(1, site.total)
 
+const percent = (n: number, of: number) => `${Math.round((n / of) * 100)}%`
+const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)}`
+
+/** The sign over a home or building: what is wrong now, or the risk nearest the top past `risk.warn`. */
+const alertOf = (r: { readonly fire: number; readonly health: number; readonly order: number } | undefined, sick: boolean, worn: boolean): Alert | null => {
+  if (sick) return "sick"
+  if (r) {
+    const worst = (["fire", "health", "order"] as const).reduce((a, b) => (r[b] > r[a] ? b : a))
+    if (r[worst] >= risk.warn) return worst
+  }
+  return worn ? "worn" : null
+}
+
+/** How a risk reads: "low", "40%", or "high: 85%". */
+const riskText = (value: number) => (value < RISK_MAX * 0.35 ? "ok" : value >= risk.warn ? `high, ${percent(value, RISK_MAX)}` : percent(value, RISK_MAX))
+
+// ── Map views ─────────────────────────────────────────────────────────────
+
+// Blue for fine, sand for worth a look, vermilion for wrong: a scale that still reads with
+// red-green colour blindness, unlike green to red.
+const GOOD = 0x3a78c2
+const FAIR = 0xe2c25c
+const BAD = 0xc8553d
+/** Citizens' homes, in the workers view. */
+const COOL = 0x8a58a8
+/** The buildings that serve a view (its fire watch, its healer), and a workplace's reach: ink, apart from the scale. */
+const MARK = 0x3d4943
+/** A meter 0 → `of` as a colour: blue when low, sand, vermilion past the warning line. */
+const meterColor = (value: number, of: number, warn: number) => (value >= warn ? BAD : value >= of * 0.35 ? FAIR : GOOD)
+
+const legends: Readonly<Record<Exclude<View, "none">, Legend>> = {
+  appeal: {
+    title: "desirability",
+    keys: [
+      { color: 0x1f4f8f, label: `${home.tiers[3].appeal}+: townhouses` },
+      { color: GOOD, label: `${home.tiers[2].appeal}+: citizens` },
+      { color: 0xc6d4e4, label: "0 to 4: settlers only" },
+      { color: 0xeaa26a, label: "below 0: fewer people, less tax" },
+      { color: BAD, label: `${home.squalid} or less: squalid` }
+    ],
+    note: "Every point counts: a cottage holds fewer and pays less for each point below 0, and pays more above it. Industry pushes homes away; parks (the more they hold, the further they reach), a chapel, a market, and paved streets draw them in."
+  },
+  workers: {
+    title: "workers",
+    keys: [
+      { color: GOOD, label: "fully staffed" },
+      { color: FAIR, label: "short of workers" },
+      { color: BAD, label: "no workers" },
+      { color: 0xd6b48a, label: "settlers' homes" },
+      { color: COOL, label: "citizens' homes" }
+    ],
+    note: `Residents walk at most ${COMMUTE} road cells to work. Select a workplace to see its reach and the homes inside it.`
+  },
+  fire: {
+    title: "fire",
+    keys: [
+      { color: GOOD, label: "watched" },
+      { color: FAIR, label: "rising" },
+      { color: BAD, label: "at risk, or burning" }
+    ],
+    note: "Buildings take the colour too. A fire watch's watchman resets the risk of every home and workshop along the way; vermilion means past half way, so there is still time. Wooden cottages, ovens, forges, and crowding raise it."
+  },
+  health: {
+    title: "health",
+    keys: [
+      { color: GOOD, label: "visited" },
+      { color: FAIR, label: "rising" },
+      { color: BAD, label: "at risk, or sick" }
+    ],
+    note: "A healer's physician resets the risk and cures the sick. Hunger, crowding, squalor, quarry dust, and still water raise it."
+  },
+  order: {
+    title: "order",
+    keys: [
+      { color: GOOD, label: "kept" },
+      { color: FAIR, label: "rising" },
+      { color: BAD, label: "thieves about" }
+    ],
+    note: "A watch house's constable keeps order. Low approval, squalor, and homes not full raise it; theft first, then the home is left derelict."
+  },
+  condition: {
+    title: "condition",
+    keys: [
+      { color: GOOD, label: "well kept" },
+      { color: FAIR, label: "needs mending" },
+      { color: BAD, label: "run down: half pace" }
+    ],
+    note: "A builder's yard mends what its builder passes with planks and stone. At nothing it falls down."
+  }
+}
+
+/** When each workshop began waiting for its input: a shelf runs empty for a moment all the time, so the ticker only says so after `ALERT_PATIENCE`. */
+const starvedSince = new Map<number, number>()
+const ALERT_PATIENCE = ticks(30)
+/** Since when the store has held no food (`null`: it has some). Fish comes in and goes out in handfuls, so the ticker waits `HUNGER_PATIENCE` before saying so. */
+let emptySince: number | null = null
+/** Once said, it stays said a while, so a handful of fish arriving does not flick it off and on. */
+let hungryUntil = 0
+const HUNGER_PATIENCE = ticks(20)
+/** A view's colour over a model: pale, so the ink still reads. */
+const TINT = { good: 0xbcd2ee, fair: 0xf3e3a8, bad: 0xf2b9a0, cool: 0xdccbe8, mark: 0xd5dad3, settlers: 0xead7bd, fine: 0xa9c4e8, plain: 0xffffff }
+const needIcons = { food: "food", bread: "bread", cloth: "cloth", faith: "faith" } as const
+
+const appealColor = (v: number) =>
+  v >= home.tiers[3].appeal ? 0x1f4f8f : v >= home.tiers[2].appeal ? GOOD : v >= 0 ? 0xc6d4e4 : v > home.squalid ? 0xeaa26a : BAD
+
 export const Interact = Game.System(
   "Town/Interact",
   {
-    queries: { buildings: BuildingRead, houses: HouseRead },
+    queries: {
+      buildings: BuildingRead,
+      houses: HouseRead,
+      ruins: RuinRead,
+      parks: ParkRead,
+      trees: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Tree] }),
+      water: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Water] }),
+      rocks: Game.Query({ selection: { tile: Game.Query.read(Tile), rock: Game.Query.read(Rock) } }),
+      paved: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road, Paved] })
+    },
     resources: {
       grid: Game.System.readResource(Grid),
       census: Game.System.readResource(Census),
       treasury: Game.System.readResource(Treasury),
       ledger: Game.System.readResource(Ledger),
       stock: Game.System.readResource(Stock),
+      flow: Game.System.readResource(Flow),
       policy: Game.System.readResource(Policy),
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter),
@@ -189,7 +357,10 @@ export const Interact = Game.System(
       crown: Game.System.readResource(Crown),
       fate: Game.System.readResource(Fate),
       history: Game.System.readResource(History),
-      chronicle: Game.System.readResource(Chronicle)
+      chronicle: Game.System.readResource(Chronicle),
+      appeal: Game.System.readResource(Appeal),
+      pantry: Game.System.readResource(Pantry),
+      guide: Game.System.writeResource(Guide)
     },
     services: { ui: Game.System.service(Ui) }
   },
@@ -198,34 +369,108 @@ export const Interact = Game.System(
     const grid = resources.grid.get()
     const rates = resources.policy.get()
     const approval = resources.mood.get().approval
+    const cells = resources.appeal.get().cells
+    const tick = resources.time.get().tick
     const buildings = queries.buildings.each()
     const houses = queries.houses.each()
+    const ruins = queries.ruins.each()
+    const parkRows = queries.parks.each()
+    const parkCells: Array<ParkCell> = parkRows.map(({ data }) => ({ ...data.tile.get(), ...data.park.get() }))
+    const parkAt = new Map(parkRows.map((row) => [key(row.data.tile.get().x, row.data.tile.get().y), row] as const))
+    const road = (x: number, y: number) => isRoad(grid, x, y)
+    /** The park a cell belongs to, as it is, or as it would be with `changed` cells laid over it. */
+    const parkOf = (cell: Point, changed: ReadonlyArray<ParkCell> = []): ParkValue | undefined => {
+      const over = new Map(parkCells.map((c) => [key(c.x, c.y), c]))
+      for (const c of changed) over.set(key(c.x, c.y), c)
+      return parksOf([...over.values()], road).find((p) => p.cells.some((c) => c.x === cell.x && c.y === cell.y))
+    }
+    /** How far a park reaches, as one square around it. */
+    const reachPlots = (p: ParkValue) => {
+      const xs = p.cells.map((c) => c.x)
+      const ys = p.cells.map((c) => c.y)
+      const x = Math.min(...xs)
+      const y = Math.min(...ys)
+      const size = Math.max(Math.max(...xs) - x, Math.max(...ys) - y) + 1
+      return [{ x: x - p.reach, y: y - p.reach, size: size + 2 * p.reach, look: "reach" as const }]
+    }
+    /** A park, for its panel: what it is worth, why, and what would make it better. */
+    const describePark = (p: ParkValue): Array<Line> => {
+      const has = new Set(p.cells.map((c) => c.prop))
+      const missing = propIds.filter((id) => !has.has(id)).map((id) => props[id].title.toLowerCase())
+      const upkeep = p.cells.reduce((n, c) => n + grounds[c.ground].upkeep + (c.prop === "none" ? 0 : props[c.prop].upkeep), 0)
+      const placed = p.cells.filter((c) => c.prop !== "none").length - p.crowded
+      return [
+        { icon: "decor", label: "size", value: `${p.cells.length} cell${p.cells.length === 1 ? "" : "s"} · beauty ${p.beauty}` },
+        { icon: "appeal", label: "made of", value: p.parts.map((part) => `${part.label} ${part.value}`).join(", ") || "nothing yet" },
+        { icon: "homes", label: "the streets around", value: parkText(p), tone: "ok" },
+        p.entrances > 0
+          ? { icon: "road", label: "ways in from the street", value: `${p.entrances}${p.entrances > 2 ? " (2 count)" : ""}` }
+          : { icon: "road", label: "ways in from the street", value: "none", tone: "warn", note: "lay a gravel walk or a paved square out to a road: +1.5 each, two count" },
+        { icon: "decor", label: "furnishings that count", value: `${placed} of ${Math.ceil(p.cells.length / 2)}`, tone: p.crowded > 0 ? "warn" : undefined, note: p.crowded > 0 ? `${p.crowded} too many: one counts for every 2 cells, so lay more ground` : undefined },
+        ...(missing.length > 0 ? [{ icon: "info", label: "nicer with", value: missing.join(", "), tone: "dim" } as Line] : []),
+        { icon: "upkeep", label: "upkeep", value: `${Math.round(upkeep * 10) / 10} coins a minute` }
+      ]
+    }
+    /** What the pointer is on: the model the camera ray hit, or else (parks have nothing standing to hit) the park on the cell. */
+    const pickAt = (at: Point, entity?: number | null) => {
+      const hit = hitAt(hits, at, entity)
+      return hit ?? parkAt.get(key(Math.floor(at.x), Math.floor(at.y)))?.entity.id ?? null
+    }
+    const parkText = (p: ParkValue) => `desirability ${signed(p.value)} out to ${p.reach} cells`
+    /**
+     * What new cottages would bring in, fed, at the settlers' rate on their streets, less what they add to the
+     * town hall's administration (see `moreAdmin`): the sum that turns once a town is large.
+     */
+    const homesWorth = (at: ReadonlyArray<Point>) => {
+      if (at.length === 0) return ""
+      const n = at.length, standing = houses.filter((row) => !row.data.closed.present).length
+      const fed = { tier: 1 as Tier, food: 1, bread: 0, cloth: 0, faith: 0, residents: home.tiers[1].residents }
+      const pays = at.reduce((sum, c) => {
+        const d = appealAt(cells, c.x, c.y)
+        return sum + taxOf({ ...fed, residents: capacity(fed, approval, d, undefined, rates.settlers) }, rates, undefined, d)
+      }, 0)
+      const worth = Math.round(pays - moreAdmin(standing, n))
+      return ` · ${n === 1 ? "this home" : "these homes"}: ${signed(worth)} coins a minute after administration, once fed${worth <= 0 ? " · past what the town hall can run cheaply: finer homes pay better than more of them" : ""}`
+    }
 
     const hits: Array<HitBox> = [
       ...buildings.map(({ entity, data }) => {
         const kind = kinds[data.building.get().kind]
         return hitBox(entity.id, data.tile.get(), kind.half, topOf(kind))
       }),
-      ...houses.map(({ entity, data }) => hitBox(entity.id, data.tile.get(), home.half, homeHeight(data.house.get().tier)))
+      ...houses.map(({ entity, data }) => hitBox(entity.id, data.tile.get(), home.half, homeHeight(data.house.get().tier))),
+      ...ruins.map(({ entity, data }) => hitBox(entity.id, data.tile.get(), 0, 0)),
+      ...parkRows.map(({ entity, data }) => hitBox(entity.id, data.tile.get(), 0, 0))
     ].sort((l, r) => r.depth - l.depth)
     ui.hits = hits
-    const tileOf = (id: number) => [...buildings, ...houses].find((row) => row.entity.id === id)?.data.tile.get()
+    const tileOf = (id: number) => [...buildings, ...houses, ...ruins, ...parkRows].find((row) => row.entity.id === id)?.data.tile.get()
 
     // ── Gestures ──
     for (const gesture of ui.gestures.splice(0)) {
       const cell = cellAt(gesture.at)
       if (gesture.type === "press") {
-        ui.dragFrom = (ui.tool === "road" || ui.tool === "home") && inside(cell.x, cell.y) ? cell : null
+        ui.dragFrom = (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave" || ui.tool === "ground") && inside(cell.x, cell.y) ? cell : null
         continue
       }
       switch (ui.tool) {
         case "road":
+        case "pave":
         case "home": {
           if (ui.dragFrom) {
             const cells = lPath(ui.dragFrom, cell).filter((c) => inside(c.x, c.y))
-            ui.edits.push(ui.tool === "road" ? { type: "roads", cells } : { type: "homes", cells })
+            ui.edits.push(ui.tool === "road" ? { type: "roads", cells } : ui.tool === "pave" ? { type: "pave", cells } : { type: "homes", cells })
           }
           ui.dragFrom = null
+          break
+        }
+        case "ground": {
+          if (ui.dragFrom) ui.edits.push({ type: "ground", ground: ui.ground, cells: rectangle(ui.dragFrom, cell).filter((c) => inside(c.x, c.y)) })
+          ui.dragFrom = null
+          break
+        }
+        case "prop": {
+          if (gesture.panned) break
+          ui.edits.push({ type: "prop", prop: ui.prop, cell })
           break
         }
         case "place": {
@@ -235,13 +480,13 @@ export const Interact = Game.System(
         }
         case "bulldoze": {
           if (gesture.panned) break
-          const hit = hitAt(hits, gesture.at, gesture.hit)
+          const hit = pickAt(gesture.at, gesture.hit)
           ui.edits.push({ type: "remove", cell: (hit !== null ? tileOf(hit) : undefined) ?? cell })
           break
         }
         case "select": {
           if (gesture.panned) break
-          ui.selected = hitAt(hits, gesture.at, gesture.hit)
+          ui.selected = pickAt(gesture.at, gesture.hit)
           if (ui.selected !== null) ui.menu = null
           break
         }
@@ -253,13 +498,46 @@ export const Interact = Game.System(
     const preview = emptyPreview()
     const pointer = ui.pointer
     const cell = pointer ? cellAt(pointer) : null
-    preview.hover = pointer && (ui.tool === "select" || ui.tool === "bulldoze") ? hitAt(hits, pointer, ui.pointerHit) : null
+    preview.hover = pointer && (ui.tool === "select" || ui.tool === "bulldoze") ? pickAt(pointer, ui.pointerHit) : null
     const showReach = (tile: TileLike, kind: Kind) => {
       const r = reachOf(kind)
       if (r !== null) preview.plots.push({ x: tile.x - r, y: tile.y - r, size: tile.size + 2 * r, look: "reach" })
     }
+    const pavedCells = new Set(queries.paved.each().map(({ data }) => key(data.tile.get().x, data.tile.get().y)))
+    /** The road cells within `limit` of a tile's doors: what a service's walkers, or a commute, would reach from here. */
+    const rangeFrom = (tile: TileLike, limit: number, note: string) => {
+      const ds = doors(grid, tile)
+      if (ds.length === 0) return
+      const roads = reach(grid, ds)
+      for (let k = 0; k < roads.distance.length; k++) {
+        const d = roads.distance[k]!
+        if (d >= 0 && d < limit) preview.range.push(cellOf(k))
+      }
+      preview.rangeNote = note
+    }
+    const rangeOfKind = (tile: TileLike, kind: Kind) => {
+      if (kind.service) rangeFrom(tile, kind.service.range, `its walkers reach ${kind.service.range} road cells from the door`)
+      else if (kind.workers > 0) rangeFrom(tile, COMMUTE + 1, `its workers come from homes within ${COMMUTE} road cells`)
+    }
+    // Where the page is pointing (from the ticker): outlined for a few seconds.
+    if (ui.flash) {
+      if (Date.now() < ui.flash.until) preview.plots.push({ x: ui.flash.cell.x, y: ui.flash.cell.y, size: ui.flash.size, look: "picked" })
+      else ui.flash = null
+    }
 
-    if (ui.tool === "road" || ui.tool === "home") {
+    /** A cost `n` times over. */
+    const times = (cost: Kind["cost"], n: number): Kind["cost"] => ({
+      coins: cost.coins * n,
+      materials: Object.fromEntries(Object.entries(cost.materials).map(([g, m]) => [g, (m ?? 0) * n]))
+    })
+    const counted = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`
+    // Let go off the map (over the tool bar, say) and the stroke is dropped: it shows as blocked.
+    const dropping = ui.stroke === "cancel" && ui.dragFrom !== null
+    if (dropping && cell && (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave" || ui.tool === "ground")) {
+      for (const c of ui.tool === "ground" ? rectangle(ui.dragFrom!, cell) : lPath(ui.dragFrom!, cell))
+        if (inside(c.x, c.y)) preview.plots.push({ ...c, size: 1, look: "blocked" })
+      preview.tooltip = "let go here to cancel"
+    } else if (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave") {
       const cells = cell === null ? [] : ui.dragFrom ? lPath(ui.dragFrom, cell) : [cell]
       for (const c of cells) {
         if (!inside(c.x, c.y)) continue
@@ -267,26 +545,127 @@ export const Interact = Game.System(
         if (ui.tool === "road") {
           if (free) preview.roads.push(c)
           else if (useAt(grid, c.x, c.y) !== "road") preview.plots.push({ ...c, size: 1, look: "blocked" })
+        } else if (ui.tool === "pave") {
+          const road = useAt(grid, c.x, c.y) === "road"
+          if (road && !pavedCells.has(key(c.x, c.y))) preview.plots.push({ ...c, size: 1, look: "reach" })
+          else if (!road) preview.plots.push({ ...c, size: 1, look: "blocked" })
         } else if (free) preview.ghosts.push({ what: "home", cell: c })
         else preview.plots.push({ ...c, size: 1, look: "blocked" })
+      }
+      if (ui.tool === "home" && cell && inside(cell.x, cell.y)) {
+        rangeFrom({ ...(ui.dragFrom ?? cell), size: 1 }, COMMUTE + 1, `residents walk to work within ${COMMUTE} road cells`)
+        preview.tooltip = `homes · ${costText(home.cost)} each · along a road${homesWorth(preview.ghosts.map((g) => g.cell))} · ${preview.rangeNote ?? "touch a road and residents walk to work within " + COMMUTE + " road cells"}`
+      }
+      if (ui.tool === "road" && cell) preview.tooltip = `road · ${ROAD_COST} coins a cell · buildings need one at the middle of a side`
+      if (ui.dragFrom && cell) {
+        const n = ui.tool === "road" ? preview.roads.length : ui.tool === "home" ? preview.ghosts.length : preview.plots.filter((p) => p.look === "reach").length
+        preview.stroke =
+          ui.tool === "road"
+            ? `${counted(n, "road cell")} · ${costText({ coins: n * ROAD_COST, materials: {} })}`
+            : ui.tool === "home"
+              ? `${counted(n, "home")} · ${costText(times(home.cost, n))}${homesWorth(preview.ghosts.map((g) => g.cell))}`
+              : `pave ${counted(n, "cell")} · ${costText({ coins: n * PAVE_COST.coins, materials: { stone: n * PAVE_COST.stone } })}`
+      }
+    } else if (ui.tool === "ground" && cell) {
+      const laid: Array<ParkCell> = []
+      for (const c of ui.dragFrom ? rectangle(ui.dragFrom, cell) : [cell]) {
+        if (!inside(c.x, c.y)) continue
+        const there = parkAt.get(key(c.x, c.y))?.data.park.get()
+        if (there ? there.ground !== ui.ground : canPlace(grid, { ...c, size: 1 })) laid.push({ ...c, ground: ui.ground, prop: there?.prop ?? "none" })
+        else if (!there) preview.plots.push({ ...c, size: 1, look: "blocked" })
+      }
+      preview.parks.push(...laid)
+      const after = laid.length > 0 ? parkOf(laid[0]!, laid) : undefined
+      // What the park it joins gives now, if it joins one.
+      const before = laid.map((c) => parkOf(c)).find((p) => p !== undefined)
+      const cost = costText(times(grounds[ui.ground].cost, laid.length))
+      if (ui.dragFrom) preview.stroke = `${grounds[ui.ground].title.toLowerCase()} · ${counted(laid.length, "cell")} · ${cost}`
+      preview.tooltip = `${grounds[ui.ground].title.toLowerCase()} · ${counted(laid.length, "cell")}, ${cost}${after ? ` · the park: ${parkText(after)}${before && before.value !== after.value ? ` (now ${signed(before.value)})` : ""}` : ""} · drag a rectangle`
+      if (after) preview.plots.push(...reachPlots(after))
+    } else if (ui.tool === "prop" && cell && inside(cell.x, cell.y)) {
+      const there = parkAt.get(key(cell.x, cell.y))?.data.park.get()
+      if (there) {
+        const placed = { ...cell, ground: there.ground, prop: ui.prop }
+        preview.parks.push(placed)
+        const before = parkOf(cell)
+        const after = parkOf(cell, [placed])
+        preview.tooltip = `${props[ui.prop].title.toLowerCase()} · ${costText(props[ui.prop].cost)}${after ? ` · the park: ${parkText(after)}${before && before.value !== after.value ? ` (now ${signed(before.value)})` : ""}` : ""}${after && after.crowded > 0 ? " · too crowded: lay more ground for it to count" : ""}`
+        if (after) preview.plots.push(...reachPlots(after))
+      } else {
+        preview.plots.push({ ...cell, size: 1, look: "blocked" })
+        preview.tooltip = `${props[ui.prop].title.toLowerCase()} · lay park ground first`
       }
     } else if (ui.tool === "place" && ui.placing && pointer) {
       const kind = kinds[ui.placing]
       const at = footprintAt(pointer, kind.size)
       const tile = { ...at, size: kind.size }
       showReach(tile, kind)
-      if (canPlace(grid, tile)) preview.ghosts.push({ what: ui.placing, cell: at })
+      rangeOfKind(tile, kind)
+      if (kind.appeal) preview.plots.push({ x: tile.x - kind.appeal.reach, y: tile.y - kind.appeal.reach, size: tile.size + 2 * kind.appeal.reach, look: kind.appeal.value > 0 ? "reach" : "hover" })
+      if (lockReason(kind, resources.census.get())) preview.plots.push({ ...tile, look: "blocked" })
+      else if (canPlace(grid, tile)) preview.ghosts.push({ what: ui.placing, cell: at })
       else preview.plots.push({ ...tile, look: "blocked" })
     } else if (ui.tool === "bulldoze") {
       preview.danger = true
-      if (preview.hover === null && cell && ["road", "tree", "field"].includes(useAt(grid, cell.x, cell.y)))
+      if ((preview.hover === null || useAt(grid, cell?.x ?? -1, cell?.y ?? -1) === "park") && cell && ["road", "tree", "field", "park"].includes(useAt(grid, cell.x, cell.y)))
         preview.plots.push({ ...cell, size: 1, look: "blocked" })
+      const there = cell ? parkAt.get(key(cell.x, cell.y))?.data.park.get() : undefined
+      if (there) preview.tooltip = there.prop !== "none" ? `remove the ${props[there.prop].title.toLowerCase()}` : `remove the ${grounds[there.ground].title.toLowerCase()}`
     }
     if (ui.selected !== null) {
       const row = buildings.find((b) => b.entity.id === ui.selected)
       const tile = tileOf(ui.selected)
-      if (tile) preview.plots.push({ ...tile, look: "picked" })
-      if (row && tile) showReach(tile, kinds[row.data.building.get().kind])
+      const whole = tile && useAt(grid, tile.x, tile.y) === "park" ? parkOf(tile) : undefined
+      if (whole) {
+        // A park is picked whole: every cell of it, and how far it reaches.
+        for (const c of whole.cells) preview.plots.push({ x: c.x, y: c.y, size: 1, look: "hover" })
+        preview.plots.push(...reachPlots(whole))
+      } else if (tile) preview.plots.push({ ...tile, look: "picked" })
+      if (row && tile) {
+        showReach(tile, kinds[row.data.building.get().kind])
+        rangeOfKind(tile, kinds[row.data.building.get().kind])
+      }
+    }
+
+    // ── The neighbourhood, explained (only when a home asks) ──
+    let sources: Array<AppealSource> | null = null
+    const appealSources = () => {
+      if (sources) return sources
+      sources = []
+      for (const { data } of buildings) {
+        if (data.site.present || data.rising.present) continue
+        const s = buildingSource(data.building.get().kind, data.tile.get())
+        if (s) sources.push(s)
+      }
+      for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get()))
+      for (const { data } of queries.water.each()) sources.push(landSource("water", data.tile.get()))
+      for (const { data } of queries.paved.each()) sources.push(landSource("paved", data.tile.get()))
+      sources.push(...parkSources(parkCells, road))
+      for (const { data } of ruins) sources.push(landSource("ruin", data.tile.get()))
+      for (const { data } of houses) {
+        if (data.site.present || data.rising.present) continue
+        if ((maybe(data.condition)?.value ?? CONDITION_MAX) < wear.worn) sources.push(landSource("worn", data.tile.get()))
+        const fine = data.closed.present ? null : homeSource(data.house.get().tier, data.tile.get())
+        if (fine) sources.push(fine)
+      }
+      return sources
+    }
+    /** Where a home's residents work: the nearest workplace of their crew in reach that has them. */
+    const workOf = (tile: TileLike, tier: Tier) => {
+      const ds = doors(grid, tile)
+      if (ds.length === 0) return null
+      const roads = reach(grid, ds)
+      let best: { title: string; distance: number } | null = null
+      for (const { data } of buildings) {
+        const kind = kinds[data.building.get().kind]
+        const staff = data.staff.get()
+        if (staff.needed === 0 || staff.assigned === 0 || (kind.crew !== crewOf(tier) && !(tier === 1 && staff.apprentices > 0))) continue
+        for (const d of doors(grid, data.tile.get())) {
+          const n = roads.distance[key(d.x, d.y)]!
+          if (n >= 0 && n <= COMMUTE && (best === null || n < best.distance)) best = { title: kind.title.toLowerCase(), distance: n }
+        }
+      }
+      return best
     }
 
     // ── Tooltip and panel ──
@@ -294,67 +673,290 @@ export const Interact = Game.System(
       const kind = kinds[row.data.building.get().kind]
       const status = row.data.status.get()
       const site = maybe(row.data.site)
-      const lines: Array<string> = []
+      const lines: Array<Line> = []
       if (site) {
-        const owed = Object.entries(site.owed)
-          .filter(([, n]) => n > 0)
-          .map(([g, n]) => `${n} ${g}`)
-        lines.push(owed.length > 0 ? `waiting for ${owed.join(", ")}` : "going up")
+        const owed = (Object.entries(site.owed) as Array<[GoodId, number]>).filter(([, n]) => n > 0)
+        lines.push(
+          owed.length > 0
+            ? { icon: "build", label: "a site", value: "waiting for", goods: owed.map(([good, count]) => ({ good, count })), note: "carriers bring materials from storage; buy what the town lacks in the town panel", tone: "warn" }
+            : { icon: "build", label: "a site", value: "going up", tone: "ok" }
+        )
         return { kind, status, problem: null, lines }
       }
       const staff = row.data.staff.get()
-      if (staff.needed > 0) lines.push(`workers ${staff.assigned} of ${staff.needed}`)
+      if (staff.needed > 0) {
+        const crew = kind.crew
+        const one = crew === "citizens" ? "citizen" : "settler"
+        const short = staff.assigned < staff.needed
+        lines.push({
+          icon: "workers",
+          label: "workers",
+          value: `${staff.assigned} of ${staff.needed}`,
+          tone: !short ? "ok" : staff.assigned > 0 ? "warn" : "bad",
+          note: short
+            ? staff.nearby === 0
+              ? `no ${crew} live within ${COMMUTE} road cells: lay homes nearer${crew === "citizens" ? ", or settlers stand in as apprentices" : ""}`
+              : `every ${one} nearby already has a job: lay more homes within ${COMMUTE} road cells`
+            : staff.apprentices > 0
+              ? `${staff.apprentices} settler apprentice${staff.apprentices > 1 ? "s" : ""} stand in for citizens, at three-quarters pace`
+              : undefined
+        })
+        lines.push({ icon: crew, label: `${crew} within ${COMMUTE} road cells`, value: `${staff.nearby}`, tone: "dim" })
+      }
       const recipe = maybe(row.data.recipe)
       const inventory = maybe(row.data.inventory)
       if (recipe)
+        lines.push({
+          icon: recipe.output,
+          label: "makes",
+          value: `${recipe.input ? `${recipe.inputs} ${goods[recipe.input].title} → ` : ""}${recipe.batch} ${goods[recipe.output].title} · a job every ${Math.round(recipe.period / 60)} s`,
+          note: `${recipe.made} made so far${recipe.input ? ` · carriers bring ${goods[recipe.input].title} from whoever makes it, or storage` : ""}`
+        })
+      if (inventory) {
+        const held = inventory.accepts.filter((g) => inventory.stock[g] > 0).map((g) => ({ good: g, count: inventory.stock[g] }))
+        const hall = maybe(row.data.hall) !== undefined
         lines.push(
-          `${recipe.input ? `${recipe.inputs} ${recipe.input} → ` : ""}${recipe.batch} ${goods[recipe.output].title} · ${recipe.made} made`
+          held.length > 0
+            ? { icon: "jobs", label: "holds", goods: held, note: hall ? `up to ${inventory.cap} of each good; carriers take what sites and workshops ask for, and ${kinds.townhall.carriers} are out at once` : undefined }
+            : { icon: "jobs", label: "holds", value: "nothing yet", tone: "dim" }
         )
-      if (inventory && !maybe(row.data.hall)) {
-        const held = inventory.accepts.filter((g) => inventory.stock[g] > 0).map((g) => `${inventory.stock[g]} ${g}`)
-        lines.push(held.length > 0 ? `holds ${held.join(", ")}` : "holds nothing yet")
       }
+      if (kind.wear && inventory)
+        lines.push(
+          inventory.stock.tools > 0
+            ? { icon: "tools", label: "tools", value: `${inventory.stock.tools} on hand`, note: `one wears out every ${kind.wear} jobs; a carrier brings another from storage` }
+            : { icon: "tools", label: "tools", value: "none", tone: "bad", note: "half pace until a carrier brings one: a smithy forges them, or buy them in the town panel" }
+        )
+      const condition = maybe(row.data.condition)
+      if (condition)
+        lines.push({
+          icon: "condition",
+          label: "condition",
+          value: percent(condition.value, CONDITION_MAX),
+          tone: condition.value < wear.worn ? "bad" : condition.value < wear.mend ? "warn" : "ok",
+          note:
+            condition.value < wear.worn
+              ? "run down: half pace, and more likely to burn · a builder's yard mends it with a plank and a stone"
+              : condition.value < wear.mend
+                ? "a builder's yard would mend it as its builder passes"
+                : "everything wears; a builder's yard keeps it mended"
+        })
+      const r = maybe(row.data.risk)
+      if (r)
+        lines.push({
+          icon: "fire",
+          label: "fire risk",
+          value: riskText(r.fire),
+          tone: r.fire >= risk.warn ? "bad" : r.fire >= RISK_MAX * 0.35 ? "warn" : "ok",
+          note: r.fire >= risk.warn ? "a fire watch's watchman resets it as he passes" : kind.hot ? "an oven or a forge: a risk to itself and to homes within 2 cells" : undefined
+        })
+      const service = maybe(row.data.service)
       const walkers = maybe(row.data.walkers)?.length ?? 0
-      if (walkers > 0) lines.push(`${walkers} out on the roads`)
-      if (kind.upkeep > 0) lines.push(`upkeep ${kind.upkeep} coins a minute`)
-      return { kind, status, problem: problemOf(kind, status, status === "starved" && growingNear(grid, row.data.tile.get(), kind)), lines }
+      if (service)
+        lines.push({
+          icon: service.service === "goods" ? "trade" : service.service === "faith" ? "faith" : service.service === "repair" ? "repair" : service.service,
+          label: "walkers",
+          value: `${walkers} out · ${service.range} road cells from the door`,
+          note: `one sets out every ${Math.round(service.interval / 60)} s while it is staffed, and serves the homes beside its way`
+        })
+      if (kind.appeal)
+        lines.push({
+          icon: "appeal",
+          label: "desirability around it",
+          value: `${signed(kind.appeal.value)} beside it, fading out to ${kind.appeal.reach} cells`,
+          tone: kind.appeal.value < 0 ? "warn" : "ok",
+          note: kind.appeal.value < 0 ? "homes this close hold fewer people and pay less; citizens need a street at 5 or more" : undefined
+        })
+      if (kind.upkeep > 0) lines.push({ icon: "upkeep", label: "upkeep", value: `${kind.upkeep} coins a minute` })
+      const growing = status === "starved" && growingNear(grid, row.data.tile.get(), kind)
+      const problem = row.data.burning.present ? "on fire!" : problemOf(kind, status, growing, { nearby: staff.nearby, crew: kind.crew })
+      return { kind, status, problem, lines }
+    }
+    /** What the town has of each provision, in storage and on market shelves. */
+    const inTown = (): InTown => {
+      const stock = resources.stock.get()
+      const sum = { fish: stock.fish, smoked: stock.smoked, bread: stock.bread, cloth: stock.cloth }
+      for (const { data } of buildings) {
+        const inv = maybe(data.inventory)
+        if (!inv || maybe(data.service)?.service !== "goods" || data.site.present || data.rising.present) continue
+        sum.fish += inv.stock.fish
+        sum.smoked += inv.stock.smoked
+        sum.bread += inv.stock.bread
+        sum.cloth += inv.stock.cloth
+      }
+      return sum
+    }
+    /** Which services have a walker that can reach a home: a standing market (or the town hall), and a chapel, within their walks of its door. */
+    const servedAt = (tile: TileLike): Served => {
+      const ds = doors(grid, tile)
+      if (ds.length === 0) return { goods: false, faith: false }
+      const way = reach(grid, ds)
+      const served = { goods: false, faith: false }
+      for (const { data } of buildings) {
+        const service = maybe(data.service)
+        if (!service || data.site.present || data.rising.present || data.burning.present) continue
+        if (service.service !== "goods" && service.service !== "faith") continue
+        if (served[service.service]) continue
+        const found = nearest(way, doors(grid, data.tile.get()))
+        if (found && found.distance < service.range) served[service.service] = true
+      }
+      return served
     }
     const describeHouse = (row: (typeof houses)[number]) => {
       const h = row.data.house.get()
       const site = maybe(row.data.site)
-      if (site) return { h, lines: ["waiting for its planks"] }
-      const tier = home.tiers[h.tier]
-      const next = h.tier === 1 ? home.tiers[2] : null
-      const mark = (n: Parameters<typeof met>[1]) => `${needTitle[n]} ${met(h, n) ? "✓" : "–"}`
-      return {
-        h,
-        lines: [
-          `${h.residents} of ${capacity(h, approval)} residents (${tier.residents} at most)`,
-          `needs: ${tier.needs.map(mark).join(" · ")}`,
-          ...(next ? [`to become citizens: ${next.needs.map(mark).join(" · ")}`] : []),
-          `pays ${Math.round(taxOf(h, rates))} coins a minute`
-        ]
+      if (site) return { h, lines: [{ icon: "planks", label: "a site", value: "waiting for its plank", tone: "warn" } as Line], blockers: [] as Array<Line> }
+      if (row.data.closed.present) {
+        return {
+          h,
+          lines: [{ icon: "settlers", label: "closed", value: "empty: it pays no taxes and costs the town hall nothing", tone: "warn", note: "reopen it and settlers move back in, a resident at a time" } as Line],
+          blockers: [] as Array<Line>
+        }
       }
+      const tile = row.data.tile.get()
+      const tier = home.tiers[h.tier]
+      const next = h.tier < 3 ? home.tiers[(h.tier + 1) as Tier] : null
+      const there = appealParts(appealSources(), tile)
+      const desirability = appealAt(cells, tile.x, tile.y)
+      const street: Street = { desirability, parts: there.parts }
+      const r = maybe(row.data.risk)
+      const work = workOf(tile, h.tier)
+      const condition = maybe(row.data.condition)
+      const town = inTown()
+      const served = servedAt(tile)
+      const rate = h.tier === 1 ? rates.settlers : rates.citizens
+      const cap = capacity(h, approval, desirability, undefined, rate)
+      const whyFewer =
+        cap >= tier.residents
+          ? undefined
+          : row.data.sick.present
+            ? "half as many while it is sick"
+            : approval < 0
+              ? "fewer while the town disapproves of its mayor"
+              : desirability < 0
+                ? `fewer on a street at ${signed(desirability)}: ${streetAdvice(street)}`
+                : rate > 100 && capacity(h, approval, desirability) > cap
+                  ? `fewer while ${tier.title} are taxed at ${rate}%: some move away`
+                  : "fewer until every need is met"
+      const taxLine = (() => {
+        const factors: Array<string> = []
+        if (rate !== 100) factors.push(`taxed at ${rate}%`)
+        const st = Math.round((streetTax(desirability) - 1) * 100)
+        if (st !== 0) factors.push(`street ${signed(st)}%`)
+        if (breadBonus(h) > 1) factors.push(`bread on the table +${Math.round(home.breadBonus * 100)}%`)
+        else if (h.tier === 1) factors.push(`+${Math.round(home.breadBonus * 100)}% with bread on the table`)
+        if (h.food <= 0) factors.unshift("hungry: no food, no taxes")
+        const could = Math.round(suppliedTaxOf(h, rates, undefined, desirability))
+        const pays = Math.round(taxOf(h, rates, undefined, desirability))
+        if (could > pays) factors.push(`${could} with every need met`)
+        return { icon: "coins", label: "pays", value: `${pays} coins a minute`, tone: h.food <= 0 ? "bad" : could > pays ? "warn" : "ok", note: factors.join(" · ") || undefined } as Line
+      })()
+      const worst = r ? (["fire", "health", "order"] as const).reduce((a, b) => (r[b] > r[a] ? b : a)) : null
+      const riskNote =
+        r && worst && r[worst] >= risk.warn
+          ? worst === "fire"
+            ? "fire is high: a fire watch's watchman resets it, and firefighters run to a blaze"
+            : worst === "health"
+              ? "sickness is near: a healer's physician resets it and cures the sick"
+              : "theft is near: a watch house's constable keeps order"
+          : r && worst && r[worst] >= RISK_MAX * 0.35
+            ? "rising slowly: a walker from the matching service resets it as it passes"
+            : undefined
+      const lines: Array<Line> = [
+        ...(row.data.burning.present
+          ? [{ icon: "fire", label: "on fire", value: "everyone has fled", tone: "bad" } as Line]
+          : row.data.sick.present
+            ? [{ icon: "health", label: "sick", value: "holds half as many", tone: "bad", note: "it passes in a minute, or when a physician calls; meanwhile it may spread to homes within 2 cells" } as Line]
+            : []),
+        { icon: "people", label: "residents", value: `${h.residents} of ${cap} (${tier.residents} at most)`, tone: whyFewer ? "warn" : "ok", note: whyFewer },
+        ...tier.needs.map((n): Line => {
+          const why = blockersOf({ ...h, tier: h.tier }, street, town, served, r).find((b) => b.what === n)
+          return { icon: needIcons[n], label: needTitle[n], value: met(h, n) ? "met" : "short", tone: met(h, n) ? "ok" : "bad", note: met(h, n) ? undefined : why?.text }
+        }),
+        ...(h.tier === 1
+          ? [{ icon: "bread", label: "bread", value: met(h, "bread") ? "on the table" : "none lately", tone: met(h, "bread") ? "ok" : "dim", note: met(h, "bread") ? "a cottage with bread pays half again" : "a cottage with bread pays half again: markets hand it out once a bakery bakes it" } as Line]
+          : []),
+        {
+          icon: "appeal",
+          label: "street",
+          value: `desirability ${signed(desirability)}`,
+          tone: desirability >= home.tiers[2].appeal ? "ok" : desirability < 0 ? "warn" : undefined,
+          note: there.parts.length > 0 ? there.parts.slice(0, 5).map((p) => `${p.label} ${signed(p.value)}`).join(", ") : "nothing nearby counts either way: a chapel, a market, a park, or paving would lift it"
+        },
+        ...(r
+          ? [{ icon: worst ?? "fire", label: "risks", value: `fire ${riskText(r.fire)} · health ${riskText(r.health)} · order ${riskText(r.order)}${r.thefts > 0 ? " · robbed" : ""}`, tone: worst && r[worst] >= risk.warn ? "bad" : worst && r[worst] >= RISK_MAX * 0.35 ? "warn" : "ok", note: riskNote } as Line]
+          : []),
+        ...(condition
+          ? [{
+              icon: "condition",
+              label: "condition",
+              value: percent(condition.value, CONDITION_MAX),
+              tone: condition.value < wear.worn ? "bad" : condition.value < wear.mend ? "warn" : "ok",
+              note: condition.value < wear.worn ? "run down: it drags the street down and may fall · a builder's yard mends it with a plank" : condition.value < wear.mend ? "a builder's yard would mend it as its builder passes" : undefined
+            } as Line]
+          : []),
+        work
+          ? { icon: "jobs", label: "work", value: `${work.title}, ${work.distance} road cells away` }
+          : { icon: "jobs", label: "work", value: `none within ${COMMUTE} road cells`, tone: "dim", note: "residents only work within that walk: a workplace nearer would have them" },
+        taxLine
+      ]
+      const blockers: Array<Line> = next
+        ? blockersOf(h, street, town, served, r).map((b) => ({
+            icon: b.what === "street" ? "appeal" : b.what === "services" ? "order" : needIcons[b.what],
+            label: b.what === "street" ? "street" : b.what === "services" ? "services" : needTitle[b.what],
+            value: b.text,
+            tone: "bad"
+          }))
+        : []
+      return { h, lines, blockers }
     }
 
+    /** What pulling a building or home down would cost and give back, for the bulldozer and the panel. */
+    const salvageFor = (cost: Kind["cost"], site: { readonly owed: Amounts } | undefined) => {
+      const s = salvageOf(cost, site?.owed ?? null)
+      const said = salvageText(s)
+      return `${site ? "cancel" : "pull down"}${said ? `: ${said}` : ""}`
+    }
     const hovered = preview.hover
     const hoveredBuilding = hovered !== null ? buildings.find((row) => row.entity.id === hovered) : undefined
     const hoveredHouse = hovered !== null ? houses.find((row) => row.entity.id === hovered) : undefined
+    const hoveredRuin = hovered !== null ? ruins.find((row) => row.entity.id === hovered) : undefined
     if (hoveredBuilding) {
       const { kind, status, problem } = describeBuilding(hoveredBuilding)
-      preview.tooltip = `${kind.title.toLowerCase()} · ${problem ?? status}`
+      preview.tooltip = ui.tool === "bulldoze"
+        ? `${kind.title.toLowerCase()} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(kind.cost, maybe(hoveredBuilding.data.site))}`
+        : `${kind.title.toLowerCase()} · ${problem ?? status}`
     } else if (hoveredHouse) {
       const h = hoveredHouse.data.house.get()
-      preview.tooltip = `${home.tiers[h.tier].title}' home · ${h.residents} residents`
+      const t = hoveredHouse.data.tile.get()
+      preview.tooltip = ui.tool === "bulldoze"
+        ? `${tierHome[h.tier]} · ${salvageFor(home.cost, maybe(hoveredHouse.data.site))}`
+        : hoveredHouse.data.closed.present
+        ? `${tierHome[h.tier]} · closed`
+        : `${tierHome[h.tier]} · ${h.residents} residents · desirability ${appealAt(cells, t.x, t.y)}${hoveredHouse.data.burning.present ? " · on fire!" : hoveredHouse.data.sick.present ? " · sick" : ""}`
+    } else if (hoveredRuin) {
+      preview.tooltip = `ruin · ${hoveredRuin.data.ruin.get().cause} · bulldoze to clear`
+    } else if (hovered !== null && ui.tool === "select" && parkRows.some((row) => row.entity.id === hovered)) {
+      const row = parkRows.find((r) => r.entity.id === hovered)!
+      const p = parkOf(row.data.tile.get())
+      const here = row.data.park.get()
+      preview.tooltip = `park · ${here.prop !== "none" ? props[here.prop].title.toLowerCase() : grounds[here.ground].title.toLowerCase()}${p ? ` · ${p.cells.length} cells · ${parkText(p)}` : ""}`
     } else if (ui.tool === "place" && ui.placing) {
       const kind = kinds[ui.placing]
       const r = reachOf(kind)
-      preview.tooltip = `${kind.title.toLowerCase()}${r !== null ? ` · works ${r} cells around` : ""}`
-    }
+      const a = kind.appeal
+      const lock = lockReason(kind, resources.census.get())
+      if (lock) preview.tooltip = `${kind.title.toLowerCase()} · ${lock}`
+      else preview.tooltip = `${kind.title.toLowerCase()}${r !== null ? ` · works ${r} cells around` : ""}${a ? ` · desirability ${signed(a.value)} out to ${a.reach} cells` : ""}${preview.rangeNote ? ` · ${preview.rangeNote}` : ""} · needs a road at the middle of a side`
+    } else if (ui.tool === "pave" && !dropping) preview.tooltip = `drag along a road to pave it · ${PAVE_COST.coins} coins and a stone a cell · carriers and walkers go half again as fast on it, and homes beside it like it a little`
+    else if (cell && ui.view === "appeal" && inside(cell.x, cell.y)) preview.tooltip = `desirability ${appealAt(cells, cell.x, cell.y)}`
     ui.preview = preview
 
     const pickedBuilding = ui.selected !== null ? buildings.find((row) => row.entity.id === ui.selected) : undefined
     const pickedHouse = ui.selected !== null ? houses.find((row) => row.entity.id === ui.selected) : undefined
+    const pickedRuin = ui.selected !== null ? ruins.find((row) => row.entity.id === ui.selected) : undefined
+    const pickedPark = ui.selected !== null ? parkRows.find((row) => row.entity.id === ui.selected) : undefined
+    const picked = pickedPark ? parkOf(pickedPark.data.tile.get()) : undefined
     if (pickedBuilding) {
       const { kind, status, problem, lines } = describeBuilding(pickedBuilding)
       const pausable = kind.id !== "townhall" && !pickedBuilding.data.site.present && !pickedBuilding.data.rising.present
@@ -367,11 +969,39 @@ export const Interact = Game.System(
         problem,
         lines,
         pausable,
-        paused: pickedBuilding.data.paused.present
+        paused: pickedBuilding.data.paused.present,
+        salvage: salvageFor(kind.cost, maybe(pickedBuilding.data.site))
       }
     } else if (pickedHouse) {
-      const { h, lines } = describeHouse(pickedHouse)
-      ui.panel = { type: "house", id: pickedHouse.entity.id, cell: pickedHouse.data.tile.get(), tier: h.tier, lines }
+      const { h, lines, blockers } = describeHouse(pickedHouse)
+      ui.panel = {
+        type: "house", id: pickedHouse.entity.id, cell: pickedHouse.data.tile.get(), tier: h.tier, lines, blockers,
+        closable: !pickedHouse.data.site.present && !pickedHouse.data.rising.present && !pickedHouse.data.burning.present,
+        closed: pickedHouse.data.closed.present,
+        salvage: salvageFor(home.cost, maybe(pickedHouse.data.site))
+      }
+    } else if (pickedPark && picked) {
+      ui.panel = {
+        type: "park",
+        id: pickedPark.entity.id,
+        cell: pickedPark.data.tile.get(),
+        cells: picked.cells.length,
+        value: picked.value,
+        reach: picked.reach,
+        lines: describePark(picked)
+      }
+    } else if (pickedRuin) {
+      const r = pickedRuin.data.ruin.get()
+      ui.panel = {
+        type: "ruin",
+        id: pickedRuin.entity.id,
+        cell: pickedRuin.data.tile.get(),
+        cause: r.cause,
+        lines: [
+          { icon: "condition", label: "what happened", value: r.cause === "burnt" ? "it burned down" : r.cause === "collapsed" ? "it fell down for want of mending" : "it was left derelict after its thefts", tone: "bad" },
+          { icon: "appeal", label: "the street", value: "desirability −3 around it until it is cleared", tone: "warn", note: "bulldoze it (X) to clear the plot" }
+        ]
+      }
     } else ui.panel = ui.menu ? { type: ui.menu } : null
 
     const centres = new Map<number, Point>()
@@ -381,22 +1011,282 @@ export const Interact = Game.System(
     }
     ui.centres = centres
 
+    // ── Map views ──
+    const view = ui.view
+    const overlayKey = `${view}|${Math.floor(tick / 30)}|${ui.selected}|${buildings.length}|${houses.length}`
+    if (view === "none") {
+      if (ui.overlay.key !== "none") ui.overlay = { key: "none", cells: [] }
+      if (ui.tints.size > 0) ui.tints = new Map()
+      ui.legend = null
+    } else if (ui.overlay.key !== overlayKey) {
+      const out: Array<OverlayCell> = []
+      // The same reading washed over each model, so the view is legible where buildings hide the ground.
+      const tints = new Map<number, number>()
+      const tintOf = (color: number) => (color === GOOD ? TINT.good : color === FAIR ? TINT.fair : color === BAD ? TINT.bad : color === COOL ? TINT.cool : TINT.plain)
+      const standing = <T extends { readonly data: { readonly site: { readonly present: boolean }; readonly rising: { readonly present: boolean } } }>(rows: ReadonlyArray<T>) =>
+        rows.filter(({ data }) => !data.site.present && !data.rising.present)
+      if (view === "appeal") {
+        for (let y = 0; y < GRID; y++)
+          for (let x = 0; x < GRID; x++) {
+            const use = useAt(grid, x, y)
+            if (use === "void" || use === "water") continue
+            out.push({ x, y, size: 1, color: appealColor(appealAt(cells, x, y)), alpha: 0.32 })
+          }
+        for (const { entity, data } of standing(houses)) {
+          const t = data.tile.get()
+          const d = appealAt(cells, t.x, t.y)
+          tints.set(entity.id, d >= home.tiers[2].appeal ? TINT.fine : d >= 0 ? TINT.plain : d > home.squalid ? TINT.fair : TINT.bad)
+        }
+      } else if (view === "workers") {
+        const picked = pickedBuilding && pickedBuilding.data.staff.get().needed > 0 ? pickedBuilding : undefined
+        let inReach: ((t: TileLike) => boolean) | null = null
+        if (picked) {
+          const roads = reach(grid, doors(grid, picked.data.tile.get()))
+          for (let k = 0; k < roads.distance.length; k++) {
+            const d = roads.distance[k]!
+            if (d >= 0 && d <= COMMUTE) out.push({ x: k % GRID, y: Math.floor(k / GRID), size: 1, color: MARK, alpha: 0.14 })
+          }
+          inReach = (t) => doors(grid, t).some((c) => {
+            const n = roads.distance[key(c.x, c.y)]!
+            return n >= 0 && n <= COMMUTE
+          })
+        }
+        for (const { entity, data } of standing(houses)) {
+          const t = data.tile.get()
+          const h = data.house.get()
+          const ring = inReach !== null && inReach(t)
+          out.push({ ...t, color: h.tier === 1 ? 0xd6b48a : COOL, alpha: ring ? 0.75 : 0.45, ...(ring ? { ring: true } : {}) })
+          tints.set(entity.id, h.tier === 1 ? TINT.settlers : TINT.cool)
+        }
+        for (const { entity, data } of standing(buildings)) {
+          const s = data.staff.get()
+          if (s.needed === 0) continue
+          const color = s.assigned >= s.needed ? GOOD : s.assigned > 0 ? FAIR : BAD
+          out.push({ ...data.tile.get(), color, alpha: 0.45, ...(entity.id === picked?.entity.id ? { ring: true } : {}) })
+          tints.set(entity.id, tintOf(color))
+        }
+      } else if (view === "fire" || view === "health" || view === "order") {
+        for (const { entity, data } of standing(houses)) {
+          const r = maybe(data.risk)
+          if (!r) continue
+          const struck = view === "fire" ? data.burning.present : view === "health" ? data.sick.present : r.thefts > 0
+          const color = struck ? BAD : meterColor(r[view], RISK_MAX, risk.warn)
+          out.push({ ...data.tile.get(), color, alpha: struck ? 0.8 : 0.5 })
+          tints.set(entity.id, tintOf(color))
+        }
+        for (const { entity, data } of standing(buildings)) {
+          const service = maybe(data.service)?.service
+          const r = maybe(data.risk)
+          if (service === view) {
+            out.push({ ...data.tile.get(), color: MARK, alpha: 0.55, ring: true })
+            tints.set(entity.id, TINT.mark)
+          } else if (view === "fire" && r) {
+            const color = data.burning.present ? BAD : meterColor(r.fire, RISK_MAX, risk.warn)
+            out.push({ ...data.tile.get(), color, alpha: 0.4 })
+            tints.set(entity.id, tintOf(color))
+          }
+        }
+      } else if (view === "condition") {
+        for (const row of [...standing(houses), ...standing(buildings)]) {
+          const c = maybe(row.data.condition)
+          if (!c) continue
+          const color = c.value < wear.worn ? BAD : c.value < wear.mend ? FAIR : GOOD
+          out.push({ ...row.data.tile.get(), color, alpha: 0.5 })
+          tints.set(row.entity.id, tintOf(color))
+        }
+        for (const { entity, data } of standing(buildings)) if (maybe(data.service)?.service === "repair") {
+          out.push({ ...data.tile.get(), color: MARK, alpha: 0.55, ring: true })
+          tints.set(entity.id, TINT.mark)
+        }
+        for (const { data } of ruins) out.push({ ...data.tile.get(), color: BAD, alpha: 0.8 })
+      }
+      ui.overlay = { key: overlayKey, cells: out }
+      ui.tints = tints
+      ui.legend = legends[view]
+    }
+
+    // ── What needs looking at ──
+    const alerts: Array<Notice> = []
     const census = resources.census.get()
+    const stock = resources.stock.get()
+    const burningRow = [...buildings, ...houses].find(({ data }) => data.burning.present)
+    if (census.burning > 0) alerts.push({ tone: "bad", text: `${census.burning} on fire`, at: burningRow?.data.tile.get() ?? null, size: burningRow?.data.tile.get().size ?? 1, id: burningRow?.entity.id ?? null })
+    const sickRow = houses.find(({ data }) => data.sick.present)
+    if (census.sick > 0) alerts.push({ tone: "warn", text: `${census.sick} home${census.sick > 1 ? "s" : ""} sick`, at: sickRow?.data.tile.get() ?? null, size: 1, id: sickRow?.entity.id ?? null })
+    const waiting = new Map<string, { n: number; at: TileLike; id: number; kind: KindId }>()
+    const remote = new Map<string, { n: number; at: TileLike; id: number; kind: KindId }>()
+    const shortStaffed: Array<{ id: number; title: string; cell: Point; size: number; assigned: number; needed: number; nobodyNear: boolean }> = []
+    const seen = new Set<number>()
+    for (const { entity, data } of buildings) {
+      if (data.site.present || data.rising.present || data.paused.present) continue
+      const kind = kinds[data.building.get().kind]
+      const status = data.status.get()
+      const staff = data.staff.get()
+      const tile = data.tile.get()
+      if (status === "starved" && kind.recipe?.input) {
+        seen.add(entity.id)
+        const since = starvedSince.get(entity.id) ?? tick
+        if (!starvedSince.has(entity.id)) starvedSince.set(entity.id, tick)
+        if (tick - since >= ALERT_PATIENCE) {
+          const label = `${kind.title.toLowerCase()} (${kind.recipe.input})`
+          const was = waiting.get(label)
+          waiting.set(label, was ? { ...was, n: was.n + 1 } : { n: 1, at: tile, id: entity.id, kind: kind.id })
+        }
+      }
+      if (staff.needed > 0 && staff.assigned < staff.needed) shortStaffed.push({ id: entity.id, title: kind.title.toLowerCase(), cell: tile, size: tile.size, assigned: staff.assigned, needed: staff.needed, nobodyNear: staff.nearby === 0 })
+      if (status === "unstaffed" && staff.nearby === 0) {
+        const label = kind.title.toLowerCase()
+        const was = remote.get(label)
+        remote.set(label, was ? { ...was, n: was.n + 1 } : { n: 1, at: tile, id: entity.id, kind: kind.id })
+      }
+    }
+    for (const id of [...starvedSince.keys()]) if (!seen.has(id)) starvedSince.delete(id)
+    const list = (m: Map<string, { n: number }>) => [...m].map(([k, v]) => `${k}${v.n > 1 ? ` ×${v.n}` : ""}`).join(", ")
+    const first = (m: Map<string, { at: TileLike; id: number }>) => [...m.values()][0]
+    const placesOf = (m: Map<string, { at: TileLike; id: number; kind: KindId }>) =>
+      Object.fromEntries([...m.values()].map((v) => [v.kind, { at: v.at, size: v.at.size, id: v.id }]))
+    if (waiting.size > 0) alerts.push({ tone: "warn", text: `waiting for inputs: ${list(waiting)}`, at: first(waiting)?.at ?? null, size: first(waiting)?.at.size ?? 1, id: first(waiting)?.id ?? null, places: placesOf(waiting) })
+    if (remote.size > 0) alerts.push({ tone: "warn", text: `no workers within ${COMMUTE} road cells: ${list(remote)}`, at: first(remote)?.at ?? null, size: first(remote)?.at.size ?? 1, id: first(remote)?.id ?? null, places: placesOf(remote) })
+    const hallRow = buildings.find(({ data }) => data.hall.present)
+    const empty = census.homes > 0 && larder(stock) === 0
+    if (!empty || (emptySince !== null && emptySince > tick)) emptySince = null
+    if (empty && emptySince === null) emptySince = tick
+    if (empty && tick - emptySince! >= HUNGER_PATIENCE) hungryUntil = tick + HUNGER_PATIENCE
+    if (hungryUntil > tick + HUNGER_PATIENCE) hungryUntil = 0
+    if (census.homes > 0 && tick < hungryUntil) alerts.push({ tone: "bad", text: "no food in store: homes go hungry", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
     const ledger = resources.ledger.get()
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
+    let suppliedTaxes = 0
+    for (const { data } of houses) {
+      if (data.site.present || data.rising.present || data.burning.present) continue
+      const tile = data.tile.get()
+      suppliedTaxes += suppliedTaxOf(data.house.get(), rates, undefined, appealAt(cells, tile.x, tile.y))
+    }
     const coins = resources.treasury.get().coins
     const net = ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin
     const mood = resources.mood.get()
     const crown = resources.crown.get()
+    // What the homes would pay at each step of each tier's rate, once settled there (see `taxOutlook`).
+    const taxed: Array<TaxedHome> = []
+    for (const { data } of houses) {
+      if (data.site.present || data.rising.present || data.burning.present || data.closed.present) continue
+      const tile = data.tile.get()
+      taxed.push({ ...data.house.get(), desirability: appealAt(cells, tile.x, tile.y), paying: true })
+    }
     const f = resources.fate.get()
-    const stock = resources.stock.get()
+    const pantry = resources.pantry.get()
     const season = seasonAt(Math.min(Math.max(0, t), termTicks(charter) - 1), charter)
+    const approvalAt = (r: { readonly settlers: number; readonly citizens: number }, memory: number) =>
+      approvalTarget(taxed, r, coins, crown.snubs.length, season.winter, undefined, memory).target
+    const outlookOf = (tier: "settlers" | "citizens") => taxed.some((h) => (h.tier === 1) === (tier === "settlers"))
+      ? TAX_STEPS.map((rate) => ({ rate, taxes: Math.round(taxOutlook(taxed, rates, tier, rate, approvalAt)) }))
+      : []
     const seconds = (steps: number) => Math.max(0, Math.ceil(steps / 60))
     const danger = (since: number, minutes: number) => (since < 0 ? null : seconds(since + minutes * 3600 - t))
+    // The winter after the coming one, for the almanac.
+    const comingYear = season.winter || winterOf(charter, season.year) === null ? season.year + 1 : season.year
+
+    // ── The mayor's guide ──
+    // The page writes what the mayor told it; then the guide puts away what the town has done, and picks the step to show.
+    for (const action of ui.guide.splice(0)) {
+      resources.guide.update((g) =>
+        action.type === "skip" ? (g.done.includes(action.id) ? g : { ...g, done: [...g.done, action.id] }) : { ...g, off: action.type === "off" }
+      )
+    }
+    const placedKinds = new Set(buildings.map(({ data }) => data.building.get().kind))
+    const standingKinds = new Set(buildings.filter(({ data }) => !data.site.present && !data.rising.present).map(({ data }) => data.building.get().kind))
+    const finished = (row: { readonly data: { readonly site: { readonly present: boolean }; readonly rising: { readonly present: boolean } } }) => !row.data.site.present && !row.data.rising.present
+    const wornRow = buildings.find((row) => finished(row) && !row.data.hall.present && (maybe(row.data.condition)?.value ?? CONDITION_MAX) < wear.mend)
+    // A settlers' home with bread, cloth, and faith, kept from citizens only by its street.
+    const poorRow = houses.find((row) => {
+      const h = row.data.house.get()
+      if (h.tier !== 1 || !finished(row)) return false
+      const tile = row.data.tile.get()
+      return met(h, "bread") && met(h, "cloth") && met(h, "faith") && appealAt(cells, tile.x, tile.y) < home.tiers[2].appeal
+    })
+    const facts: GuideFacts = {
+      homes: houses.length,
+      builtHomes: houses.filter(finished).length,
+      residents: census.settlers + census.citizens,
+      citizens: census.citizens,
+      finerHomes: houses.filter((row) => row.data.house.get().tier > 1).length,
+      placed: placedKinds,
+      standing: standingKinds,
+      stock,
+      sick: census.sick,
+      burning: census.burning,
+      winter: season.winter,
+      winterIn: season.coming === null ? null : seconds(season.left),
+      worn: wornRow !== undefined,
+      poorStreet: poorRow !== undefined,
+      crown: { open: crown.open, met: crown.met },
+      net: steadyNet(resources.history.get().samples, net),
+      approval: mood.approval,
+      trading: rates.sells.length > 0 || rates.buys.length > 0,
+      buysTools: rates.buys.includes("tools"),
+      taxed: rates.settlers !== 100 || rates.citizens !== 100,
+      most: Math.max(...goodIds.map((g) => stock[g])),
+      sawTown: ui.menu === "town",
+      sawHome: houses.some((row) => row.entity.id === ui.selected),
+      risk: {
+        fire: houses.some((row) => (maybe(row.data.risk)?.fire ?? 0) >= RISK_MAX * 0.35),
+        health: houses.some((row) => (maybe(row.data.risk)?.health ?? 0) >= RISK_MAX * 0.35),
+        order: houses.some((row) => (maybe(row.data.risk)?.order ?? 0) >= RISK_MAX * 0.35)
+      },
+      fewTrees: buildings.some((row) => {
+        if (row.data.building.get().kind !== "lumberjack" || !finished(row)) return false
+        const tile = row.data.tile.get()
+        const reach = kinds.lumberjack.gathers!.radius
+        return queries.trees.each().map(({ data }) => data.tile.get()).filter((t) => t.x >= tile.x - reach && t.x < tile.x + tile.size + reach && t.y >= tile.y - reach && t.y < tile.y + tile.size + reach).length < 6
+      })
+    }
+    const guide = resources.guide.get()
+    const put = new Set(guide.done)
+    const playing = f.state === "playing" && !ui.founding
+    const newly = playing ? guideDone(facts, put) : []
+    if (newly.length > 0) {
+      resources.guide.update((g) => ({ ...g, done: [...g.done, ...newly] }))
+      for (const id of newly) put.add(id)
+    }
+    // The guide keeps quiet a while after a step is put away; a new town (the clock gone back) starts it afresh.
+    if (t < guidePace.since) Object.assign(guidePace, { shown: null, since: 0, quietUntil: 0 })
+    if (guidePace.shown !== null && put.has(guidePace.shown)) Object.assign(guidePace, { shown: null, quietUntil: t + GUIDE_QUIET * 60 })
+    const step = guide.off || !playing ? null : guideStep(facts, put, { shown: guidePace.shown, quiet: t < guidePace.quietUntil })
+    if (step && !step.urgent?.(facts)) guidePace.shown = step.id
+    guidePace.since = t
+    const hallTile = hallRow?.data.tile.get()
+    /** Of some tiles, the one nearest the town hall. */
+    const nearestHall = (tiles: ReadonlyArray<TileLike>): TileLike | undefined => {
+      if (!hallTile) return tiles[0]
+      let best: TileLike | undefined
+      let far = Infinity
+      for (const tile of tiles) {
+        const d = Math.abs(tile.x - hallTile.x) + Math.abs(tile.y - hallTile.y)
+        if (d < far) [best, far] = [tile, d]
+      }
+      return best
+    }
+    const focusOf = (focus: GuideFocus | null): { at: TileLike | null; id: number | null } => {
+      if (focus === null) return { at: null, id: null }
+      if (focus === "hall") return { at: hallTile ?? null, id: null }
+      if (focus === "water") return { at: nearestHall(queries.water.each().map(({ data }) => data.tile.get())) ?? null, id: null }
+      if (focus === "trees") return { at: nearestHall(queries.trees.each().map(({ data }) => data.tile.get())) ?? null, id: null }
+      if (focus === "stone" || focus === "ore") {
+        const ore = focus === "ore"
+        return { at: nearestHall(queries.rocks.each().filter(({ data }) => data.rock.get().ore === ore).map(({ data }) => data.tile.get())) ?? null, id: null }
+      }
+      const row = focus === "worn" ? wornRow : focus === "poorStreet" ? poorRow : buildings.find(({ data }) => data.building.get().kind === focus.kind)
+      return row ? { at: row.data.tile.get(), id: row.entity.id } : { at: null, id: null }
+    }
+    const shown = step ? focusOf(step.focus) : null
+    const flowNow = resources.flow.get().last
+    const flowHeld = resources.flow.get().held
     ui.stats = {
       coins,
       taxes: ledger.taxes,
+      suppliedTaxes: Math.round(suppliedTaxes),
+      taxOutlook: { settlers: outlookOf("settlers"), citizens: outlookOf("citizens") },
       trade: ledger.trade,
       upkeep: ledger.upkeep,
       admin: ledger.admin,
@@ -408,18 +1298,28 @@ export const Interact = Game.System(
       prices: resources.market.get().prices,
       settlers: census.settlers,
       citizens: census.citizens,
+      burghers: census.burghers,
       jobs: census.jobs,
       employed: census.employed,
+      shortStaffed,
       charter: { size: charter.size, term: charter.term, land: charter.land, seed: charter.seed },
       minute: t / 3600,
-      season: { year: season.year, winter: season.winter, left: seconds(season.left) },
+      season: {
+        year: season.year,
+        winter: season.winter,
+        left: seconds(season.left),
+        severity: season.severity,
+        coming: season.coming,
+        after: winterOf(charter, comingYear + 1)
+      },
       mood: {
         approval: mood.approval,
         target: mood.target,
         parts: [
           { label: "mood of the town", value: mood.base },
           { label: "needs met", value: mood.needs },
-          { label: "taxes", value: mood.taxes },
+          { label: "taxes now", value: mood.taxes },
+          { label: "a grudge over taxes past", value: mood.grudge },
           { label: "unpaid wages", value: mood.debt },
           { label: "the crown's displeasure", value: mood.crown },
           { label: "a hungry winter", value: mood.winter }
@@ -448,10 +1348,22 @@ export const Interact = Game.System(
         complete: danger(f.goalSince, fate.hold),
         peak: f.peak
       },
-      goals: goalsOf(charter, { settlers: census.settlers, citizens: census.citizens, coins, net, approval: mood.approval }),
+      goals: goalsOf(charter, { settlers: census.settlers, citizens: census.citizens, coins, net: steadyNet(resources.history.get().samples, net), approval: mood.approval }),
       larder: larder(stock),
+      flow: flowNow === null ? null : { ...flowNow, elsewhere: amounts(Object.fromEntries(goodIds.map((g) => [g, Math.max(0, flowHeld[g] - stock[g])]))) },
+      eaten: pantry.eatenLast,
+      rotted: pantry.rottedLast,
+      sick: census.sick,
+      burning: census.burning,
       history: resources.history.get().samples,
-      chronicle: resources.chronicle.get().lines
+      chronicle: resources.chronicle.get().lines,
+      alerts,
+      guide: {
+        step: step && shown ? { key: step.id, chapter: step.chapter, goal: step.goal, text: step.text, at: shown.at, size: shown.at?.size ?? 1, id: shown.id } : null,
+        done: guideSteps.filter((s) => put.has(s.id)).length,
+        total: guideSteps.length,
+        off: guide.off
+      }
     }
   }
 )
@@ -507,6 +1419,16 @@ export const RenderRocks = RenderSync.system(Game, {
   apply: (node, { transform }) => node.place(transform.x, transform.y)
 })
 
+export const RenderRuins = RenderSync.system(Game, {
+  name: "Town/RenderRuins",
+  renderable: Ruin,
+  transform: Tile,
+  registry: RuinNodes,
+  services: { stage: StageService },
+  create: ({ renderable, services, entity }) => new RuinView(renderable.cause, services.stage, entity),
+  apply: (node, { transform }) => node.place(transform.x, transform.y, transform.size)
+})
+
 export const RenderFields = RenderSync.system(Game, {
   name: "Town/RenderFields",
   renderable: Field,
@@ -517,33 +1439,54 @@ export const RenderFields = RenderSync.system(Game, {
   apply: (node, { transform }) => node.place(transform.x, transform.y)
 })
 
-/** The land, redrawn when a new town is founded (or one loaded). */
+/** The land, redrawn when a new town is founded (or one loaded), and frosted through winter. */
 export const DrawLand = Game.System(
   "Town/DrawLand",
-  { resources: { land: Game.System.readResource(Land) }, services: { stage: Game.System.service(StageService) } },
+  {
+    resources: { land: Game.System.readResource(Land), time: Game.System.readResource(Time), charter: Game.System.readResource(Charter) },
+    services: { stage: Game.System.service(StageService) }
+  },
   ({ resources, services }) => {
     const mask = resources.land.get().mask
-    services.stage.setLand(mask)
+    const charter = resources.charter.get()
+    const t = elapsed(resources.time.get(), charter)
+    services.stage.setLand(mask, t > 0 && seasonAt(Math.min(t, termTicks(charter) - 1), charter).winter)
   }
 )
 
-/** Roads and water, each redrawn as one layer whenever one is laid or anything is removed. */
+/** The map view, washed over the town. */
+export const DrawOverlay = Game.System(
+  "Town/DrawOverlay",
+  { services: { ui: Game.System.service(Ui), stage: Game.System.service(StageService) } },
+  ({ services }) => {
+    services.stage.setOverlay(services.ui.overlay.key, services.ui.overlay.cells)
+  }
+)
+
+/** Roads, water, and parks, each redrawn as one layer whenever one is laid or anything is removed. */
 export const DrawGround = Game.System(
   "Town/DrawGround",
   {
     queries: {
       roads: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road] }),
+      paved: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road, Paved] }),
+      added: Game.Query({ selection: { paved: Game.Query.read(Paved) }, filters: [Game.Query.added(Paved)] }),
       water: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Water] }),
+      parks: ParkRead,
+      relaid: Game.Query({ selection: { park: Game.Query.read(Park) }, filters: [Game.Query.changed(Park)] }),
       laid: Game.Query({ selection: { tile: Game.Query.read(Tile) }, filters: [Game.Query.added(Tile)] })
     },
     despawned: { entities: Game.System.readDespawned() },
     services: { stage: Game.System.service(StageService) }
   },
   ({ queries, despawned, services }) => {
-    if (!services.stage.groundDirty && queries.laid.each().length === 0 && despawned.entities.all().length === 0) return
+    const dirty = services.stage.groundDirty
+    if (!dirty && queries.laid.each().length === 0 && queries.added.each().length === 0 && queries.relaid.each().length === 0 && despawned.entities.all().length === 0) return
     const cellsOf = (rows: ReadonlyArray<{ readonly data: { readonly tile: { get(): TileLike } } }>) =>
       new Set(rows.map(({ data }) => key(data.tile.get().x, data.tile.get().y)))
-    services.stage.setGround(cellsOf(queries.roads.each()), cellsOf(queries.water.each()))
+    const roads = cellsOf(queries.roads.each())
+    services.stage.setGround(roads, cellsOf(queries.water.each()), cellsOf(queries.paved.each()))
+    services.stage.setParks(new Map(queries.parks.each().map(({ data }) => [key(data.tile.get().x, data.tile.get().y), { ...data.tile.get(), ...data.park.get() }])), roads)
   }
 )
 
@@ -573,17 +1516,24 @@ export const Animate = Game.System(
     queries: {
       buildings: BuildingRead,
       houses: HouseRead,
+      ruins: RuinRead,
       walkers: Game.Query({
-        selection: { route: Game.Query.read(Route), errand: Game.Query.optional(Errand), roam: Game.Query.optional(Roam) }
+        selection: {
+          route: Game.Query.read(Route),
+          errand: Game.Query.optional(Errand),
+          roam: Game.Query.optional(Roam),
+          rescue: Game.Query.optional(Rescue)
+        }
       }),
       trees: Game.Query({ selection: { tree: Game.Query.read(Tree) } }),
-      rocks: Game.Query({ selection: { rock: Game.Query.read(Rock) } }),
+      rocks: Game.Query({ selection: { rock: Game.Query.read(Rock), tile: Game.Query.read(Tile) } }),
       fields: Game.Query({ selection: { field: Game.Query.read(Field) } })
     },
-    resources: { grid: Game.System.readResource(Grid) },
+    resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal) },
     services: {
       ui: Game.System.service(Ui),
       clock: Game.System.service(Clock),
+      ruinNodes: Game.System.service(RuinNodes),
       buildingNodes: Game.System.service(BuildingNodes),
       houseNodes: Game.System.service(HouseNodes),
       walkerNodes: Game.System.service(WalkerNodes),
@@ -594,6 +1544,7 @@ export const Animate = Game.System(
   },
   ({ queries, resources, services }) => {
     const grid = resources.grid.get()
+    const cells = resources.appeal.get().cells
     const { hover, danger } = services.ui.preview
     const emphasis = (id: number): Emphasis => (danger && hover === id ? "danger" : "normal")
     const dt = services.clock.deltaSeconds
@@ -603,9 +1554,19 @@ export const Animate = Game.System(
       const status = data.status.get()
       const recipe = maybe(data.recipe)
       const walkers = maybe(data.walkers)?.length ?? 0
+      const worn = (maybe(data.condition)?.value ?? CONDITION_MAX) < wear.worn
+      const r = maybe(data.risk)
       services.buildingNodes.get(entity.id)?.update(
         {
+          alert: alertOf(r ? { fire: r.fire, health: 0, order: 0 } : undefined, false, worn),
+          burning: data.burning.present,
+          worn,
+          effects: {
+            wear: 1-(maybe(data.condition)?.value??CONDITION_MAX)/CONDITION_MAX,
+            fireRisk: hazardStrength(r?.fire??0,risk.warn,RISK_MAX)
+          },
           working: status === "working",
+          tint: services.ui.tints.get(entity.id),
           problem: problemOf(kind, status) !== null,
           build: buildOf(maybe(data.site), maybe(data.rising)),
           beat: recipe ? recipe.made : maybe(data.service) ? walkers : 0,
@@ -617,24 +1578,51 @@ export const Animate = Game.System(
       )
     }
     for (const { entity, data } of queries.houses.each()) {
+      const tile = data.tile.get()
+      const worn = (maybe(data.condition)?.value ?? CONDITION_MAX) < wear.worn
+      const desirability = appealAt(cells, tile.x, tile.y)
       services.houseNodes
         .get(entity.id)
         ?.update(
           {
             tier: data.house.get().tier,
             build: buildOf(maybe(data.site), maybe(data.rising)),
-            doors: doorsOf(grid, data.tile.get()),
-            site: siteShare(maybe(data.site))
+            doors: doorsOf(grid, tile),
+            site: siteShare(maybe(data.site)),
+            alert: data.site.present ? null : alertOf(maybe(data.risk), data.sick.present, worn),
+            burning: data.burning.present,
+            worn,
+            effects: {
+              wear: Math.max(desirability<0?0.55:0,1-(maybe(data.condition)?.value??CONDITION_MAX)/CONDITION_MAX),
+              fireRisk: hazardStrength(maybe(data.risk)?.fire??0,risk.warn,RISK_MAX),
+              health: hazardStrength(maybe(data.risk)?.health??0,risk.warn,RISK_MAX),
+              order: hazardStrength(maybe(data.risk)?.order??0,risk.warn,RISK_MAX),
+              sick: Number(data.sick.present)
+            },
+            band: desirability < 0 ? "poor" : desirability >= home.tiers[2].appeal ? "fine" : "plain",
+            closed: data.closed.present,
+            tint: services.ui.tints.get(entity.id)
           },
           emphasis(entity.id)
         )
     }
+    for (const { entity } of queries.ruins.each()) services.ruinNodes.get(entity.id)?.update(emphasis(entity.id))
     for (const { entity, data } of queries.walkers.each()) {
       const p = walkerAt(data.route.get())
       const errand = maybe(data.errand)
       const roam = maybe(data.roam)
       const load: Load = errand
         ? { kind: "cart", good: errand.good, count: !errand.back || errand.count > 0 ? errand.count : 0 }
+        : maybe(data.rescue)
+          ? { kind: "service", role: "firefighter" }
+        : roam?.service === "fire"
+          ? { kind: "service", role: "watchman" }
+        : roam?.service === "health"
+          ? { kind: "service", role: "physician" }
+        : roam?.service === "order"
+          ? { kind: "service", role: "constable" }
+        : roam?.service === "repair"
+          ? { kind: "service", role: "builder" }
         : roam?.service === "faith"
           ? { kind: "bell" }
           : roam && total(roam.basket) > 0
@@ -644,13 +1632,28 @@ export const Animate = Game.System(
     }
     for (const { entity, data } of queries.trees.each())
       services.treeNodes.get(entity.id)?.update(data.tree.get().growth, emphasis(entity.id))
-    for (const { entity, data } of queries.rocks.each()) {
+    // Neighbouring rocks are drawn as one big outcrop; the blocks are formed again only when a rock runs out (or the land changes).
+    const rocks = queries.rocks.each()
+    const rockKey = `${rocks.length}:${rocks.reduce((n, { entity }) => n + entity.id, 0)}`
+    if (rockKey !== rockShapes.key) {
+      rockShapes.key = rockKey
+      rockShapes.parts = rockBlocks(rocks.map(({ entity, data }) => ({ id: entity.id, ...data.tile.get(), ore: data.rock.get().ore })))
+    }
+    const amounts = new Map<number, number>(rocks.map(({ entity, data }) => [entity.id, data.rock.get().amount]))
+    for (const { entity, data } of rocks) {
       const r = data.rock.get()
-      services.rockNodes.get(entity.id)?.update(r.ore, r.amount)
+      const part = rockShapes.parts.get(entity.id)
+      if (!part || !part.draws) services.rockNodes.get(entity.id)?.update(r.ore, r.amount, part ? 0 : 1, part ? 0 : 1)
+      else services.rockNodes.get(entity.id)?.update(r.ore, part.members.reduce((n, id) => n + (amounts.get(id) ?? 0), 0) / part.members.length, part.w, part.h)
     }
     for (const { entity, data } of queries.fields.each()) services.fieldNodes.get(entity.id)?.update(data.field.get().growth)
   }
 )
+
+/** The guide's pace (page-side, not saved): the step it is showing, and until when it keeps quiet. */
+const guidePace: { shown: string | null; since: number; quietUntil: number } = { shown: null, since: 0, quietUntil: 0 }
+
+const rockShapes: { key: string; parts: Map<number, RockPart> } = { key: "", parts: new Map() }
 
 /** Ghosts, the road being dragged, and outlines, redrawn every frame. */
 export const DrawPreview = Game.System(
@@ -700,7 +1703,9 @@ export const present = Game.Schedule(
   RenderTrees,
   RenderRocks,
   RenderFields,
+  RenderRuins,
   DrawGround,
+  DrawOverlay,
   Animate,
   Stroll,
   DrawPreview

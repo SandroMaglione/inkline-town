@@ -1,12 +1,12 @@
 import { U } from "../iso.ts"
-import { kinds, type Tier } from "../content.ts"
+import { kinds } from "../content.ts"
 import { makeBuilding } from "./buildings.ts"
 import { Drawing, palette, pale, sides, type Side, type Vertex } from "./primitives.ts"
 
 export type ServiceKind = "market" | "chapel"
 
 /** Presentation assets only. Service costs, unlocks and upgrade rules belong to the simulation. */
-export function serviceBuilding(kind: ServiceKind, tier: Tier) {
+export function serviceBuilding(kind: ServiceKind, tier: 1 | 2) {
   if (tier === 1) return makeBuilding(kind)
   return kind === "market" ? marketHall() : church()
 }

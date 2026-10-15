@@ -134,67 +134,77 @@ export function makeTree(
   return d.asset
 }
 
-export function makeRock(ore: boolean, full: boolean) {
-  const x = ore ? 5 : 0,
-    y = ore ? 3 : 0,
-    h = hash(x, y),
-    h2 = hash(x * 7 + 3, y * 5 + 11),
-    h3 = hash(y * 17 + 5, x * 3 + 29)
-  const colors = ore ? { top: 0xe8ebf0, left: 0xd5dae3, right: 0xbcc3d0 } : { top: 0xeeefe9, left: 0xdfe1da, right: 0xcbcfc7 }
-  const d = new Drawing(
-    `${ore ? "ore" : "stone"}-${full ? "full" : "quarried"}`,
-    `${ore ? "Ore" : "Stone"} · ${full ? "full" : "quarried"}`,
-    "Faceted boulders, pebbles and mineral flecks, in both resource states."
-  )
-  d.asset.category = "land"
-  d.asset.reference = { type: "rock", x, y, ore, amount: full ? 40 : 10 }
-  d.asset.footprint = 1
-  const s = (full ? 5 : 4) * U * (0.85 + h2 * 0.3),
-    tall = Math.round((full ? 10 : 7) * (0.8 + h3 * 0.4)),
-    u = (h - 0.5) * 4 * U,
-    v = (h3 - 0.5) * 3 * U
-  const boulder = (u: number, v: number, s: number, H: number, k: number, j: number) => {
-    const base = square(u, v, s),
-      top: Array<Vertex> = [
-        [u - s * j, v - s * j, H],
-        [u + s * k, v - s * j, H],
-        [u + s, v + s * k, H],
-        [u - s * j, v + s * k, H]
-      ]
-    for (let i = 0; i < 4; i++) d.face([base[i]!, base[(i + 1) % 4]!, top[(i + 1) % 4]!, top[i]!], i === 1 ? colors.right : colors.left)
-    d.face(top, colors.top)
-    d.face([...base].reverse(), colors.left, 0)
+/** Layered angular rock, shared by natural deposits and the quarry face. */
+/** Stone is pale and rounded; ore is dark slate, with rust-red veins and sharp shards, so the two read apart at a glance. */
+const stoneColors = { top: 0xeeefe8, left: 0xdcded4, right: 0xc1c7b9 }
+const oreColors = { top: 0xa9aebb, left: 0x8d93a3, right: 0x737a8c }
+const RUST = 0xc7825c
+
+export function rockOutcrop(d: Drawing, u: number, v: number, radius: number, height: number, ore: boolean, variant = 0) {
+  const start=d.asset.faces.length,n=7, turn=variant*0.29
+  const colors=ore?oreColors:stoneColors
+  const ring=(scale:number,z:number,layer:number)=>Array.from({length:n},(_,i):Vertex=>{
+    const t=i*Math.PI*2/n+turn,rough=0.66+hash(i+variant*7,variant+3)*0.34
+    const shift=layer===3?-radius*0.17:0
+    return [u+Math.cos(t)*radius*scale*rough+shift,v+Math.sin(t)*radius*scale*rough,z===0?0:z*(0.7+hash(i+3,variant+2)*0.3)]
+  })
+  const rings=[ring(1,0,0),ring(0.95,height*0.32,1),ring(0.78,height*0.65,2),ring(0.51,height,3)]
+  for(let j=0;j<3;j++)for(let i=0;i<n;i++){
+    const a=rings[j]![i]!,b=rings[j]![(i+1)%n]!,c=rings[j+1]![(i+1)%n]!,e=rings[j+1]![i]!
+    d.face([a,b,c,e],ore&&j===1&&(i+variant)%5===0?RUST:i<4?colors.right:colors.left,0)
   }
-  if (h2 > 0.35) boulder(u - s * 0.9, v - s * 1.1, s * 0.55, Math.round(tall * 0.6), 0.3 + h * 0.3, 0.5)
-  boulder(u, v, s, tall, 0.3 + h2 * 0.3, 0.5 + h3 * 0.2)
-  if (full && h3 > 0.5) boulder(u + s * 0.9, v + s * 1.2, s * 0.4, Math.round(tall * 0.45), 0.4, 0.6)
-  for (let i = 0; i < 3; i++)
-    d.ellipsoid(u + (hash(x + i, y * 3) - 0.5) * 14 * U, v + s + (hash(y + i, x * 5) * 3 + 1) * U, 0.4, 0.02, 0.02, 0.4, 0xaab1a6, 0)
-  if (ore) {
-    for (const [du, dv, z] of [
-      [-0.3, 1, 3],
-      [0.2, 1, 6],
-      [1, 0.1, 4],
-      [1, -0.5, 7]
-    ]) {
-      const U0 = u + du! * s,
-        V0 = v + dv! * s,
-        H = z! * (tall / 10),
-        w = 1 / 64
-      d.face(
-        [
-          [U0 - w, V0 + 0.003, H - 1],
-          [U0 + w, V0 + 0.003, H - 1],
-          [U0 + w, V0 + 0.003, H + 1],
-          [U0 - w, V0 + 0.003, H + 1]
-        ],
-        0x4a5368,
-        0
-      )
-    }
-    const base = square(u - s * 0.2, v + s * 0.1, 0.035, tall)
-    for (let i = 0; i < 4; i++) d.face([base[i]!, base[(i + 1) % 4]!, [u - s * 0.2, v + s * 0.1, tall + 4]], 0x8fa3c8, 1)
+  const summit:Vertex=[u-radius*0.19,v+radius*0.09,height*1.06]
+  for(let i=0;i<n;i++)d.face([rings[3]![i]!,rings[3]![(i+1)%n]!,summit],i%3===0?colors.left:colors.top,0)
+  d.face([...rings[0]!].reverse(),colors.left,0)
+  d.volume(start,0.8)
+}
+
+/** A crystal of ore: a leaning, five-sided spike with a rust-red face. */
+export function oreShard(d: Drawing, u: number, v: number, radius: number, height: number, variant = 0) {
+  const start=d.asset.faces.length,n=5,turn=hash(variant,11)*Math.PI*2
+  const lean:[number,number]=[(hash(variant,5)-0.5)*radius*1.4,(hash(variant,7)-0.5)*radius*1.4]
+  const base=Array.from({length:n},(_,i):Vertex=>{
+    const t=i*Math.PI*2/n+turn,r=radius*(0.75+hash(i,variant+1)*0.25)
+    return [u+Math.cos(t)*r,v+Math.sin(t)*r,0]
+  })
+  const neck=base.map(([x,y]):Vertex=>[x+(u+lean[0]-x)*0.35+lean[0]*0.5,y+(v+lean[1]-y)*0.35+lean[1]*0.5,height*0.62])
+  const tip:Vertex=[u+lean[0]*1.3,v+lean[1]*1.3,height]
+  for(let i=0;i<n;i++){
+    const j=(i+1)%n,side=i===variant%n?RUST:i<2?oreColors.right:oreColors.left
+    d.face([base[i]!,base[j]!,neck[j]!,neck[i]!],side,0)
+    d.face([neck[i]!,neck[j]!,tip],i===(variant+2)%n?RUST:oreColors.top,0)
   }
+  d.volume(start,0.8)
+}
+
+/**
+ * A deposit of stone or ore, over `w` × `h` cells (a big outcrop is drawn
+ * once over the cells it spans). Stone is a heap of rounded boulders; ore is
+ * slate rubble with shards standing out of it.
+ */
+export function makeRock(ore: boolean, full: boolean, variant = 0, w = 1, h = 1) {
+  const name=ore?"Ore":"Stone"
+  const size=w*h>1?`-${w}x${h}`:""
+  const d=new Drawing(`${ore?"ore":"stone"}-${full?"full":"quarried"}${size}`,`${name} · ${full?"full":"quarried"}${size?` · ${w}×${h}`:""}`,"A clustered deposit with clean shaded facets and seeded silhouettes. Stone is pale rounded boulders; ore is dark slate with rust-red shards.")
+  d.asset.category="land";d.asset.reference={type:"rock",x:ore?5:0,y:ore?3:0,ore,amount:full?40:10};d.asset.footprint=Math.max(w,h)
+  const A=w*8*U,B=h*8*U,small=Math.min(w,h),grow=1+(small-1)*0.55
+  // The big rock in the middle, then smaller ones around it, inside the footprint.
+  const spots:Array<[number,number,number]>=[[0.06,-0.02,1]]
+  const around=2+w*h
+  for(let i=0;i<around;i++){
+    const t=i*Math.PI*2/around+hash(variant,i)*0.9
+    spots.push([Math.cos(t)*(0.5+hash(i,variant)*0.2),Math.sin(t)*(0.5+hash(variant,i+3)*0.2),0.45+hash(i+5,variant)*0.25])
+  }
+  spots.forEach(([fu,fv,scale],i)=>{
+    const u=fu*(A-3*U),v=fv*(B-3*U),r=(full?4.4:3.6)*U*grow*scale
+    const z=(full?11+(variant%3)*1.5:5)*grow*scale
+    if(!ore)rockOutcrop(d,u,v,r,z,false,variant+i*2)
+    else if(i===0||i%2===1){
+      rockOutcrop(d,u,v,r*0.9,z*0.4,true,variant+i*2)
+      if(full||i===0)for(let k=0;k<(i===0?3:1);k++)oreShard(d,u+(k-1)*r*0.45,v+(k%2)*r*0.3-r*0.15,r*0.38,z*(1.35-k*0.2),variant+i*3+k)
+    }else oreShard(d,u,v,r*0.4,z*(full?1:0.6),variant+i*3)
+  })
+  for(const [fu,fv] of [[-0.55,0.62],[-0.2,0.85],[0.7,-0.5]] as const)rockOutcrop(d,fu*(A-U),fv*(B-U),0.7*U,1.8,ore,variant+Math.round(fu*10))
   return d.asset
 }
 
