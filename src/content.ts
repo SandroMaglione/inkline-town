@@ -25,7 +25,7 @@ export const goods: Readonly<Record<GoodId, { readonly title: string; readonly c
   fish: { title: "fish", color: 0x2f8c87, price: 2 },
   smoked: { title: "smoked fish", color: 0x9a5b3a, price: 4 },
   wheat: { title: "wheat", color: 0xd6ae2e, price: 1 },
-  flour: { title: "flour", color: 0xc9b48a, price: 2 },
+  flour: { title: "flour", color: 0xc9b48a, price: 3 },
   bread: { title: "bread", color: 0xc4523f, price: 4 },
   wool: { title: "wool", color: 0xa7ada4, price: 2 },
   cloth: { title: "cloth", color: 0x8a58a8, price: 6 }
@@ -226,7 +226,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
   mine: {
     id: "mine", title: "Mine", blurb: "digs ore from a deposit nearby",
     category: "gathering", size: 2, half: 10, stories: 1, roof: "flat", bays: 2, window: 6, topper: "chimney",
-    cost: { coins: 200, materials: { planks: 6, stone: 4 } }, upkeep: 10, workers: 4, crew: "settlers", unlock: { residents: 0, citizens: 10 }, buildable: true,
+    cost: { coins: 200, materials: { planks: 6, stone: 4 } }, upkeep: 6, workers: 4, crew: "settlers", unlock: { residents: 0, citizens: 10 }, buildable: true,
     recipe: { input: null, inputs: 0, output: "ore", batch: 1, seconds: 10 }, gathers: { source: "ore", radius: 3 }, carriers: 2,
     wear: 50, dusty: true, appeal: { value: -8, reach: 4 }
   },
@@ -261,34 +261,34 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
   farm: {
     id: "farm", title: "Farm", blurb: "sows fields around it and harvests the wheat",
     category: "food", size: 3, half: 12, stories: 1, roof: "gable", bays: 2, window: 4, topper: "none",
-    cost: { coins: 120, materials: { planks: 4 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: { residents: 30, citizens: 0 }, buildable: true,
+    cost: { coins: 120, materials: { planks: 4 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: { residents: 60, citizens: 0 }, buildable: true,
     recipe: { input: null, inputs: 0, output: "wheat", batch: 1, seconds: 4 }, gathers: { source: "field", radius: 2 },
     plants: { what: "field", radius: 2, seconds: 3, max: 8 }, carriers: 2, appeal: { value: -2, reach: 2 }
   },
   mill: {
     id: "mill", title: "Mill", blurb: "grinds wheat into flour",
     category: "food", size: 2, half: 8, stories: 2, roof: "flat", bays: 2, window: 4, topper: "sails",
-    cost: { coins: 150, materials: { planks: 6, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 30, citizens: 0 }, buildable: true,
+    cost: { coins: 150, materials: { planks: 6, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 60, citizens: 0 }, buildable: true,
     recipe: { input: "wheat", inputs: 1, output: "flour", batch: 1, seconds: 6 }, holds: { accepts: ["wheat", "flour"], cap: 8 }, carriers: 2,
     wear: 60, appeal: { value: -4, reach: 3 }
   },
   bakery: {
     id: "bakery", title: "Bakery", blurb: "bakes flour into bread",
     category: "food", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "chimney",
-    cost: { coins: 150, materials: { planks: 4, stone: 4, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 30, citizens: 0 }, buildable: true,
+    cost: { coins: 150, materials: { planks: 4, stone: 4, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 60, citizens: 0 }, buildable: true,
     recipe: { input: "flour", inputs: 1, output: "bread", batch: 2, seconds: 6 }, holds: { accepts: ["flour", "bread"], cap: 8 }, carriers: 2,
     wear: 60, hot: true, appeal: { value: -4, reach: 3 }
   },
   sheep: {
     id: "sheep", title: "Sheep farm", blurb: "shears sheep for wool",
     category: "crafts", size: 3, half: 12, stories: 1, roof: "gable", bays: 2, window: 4, topper: "none",
-    cost: { coins: 100, materials: { planks: 4 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: { residents: 15, citizens: 0 }, buildable: true,
+    cost: { coins: 100, materials: { planks: 4 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: { residents: 40, citizens: 0 }, buildable: true,
     recipe: { input: null, inputs: 0, output: "wool", batch: 1, seconds: 6 }, carriers: 2, appeal: { value: -2, reach: 2 }
   },
   weaver: {
     id: "weaver", title: "Weaver", blurb: "weaves wool into cloth",
     category: "crafts", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "none",
-    cost: { coins: 150, materials: { planks: 4, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 15, citizens: 0 }, buildable: true,
+    cost: { coins: 150, materials: { planks: 4, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 40, citizens: 0 }, buildable: true,
     recipe: { input: "wool", inputs: 1, output: "cloth", batch: 1, seconds: 6 }, holds: { accepts: ["wool", "cloth"], cap: 8 }, carriers: 2,
     wear: 60, appeal: { value: -2, reach: 2 }
   },
@@ -307,7 +307,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
   chapel: {
     id: "chapel", title: "Chapel", blurb: "a walker brings faith to the homes it passes",
     category: "services", size: 2, half: 12, stories: 2, roof: "flat", bays: 2, window: 6, topper: "cupola",
-    cost: { coins: 200, materials: { planks: 6, stone: 6 } }, upkeep: 10, workers: 1, crew: "citizens", unlock: { residents: 15, citizens: 0 }, buildable: true,
+    cost: { coins: 200, materials: { planks: 6, stone: 6 } }, upkeep: 10, workers: 1, crew: "citizens", unlock: { residents: 40, citizens: 0 }, buildable: true,
     service: { service: "faith", seconds: 8, range: 22 }, appeal: { value: 4, reach: 4, full: 2 },
     upgrade: {
       title: "Church", blurb: "a church with a tower: its priest walks further, more often, and the streets around it are the finest", rank: 2,
@@ -330,7 +330,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
   hospital: {
     id: "hospital", title: "Hospital", blurb: "physicians call more often and walk further",
     category: "services", size: 3, half: 16, stories: 2, roof: "flat", bays: 2, window: 6, topper: "cupola",
-    cost: { coins: 400, materials: { planks: 10, stone: 10, tools: 2 } }, upkeep: 16, workers: 4, crew: "citizens", unlock: { residents: 0, citizens: 40 }, buildable: true,
+    cost: { coins: 400, materials: { planks: 10, stone: 10, tools: 2 } }, upkeep: 10, workers: 4, crew: "citizens", unlock: { residents: 0, citizens: 40 }, buildable: true,
     service: { service: "health", seconds: 4, range: 40 }, appeal: { value: 2, reach: 3, full: 2 }
   },
   watchhouse: {
@@ -688,17 +688,17 @@ export const lands: Readonly<Record<LandId, {
 }>> = {
   rich: {
     title: "rich", blurb: "deep forests, plenty of stone and ore, two lakes, a full treasury",
-    forests: 7, stone: 4.5, ore: 3, rock: 40, lakes: 2, coins: 2400,
+    forests: 7, stone: 4.5, ore: 3, rock: 40, lakes: 2, coins: 1250,
     stock: amounts({ wood: 15, planks: 50, stone: 24, tools: 10, fish: 30 })
   },
   fair: {
     title: "fair", blurb: "enough of everything, if it is not wasted",
-    forests: 5.5, stone: 3, ore: 2, rock: 32, lakes: 2, coins: 1900,
+    forests: 5.5, stone: 3, ore: 2, rock: 32, lakes: 2, coins: 1100,
     stock: amounts({ wood: 10, planks: 40, stone: 16, tools: 10, fish: 20 })
   },
   harsh: {
     title: "harsh", blurb: "thin woods, little stone, one deposit of ore, one lake",
-    forests: 4, stone: 2, ore: 1, rock: 24, lakes: 1, coins: 1500,
+    forests: 4, stone: 2, ore: 1, rock: 24, lakes: 1, coins: 950,
     stock: amounts({ wood: 10, planks: 30, stone: 12, tools: 8, fish: 15 })
   }
 }
@@ -792,9 +792,9 @@ export const crown = {
   /** Nor more than this share of what the town's storage holds of one good. */
   room: 0.6,
   /** Reward as a multiple of what the goods would fetch from traders, plus a bonus; the fine is the goods' worth plus the bonus. */
-  reward: 2,
+  reward: 1.3,
   fine: 1,
-  bonus: 50,
+  bonus: 25,
   /** How long the crown remembers a missed request, in minutes. */
   memory: 4,
   /** Requests missed in a row before the crown dismisses the mayor. */

@@ -203,7 +203,7 @@ goals again. *Governing*: the ranks, up to a city (and, once the town rank opens
 a market hall where homes lie beyond every walker). While a step's homes or building
 are going up it says so (carriers bringing planks to the site), so you know
 you did your part; when the town cannot build what a step asks for yet, it
-says what opens it (*the farm opens at 30 residents*), or that the treasury
+says what opens it (*the farm opens at 60 residents*), or that the treasury
 must save up, and goes on to a building it can. It never asks for a
 building before the town needs it, as upkeep starts the day it stands: the
 lumberjack and sawmill wait until planks fall below 25, the quarry until

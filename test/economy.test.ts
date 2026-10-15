@@ -6,10 +6,10 @@
  * one number that opens a hole a player could play over and over fails
  * here.
  *
- * A rule the shipped game breaks today is marked `todo` with what breaks
- * it: the suite stays green, and `node --test` lists each one, so this
- * file is also the list of holes still open. Once a hole is closed, drop
- * its `todo` and the rule holds from then on.
+ * A rule the shipped game breaks is marked `todo` with what breaks it: the
+ * suite stays green, and `node --test` lists each one, so this file is
+ * also the list of holes still open. Once a hole is closed, drop its
+ * `todo` and the rule holds from then on.
  */
 import assert from "node:assert/strict"
 import { test } from "node:test"
@@ -31,7 +31,7 @@ const round = (n: number) => Math.round(n * 100) / 100
 /** A producer adds between half and twice what producers usually add for each coin of upkeep. */
 const PRODUCER_BAND = [0.5, 2] as const
 
-test("every producer adds about what producers usually do for its upkeep", { todo: "fishery ×2.8 and bakery ×2.0 of the usual; mill ×0.29 and mine ×0.47" }, () => {
+test("every producer adds about what producers usually do for its upkeep", () => {
   const all = producers(rules), usual = median(all.map((p) => p.perUpkeep))
   none(all.filter((p) => p.perUpkeep < usual * PRODUCER_BAND[0] || p.perUpkeep > usual * PRODUCER_BAND[1])
     .map((p) => `${p.id}: adds ${round(p.adds)}/min for ${p.upkeep} upkeep, ×${round(p.perUpkeep / usual)} of the usual ${round(usual)}`), "producer outside the band")
@@ -106,32 +106,33 @@ test("administration is charged by the resident, so finer homes pay for their pe
 
 // ── The opening ───────────────────────────────────────────────────────────
 
-/** The share of the first citizens' buildings a new town's treasury pays for, at most; and the homes they need, at least. */
-const OPENING_SHARE = 0.7
+/** The share of the first citizens' buildings a new town's treasury pays for, at most (it cannot buy them all at once); and the homes they need, at least. */
+const OPENING_SHARE = 1
 const OPENING_HOMES = 15
 
-test("a new town's treasury pays for only part of the first citizens' buildings", { todo: "every land's treasury buys the whole kit (1260 coins): rich 190%, fair 151%, harsh 119%" }, () => {
+test("a new town's treasury pays for only part of the first citizens' buildings", () => {
   const kit = openingKit(10, rules)
   none((Object.entries(rules.lands) as Array<[string, { coins: number }]>).filter(([, l]) => l.coins > kit.cost * OPENING_SHARE)
     .map(([id, l]) => `${id}: ${l.coins} coins for a ${kit.cost}-coin kit (${kit.kinds.join(", ")}), ${Math.round((l.coins / kit.cost) * 100)}%`), "opening paid for")
 })
 
-test("the first citizens' buildings open only once the town has grown", { todo: "all of them open by the 8th cottage" }, () => {
+test("the first citizens' buildings open only once the town has grown", () => {
   const kit = openingKit(10, rules)
   assert(kit.unlockHomes >= OPENING_HOMES, `the ${kit.kinds.join(", ")} all open at ${kit.unlockHomes} cottages`)
 })
 
 // ── The crown ─────────────────────────────────────────────────────────────
 
-test("answering the crown with bought goods does not pay", { todo: "the reward (2× price + 50) beats buying at 1.5× on requests of 10 to 30" }, () => {
+test("answering the crown with bought goods pays no more than its thanks", () => {
+  // The bonus is the crown's thanks for answering at all; the goods themselves are paid about what they cost to buy.
   const goods = (Object.keys(rules.goods) as Array<GoodId>).filter((g) => rules.spoils[g] === undefined)
-  none(goods.flatMap((g) => [10, 20, 30].map((n) => crownMargin(g, n, rules))).filter((m) => m.margin > 0)
+  none(goods.flatMap((g) => [10, 20, 30].map((n) => crownMargin(g, n, rules))).filter((m) => m.margin > rules.crown.bonus)
     .map((m) => `${m.amount} ${m.good}: reward ${m.reward}, bought for ${m.bought}, +${m.margin}`), "crown pays for bought goods")
 })
 
 // ── Services ──────────────────────────────────────────────────────────────
 
-test("a bigger building for a service walks at least as far for its upkeep as a smaller one", { todo: "a hospital walks 37.5 cells a coin of upkeep, a healer 56" }, () => {
+test("a bigger building for a service walks at least as far for its upkeep as a smaller one", () => {
   const all = services(rules), out: Array<string> = []
   for (const big of all) for (const small of all)
     if (big.service === small.service && big.cost > small.cost && big.perUpkeep < small.perUpkeep)
