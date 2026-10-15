@@ -67,7 +67,8 @@ six months.
     more for it every minute; the open stone and ore are quarried down to
     worked faces, which give one more every 90 seconds, so a quarry or mine
     beside them goes on at about a third of its pace (the chronicle says
-    when the last open rock is gone);
+    when the last open rock is gone); the bulldozer clears a worked face
+    for building, and it gives nothing more;
   - *approval*, from -100 to 100, follows needs met, taxes, unpaid wages,
     snubs from the crown, and hungry winters, and decides how many people
     each home holds. Taxes above 100% also send residents away directly,
@@ -90,10 +91,11 @@ six months.
   townhouses). Hold every goal of the next rank for two minutes and the town
   rises: the crown sends a reward, and play goes on. A rank is never lost.
   The town panel shows the next rank's goals.
-- **Upgrades**: a town can turn its market into a *market hall*, and a city
-  its chapel into a *church*, where they stand (the building's panel):
+- **Upgrades**: a town can turn its market into a *market hall*, and its
+  chapel into a *church*, where they stand (the building's panel):
   paid at once in coins, planks, stone, and tools, the walker goes further
   and more often, the street around it is finer, and the upkeep is higher.
+  Pulling one down gives back part of what both cost.
 - **The end of a term**: it is *lost* to bankruptcy (three minutes in
   debt), revolt (approval at -50 or below for two minutes), abandonment
   (people fall below 15% of their peak), or dismissal (three of the crown's

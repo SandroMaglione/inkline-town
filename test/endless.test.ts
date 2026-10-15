@@ -132,3 +132,81 @@ test("once a term runs out, the next one carries on the same town", () => {
   assert(s.resources["Town/Crown"].next > end)
   assert(s.resources["Town/Chronicle"].lines.some((l: { text: string }) => l.text.startsWith("Term 2:")))
 })
+
+test("a long reign: five terms follow one another, each judged on its own, and the save stays in bounds", () => {
+  const t = headless(charter)
+  t.run(16)
+  const term = charter.term * 3600
+  const sample = t.snapshot().resources["Town/History"].samples.at(-1)
+  assert(sample, "a sample of the town's history")
+  for (let n = 1; n <= 5; n++) {
+    // The term's history, as a long term would leave it, and the crown's tally from it; then its last seconds.
+    t.change((s) => {
+      const f = s.resources["Town/Fate"]
+      const samples = s.resources["Town/History"].samples
+      for (let i = 1; i <= 400; i++) samples.push({ ...sample, tick: f.began + Math.round((i * term) / 401) })
+      s.resources["Town/Crown"] = { ...s.resources["Town/Crown"], met: 3, missed: 2, streak: 2 }
+      s.resources["Town/Time"].tick = s.resources["Town/Charter"].founded + f.began + term - 120
+      s.resources["Town/Treasury"].coins = 5000
+    })
+    t.run(3)
+    const over = t.snapshot().resources["Town/Fate"]
+    assert.equal(over.state, "over", `term ${n} runs out on time`)
+    assert.equal(over.term, n)
+    assert.equal(over.began, (n - 1) * term)
+    assert.match(over.reason, new RegExp(`^Term ${n} is over`))
+    t.edit({ type: "nextTerm" })
+    t.run(1)
+    const s = t.snapshot()
+    // The crown's tally starts again, so a term is scored on its own requests and no mayor starts one near dismissal.
+    assert.deepEqual([s.resources["Town/Crown"].met, s.resources["Town/Crown"].missed, s.resources["Town/Crown"].streak], [0, 0, 0])
+    assert.equal(s.resources["Town/Fate"].term, n + 1)
+  }
+  const s = t.snapshot()
+  const samples: ReadonlyArray<{ tick: number }> = s.resources["Town/History"].samples
+  // Older history thins (past 1200 samples), the term just played stays whole, and the samples stay in order.
+  assert(samples.length < 5 * 400, `history thinned: ${samples.length} samples`)
+  assert.equal(samples.filter((p) => p.tick >= 4 * term).length >= 400, true)
+  assert(samples.every((p, i) => i === 0 || p.tick >= samples[i - 1]!.tick))
+  assert(s.resources["Town/Chronicle"].lines.length <= 200)
+  assert.equal(s.resources["Town/Charter"].winters.length, 6 * YEARS_PER_TERM)
+  const size = JSON.stringify(s).length
+  assert(size < 600_000, `save size ${size}`)
+})
+
+test("the bulldozer clears a worked face, but not a rock still standing", () => {
+  const toasts: Array<string> = []
+  const t = headless(charter, { toast: (m) => toasts.push(m) })
+  t.run(1)
+  const rocks = t.snapshot().entities.filter((e) => e.components["Town/Rock"])
+  const [worked, standing] = [rocks[0]!, rocks[1]!]
+  t.change((s) => {
+    s.entities.find((e) => e.id === worked.id)!.components["Town/Rock"].amount = 0
+    s.entities.find((e) => e.id === standing.id)!.components["Town/Rock"].amount = 12
+  })
+  t.edit({ type: "remove", cell: worked.components["Town/Tile"] }, { type: "remove", cell: standing.components["Town/Tile"] })
+  t.run(1)
+  const left = new Set(t.snapshot().entities.map((e) => e.id))
+  assert.equal(left.has(worked.id), false)
+  assert.equal(left.has(standing.id), true)
+  assert(toasts.some((m) => m.startsWith("Quarry it down first")), toasts.join(" | "))
+})
+
+test("pulling down a market hall gives back part of the upgrade too", () => {
+  const t = headless(charter)
+  t.run(1)
+  let cell = { x: 0, y: 0 }
+  t.change((s) => {
+    cell = market(s)
+    s.resources["Town/Fate"].rank = 2
+  })
+  t.edit({ type: "upgrade", cell })
+  t.run(1)
+  const stone = stockOf(t.snapshot(), "stone")
+  t.edit({ type: "remove", cell })
+  t.run(1)
+  const back = stockOf(t.snapshot(), "stone") - stone
+  const base = kinds.market.cost.materials.stone!, up = kinds.market.upgrade!.cost.materials.stone!
+  assert(back > Math.floor(base / 2), `${back} stone back, more than the market's own share`)
+  assert(back <= base + up)
+})

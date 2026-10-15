@@ -141,7 +141,7 @@ interface World {
   readonly policy: { readonly settlers: number; readonly citizens: number; readonly sells: ReadonlyArray<GoodId>; readonly buys: ReadonlyArray<GoodId>; readonly reserve: number }
   readonly mood: { readonly approval: number; readonly target: number }
   readonly crown: { readonly open: boolean; readonly good: GoodId; readonly amount: number; readonly met: number; readonly missed: number }
-  readonly fate: { readonly state: string; readonly reason: string; readonly at: number; readonly score: number; readonly goalSince: number }
+  readonly fate: { readonly state: string; readonly reason: string; readonly at: number; readonly score: number; readonly goalSince: number; readonly rank: number }
   readonly charter: { readonly size: CharterValue["size"]; readonly term: number; readonly founded: number }
   readonly tick: number
 }
@@ -662,6 +662,8 @@ const resting = new Map<KindId, number>()
 
 interface Row {
   readonly minute: number
+  /** The town's rank (see `ranks`) at this minute. */
+  readonly rank: number
   readonly coins: number
   readonly net: number
   readonly income: number
@@ -772,13 +774,14 @@ const run = (seed: number) => {
       burning: w.census.burning!,
       lost: ruined.size,
       burghers: w.census.burghers!,
+      rank: w.fate.rank,
       problems: problemsNow
     })
   }
   if (process.env.CHRONICLE) for (const l of town.snapshot().resources["Town/Chronicle"].lines as Array<{ tick: number; text: string }>) console.log(`  ${(l.tick / 3600).toFixed(1)} ${l.text}`)
   const lastGoals = goalsOf(w.charter, {
     settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: net(w), approval: w.mood.approval
-  }, rules).map((g) => `${g.met ? "✓" : "✗"} ${g.text} (${g.value})`).join(" · ")
+  }, rules, w.fate.rank).map((g) => `${g.met ? "✓" : "✗"} ${g.text} (${g.value})`).join(" · ")
   const hh = Math.max(1, w.homes.length)
   console.log(`  longest continuous goal hold: ${longestGoalHold.toFixed(1)} seconds`)
   const supplied = `food ${Math.round((w.census.food! / hh) * 100)}% bread ${Math.round((w.census.bread! / hh) * 100)}% cloth ${Math.round((w.census.cloth! / hh) * 100)}% faith ${Math.round((w.census.faith! / hh) * 100)}%`
@@ -786,7 +789,12 @@ const run = (seed: number) => {
   const built: Record<string, number> = {}
   for (const b of w.buildings) built[b.kind] = (built[b.kind] ?? 0) + 1
   const final = town.snapshot().resources
-  return { seed, rows, problems, end, score: w.fate.score, built, stock: w.stock, crown: w.crown, lastGoals, supplied, lost: ruined.size,
+  // The ranks the town rose to, and the first minute it stood at each.
+  const risen = rules.ranks.slice(1).flatMap((r, i) => {
+    const row = rows.find((x) => x.rank >= i + 1)
+    return row ? [{ title: r.title, minute: row.minute }] : []
+  })
+  return { seed, rows, problems, end, score: w.fate.score, built, stock: w.stock, crown: w.crown, lastGoals, supplied, lost: ruined.size, risen,
     longestGoalHoldSeconds: longestGoalHold,
     final: { census: final["Town/Census"], treasury: final["Town/Treasury"], ledger: final["Town/Ledger"], mood: final["Town/Mood"], fate: final["Town/Fate"], charter: final["Town/Charter"] } }
 }
@@ -809,7 +817,7 @@ const play = (which: Bot) => {
     results.push(r)
     const outcome = r.end.state === "playing" ? "still playing" : `${r.end.state} at ${r.end.minute} min: ${r.end.reason}`
     console.log(`seed ${r.seed}: ${outcome}  (score ${r.score})`)
-    console.log(`  goals: ${r.lastGoals}`)
+    console.log(`  ranks: ${r.risen.length ? r.risen.map((x) => `${x.title} at ${x.minute} min`).join(", ") : "still a hamlet"} · next: ${r.lastGoals}`)
     console.log(`  homes supplied: ${r.supplied} · built ${Object.entries(r.built).map(([k, n]) => `${k}${n > 1 ? `×${n}` : ""}`).join(", ")}`)
     if (verbose) {
       console.log(header)
@@ -828,6 +836,9 @@ const play = (which: Bot) => {
     ;(outcomes[k] ??= []).push(r.end.minute)
   }
   console.log(`  outcomes        ${Object.entries(outcomes).map(([k, ms]) => `${k} ×${ms.length} (around minute ${Math.round(mean(ms))})`).join(", ")}`)
+  const reached: Record<string, Array<number>> = {}
+  for (const r of results) for (const x of r.risen) (reached[x.title] ??= []).push(x.minute)
+  console.log(`  ranks           ${Object.entries(reached).map(([k, ms]) => `${k} ×${ms.length} (around minute ${Math.round(mean(ms))})`).join(", ") || "none reached"}`)
   console.log(`  score           ${Math.round(mean(results.map((r) => r.score)))}`)
   console.log(`  crown           met ${mean(results.map((r) => r.crown.met)).toFixed(1)}, missed ${mean(results.map((r) => r.crown.missed)).toFixed(1)}`)
   // The pressure curve: each checkpoint averaged over the seeds still running then.

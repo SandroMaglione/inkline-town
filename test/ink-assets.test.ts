@@ -5,6 +5,7 @@ import { kindIds, goodIds, kinds } from "../src/content.ts"
 import { testMap } from "../src/map-lab/map.ts"
 import { U } from "../src/iso.ts"
 import { makeRock } from "../src/asset-lab/land.ts"
+import { church, marketHall, quartersFor } from "../src/asset-lab/service-upgrades.ts"
 
 test("the portable catalogue covers all world object families", () => {
   assert.equal(assetById.size, inkAssets.length, "Asset IDs must be unique")
@@ -22,8 +23,8 @@ test("the portable catalogue covers all world object families", () => {
   assert.deepEqual([...hats].sort(), ["bonnet", "brim", "cap", "hood", "none", "top"])
   for (const tier of [1, 2]) assert.equal(inkAssets.filter((a) => a.reference?.type === "house" && a.reference.tier === tier && !a.appearance).length, 4)
   assert.equal(inkAssets.filter((a) => a.reference?.type === "tree").length, 9)
-  // Stone and ore, full and quarried, one cell; and full outcrops over 2×1, 2×2, and 3×3 cells.
-  assert.equal(inkAssets.filter((a) => a.reference?.type === "rock").length, 10)
+  // Stone and ore, full, quarried, and worked down to a face, one cell; and full outcrops over 2×1, 2×2, and 3×3 cells.
+  assert.equal(inkAssets.filter((a) => a.reference?.type === "rock").length, 12)
   assert.equal(inkAssets.filter((a) => a.reference?.type === "field").length, 4)
 })
 
@@ -67,9 +68,32 @@ test("the review map includes every catalogue model at least once", () => {
 })
 
 test("buildings, homes and resource deposits stay inside their plates", () => {
-  const models = [...inkAssets.filter(a=>a.reference?.type==="building"||a.reference?.type==="house"),...Array.from({length:6},(_,i)=>[makeRock(false,true,i),makeRock(true,true,i)]).flat()]
+  const models = [...inkAssets.filter(a=>a.reference?.type==="building"||a.reference?.type==="house"),...Array.from({length:6},(_,i)=>[makeRock(false,true,i),makeRock(true,true,i),makeRock(false,"worked",i),makeRock(true,"worked",i),makeRock(false,"worked",i,3,3)]).flat()]
   for(const a of models){
     const half=(a.footprint!*8-1)*U
     for(const p of [...a.faces.flatMap(f=>f.points),...a.strokes.flatMap(s=>s.points)])assert.ok(Math.abs(p[0])<=half+0.0001&&Math.abs(p[1])<=half+0.0001,`${a.id}: geometry outside the ${a.footprint}-cell plate`)
   }
+})
+
+test("an upgraded market or church turns to face its road, keeping its plot and its light", () => {
+  for (const side of ["right", "left", "backRight", "backLeft"] as const) {
+    const doors = { [side]: true }
+    const q = quartersFor("chapel", doors)
+    assert.ok(q >= 0 && q < 4)
+    for (const asset of [church({ plate: false, doors }), marketHall({ plate: false, doors })]) {
+      const edge = (kinds.market.size * 8 - 1) * U
+      assert.ok(asset.faces.every((f) => f.points.every(([u, v]) => Math.abs(u) <= edge + 1e-9 && Math.abs(v) <= edge + 1e-9)), `${asset.id} facing ${side}`)
+      assert.ok(!asset.faces.some((f) => f.color === 0xf5f6f2), `${asset.id}: no plate in the town`)
+    }
+  }
+  // The church's tower door is on its +v side as drawn: turned to the road on each side.
+  const towerAt = (doors: Record<string, boolean>) => {
+    const tall = church({ plate: false, doors }).faces.flatMap((f) => f.points).filter((p) => p[2] > 110)
+    const [u, v] = [tall.reduce((n, p) => n + p[0], 0) / tall.length, tall.reduce((n, p) => n + p[1], 0) / tall.length]
+    return Math.abs(u) > Math.abs(v) ? (u > 0 ? "right" : "backRight") : v > 0 ? "left" : "backLeft"
+  }
+  for (const side of ["right", "left", "backRight", "backLeft"]) assert.equal(towerAt({ [side]: true }), side)
+  // Lit faces stay lit: as many of the church's faces carry the lit wall colour whichever way it turns.
+  const lit = (doors: Record<string, boolean>) => church({ plate: false, doors }).faces.filter((f) => f.color === 0xe9ebe5).length
+  assert.equal(lit({ right: true }), lit({ left: true }))
 })

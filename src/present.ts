@@ -12,7 +12,7 @@ import { homeHeight, topOf, type Alert, type Load, type Emphasis } from "./art.t
 import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView, RuinView } from "./render3d/views.ts"
 import type { DoorSet, OverlayCell } from "./render3d/models.ts"
 import {
-  amounts, BUILD_TICKS, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
+  amounts, BUILD_TICKS, builtCost, COMMUTE, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
   PAVE_COST, propIds, props, ranks, risk, RISK_MAX, ROAD_COST, tierHome, total, upkeepOf, winters, type Amounts, type GoodId, type Kind, type KindId, type Tier
 } from "./content.ts"
 import { around, canPlace, cellOf, doors, entrances, isRoad, key, lPath, nearest, reach, useAt, type TileLike } from "./grid.ts"
@@ -167,11 +167,11 @@ const problemOf = (kind: Kind, status: StatusValue, growing = false, crewing?: C
  * them to grow, not on a forester. A quarry or mine has rocks in reach,
  * worked down to their faces: it is waiting on the next one.
  */
-const growingNear = (grid: GridValue, tile: TileLike, kind: Kind): boolean => {
+const growingNear = (grid: GridValue, tile: TileLike, kind: Kind, rocks: ReadonlyMap<number, { readonly ore: boolean }>): boolean => {
   const g = kind.gathers
   if (!g || g.source === "water") return false
-  const use = g.source === "stone" || g.source === "ore" ? "rock" : g.source
-  return around(tile, g.radius).some((c) => useAt(grid, c.x, c.y) === use)
+  if (g.source === "stone" || g.source === "ore") return around(tile, g.radius).some((c) => rocks.get(key(c.x, c.y))?.ore === (g.source === "ore"))
+  return around(tile, g.radius).some((c) => useAt(grid, c.x, c.y) === g.source)
 }
 
 const BuildingRead = Game.Query({
@@ -379,6 +379,8 @@ export const Interact = Game.System(
     const rates = resources.policy.get()
     const approval = resources.mood.get().approval
     const cells = resources.appeal.get().cells
+    // The rocks by cell: which are ore, and which are worked down to their faces.
+    const rockAt = new Map(queries.rocks.each().map(({ data }) => [key(data.tile.get().x, data.tile.get().y), data.rock.get()]))
     const tick = resources.time.get().tick
     const buildings = queries.buildings.each()
     const houses = queries.houses.each()
@@ -620,6 +622,14 @@ export const Interact = Game.System(
         preview.plots.push({ ...cell, size: 1, look: "blocked" })
       const there = cell ? parkAt.get(key(cell.x, cell.y))?.data.park.get() : undefined
       if (there) preview.tooltip = there.prop !== "none" ? `remove the ${props[there.prop].title.toLowerCase()}` : `remove the ${grounds[there.ground].title.toLowerCase()}`
+      const rock = cell ? rockAt.get(key(cell.x, cell.y)) : undefined
+      if (rock && cell) {
+        const worked = rock.amount <= 1
+        if (worked) preview.plots.push({ ...cell, size: 1, look: "blocked" })
+        preview.tooltip = worked
+          ? `worked ${rock.ore ? "ore" : "stone"} face · clear it for building: it gives no more`
+          : `${rock.ore ? "ore" : "stone"} · ${rock.amount} left · quarry it down to a worked face before it can be cleared`
+      }
     }
     if (ui.selected !== null) {
       const row = buildings.find((b) => b.entity.id === ui.selected)
@@ -780,7 +790,7 @@ export const Interact = Game.System(
         })
       const upkeep = upkeepOf(kind, upgraded)
       if (upkeep > 0) lines.push({ icon: "upkeep", label: "upkeep", value: `${upkeep} coins a minute` })
-      const growing = status === "starved" && growingNear(grid, row.data.tile.get(), kind)
+      const growing = status === "starved" && growingNear(grid, row.data.tile.get(), kind, rockAt)
       const problem = row.data.burning.present ? "on fire!" : problemOf(kind, status, growing, { nearby: staff.nearby, crew: kind.crew })
       return { kind, status, problem, lines }
     }
@@ -936,7 +946,7 @@ export const Interact = Game.System(
     if (hoveredBuilding) {
       const { kind, status, problem } = describeBuilding(hoveredBuilding)
       preview.tooltip = ui.tool === "bulldoze"
-        ? `${kind.title.toLowerCase()} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(kind.cost, maybe(hoveredBuilding.data.site))}`
+        ? `${kind.title.toLowerCase()} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(builtCost(kind, hoveredBuilding.data.upgraded.present), maybe(hoveredBuilding.data.site))}`
         : `${kind.title.toLowerCase()} · ${problem ?? status}`
     } else if (hoveredHouse) {
       const h = hoveredHouse.data.house.get()
@@ -985,7 +995,7 @@ export const Interact = Game.System(
         lines,
         pausable,
         paused: pickedBuilding.data.paused.present,
-        salvage: salvageFor(kind.cost, maybe(pickedBuilding.data.site)),
+        salvage: salvageFor(builtCost(kind, upgraded), maybe(pickedBuilding.data.site)),
         upgraded,
         upgrade: up && standing && !upgraded
           ? { title: up.title, cost: costText(up.cost), blocked: upgradeBlock(up, resources.fate.get().rank, { ranks }) }

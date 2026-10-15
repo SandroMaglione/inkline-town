@@ -8,11 +8,11 @@
  */
 import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft } from "../archetypes.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
-import { amounts, goodIds, RESERVE_MAX, TAX_STEPS, ticks, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
+import { amounts, builtCost, goodIds, RESERVE_MAX, TAX_STEPS, ticks, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
-import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Service, Site, Status, Stock, Storage, Time, TownHall, Treasury, Ui, Upgraded } from "../schema.ts"
+import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Treasury, Ui, Upgraded } from "../schema.ts"
 import { salvageOf, salvageText } from "../rules/salvage.ts"
 import { elapsed, rollWinters, termTicks, TileRead, useOf, write } from "./shared.ts"
 import type { Rules as RuleInputs } from "../rules/config.ts"
@@ -44,8 +44,11 @@ export const ApplyEdits = Game.System(
       parks: Game.Query({ selection: { park: Game.Query.write(Park) } }),
       halls: Game.Query({ selection: { hall: Game.Query.read(TownHall) } }),
       /** Whatever was built at a cost, standing or a site: what pulling it down gives back. */
-      built: Game.Query({ selection: { building: Game.Query.optional(Building), house: Game.Query.optional(House), site: Game.Query.optional(Site), paused: Game.Query.optional(Paused) } }),
+      built: Game.Query({
+        selection: { building: Game.Query.optional(Building), house: Game.Query.optional(House), site: Game.Query.optional(Site), paused: Game.Query.optional(Paused), upgraded: Game.Query.optional(Upgraded) }
+      }),
       stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage] }),
+      rocks: Game.Query({ selection: { rock: Game.Query.read(Rock) } }),
       upgradable: Game.Query({
         selection: {
           building: Game.Query.read(Building),
@@ -281,7 +284,15 @@ export const ApplyEdits = Game.System(
           if (!inside(edit.cell.x, edit.cell.y)) break
           const use = useAt(grid.value(), edit.cell.x, edit.cell.y)
           const owner = entities.get(ownerAt(grid.value(), edit.cell.x, edit.cell.y))
-          if (owner === undefined || use === "rock" || use === "water") break
+          if (owner === undefined || use === "water") break
+          // A rock goes only once it is quarried down to a worked face, and gives nothing more after.
+          if (use === "rock") {
+            const rock = queries.rocks.get(owner)
+            if (!rock.ok || rock.value.data.rock.get().amount > 1) {
+              ui.toast("Quarry it down first: only a worked face can be cleared")
+              break
+            }
+          }
           if (halls.has(owner)) {
             ui.toast("The town hall stays")
             break
@@ -296,7 +307,7 @@ export const ApplyEdits = Game.System(
           const built = queries.built.get(owner)
           if (built.ok && (built.value.data.building.present || built.value.data.house.present)) {
             const b = maybe(built.value.data.building)
-            const s = salvageOf(b ? kinds[b.kind].cost : home.cost, maybe(built.value.data.site)?.owed ?? null, rules)
+            const s = salvageOf(b ? builtCost(kinds[b.kind], built.value.data.upgraded.present) : home.cost, maybe(built.value.data.site)?.owed ?? null, rules)
             if (s.fee > 0 && coins < s.fee) {
               ui.toast(`Pulling it down costs ${s.fee} coins`)
               break
@@ -373,8 +384,8 @@ export const ApplyEdits = Game.System(
           const winters = [...charter.winters]
           while (winters.length < term * rules.yearsPerTerm) winters.push(...rollWinters(() => almanac.next(), rules, false))
           resources.charter.set({ ...charter, winters: winters.slice(0, term * rules.yearsPerTerm) })
-          // The crown starts the term afresh: an open request lapses, unfined.
-          resources.crown.update((c) => ({ ...c, open: false, next: began + crownGap(charter, rules) }))
+          // The crown starts the term afresh: an open request lapses, unfined, and its tally of requests met and missed begins again.
+          resources.crown.update((c) => ({ ...c, open: false, next: began + crownGap(charter, rules), met: 0, missed: 0, streak: 0 }))
           resources.fate.set({ ...f, state: "playing", reason: "", term, began, debtSince: -1, revoltSince: -1, goalSince: -1, score: 0 })
           // A long reign keeps its history in less detail the further back it is.
           const samples = resources.history.get().samples

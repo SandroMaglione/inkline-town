@@ -160,6 +160,14 @@ export interface Kind {
 /** Coins a minute a building of a kind costs, upgraded or not. */
 export const upkeepOf = (kind: Pick<Kind, "upkeep" | "upgrade">, upgraded: boolean): number => (upgraded && kind.upgrade ? kind.upgrade.upkeep : kind.upkeep)
 
+/** What a building of a kind cost all told, its upgrade included: what pulling it down gives part of back. */
+export const builtCost = (kind: Pick<Kind, "cost" | "upgrade">, upgraded: boolean): Kind["cost"] => {
+  if (!upgraded || !kind.upgrade) return kind.cost
+  const materials: Partial<Record<GoodId, number>> = { ...kind.cost.materials }
+  for (const [g, n] of Object.entries(kind.upgrade.cost.materials) as Array<[GoodId, number]>) materials[g] = (materials[g] ?? 0) + n
+  return { coins: kind.cost.coins + kind.upgrade.cost.coins, materials }
+}
+
 /** A building upgraded where it stands (see `Kind.upgrade`). */
 export interface Upgrade {
   readonly title: string
@@ -302,7 +310,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     cost: { coins: 200, materials: { planks: 6, stone: 6 } }, upkeep: 10, workers: 1, crew: "citizens", unlock: { residents: 15, citizens: 0 }, buildable: true,
     service: { service: "faith", seconds: 8, range: 22 }, appeal: { value: 4, reach: 4, full: 2 },
     upgrade: {
-      title: "Church", blurb: "a church with a tower: its priest walks further, more often, and the streets around it are the finest", rank: 3,
+      title: "Church", blurb: "a church with a tower: its priest walks further, more often, and the streets around it are the finest", rank: 2,
       cost: { coins: 700, materials: { planks: 8, stone: 20, tools: 3 } }, upkeep: 18,
       service: { seconds: 6, range: 30 }, appeal: { value: 6, reach: 5, full: 3 }
     }

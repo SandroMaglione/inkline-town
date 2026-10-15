@@ -138,7 +138,7 @@ for (const type of ["fir", "broadleaf", "poplar"] as const)
     if (type === "fir" && grown === 1) continue
     additional.push(makeTree(type, grown, `${type}-${grown === 1 ? "grown" : grown >= 0.5 ? "young" : "sapling"}`))
   }
-for (const ore of [false, true]) for (const full of [false, true]) additional.push(makeRock(ore, full))
+for (const ore of [false, true]) for (const stage of [false, true, "worked"] as const) additional.push(makeRock(ore, stage))
 for (const ore of [false, true]) for (const [w, h] of [[2, 1], [2, 2], [3, 3]] as const) additional.push(makeRock(ore, true, 0, w, h))
 for (const stage of [0, 1, 2, 3] as const) additional.push(makeField(stage))
 additional.push(makeRoadPatch(), makeWater(), ...personCatalogue())

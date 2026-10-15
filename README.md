@@ -98,7 +98,7 @@ A town is founded as a hamlet. Hold every goal of the next rank for two
 minutes (enough people and coins, a share of them citizens, a town that
 approves of you) and it rises to a **village**, then a **town**, then a
 **city**, whose finest streets must hold burghers in townhouses. Each rank
-brings a reward from the crown, and the town can upgrade its market to a
+brings a reward from the crown, and a town can upgrade its market to a
 market hall and its chapel to a church. Nothing ends when a rank is
 reached.
 
@@ -107,7 +107,7 @@ three of the crown's requests ignored, and the term is **lost**. Otherwise
 time runs out and the term is judged: flourishing, holding on, or declining.
 Stand for the **next term** to carry on the same town, or retire and found a
 new one. The open stone and ore run out, but the worked faces they leave keep
-giving a little, so a long reign never runs dry.
+giving a little, so a long reign never runs dry (or clear them to build).
 
 The reckoning shows how the term went: residents, coins, and approval
 across it, with the winters shaded, and the chronicle of everything that

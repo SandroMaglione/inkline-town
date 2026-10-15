@@ -1735,7 +1735,8 @@ export const createHost = async (
     const story = el("div", "chronicle")
     story.innerHTML = s.chronicle
       .filter((l) => l.tick >= s.fate.began * 3600)
-      .map((l) => `<p><b>${clockText(Math.round(l.tick / 60))}</b> ${l.text}</p>`)
+      // Timed from the start of this term, as its chart is.
+      .map((l) => `<p><b>${clockText(Math.round((l.tick - s.fate.began * 3600) / 60))}</b> ${l.text}</p>`)
       .join("")
     card.append(story)
     const actions = el("div", "actions")
