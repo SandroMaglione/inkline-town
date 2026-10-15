@@ -17,7 +17,8 @@ const families = {
   winter: { title: "Winter", ids: ["cottage-winter", "citizen-winter", "townhouse-winter", "granary-winter", "smokehouse-winter", "firewatch-winter", "healer-winter", "hospital-winter", "watchhouse-winter", "builder-winter"] },
   hazards: { title: "Ruins", ids: ["ruin-burnt-1", "ruin-collapsed-1", "ruin-derelict-1"] },
   people: { title: "People & cargo", ids: ["service-watchman", "service-firefighter", "service-physician", "service-constable", "service-builder", "goods-smoked", "cart-smoked-4", "barrow-smoked-4"] },
-  wear: { title: "Building condition", ids: ["granary-worn", "smokehouse-worn", "firewatch-worn", "healer-worn", "hospital-worn", "watchhouse-worn", "builder-worn"] }
+  wear: { title: "Building condition", ids: ["granary-worn", "smokehouse-worn", "firewatch-worn", "healer-worn", "hospital-worn", "watchhouse-worn", "builder-worn"] },
+  upgrades: { title: "Upgrades & worked faces", ids: ["market", "market-hall", "chapel", "church", "stone-full", "stone-quarried", "stone-worked", "ore-full", "ore-quarried", "ore-worked"] }
 } as const
 type Family = keyof typeof families
 const introductions: Partial<Record<Family, { heading: string; eyebrow: string; description: string; aside: string }>> = {

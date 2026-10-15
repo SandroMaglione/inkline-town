@@ -84,6 +84,6 @@ export const blankResources = () => ({
 
 export { CELL_STEPS, elapsed, seasonAt, termTicks, winterOf } from "./shared.ts"
 export { SITE_SHARE } from "./work.ts"
-export { lockReason, unlocked } from "./edits.ts"
+export { lockReason, unlocked, upgradeBlock } from "./edits.ts"
 export { adminOf, askOf, capacity, kept, met, priceOf, satisfaction, taxOf, tierFor } from "./town.ts"
 export { crownGap, goalsOf, larder, steadyNet } from "./term.ts"

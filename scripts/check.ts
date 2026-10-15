@@ -5,8 +5,9 @@
  *
  *   node scripts/check.ts
  *
- * - complete: a town meeting every goal, held two minutes, is won; it can
- *   carry on governing, and its term then runs out as complete;
+ * - ranks: a town meeting every goal of the next rank, held two minutes,
+ *   rises to it (a village, then a town) and plays on; its term then runs
+ *   out, and the next term carries on the same town;
  * - bankrupt: three minutes in debt;
  * - revolt: approval at -50 or below for two minutes;
  * - abandoned: residents fall below 15% of their peak;
@@ -39,7 +40,7 @@ const town = (charter: CharterValue = { size: "small", term: 45, land: "fair", s
       for (const cell of [{ x: hall.x + 2 + i, y: hall.y + 1 }, { x: hall.x + 1, y: hall.y + 2 + i }, { x: hall.x - i, y: hall.y + 1 }, { x: hall.x + 1, y: hall.y - i }])
         s.entities.push({ id: s.nextEntity++, components: { "Town/Tile": { ...cell, size: 1 }, "Town/Road": {} } })
   })
-  const fate = () => t.snapshot().resources["Town/Fate"] as { state: string; reason: string; at: number; governing: boolean }
+  const fate = () => t.snapshot().resources["Town/Fate"] as { state: string; reason: string; at: number; term: number; began: number; rank: number }
   return { ...t, fate }
 }
 
@@ -117,7 +118,7 @@ const check = (name: string, ok: boolean, detail: string) => {
   if (!ok) failures += 1
 }
 
-// Complete: 25 citizens' homes is 200 residents, all citizens; plenty of coins.
+// Ranks: 25 citizens' homes is 200 residents, all citizens; plenty of coins.
 {
   const t = town()
   let placed = 0
@@ -125,15 +126,16 @@ const check = (name: string, ok: boolean, detail: string) => {
     placed = settle(s, 25)
     s.resources["Town/Treasury"].coins = 10_000
   })
-  t.run(4 * 60)
+  t.run(8 * 60)
   const f = t.fate()
-  check("complete", f.state === "won", `${placed} homes · ${f.state} at ${(f.at / 3600).toFixed(1)} min: ${f.reason}`)
-  t.edit({ type: "govern" })
-  t.run(1)
-  check("keep governing", t.fate().state === "playing" && t.fate().governing, `${t.fate().state}, governing ${t.fate().governing}`)
-  t.run(42 * 60)
+  check("a village, then a town", f.state === "playing" && f.rank === 2, `${placed} homes · ${f.state}, rank ${f.rank}`)
+  t.run(38 * 60)
   const end = t.fate()
-  check("complete to the end", end.state === "over" && end.governing, `${end.state}: ${end.reason}`)
+  check("the term runs out", end.state === "over" && end.rank === 2, `${end.state}, rank ${end.rank}: ${end.reason}`)
+  t.edit({ type: "nextTerm" })
+  t.run(1)
+  const next = t.fate()
+  check("the next term", next.state === "playing" && next.term === 2 && next.rank === 2 && next.began === 45 * 3600, `${next.state}, term ${next.term} from ${next.began}`)
 }
 
 // Bankrupt: deep in debt with nothing coming in.

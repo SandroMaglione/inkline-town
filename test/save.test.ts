@@ -143,3 +143,35 @@ test("a town saved before the guide loads, with the guide from its start", () =>
   assert.equal(run(load("manual"))._tag, "Success")
   assert.deepEqual(town.snapshot().resources["Town/Guide"], { done: [], off: false })
 })
+
+test("a town saved complete, before terms followed one another, loads as a town playing on", () => {
+  const { town, storage, run } = setup()
+  town.run(10)
+  run(save("manual"))
+  const file = JSON.parse(storage.get("inkline-town/save/manual")!)
+  const { term: _t, began: _b, rank: _r, ...fate } = file.world.resources["Town/Fate"]
+  file.world.resources["Town/Fate"] = { ...fate, state: "won", reason: "The town is complete.", governing: false, won: -1 }
+  storage.set("inkline-town/save/manual", JSON.stringify({ ...file, version: 7 }))
+  assert.equal(run(load("manual"))._tag, "Success")
+  const loaded = town.snapshot().resources["Town/Fate"]
+  assert.equal(loaded.state, "playing")
+  assert.equal(loaded.reason, "")
+  assert.equal(loaded.rank, 2)
+  assert.equal(loaded.term, 1)
+  assert.equal(loaded.began, 0)
+  assert.equal("governing" in loaded, false)
+})
+
+test("a town saved mid-term, before ranks, loads as a hamlet", () => {
+  const { town, storage, run } = setup()
+  town.run(10)
+  run(save("manual"))
+  const file = JSON.parse(storage.get("inkline-town/save/manual")!)
+  const { term: _t, began: _b, rank: _r, ...fate } = file.world.resources["Town/Fate"]
+  file.world.resources["Town/Fate"] = { ...fate, governing: false, won: -1 }
+  storage.set("inkline-town/save/manual", JSON.stringify({ ...file, version: 7 }))
+  assert.equal(run(load("manual"))._tag, "Success")
+  const loaded = town.snapshot().resources["Town/Fate"]
+  assert.equal(loaded.state, "playing")
+  assert.equal(loaded.rank, 0)
+})

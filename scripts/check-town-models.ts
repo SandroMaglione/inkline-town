@@ -14,7 +14,7 @@ page.on("console", e => { if (e.type() === "error") errors.push(e.text()) })
 page.on("response", r => { if (r.status() >= 400) errors.push(`${r.status()} ${r.url()}`) })
 const output = "output/inkline-3d/town-review"
 await mkdir(output, { recursive: true })
-const groups = ["All buildings", "Final refinements", "Trade buildings", "Workshop batch", "Review fixes", "Buildings", "Parks", "Homes & neighbourhoods", "Winter", "Ruins", "People & cargo", "Building condition"]
+const groups = ["All buildings", "Final refinements", "Trade buildings", "Workshop batch", "Review fixes", "Buildings", "Parks", "Homes & neighbourhoods", "Winter", "Ruins", "People & cargo", "Building condition", "Upgrades & worked faces"]
 const captureSheet = async () => {
   const previous = await page.locator("#sheet-link").getAttribute("href")
   await page.getByRole("button", { name: "Save model sheet", exact: true }).click()

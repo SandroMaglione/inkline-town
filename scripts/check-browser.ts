@@ -189,7 +189,8 @@ try {
   await page.evaluate(save=>localStorage.setItem("inkline-town/save/manual",JSON.stringify({...save,savedAt:Date.now()})),ended)
   await page.getByRole("button",{name:"load",exact:true}).click()
   await page.getByRole("button",{name:"Load without saving",exact:true}).click()
-  await page.getByRole("button",{name:"Found a new town",exact:true}).waitFor({state:"visible"})
+  await page.getByRole("button",{name:"Next term",exact:true}).waitFor({state:"visible"})
+  await page.getByRole("button",{name:"Retire: found a new town",exact:true}).waitFor({state:"visible"})
   assert.equal(await page.evaluate(()=>window.town.ui.stats!.fate.state),"over")
   facts.reckoning=true
   // Sharing: the card, then a link that opens the town in another browser (a phone), which can play on from there.

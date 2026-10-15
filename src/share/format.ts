@@ -37,7 +37,7 @@ export const PICTURE_HEIGHT = 630
 
 /** The lines about a share, shown in its link's preview. */
 export interface ShareMeta {
-  /** "Inkline Town · the town is complete" */
+  /** "Inkline Town · A town: term 2 is over, flourishing" */
   readonly title: string
   /** "Large, fair land · year 5 · 581 residents · 352 citizens · 9000 coins" */
   readonly description: string

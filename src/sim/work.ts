@@ -16,8 +16,8 @@ const FLOW_SLICES = 6
 
 const each = (f: (g: (typeof goodIds)[number]) => number): Amounts => Object.fromEntries(goodIds.map((g) => [g, f(g)])) as Amounts
 import { around, doors, GridBuilder, key, ownerAt, reach, roadPrint, useAt } from "../grid.ts"
-import { Building, Burning, Charter, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Treasury, Tree, maybe, type Status as StatusValue } from "../schema.ts"
-import { connected, elapsed, seasonAt, TileRead, useOf } from "./shared.ts"
+import { Building, Burning, Charter, Chronicle, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Treasury, Tree, maybe, type Status as StatusValue } from "../schema.ts"
+import { connected, elapsed, seasonAt, TileRead, useOf, write } from "./shared.ts"
 
 import { assignWorkers, equipmentPace, effort, paced } from "../rules/production.ts"
 export { effort, paced } from "../rules/production.ts"
@@ -299,7 +299,13 @@ export const Work = Game.System(
       rocks: Game.Query({ selection: { rock: Game.Query.write(Rock) } }),
       fields: Game.Query({ selection: { field: Game.Query.write(Field) } })
     },
-    resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time), charter: Game.System.readResource(Charter), flow: Game.System.writeResource(Flow) },
+    resources: {
+      grid: Game.System.readResource(Grid),
+      time: Game.System.readResource(Time),
+      charter: Game.System.readResource(Charter),
+      flow: Game.System.writeResource(Flow),
+      chronicle: Game.System.writeResource(Chronicle)
+    },
     services: { rules: Game.System.service(Rules) }
   },
   ({ queries, resources, commands, services }) => {
@@ -321,6 +327,12 @@ export const Work = Game.System(
     const rocks = lazy(() => new Map(queries.rocks.each().map((row) => [row.entity.id as number, row])))
     const fields = lazy(() => new Map(queries.fields.each().map((row) => [row.entity.id as number, row])))
     const used = new Set<number>()
+    // A worked face gives one more now and then.
+    if (tick % rules.faceTicks === 0)
+      for (const { data } of queries.rocks.each()) {
+        const r = data.rock.get()
+        if (r.amount <= 0) data.rock.set({ ...r, amount: 1 })
+      }
 
     /** Takes what a gatherer needs from the land within reach, or says there is none. */
     const gather = (source: "tree" | "stone" | "ore" | "field" | "water", tile: { x: number; y: number; size: number }, radius: number): boolean => {
@@ -341,10 +353,18 @@ export const Work = Game.System(
           if (!rock) continue
           const r = rock.data.rock.get()
           if (r.ore !== (source === "ore") || r.amount <= 0) continue
-          if (r.amount <= 1) {
-            commands.despawn(rock.entity.id)
-            used.add(id)
-          } else rock.data.rock.set({ ...r, amount: r.amount - 1 })
+          // Quarried down, a rock stays as a worked face (see `FACE_TICKS`).
+          rock.data.rock.set({ ...r, amount: r.amount - 1 })
+          if (r.amount === 2 && ![...rocks().values()].some((o) => o !== rock && o.data.rock.get().ore === r.ore && o.data.rock.get().amount >= 2))
+            write(
+              resources.chronicle,
+              t,
+              r.ore
+                ? "The last of the open ore is dug: the worked faces still give a little, slowly. Traders sell ore and tools."
+                : "The last of the open stone is quarried: the worked faces still give a little, slowly. Traders sell stone.",
+              true,
+              c
+            )
           return true
         }
         if (source === "field" && use === "field") {

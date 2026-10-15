@@ -3,7 +3,8 @@ import { test } from "node:test"
 import * as THREE from "three"
 import { kindIds } from "../src/content.ts"
 import { Drawing, type InkAsset } from "../src/asset-lab/primitives.ts"
-import { buildingAsset, homeAsset, noDoors, treeVariant } from "../src/render3d/models.ts"
+import { buildingAsset, buildingHeight, homeAsset, noDoors, treeVariant } from "../src/render3d/models.ts"
+import { upgradeHeights } from "../src/asset-lab/service-upgrades.ts"
 import { ModelHandle, ModelPool } from "../src/render3d/pool.ts"
 import { assetById } from "../src/asset-lab/assets.ts"
 import { surfaceState, hazardStrength } from "../src/render3d/surface-state.ts"
@@ -28,6 +29,23 @@ test("live construction and fitting are valid for every building and all three h
     }
     for (const tier of [1, 2, 3] as const) valid(homeAsset(tier, 0.62, build, 1, { ...noDoors, backLeft: true }))
   }
+})
+
+test("live service upgrades retain their taller models and material bounds beside the revised base buildings", () => {
+  for (const id of ["market", "chapel"] as const) for (const side of Object.keys(noDoors)) {
+    const doors = { ...noDoors, [side]: true }
+    const base = buildingAsset(id, 1, null, doors, 1)
+    const upgraded = buildingAsset(id, 1, null, doors, 1, { winter: true }, true)
+    valid(upgraded)
+    assert.equal(upgraded.reference?.type === "building" && upgraded.reference.tier, 2)
+    const top = (asset: InkAsset) => Math.max(...asset.faces.flatMap(face => face.points.map(p => p[2])))
+    assert.ok(top(upgraded) > top(base), `${id}/${side}: live upgrade lost its silhouette`)
+    assert.equal(buildingHeight(id, true), upgradeHeights[id].eave)
+    assert.equal(upgraded.effects?.height, upgradeHeights[id].eave)
+    assert.equal(upgraded.effects?.state.snow, 1)
+  }
+  for (const [id, height] of [["bakery", 28], ["weaver", 30], ["fishery", 20]] as const)
+    assert.equal(buildingHeight(id), height, `${id}: public height must follow the revised model`)
 })
 
 test("shared geometry retains independent colours, transforms and entity picking", () => {

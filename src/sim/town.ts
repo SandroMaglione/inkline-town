@@ -6,8 +6,8 @@ import { tradeCollection } from "../rules/trade.ts"
  */
 import { appealAt, parkUpkeep } from "../appeal.ts"
 import { doors, key, reach } from "../grid.ts"
-import { amounts, goodIds, type GoodId } from "../content.ts"
-import { Appeal, Building, Burning, Census, Charter, Flow, Game, Rules, Grid, House, Inventory, Ledger, Market, Mood, Park, Paused, Policy, Rising, Risk, Sick, Site, Staff, Storage, Tile, Time, TownHall, Treasury, maybe } from "../schema.ts"
+import { amounts, goodIds, upkeepOf, type GoodId } from "../content.ts"
+import { Appeal, Building, Burning, Census, Charter, Flow, Game, Rules, Grid, House, Inventory, Ledger, Market, Mood, Park, Paused, Policy, Rising, Risk, Sick, Site, Staff, Storage, Tile, Time, TownHall, Treasury, Upgraded, maybe } from "../schema.ts"
 import { connected, elapsed, seasonAt } from "./shared.ts"
 
 import { ageNeeds, baseCollection, mealDecay, adminOf, capacity, met, rateOf, taxOf, tierFor } from "../rules/households.ts"
@@ -91,7 +91,7 @@ export const Collect = Game.System(
     queries: {
       /** A closed home pays nothing and costs the town hall nothing. */
       homes: Game.Query({ selection: { tile: Game.Query.read(Tile), house: Game.Query.read(House) }, without: [Site, Rising, Paused] }),
-      buildings: Game.Query({ selection: { building: Game.Query.read(Building), paused: Game.Query.optional(Paused) }, without: [Site] }),
+      buildings: Game.Query({ selection: { building: Game.Query.read(Building), paused: Game.Query.optional(Paused), upgraded: Game.Query.optional(Upgraded) }, without: [Site] }),
       halls: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [TownHall] }),
       stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage], without: [Site, Rising] }),
       parks: Game.Query({ selection: { park: Game.Query.read(Park) } })
@@ -128,7 +128,7 @@ export const Collect = Game.System(
       if (reached) taxes += taxOf(data.house.get(), policy, rules, appealAt(cells, tile.x, tile.y))
     }
     let upkeep = 0
-    for (const { data } of queries.buildings.each()) upkeep += kinds[data.building.get().kind].upkeep * (data.paused.present ? PAUSED_UPKEEP : 1)
+    for (const { data } of queries.buildings.each()) upkeep += upkeepOf(kinds[data.building.get().kind], data.upgraded.present) * (data.paused.present ? PAUSED_UPKEEP : 1)
     for (const { data } of queries.parks.each()) upkeep += parkUpkeep(data.park.get(), rules)
     const admin = adminOf(homes, rules)
 
