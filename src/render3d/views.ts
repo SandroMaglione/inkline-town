@@ -15,7 +15,7 @@ import { kinds, home, GROWN, ROCK_AMOUNT, type KindId } from "../content.ts"
 import { U, type Point } from "../iso.ts"
 import { vertex3 } from "../asset-lab/renderer.ts"
 import { Drawing, type Vertex } from "../asset-lab/primitives.ts"
-import { makeSails, makeFlag } from "../asset-lab/buildings.ts"
+import { makeSails, makeFlag, buildingSmokeOrigin, buildingDimensions } from "../asset-lab/buildings.ts"
 import { makeMarker } from "../asset-lab/construction.ts"
 import { makeRuin } from "../asset-lab/town-props.ts"
 import { StructureEffects } from "./structure-effects.ts"
@@ -91,6 +91,7 @@ export class BuildingView extends WorldView {
   private marker: ModelHandle
   private motion: ModelHandle
   private smoke: SmokePlume | null = null
+  private effectLayout = ""
   private wave = 0
   private opening = 0
   private beat = -1
@@ -128,12 +129,10 @@ export class BuildingView extends WorldView {
     )
     this.plate.use(`plate/${kind.size}/${build}`, () => plateAsset(kind.size, build))
     this.body.root.scale.set(1 + this.pulse * 0.04, 1 - this.pulse * 0.06, 1 + this.pulse * 0.04)
-    const H = kind.roof === "gable" ? 20 : kind.stories * 32
+    const dimensions = buildingDimensions(this.kindId), H = dimensions.height
     this.marker.root.position.set(
       0,
-      (H +
-        (kind.topper === "chimney" ? 24 : kind.topper === "cupola" ? 25 : kind.topper === "flag" ? 24 : kind.topper === "sails" ? 16 : 0) +
-        8) /
+      (dimensions.top + 8) /
         Math.cos(Math.PI / 6),
       0
     )
@@ -141,9 +140,15 @@ export class BuildingView extends WorldView {
     this.marker.root.visible = look.problem && look.build >= 1 && !signed
     const state = structureState(look,this.stage.frost)
     this.body.effects = build >= 1 ? state : surfaceState()
-    this.body.effectBounds.set(kind.half * U * 32 * Math.SQRT2,H/Math.cos(Math.PI/6),this.entity%97/97,1)
+    this.body.effectBounds.set(dimensions.half * 32 * Math.SQRT2,H/Math.cos(Math.PI/6),this.entity%97/97,1)
+    const effectLayout = doorKey(doors)
+    if (this.effects && this.effectLayout !== effectLayout) {
+      this.effects.dispose()
+      this.effects = null
+    }
     if(!this.effects&&build>=1&&(state.burning||state.fireRisk)){
-      this.effects = new StructureEffects(buildingAsset(this.kindId,1,null,noDoors,0),H)
+      this.effects = new StructureEffects(buildingAsset(this.kindId,1,null,doors,0),H)
+      this.effectLayout = effectLayout
       this.group.add(this.effects.group)
     }
     this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
@@ -163,13 +168,13 @@ export class BuildingView extends WorldView {
       this.motion.root.position.copy(vertex3([kind.half * U + 3 * U, 0, H - 6]))
       this.motion.root.rotation.x = this.wave
     }
-    const smoking=look.working&&kind.topper==="chimney"&&look.build>=1&&!look.burning
+    const origin = buildingSmokeOrigin(this.kindId, doors)
+    const smoking=look.working&&origin!==null&&look.build>=1&&!look.burning
     if(smoking&&!this.smoke){
       this.smoke=new SmokePlume()
-      const a=kind.half*U,pitch=2*a/kind.bays
-      this.smoke.group.position.copy(vertex3([-a+pitch*0.5,-a+pitch*0.5,H+24.3]))
       this.group.add(this.smoke.group)
     }
+    if (smoking) this.smoke!.group.position.copy(vertex3(origin!))
     this.smoke?.update(performance.now()/1000,Number(smoking))
     this.viewTint = look.tint ?? null
     this.emphasis(emphasis)

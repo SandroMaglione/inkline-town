@@ -4,6 +4,7 @@ import { buildAsset, exportAsset } from "../asset-lab/renderer.ts"
 import "./style.css"
 
 const families = {
+  workshops: { title: "Workshop batch", ids: ["mine", "smithy", "sawmill", "townhall"] },
   fixes: { title: "Review fixes", ids: ["mill","bakery","weaver","warehouse","mine","farm","chapel","hospital","smokehouse","builder","townhouse","quarry","stone-full","stone-quarried","ore-full","ore-quarried","stone-full-2x1","stone-full-2x2","stone-full-3x3","ore-full-2x1","ore-full-2x2","ore-full-3x3","problem-marker","smoke","firewatch"] },
   buildings: { title: "Buildings", ids: ["granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder"] },
   ornaments: { title: "Parks", ids: ["park-sample", "park-lamp", "park-fountain", "park-statue", "paved-street"] },
@@ -15,7 +16,7 @@ const families = {
 } as const
 type Family = keyof typeof families
 const root = document.querySelector<HTMLElement>("#review")!
-root.innerHTML = `<header><a href="/">Inkline Town</a><span>PR 03 / MODEL REVIEW</span><a href="/map-lab.html">Town map ↗</a></header>
+root.innerHTML = `<header><a href="/">Inkline Town</a><span>TOWN MODEL REVIEW</span><a href="/map-lab.html">Town map ↗</a></header>
   <section class="intro"><div><p class="eyebrow">A town with a little more life</p><h1>New places.<br>The same ink.</h1><p>Inspect the models together, turn them around, then open any one for a closer look.</p></div><aside>7 buildings<br>3 park furnishings<br>3 home tiers<br><span>Plus people, hazards, paving,<br>snow and signs of wear.</span></aside></section>
   <nav aria-label="Model collections"></nav><section class="camera"><label>Turn the models <input aria-label="Model rotation" type="range" min="-180" max="180" value="0"><output>0°</output></label><button id="rear">See the back</button><button id="reset">Reset view</button><button id="sheet">Save model sheet</button><a id="sheet-link" hidden download>Download sheet ↗</a><label>View <select aria-label="View elevation"><option value="30">Street angle</option><option value="50">From above</option><option value="15">Near the ground</option></select></label></section>
   <section class="grid" aria-label="3D models"></section><footer><a href="/park-lab.html">Built park & running water ↗</a> · <a href="/effects-lab.html">Animated house effects ↗</a> · Drag a model to turn the collection · <a href="/asset-lab.html">Full asset catalogue ↗</a> · <a href="/">Play this town ↗</a></footer>`
@@ -51,6 +52,15 @@ function select(next: Family) {
   if (sheetUrl) URL.revokeObjectURL(sheetUrl)
   sheetUrl = ""; root.querySelector<HTMLAnchorElement>("#sheet-link")!.hidden = true
   family = next; models.forEach(m => m.built.dispose()); models = []; grid.replaceChildren()
+  const workshop = family === "workshops"
+  root.querySelector(".intro h1")!.innerHTML = workshop ? "Room to work.<br>The same ink." : "New places.<br>The same ink."
+  root.querySelector(".eyebrow")!.textContent = workshop ? "The first building batch" : "A town with a little more life"
+  root.querySelector(".intro > div > p:last-child")!.textContent = workshop
+    ? "Open work yards around real tools, and a civic entrance for the town hall. Turn the models to inspect their working space."
+    : "Inspect the models together, turn them around, then open any one for a closer look."
+  root.querySelector(".intro aside")!.innerHTML = workshop
+    ? "4 revised buildings<br>3 open work yards<br><span>Original plots, pale surfaces,<br>fine ink and purposeful tools.</span>"
+    : "7 buildings<br>3 park furnishings<br>3 home tiers<br><span>Plus people, hazards, paving,<br>snow and signs of wear.</span>"
   for (const [i, id] of families[family].ids.entries()) {
     const asset = assetById.get(id)!
     if (!asset) throw new Error(`Missing review model: ${id}`)
@@ -81,7 +91,7 @@ root.querySelector<HTMLButtonElement>("#sheet")!.onclick = () => {
   canvas.width = columns * width; canvas.height = 100 + Math.ceil(models.length / columns) * height
   ctx.fillStyle = "#f0f2ec"; ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.fillStyle = "#3d4943"; ctx.font = "30px Georgia"; ctx.fillText(`Inkline Town / ${families[family].title}`, 30, 48)
-  ctx.font = "13px monospace"; ctx.fillText(`PR 03 · ${Math.round(yaw)}° rotation · ${pitch}° elevation`, 30, 76)
+  ctx.font = "13px monospace"; ctx.fillText(`Inkline Town · ${Math.round(yaw)}° rotation · ${pitch}° elevation`, 30, 76)
   renderer.setSize(width, 270, false); renderer.setScissorTest(false)
   models.forEach((model, i) => {
     const camera = model.camera, heading = (45 + yaw) * Math.PI / 180, angle = pitch * Math.PI / 180,

@@ -205,6 +205,12 @@ That is how the README's screenshots of grown towns were made.
 
 ### Reviewing the new town models
 
+[`/model-review.html?collection=workshops`](http://localhost:5232/model-review.html?collection=workshops)
+groups the revised mine, smithy, sawmill and town hall. The three workshops have
+open yards and road-facing layouts. `src/asset-lab/workshops.ts` owns their
+geometry, construction frames and smoke origins. The live renderer and catalogue
+use the same models; simulation footprints and building costs are unchanged.
+
 Open [`/model-review.html`](http://localhost:5232/model-review.html) for
 the models added for PR #3. Collections cover buildings, parks,
 home tiers and neighbourhoods, winter, hazards, people/cargo and building

@@ -2,6 +2,7 @@ import { kinds, type KindId } from "../content.ts"
 import { U } from "../iso.ts"
 import { Drawing, palette, pale, square, sides, type Vertex, type Side } from "./primitives.ts"
 import { finishTownBuilding, townBuildingNotes, institutionDoor, makeQuarry } from "./services.ts"
+import { isWorkshop, makeWorkshop, workshopSmokeOrigin, townHallEntrance } from "./workshops.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
   townhall: { accent: 0x8a58a8, glass: 0xf3dca6 },
@@ -38,6 +39,7 @@ export interface BuildingOptions {
   motion?: boolean
 }
 export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
+  if (isWorkshop(id)) return makeWorkshop(id, options)
   if (id === "quarry") return makeQuarry(options)
   const fit = options.fit ?? 1
   const kind = kinds[id],
@@ -54,7 +56,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
       : id === "market"
         ? "Striped canopy, coloured goods crates and roof flag, all built as geometry."
         : id === "townhall"
-          ? "Two storeys, clock faces, violet trim, three skylights and a red flag. Original dimensions throughout."
+          ? "Civic timber double doors beneath stone porches, with broad steps, clocks, violet trim, three skylights and a red flag."
           : "Original footprint, palette and yard details, with complete walls and roof geometry.")
   )
   d.asset.category = "buildings"
@@ -83,7 +85,8 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
           } else d.window(side, a, s, floor * 32 + 12, 8, glass, true)
         }
     if (door && fit > 0.15) {
-      if (id === "chapel" || id === "hospital") institutionDoor(d,side,a,id,fit)
+      if (id === "townhall") townHallEntrance(d, side, a, fit, options.open ?? 0)
+      else if (id === "chapel" || id === "hospital") institutionDoor(d,side,a,id,fit)
       else d.door(side, a, Math.max(2, Math.round(Math.min(16, H - 8) * fit)), 5 * U, 6 * U, 2.5 * U, accent, true, options.open ?? 0)
     }
     if (kind.roof === "gable" && !door && fit > 0.4) d.window(side, a, 0, 6)
@@ -187,6 +190,26 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
   }
   finishBuilding(d, id, a, p, H, fit)
   return d.asset
+}
+
+/** Shared by catalogue geometry and working-building emitters. Open yards have no flue. */
+export function buildingSmokeOrigin(id: KindId, doors?: BuildingOptions["doors"]): Vertex | null {
+  if (isWorkshop(id)) return workshopSmokeOrigin(id, doors)
+  const kind = kinds[id]
+  if (kind.topper !== "chimney") return null
+  const a = kind.half * U, pitch = 2 * a / kind.bays
+  return [-a + pitch * 0.5, -a + pitch * 0.5, (kind.roof === "gable" ? 20 : kind.stories * 32) + 24.3]
+}
+
+/** Presentation dimensions stay separate from simulation footprints and content costs. */
+export function buildingDimensions(id: KindId) {
+  const kind = kinds[id], height = kind.roof === "gable" ? 20 : kind.stories * 32
+  const topper = kind.topper === "chimney" || kind.topper === "flag" ? 24 : kind.topper === "cupola" ? 25 : kind.topper === "sails" ? 16 : 0
+  return {
+    half: isWorkshop(id) ? 13.5 * U : kind.half * U,
+    height,
+    top: id === "sawmill" ? 36.7 : id === "mine" || id === "smithy" ? 56 : height + topper
+  }
 }
 
 function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number, fit = 1) {
@@ -306,28 +329,6 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
       d.box(c, y, U, U, 4, 4, 0xeeefea, 0xdcded7, 0xc9ccc4)
       break
     }
-    case "mine": {
-      for (const du of [-1, 1])
-        d.line(
-          [
-            [c + du * U, a + 0.5 * U, 0],
-            [c + du * U, p - 0.2 * U, 0]
-          ],
-          1,
-          palette.ink,
-          0.6
-        )
-      d.box(c, c, 1.6 * U, 2 * U, 2, 5, 0x6c7488, 0xd5dae4, 0xbcc3d1)
-      for (const [du, dv] of [
-        [-0.8, -0.5],
-        [0.7, 0.5],
-        [0, 0]
-      ])
-        d.ellipsoid(c + du! * U, c + dv! * U, 7.5, 0.035, 0.035, 1.5, 0x5a6479, 0.75)
-      for (const dv of [-1.2, 1.2]) d.cylinder(c + 1.6 * U, c + dv * U, 0.026, 0, 3, palette.ink, palette.ink, 0.75)
-      pyramid(c - U, -a - 2 * U, 2 * U, 0, 6, 0x5a6479)
-      break
-    }
     case "fishery": {
       d.cylinder(c, c, 1.5 * U, 0, 7, 0xc79a5b, 0x9fc9c4, 1.5)
       const y0 = -a - 4 * U,
@@ -357,15 +358,6 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
       }
       break
     }
-    case "sawmill":
-      for (let i = 0; i < 3; i++) d.box(c, -a + 1.5 * U, 1.1 * U, 3 * U, i * 2.5, 2.5, 0xf0c59a, 0xe2a873, 0xd2945c, 1)
-      d.log("u", c, -a - 3 * U, -a + 4 * U, 0, 2, 0xb08a5e, 0xe9d2a8)
-      break
-    case "smithy":
-      d.cylinder(c, c, U, 0, 3, 0xb08a5e, 0xe9d2a8, 1.5)
-      d.box(c, c, 0.6 * U, 1.4 * U, 3, 3, 0x6d7671, 0x5a625e, 0x4b524e)
-      pyramid(c, -a - 1.5 * U, 1.2 * U, 0, 5, 0x3d4943)
-      break
     case "farm":
       d.cylinder(c + U, -a - 3 * U, 3.5 * U, 0, 28, 0xeeeae0, pale(0xc4523f, 0.6), 1.5)
       {
