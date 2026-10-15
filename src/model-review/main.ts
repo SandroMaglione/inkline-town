@@ -1,9 +1,15 @@
 import * as THREE from "three"
 import { assetById } from "../asset-lab/assets.ts"
 import { buildAsset, exportAsset } from "../asset-lab/renderer.ts"
+import { kindIds } from "../content.ts"
+import { ruralIds } from "../asset-lab/rural.ts"
 import "./style.css"
 
 const families = {
+  town: { title: "All buildings", ids: [...kindIds, "market-hall", "church"] },
+  rural: { title: "Final refinements", ids: ruralIds },
+  trades: { title: "Trade buildings", ids: ["mill", "warehouse", "fishery", "bakery", "weaver", "watchhouse"] },
+  workshops: { title: "Workshop batch", ids: ["mine", "smithy", "sawmill", "townhall"] },
   fixes: { title: "Review fixes", ids: ["mill","bakery","weaver","warehouse","mine","farm","chapel","hospital","smokehouse","builder","townhouse","quarry","stone-full","stone-quarried","ore-full","ore-quarried","stone-full-2x1","stone-full-2x2","stone-full-3x3","ore-full-2x1","ore-full-2x2","ore-full-3x3","problem-marker","smoke","firewatch"] },
   buildings: { title: "Buildings", ids: ["granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder"] },
   ornaments: { title: "Parks", ids: ["park-sample", "park-lamp", "park-fountain", "park-statue", "paved-street"] },
@@ -15,8 +21,14 @@ const families = {
   upgrades: { title: "Upgrades & worked faces", ids: ["market", "market-hall", "chapel", "church", "stone-full", "stone-quarried", "stone-worked", "ore-full", "ore-quarried", "ore-worked"] }
 } as const
 type Family = keyof typeof families
+const introductions: Partial<Record<Family, { heading: string; eyebrow: string; description: string; aside: string }>> = {
+  town: { heading: "The whole town.<br>The same ink.", eyebrow: "The complete building collection", description: "Every building kind, plus the market hall and church. Compare their silhouettes, turn the collection, and open any building for a closer look.", aside: `${kindIds.length} building kinds<br>2 upgraded buildings<br><span>Work yards, homes for trades,<br>stores and town services.</span>` },
+  rural: { heading: "Small things.<br>A better town.", eyebrow: "The final building pass", description: "Timber entrances, nursery beds, farm details, a quieter chapel and a connected fire-watch lookout. Inspect all nine refinements together.", aside: "9 refined buildings<br>Original plots<br><span>Connected structures,<br>clear entrances and useful yards.</span>" },
+  workshops: { heading: "Room to work.<br>The same ink.", eyebrow: "The first building batch", description: "Open work yards around real tools, and a civic entrance for the town hall. Turn the models to inspect their working space.", aside: "4 revised buildings<br>3 open work yards<br><span>Original plots, pale surfaces,<br>fine ink and purposeful tools.</span>" },
+  trades: { heading: "Built for the job.<br>The same ink.", eyebrow: "The second building batch", description: "Loading aprons, a fishing net, an open oven and a working loom. Inspect the equipment and entrances from every side.", aside: "6 revised buildings<br>Original plots<br><span>Timber loading doors, open bays,<br>and equipment for each trade.</span>" }
+}
 const root = document.querySelector<HTMLElement>("#review")!
-root.innerHTML = `<header><a href="/">Inkline Town</a><span>PR 03 / MODEL REVIEW</span><a href="/map-lab.html">Town map ↗</a></header>
+root.innerHTML = `<header><a href="/">Inkline Town</a><span>TOWN MODEL REVIEW</span><a href="/map-lab.html">Town map ↗</a></header>
   <section class="intro"><div><p class="eyebrow">A town with a little more life</p><h1>New places.<br>The same ink.</h1><p>Inspect the models together, turn them around, then open any one for a closer look.</p></div><aside>7 buildings<br>3 park furnishings<br>3 home tiers<br><span>Plus people, hazards, paving,<br>snow and signs of wear.</span></aside></section>
   <nav aria-label="Model collections"></nav><section class="camera"><label>Turn the models <input aria-label="Model rotation" type="range" min="-180" max="180" value="0"><output>0°</output></label><button id="rear">See the back</button><button id="reset">Reset view</button><button id="sheet">Save model sheet</button><a id="sheet-link" hidden download>Download sheet ↗</a><label>View <select aria-label="View elevation"><option value="30">Street angle</option><option value="50">From above</option><option value="15">Near the ground</option></select></label></section>
   <section class="grid" aria-label="3D models"></section><footer><a href="/park-lab.html">Built park & running water ↗</a> · <a href="/effects-lab.html">Animated house effects ↗</a> · Drag a model to turn the collection · <a href="/asset-lab.html">Full asset catalogue ↗</a> · <a href="/">Play this town ↗</a></footer>`
@@ -28,6 +40,14 @@ renderer.domElement.className = "models"; document.body.append(renderer.domEleme
 let family: Family = "buildings", yaw = 0, pitch = 30, renders = 0
 let sheetUrl = ""
 let models: Array<{ scene: THREE.Scene; camera: THREE.OrthographicCamera; built: ReturnType<typeof buildAsset>; view: HTMLElement; center: THREE.Vector3; size: THREE.Vector3 }> = []
+// Include both the tower height and the ground plane projected into the view.
+// Taking only the larger dimension clips the mill's foreground at street angle.
+function viewHeight(size: THREE.Vector3, heading: number, angle: number, aspect: number) {
+  const width = Math.abs(Math.cos(heading)) * size.x + Math.abs(Math.sin(heading)) * size.z
+  const depth = Math.abs(Math.sin(heading)) * size.x + Math.abs(Math.cos(heading)) * size.z
+  const height = Math.abs(Math.cos(angle)) * size.y + Math.abs(Math.sin(angle)) * depth
+  return Math.max(height, width / aspect, 18) * 1.12
+}
 function render() {
   renderer.setSize(innerWidth, innerHeight, false)
   renderer.setScissorTest(false); renderer.clear(); renderer.setScissorTest(true)
@@ -35,8 +55,7 @@ function render() {
     const r = model.view.getBoundingClientRect()
     if (r.bottom <= 0 || r.top >= innerHeight) continue
     const heading = (45 + yaw) * Math.PI / 180, angle = pitch * Math.PI / 180,
-      extent = Math.max(model.size.y, Math.hypot(model.size.x, model.size.z) * 0.75, 18) * 1.3,
-      vertical = Math.max(extent, Math.hypot(model.size.x, model.size.z) * r.height / r.width * 1.4), camera = model.camera
+      vertical = viewHeight(model.size, heading, angle, r.width / r.height), camera = model.camera
     camera.top = vertical / 2; camera.bottom = -camera.top; camera.left = -vertical * r.width / r.height / 2; camera.right = -camera.left
     camera.position.copy(model.center).add(new THREE.Vector3(Math.sin(heading) * Math.cos(angle), Math.sin(angle), Math.cos(heading) * Math.cos(angle)).multiplyScalar(1000))
     camera.lookAt(model.center); camera.updateProjectionMatrix(); camera.updateMatrixWorld()
@@ -52,6 +71,11 @@ function select(next: Family) {
   if (sheetUrl) URL.revokeObjectURL(sheetUrl)
   sheetUrl = ""; root.querySelector<HTMLAnchorElement>("#sheet-link")!.hidden = true
   family = next; models.forEach(m => m.built.dispose()); models = []; grid.replaceChildren()
+  const intro = introductions[family] ?? { heading: "New places.<br>The same ink.", eyebrow: "A town with a little more life", description: "Inspect the models together, turn them around, then open any one for a closer look.", aside: "7 buildings<br>3 park furnishings<br>3 home tiers<br><span>Plus people, hazards, paving,<br>snow and signs of wear.</span>" }
+  root.querySelector(".intro h1")!.innerHTML = intro.heading
+  root.querySelector(".eyebrow")!.textContent = intro.eyebrow
+  root.querySelector(".intro > div > p:last-child")!.textContent = intro.description
+  root.querySelector(".intro aside")!.innerHTML = intro.aside
   for (const [i, id] of families[family].ids.entries()) {
     const asset = assetById.get(id)!
     if (!asset) throw new Error(`Missing review model: ${id}`)
@@ -82,11 +106,11 @@ root.querySelector<HTMLButtonElement>("#sheet")!.onclick = () => {
   canvas.width = columns * width; canvas.height = 100 + Math.ceil(models.length / columns) * height
   ctx.fillStyle = "#f0f2ec"; ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.fillStyle = "#3d4943"; ctx.font = "30px Georgia"; ctx.fillText(`Inkline Town / ${families[family].title}`, 30, 48)
-  ctx.font = "13px monospace"; ctx.fillText(`PR 03 · ${Math.round(yaw)}° rotation · ${pitch}° elevation`, 30, 76)
+  ctx.font = "13px monospace"; ctx.fillText(`Inkline Town · ${Math.round(yaw)}° rotation · ${pitch}° elevation`, 30, 76)
   renderer.setSize(width, 270, false); renderer.setScissorTest(false)
   models.forEach((model, i) => {
     const camera = model.camera, heading = (45 + yaw) * Math.PI / 180, angle = pitch * Math.PI / 180,
-      vertical = Math.max(model.size.y, Math.hypot(model.size.x, model.size.z) * 0.75, 18) * 1.3
+      vertical = viewHeight(model.size, heading, angle, width / 270)
     camera.top = vertical / 2; camera.bottom = -camera.top; camera.left = -vertical * width / 270 / 2; camera.right = -camera.left
     camera.position.copy(model.center).add(new THREE.Vector3(Math.sin(heading) * Math.cos(angle), Math.sin(angle), Math.cos(heading) * Math.cos(angle)).multiplyScalar(1000))
     camera.lookAt(model.center); camera.updateProjectionMatrix(); camera.updateMatrixWorld(); model.built.updateContours(camera)

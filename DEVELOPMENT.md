@@ -211,6 +211,25 @@ That is how the README's screenshots of grown towns were made.
 
 ### Reviewing the new town models
 
+[`/model-review.html?collection=town`](http://localhost:5232/model-review.html?collection=town)
+shows all 23 building kinds plus the market hall and church upgrades. The final
+nine refinements are grouped at `?collection=rural`. `src/asset-lab/rural.ts`
+owns timber entrances, nursery and farm fittings, chapel porches, granary louvres
+and the supported fire-watch access route. The same geometry is used in the game,
+catalogue, model sheets and GLB exports.
+
+[`/model-review.html?collection=trades`](http://localhost:5232/model-review.html?collection=trades)
+groups the mill, warehouse, fishery, bakery, weaver and watch house revisions.
+`src/asset-lab/trades.ts` owns their equipment, loading doors, open yards and the
+bakery smoke origin. The mill keeps its animated sails. Cargo sits on the ground
+or loading apron, and the four new yard layouts turn towards connected roads.
+
+[`/model-review.html?collection=workshops`](http://localhost:5232/model-review.html?collection=workshops)
+groups the revised mine, smithy, sawmill and town hall. The three workshops have
+open yards and road-facing layouts. `src/asset-lab/workshops.ts` owns their
+geometry, construction frames and smoke origins. The live renderer and catalogue
+use the same models; simulation footprints and building costs are unchanged.
+
 Open [`/model-review.html`](http://localhost:5232/model-review.html) for
 the models added for PR #3. Collections cover buildings, parks,
 home tiers and neighbourhoods, winter, hazards, people/cargo, building
