@@ -1568,7 +1568,8 @@ export const Interact = Game.System(
       },
       goals: goalsOf(
         charter,
-        { settlers: census.settlers, citizens: census.citizens, burghers: census.burghers, coins, net: steadyNet(resources.history.get().samples, net), approval: mood.approval },
+        { settlers: census.settlers, citizens: census.citizens, burghers: census.burghers, coins, net: steadyNet(resources.history.get().samples, net), approval: mood.approval,
+          hall: hallRow ? maybe(hallRow.data.upgraded)?.level ?? 0 : 0 },
         undefined,
         f.rank
       ),

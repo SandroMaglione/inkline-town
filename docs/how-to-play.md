@@ -86,10 +86,13 @@ six months.
   pausing a building (no workers, a quarter of its upkeep); answering the
   crown; and the speed of time (space pauses, 1, 2, 3 for 1×, 2×, 4×).
 - **Ranks**: a town is founded as a hamlet and rises to a *village*, a
-  *town*, and a *city*. Each rank has its goals (residents and coins for
-  the land's size, a share of them citizens, approval, not losing coins over
-  the last minute; a city also wants 15% of its people burghers, in
-  townhouses). Hold every goal of the next rank for two minutes and the town
+  *town*, and a *city*. Each rank has its goals (residents and an income
+  for the land's size, a share of them citizens, approval; a city also
+  wants 15% of its people burghers, in townhouses, and a guildhall). The
+  income goal is coins a minute after upkeep and administration, over the
+  last minute, out of debt: a medium town asks 150 a minute, a village
+  less, a city more. Coins held count for nothing: a treasury is for
+  spending. Hold every goal of the next rank for two minutes and the town
   rises: the crown sends a reward, and play goes on. A rank is never lost.
   The town panel shows the next rank's goals.
 - **Upgrades** are made where a building stands, so they need no more
@@ -287,7 +290,7 @@ over with a new one.
   figure under them are the treasury's last minute, every coin in and out
   (taxes and refunds made; upkeep, administration, building, and fines used;
   trade). Click them for the same table, with the treasury on its first row.
-  The goal of not losing coins goes by the steady rate (taxes, trade, upkeep,
+  The income goal goes by the steady rate (taxes, trade, upkeep,
   administration) shown when you hover over them.
 - **Materials** (planks, stone, tools) come from storage: a new building is a
   site until carriers have brought what it costs, then it goes up.

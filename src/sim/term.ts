@@ -7,7 +7,7 @@ import { shippedRules } from "../rules/config.ts"
  */
 import { crown, HISTORY_TICKS, ticks, WINTER_WARNING, type GoodId } from "../content.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
-import { Building, Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, House, Inventory, Ledger, Mood, Pantry, Paused, Policy, Recipe, Rising, Rng, Site, Stock, Storage, Time, Treasury } from "../schema.ts"
+import { Building, Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, House, Inventory, Ledger, Mood, Pantry, Paused, Policy, Recipe, Rising, Rng, Site, Stock, Storage, Time, Treasury, TownHall, Upgraded, maybe } from "../schema.ts"
 import { elapsed, seasonAt, termTicks, write } from "./shared.ts"
 
 // ── Time ──────────────────────────────────────────────────────────────────
@@ -205,6 +205,7 @@ export { goalsOf, larder, nextRank, scoreOf, steadyNet } from "../rules/goals.ts
 export const Judge = Game.System(
   "Town/Judge",
   {
+    queries: { halls: Game.Query({ selection: { upgraded: Game.Query.optional(Upgraded) }, with: [TownHall] }) },
     resources: {
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter),
@@ -219,9 +220,12 @@ export const Judge = Game.System(
     },
     services: { rules: Game.System.service(Rules) }
   },
-  ({ resources, services }) => {
+  ({ queries, resources, services }) => {
     const rules = services.rules
     const { crown, fate, ranks } = rules
+    // The town hall's upgrades: a city asks for a guildhall.
+    const hallRow = queries.halls.each()[0]
+    const hall = hallRow ? maybe(hallRow.data.upgraded)?.level ?? 0 : 0
 
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
@@ -253,7 +257,7 @@ export const Judge = Game.System(
 
     const end = (state: "lost" | "over", reason: string) => {
       note(reason)
-      resources.fate.set({ ...next, state, reason, at: t, score: scoreOf({ ...census, coins, approval, met: crownNow.met, missed: crownNow.missed }, next.rank) })
+      resources.fate.set({ ...next, state, reason, at: t, score: scoreOf({ ...census, net, approval, met: crownNow.met, missed: crownNow.missed, hall }, next.rank) })
     }
     if (next.debtSince >= 0 && t - next.debtSince >= minutes(fate.debt)) return end("lost", "Bankrupt: the crown has taken the treasury out of the mayor's hands.")
     if (next.revoltSince >= 0 && t - next.revoltSince >= minutes(fate.revolt)) return end("lost", "Revolt: the town has turned the mayor out.")
@@ -265,7 +269,7 @@ export const Judge = Game.System(
 
     // The next rank.
     if (nextRank(f.rank, rules) > f.rank) {
-      const goals = goalsOf(charter, { ...census, coins, net, approval }, rules, f.rank)
+      const goals = goalsOf(charter, { ...census, coins, net, approval, hall }, rules, f.rank)
       if (goals.every((g) => g.met)) {
         const to = ranks[f.rank + 1]!
         if (f.goalSince < 0) note(`Every goal of a ${to.title} is met: the town needs only to hold them.`)

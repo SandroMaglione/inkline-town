@@ -121,7 +121,9 @@ interface World {
   readonly ruins: ReadonlyArray<{ readonly id: number; readonly tile: Tile }>
   /** Cells of ore rocks (other rocks are stone). */
   readonly ore: ReadonlySet<number>
-  readonly buildings: ReadonlyArray<{ readonly kind: KindId; readonly tile: Tile; readonly status: string; readonly site: boolean; readonly nearby: number }>
+  readonly buildings: ReadonlyArray<{ readonly kind: KindId; readonly tile: Tile; readonly status: string; readonly site: boolean; readonly nearby: number; readonly level: number; readonly works: boolean }>
+  /** The town hall's upgrades: 1 a guildhall, 2 a city hall. */
+  readonly hall: number
   readonly homes: ReadonlyArray<{
     readonly tile: Tile
     readonly tier: number
@@ -166,7 +168,7 @@ const read = (snapshot: Snapshot): World => {
     if (c["Town/Paved"]) paved.add(key(tile.x, tile.y))
     if (c["Town/Park"]) parks.set(key(tile.x, tile.y), { x: tile.x, y: tile.y, ...c["Town/Park"] })
     if (c["Town/Ruin"]) ruins.push({ id: e.id, tile })
-    if (c["Town/Building"]) buildings.push({ kind: c["Town/Building"].kind, tile, status: c["Town/Status"], site: !!c["Town/Site"], nearby: c["Town/Staff"]?.nearby ?? 0 })
+    if (c["Town/Building"]) buildings.push({ kind: c["Town/Building"].kind, tile, status: c["Town/Status"], site: !!c["Town/Site"], nearby: c["Town/Staff"]?.nearby ?? 0, level: c["Town/Upgraded"]?.level ?? 0, works: !!c["Town/Works"] })
     if (c["Town/House"])
       homes.push({
         tile,
@@ -187,6 +189,7 @@ const read = (snapshot: Snapshot): World => {
     ruins,
     ore,
     buildings,
+    hall: buildings.find((b) => b.kind === "townhall")?.level ?? 0,
     homes,
     stock: stock as Amounts,
     prices: r["Town/Market"].prices,
@@ -516,7 +519,7 @@ const decide = (w: World): ReadonlyArray<Edit> => {
   if (sensible()) {
     // Taxes follow the town's mood; once every other goal is met, they come down to win it over.
     const goals = goalsOf(w.charter, {
-      settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: net(w), approval: w.mood.approval
+      settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: net(w), approval: w.mood.approval, hall: w.hall
     }, rules)
     // Closing in on a complete town: everything but approval and the larder met. Cut taxes, buy food.
     const closing = goals.every((g) => g.met || g.id === "approval") && w.coins > 1000
@@ -767,7 +770,7 @@ const run = (seed: number) => {
     const income = w.ledger.taxes + Math.max(0, w.ledger.trade)
     const costs = w.ledger.upkeep + w.ledger.admin + Math.max(0, -w.ledger.trade)
     const goals = goalsOf(w.charter, {
-      settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: income - costs, approval: w.mood.approval
+      settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: income - costs, approval: w.mood.approval, hall: w.hall
     }, rules)
     rows.push({
       minute,
@@ -795,7 +798,7 @@ const run = (seed: number) => {
   }
   if (process.env.CHRONICLE) for (const l of town.snapshot().resources["Town/Chronicle"].lines as Array<{ tick: number; text: string }>) console.log(`  ${(l.tick / 3600).toFixed(1)} ${l.text}`)
   const lastGoals = goalsOf(w.charter, {
-    settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: net(w), approval: w.mood.approval
+    settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: net(w), approval: w.mood.approval, hall: w.hall
   }, rules, w.fate.rank).map((g) => `${g.met ? "✓" : "✗"} ${g.text} (${g.value})`).join(" · ")
   const hh = Math.max(1, w.homes.length)
   console.log(`  longest continuous goal hold: ${longestGoalHold.toFixed(1)} seconds`)

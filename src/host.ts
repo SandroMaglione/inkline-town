@@ -1597,8 +1597,8 @@ export const createHost = async (
         "pave",
         sizeIds,
         (v) => sizes[v].title,
-        (v) => `a town at ${chip("people", `${sizes[v].goal.residents} residents`)}${chip("coins", `${sizes[v].goal.coins} coins`)}`,
-        (v) => `The town rank asks ${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins; a village less, a city more`,
+        (v) => `a town at ${chip("people", `${sizes[v].goal.residents} residents`)}${chip("coins", `+${sizes[v].goal.income}/min`)}`,
+        (v) => `The town rank asks ${sizes[v].goal.residents} residents and an income of ${sizes[v].goal.income} coins a minute; a village less, a city more`,
         () => choice.size,
         (v) => (choice.size = v)
       ),

@@ -55,8 +55,16 @@ test("each rank asks more than the last, and the city asks for burghers", () => 
   assert.equal(residents(towns), 180)
   assert.equal(nextRank(ranks.length - 1), ranks.length - 1)
   assert.deepEqual(goalsOf(charter, town, undefined, 3), city)
+  // Each asks an income, not coins held; the city asks for a guildhall too, and a guildhall meets it.
+  const income = (goals: ReadonlyArray<{ id: string; target: number }>) => goals.find((g) => g.id === "income")!.target
+  assert.equal(income(towns), 100)
+  assert(income(village) < income(towns) && income(towns) < income(city))
+  assert.equal(towns.some((g) => g.id === "hall"), false)
+  assert.equal(city.find((g) => g.id === "hall")?.met, false)
+  assert.equal(goalsOf(charter, { ...town, hall: 1 }, undefined, 2).find((g) => g.id === "hall")?.met, true)
+  assert.equal(goalsOf(charter, { ...town, coins: 1_000_000 }, undefined, 1).find((g) => g.id === "income")?.met, false, "a hoard is not an income")
   // A rank counts for more than its people.
-  const s = { settlers: 100, citizens: 50, burghers: 10, coins: 2000, approval: 20, met: 2, missed: 0 }
+  const s = { settlers: 100, citizens: 50, burghers: 10, net: 150, approval: 20, met: 2, missed: 0 }
   assert(scoreOf(s, 2) > scoreOf(s, 1))
 })
 

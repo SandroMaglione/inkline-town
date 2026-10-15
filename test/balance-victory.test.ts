@@ -34,12 +34,9 @@ for (const from of [1, 2]) {
     assert(final.fate.rank >= 1, stdout)
     assert.notEqual(final.fate.state, "lost", stdout)
   })
-  // Since homes pay to rise, fish ran short, and the treasury started smaller, the sensible mayor comes
-  // close to the town rank in a 60-minute term (residents, citizens, and approval) but not to 4000 coins held.
-  test(`generated charter ${1000 + from * 7919} reaches the town rank through ordinary edits`,
-    { timeout: 180000, todo: "the sensible mayor falls short of 4000 coins held; the coins goal or the mayor is to be decided" }, () => {
-      const { final, stdout } = play(from)
-      // The old "complete" town is the town rank: reached (its goals held for `fate.hold`), the term plays on to its end.
-      assert(final.fate.rank >= TOWN_RANK, stdout)
-    })
+  test(`generated charter ${1000 + from * 7919} reaches the town rank through ordinary edits`, { timeout: 180000 }, () => {
+    const { final, stdout } = play(from)
+    // The old "complete" town is the town rank: reached (its goals held for `fate.hold`), the term plays on to its end.
+    assert(final.fate.rank >= TOWN_RANK, stdout)
+  })
 }

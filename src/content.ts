@@ -745,16 +745,18 @@ export const TERMS = [45, 60, 90] as const
 /**
  * Sizes of land: its rough radius in cells (the coast wanders in and out of
  * it, with capes reaching further), and what the town must reach to be
- * a town (see `ranks`: a village needs less of both, a city more).
+ * a town (see `ranks`: a village needs less of both, a city more): its
+ * residents, and its income, coins a minute after upkeep and
+ * administration. Income, not coins held: a treasury is for spending.
  */
 export const sizes: Readonly<Record<SizeId, {
   readonly title: string
   readonly radius: number
-  readonly goal: { readonly residents: number; readonly coins: number }
+  readonly goal: { readonly residents: number; readonly income: number }
 }>> = {
-  small: { title: "small", radius: 14, goal: { residents: 180, coins: 2500 } },
-  medium: { title: "medium", radius: 19, goal: { residents: 320, coins: 4000 } },
-  large: { title: "large", radius: 25, goal: { residents: 520, coins: 5000 } }
+  small: { title: "small", radius: 14, goal: { residents: 180, income: 100 } },
+  medium: { title: "medium", radius: 19, goal: { residents: 320, income: 150 } },
+  large: { title: "large", radius: 25, goal: { residents: 520, income: 200 } }
 }
 
 /**
@@ -929,25 +931,27 @@ export const fate = {
 /**
  * The town's ranks, from the hamlet it is founded as. It rises to the next
  * once every goal of that rank has held for `fate.hold` minutes together:
- * `residents` and `coins` (not losing any) as shares of its land's goal
+ * `residents` and `income` (out of debt) as shares of its land's goal
  * (see `sizes`), a share of the residents `citizens` (those in townhouses
- * count), a share `burghers`, and approval. A rank is never lost, and the
- * crown sends `reward` coins on reaching it. The town rank is the old
- * "complete" town; nothing ends when a rank is reached.
+ * count), a share `burghers`, approval, and (a city) a town hall upgraded
+ * `hall` times, a guildhall. A rank is never lost, and the crown sends
+ * `reward` coins on reaching it. The town rank is the old "complete" town;
+ * nothing ends when a rank is reached.
  */
 export const ranks: ReadonlyArray<{
   readonly title: string
   readonly residents: number
-  readonly coins: number
+  readonly income: number
   readonly citizens: number
   readonly burghers: number
   readonly approval: number
+  readonly hall: number
   readonly reward: number
 }> = [
-  { title: "hamlet", residents: 0, coins: 0, citizens: 0, burghers: 0, approval: 0, reward: 0 },
-  { title: "village", residents: 0.35, coins: 0.3, citizens: 0.1, burghers: 0, approval: 0, reward: 300 },
-  { title: "town", residents: 1, coins: 1, citizens: fate.citizens, burghers: 0, approval: fate.approval, reward: 800 },
-  { title: "city", residents: 1.5, coins: 1.5, citizens: 0.5, burghers: 0.15, approval: 25, reward: 1500 }
+  { title: "hamlet", residents: 0, income: 0, citizens: 0, burghers: 0, approval: 0, hall: 0, reward: 0 },
+  { title: "village", residents: 0.35, income: 0.3, citizens: 0.1, burghers: 0, approval: 0, hall: 0, reward: 300 },
+  { title: "town", residents: 1, income: 1, citizens: fate.citizens, burghers: 0, approval: fate.approval, hall: 0, reward: 800 },
+  { title: "city", residents: 1.5, income: 1.5, citizens: 0.5, burghers: 0.15, approval: 25, hall: 1, reward: 1500 }
 ]
 /** The rank the old "complete" town is: the goals a balance run plays for. */
 export const TOWN_RANK = 2
