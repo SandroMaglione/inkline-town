@@ -7,7 +7,7 @@ import { tradeCollection } from "../rules/trade.ts"
 import { appealAt, parkUpkeep } from "../appeal.ts"
 import { doors, key, reach } from "../grid.ts"
 import { amounts, goodIds, upkeepOf, type GoodId } from "../content.ts"
-import { Appeal, Building, Burning, Census, Charter, Flow, Game, Rules, Grid, House, Inventory, Ledger, Market, Mood, Park, Paused, Policy, Rising, Risk, Sick, Site, Staff, Storage, Tile, Time, TownHall, Treasury, Upgraded, maybe } from "../schema.ts"
+import { Appeal, Building, Burning, Census, Charter, Flow, Game, Rules, Grid, House, Inventory, Ledger, Market, Mood, Park, Paused, Policy, Rebuilt, Rising, Risk, Sick, Site, Staff, Storage, Tile, Time, TownHall, Treasury, Upgraded, maybe } from "../schema.ts"
 import { connected, elapsed, seasonAt } from "./shared.ts"
 
 import { ageNeeds, baseCollection, mealDecay, adminOf, capacity, met, rateOf, shortOf, taxOf, tierFor } from "../rules/households.ts"
@@ -15,8 +15,9 @@ export { adminOf, appealOf, askOf, capacity, kept, met, priceOf, satisfaction, t
 
 /**
  * Needs wear off, food faster in winter. Every so often a home settles
- * into its tier (see `tierFor`), rising only once the treasury and the
- * store pay for the rebuilding (see `home.tiers`), and one resident moves in or out towards
+ * into its tier (see `tierFor`), rising to a tier it was never rebuilt
+ * for only once the treasury and the store pay for it (see `home.tiers`),
+ * and one resident moves in or out towards
  * what the home holds (half as many while it is sick, fewer under heavy
  * taxes). Everyone leaves a
  * home with no road, or on fire.
@@ -29,6 +30,7 @@ export const Households = Game.System(
         selection: {
           tile: Game.Query.read(Tile),
           house: Game.Query.write(House),
+          rebuilt: Game.Query.optional(Rebuilt),
           risk: Game.Query.optional(Risk),
           sick: Game.Query.optional(Sick),
           burning: Game.Query.optional(Burning),
@@ -49,7 +51,7 @@ export const Households = Game.System(
     },
     services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, services }) => {
+  ({ queries, resources, commands, services }) => {
     const rules = services.rules
     const { home, risk } = rules
     // What the store holds, reckoned only once some home is ready to rise this step.
@@ -79,7 +81,7 @@ export const Households = Game.System(
     const t = elapsed(resources.time.get(), resources.charter.get())
     // In winter a meal lasts two thirds as long.
     const eat = mealDecay(t, seasonAt(t, resources.charter.get(), rules).winter)
-    for (const { data } of queries.homes.each()) {
+    for (const { entity, data } of queries.homes.each()) {
       const h = data.house.get()
       const next = ageNeeds(h, eat)
       // A home on fire, or closed by the town, stands empty.
@@ -88,8 +90,14 @@ export const Households = Game.System(
         const tile = data.tile.get()
         const desirability = appealAt(cells, tile.x, tile.y)
         const tier = tierFor(next, desirability, maybe(data.risk) ?? { fire: 0, health: 0, order: 0 }, rules)
-        // Rising a tier is a rebuilding, paid for at once; a home that cannot be paid for waits.
-        next.tier = tier > h.tier && !pay(home.tiers[tier].rise) ? h.tier : tier
+        // Rising a tier is a rebuilding, paid for at once, once: a home that cannot be paid for waits, and one
+        // that stepped down moves back up into what it was rebuilt as.
+        const built = maybe(data.rebuilt)?.tier ?? 1
+        if (tier <= h.tier || tier <= built) next.tier = tier
+        else if (pay(home.tiers[tier].rise)) {
+          next.tier = tier
+          commands.insert(entity.id, Game.Command.entry(Rebuilt, { tier: tier as 2 | 3 }))
+        }
         const well = connected(grid, tile) ? capacity(next, approval, desirability, rules, rateOf(policy, next.tier)) : 0
         const cap = data.sick.present ? Math.floor(well * risk.health.sickly) : well
         next.residents = Math.min(next.residents, home.tiers[next.tier].residents)

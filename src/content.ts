@@ -447,8 +447,8 @@ export const home = {
     /**
      * What rebuilding a home into this tier costs, paid at once from the
      * treasury and the store when it is ready to rise, as paving is: a home
-     * that cannot be paid for waits at its tier. Rising again after
-     * stepping down costs it again.
+     * that cannot be paid for waits at its tier. A home that steps down
+     * keeps its rebuilding, and rises back into it for nothing.
      */
     readonly rise: Kind["cost"]
   }>>,

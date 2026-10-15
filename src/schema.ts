@@ -76,6 +76,9 @@ export const House = Descriptor.ConstructedComponent(Decode.struct({
   clock: integer
 }))("Town/House")
 
+/** The finest tier a home has been rebuilt for and paid (see `home.tiers`): rising to it again costs nothing. Absent: a cottage. */
+export const Rebuilt = Descriptor.ConstructedComponent(Decode.struct({ tier: Decode.literal(2, 3) }))("Town/Rebuilt")
+
 // ── Risks and wear (homes and buildings) ──────────────────────────────────
 
 /**
@@ -413,7 +416,7 @@ export const RuinNodes = Descriptor.Service<NodeRegistry.NodeRegistry<RuinView>>
 export const Game = Schema.bind(
   Schema.fragment({
     components: {
-      Tile, Road, Paved, Park, Ruin, Site, Rising, Tree, Rock, Water, Field, House, Risk, Condition, Burning, Sick, Building, TownHall, Status,
+      Tile, Road, Paved, Park, Ruin, Site, Rising, Tree, Rock, Water, Field, House, Rebuilt, Risk, Condition, Burning, Sick, Building, TownHall, Status,
       Paused, Upgraded, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Patrol, Figure, Route, Errand, Rescue, Roam
     },
     resources: {

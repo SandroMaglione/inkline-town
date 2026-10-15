@@ -148,8 +148,8 @@ Nobody tells you to build it that way; it works best that way.
   as well as bread, cloth, and faith, and its rebuilding is paid at once
   from the treasury and the store (35 coins, 4 planks, 2 stone; a
   townhouse 45 coins, 4 planks, 4 stone, and a tool): a home the store
-  cannot pay for waits at its tier, and one that steps down pays again to
-  rise. A home whose street drops below 5
+  cannot pay for waits at its tier, and one that steps down keeps its
+  rebuilding and rises back into it for nothing. A home whose street drops below 5
   goes back to settlers even with every need met. A **townhouse** of
   burghers (12 residents, the best taxes) needs desirability 12 and a
   fire watch, a healer, and a watch house all calling on it. At

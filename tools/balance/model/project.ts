@@ -19,6 +19,8 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
   for (const b of scenario.buildings) if (!b.site) for (const g of goodIds) stock[g] += b.stock[g]
   let parks = [...scenario.parks ?? []]
   let homes = scenario.homes.map((h) => ({ ...h, meters: { ...h.meters } })), buildings = [...scenario.buildings], coins = scenario.coins, approval = scenario.approval
+  /** The finest tier each home has been rebuilt for (see `Rebuilt`): a home already finer is taken as paid for. */
+  const rebuilt = new Map(homes.map((h) => [h.id, h.tier as number]))
   const events: Array<{ second: number; type: string; detail: string }> = [], rows: Array<{ second: number; coins: number; residents: number; citizens: number; approval: number; stock: Amounts }> = []
   const builds = [...options.builds ?? []].sort((a, b) => a.at - b.at), crown = [...options.crown ?? []].sort((a, b) => a.at - b.at)
   const pending: Array<{ ready: number; action: BuildingAction }> = []
@@ -147,12 +149,14 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
       const appeal = analysis.household.find((a) => a.id === h.id)?.desirability ?? 0
       for (let n = 0; n < settleCount; n++) {
         const tier = tierFor(next, appeal, next.meters, rules), rise = rules.home.tiers[tier].rise
-        // A rise is paid at once from the treasury and the store, as in the game; unpaid, the home waits.
-        if (tier > next.tier && shortOf(rise, coins, stock) === null) {
+        // A rise is paid at once from the treasury and the store, once, as in the game; unpaid, the home waits.
+        if (tier <= next.tier || tier <= (rebuilt.get(h.id) ?? 1)) next.tier = tier
+        else if (shortOf(rise, coins, stock) === null) {
           coins -= rise.coins
           for (const [g, n] of Object.entries(rise.materials) as Array<[keyof Amounts, number]>) stock[g] -= n
           next.tier = tier
-        } else if (tier <= next.tier) next.tier = tier
+          rebuilt.set(h.id, tier)
+        }
         const cap = analysis.household.find((a) => a.id === h.id)?.roadConnected ? capacity(next, approval, appeal, rules, rateOf(scenario.policy, next.tier)) : 0
         next.residents = Math.min(next.residents, rules.home.tiers[next.tier].residents)
         next.residents += Math.sign(cap - next.residents)

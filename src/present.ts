@@ -52,7 +52,7 @@ import {
   Policy,
   Recipe,
   Rescue,
-  Rising,
+  Rebuilt, Rising,
   Risk,
   Road,
   Roam,
@@ -198,6 +198,7 @@ const HouseRead = Game.Query({
   selection: {
     tile: Game.Query.read(Tile),
     house: Game.Query.read(House),
+    rebuilt: Game.Query.optional(Rebuilt),
     site: Game.Query.optional(Site),
     rising: Game.Query.optional(Rising),
     risk: Game.Query.optional(Risk),
@@ -928,12 +929,13 @@ export const Interact = Game.System(
       else needs.push({ icon: "appeal", label: "street", value: signed(desirability), tone: "ok" })
       const services = blocks.find((b) => b.what === "services")
       if (services) needs.push({ icon: "order", label: "services", value: `for ${home.tiers[3].title}`, tone: "warn", note: services.text })
-      // Rising is a rebuilding, paid at once from the treasury and the store.
-      const short = nextTier ? shortOf(home.tiers[nextTier].rise, resources.treasury.get().coins, resources.stock.get()) : null
+      // Rising is a rebuilding, paid at once from the treasury and the store, once.
+      const rebuilt = nextTier !== null && (maybe(row.data.rebuilt)?.tier ?? 1) >= nextTier
+      const short = nextTier && !rebuilt ? shortOf(home.tiers[nextTier].rise, resources.treasury.get().coins, resources.stock.get()) : null
       if (nextTier)
         needs.push({
-          icon: "upkeep", label: "rebuilding", value: costText(home.tiers[nextTier].rise), tone: short ? "warn" : "ok",
-          note: short ? `the town is short of ${short}: it waits at its tier until the store can pay` : undefined
+          icon: "upkeep", label: "rebuilding", value: rebuilt ? "done ✓" : costText(home.tiers[nextTier].rise), tone: short ? "warn" : "ok",
+          note: short ? `the town is short of ${short}: it waits at its tier until the store can pay` : rebuilt ? "rebuilt already: it rises back for nothing" : undefined
         })
       if (nextTier && blocks.length === 0 && !short)
         needs.push({ icon: "citizens", label: `ready for ${home.tiers[nextTier].title}`, value: "✓", tone: "ok", note: "it grows as the next resident moves in, and pays for its rebuilding then" })
