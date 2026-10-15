@@ -8,7 +8,7 @@ import { resolveRules } from "../src/rules/config.ts"
 import { goalsOf } from "../src/rules/goals.ts"
 import { fingerprint } from "../tools/balance/provenance.ts"
 
-for (const from of [0, 2]) test(`generated charter ${1000 + from * 7919} reaches and holds a full win through ordinary edits`, { timeout: 180000 }, () => {
+for (const from of [1, 2]) test(`generated charter ${1000 + from * 7919} reaches and holds a full win through ordinary edits`, { timeout: 180000 }, () => {
   const directory = mkdtempSync(join(tmpdir(), "inkline-victory-")), file = join(directory, "result.json")
   try {
     const run = spawnSync(process.execPath, ["scripts/balance.ts", "--seeds", "1", "--from", String(from), "--term", "60", "--json", file],
