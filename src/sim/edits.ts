@@ -3,18 +3,19 @@
  * roads and homes, laying out parks, bulldozing, pausing, the town's policy, answering the
  * crown, and founding a new town. Costs are checked against the treasury
  * and the town's stock and paid up front in coins; the materials are
- * carried to the site afterwards. Once the term has ended, only a new town
- * (or carrying on after completing this one) is taken.
+ * carried to the site afterwards. Upgrading a building is paid at once.
+ * Once the term has ended, only a new town, or another term, is taken.
  */
 import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft } from "../archetypes.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
-import { amounts, goodIds, RESERVE_MAX, TAX_STEPS, type Amounts, type Kind, type ParkPiece } from "../content.ts"
+import { amounts, goodIds, RESERVE_MAX, TAX_STEPS, ticks, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
-import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rng, Site, Status, Stock, Storage, Time, TownHall, Treasury, Ui } from "../schema.ts"
+import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Service, Site, Status, Stock, Storage, Time, TownHall, Treasury, Ui, Upgraded } from "../schema.ts"
 import { salvageOf, salvageText } from "../rules/salvage.ts"
-import { elapsed, rollWinters, TileRead, useOf, write } from "./shared.ts"
+import { elapsed, rollWinters, termTicks, TileRead, useOf, write } from "./shared.ts"
+import type { Rules as RuleInputs } from "../rules/config.ts"
 import { crownGap, foundedFate } from "./term.ts"
 
 export const unlocked = (kind: Pick<Kind, "unlock"> | ParkPiece, census: { readonly settlers: number; readonly citizens: number }) =>
@@ -27,6 +28,13 @@ export const lockReason = (kind: Pick<Kind, "unlock"> | ParkPiece, census: { rea
   return null
 }
 
+/** What keeps a town from an upgrade now, or `null` when nothing does. */
+export const upgradeBlock = (up: Pick<Upgrade, "rank">, rank: number, rules: Pick<RuleInputs, "ranks">): string | null =>
+  rank >= up.rank ? null : `needs the town to be a ${rules.ranks[up.rank]!.title}`
+
+/** Samples of history a long reign keeps in full detail before it thins the older half. */
+const HISTORY_KEPT = 1200
+
 export const ApplyEdits = Game.System(
   "Town/ApplyEdits",
   {
@@ -37,7 +45,16 @@ export const ApplyEdits = Game.System(
       halls: Game.Query({ selection: { hall: Game.Query.read(TownHall) } }),
       /** Whatever was built at a cost, standing or a site: what pulling it down gives back. */
       built: Game.Query({ selection: { building: Game.Query.optional(Building), house: Game.Query.optional(House), site: Game.Query.optional(Site), paused: Game.Query.optional(Paused) } }),
-      stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage] })
+      stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage] }),
+      upgradable: Game.Query({
+        selection: {
+          building: Game.Query.read(Building),
+          service: Game.Query.optional(Service),
+          upgraded: Game.Query.optional(Upgraded),
+          site: Game.Query.optional(Site),
+          rising: Game.Query.optional(Rising)
+        }
+      })
     },
     resources: {
       time: Game.System.readResource(Time),
@@ -140,7 +157,7 @@ export const ApplyEdits = Game.System(
     const t = elapsed(resources.time.get(), resources.charter.get())
 
     edits: for (const edit of ui.edits.splice(0)) {
-      if (edit.type !== "newTown" && edit.type !== "govern" && !playing()) continue
+      if (edit.type !== "newTown" && edit.type !== "nextTerm" && !playing()) continue
       switch (edit.type) {
         case "building": {
           const kind = kinds[edit.kind]
@@ -345,11 +362,58 @@ export const ApplyEdits = Game.System(
           ui.toast(`Sent · +${c.reward} coins`)
           break
         }
-        case "govern": {
+        case "nextTerm": {
           const f = resources.fate.get()
-          if (f.state !== "won") break
-          resources.fate.set({ ...f, state: "playing", governing: true, won: f.at, reason: "" })
-          write(resources.chronicle, t, "The mayor stays on to govern the town to the end of the term.")
+          if (f.state !== "over") break
+          const charter = resources.charter.get()
+          const term = f.term + 1
+          const began = f.began + termTicks(charter, rules)
+          // The new term's winters, from the seed and the term, on the almanac's own stream; its first year is not spared.
+          const almanac = Random.make((charter.seed ^ 0x5a17c3 ^ Math.imul(term, 0x9e3779b1)) >>> 0)
+          const winters = [...charter.winters]
+          while (winters.length < term * rules.yearsPerTerm) winters.push(...rollWinters(() => almanac.next(), rules, false))
+          resources.charter.set({ ...charter, winters: winters.slice(0, term * rules.yearsPerTerm) })
+          // The crown starts the term afresh: an open request lapses, unfined.
+          resources.crown.update((c) => ({ ...c, open: false, next: began + crownGap(charter, rules) }))
+          resources.fate.set({ ...f, state: "playing", reason: "", term, began, debtSince: -1, revoltSince: -1, goalSince: -1, score: 0 })
+          // A long reign keeps its history in less detail the further back it is.
+          const samples = resources.history.get().samples
+          if (samples.length > HISTORY_KEPT) {
+            const half = Math.floor(samples.length / 2)
+            resources.history.set({ samples: [...samples.slice(0, half).filter((_, i) => i % 2 === 0), ...samples.slice(half)] })
+          }
+          write(resources.chronicle, t, `Term ${term}: the mayor stands for another ${charter.term} minutes.`)
+          break
+        }
+        case "upgrade": {
+          if (!inside(edit.cell.x, edit.cell.y)) break
+          const id = entities.get(ownerAt(grid.value(), edit.cell.x, edit.cell.y))
+          const row = id === undefined ? undefined : queries.upgradable.get(id)
+          if (!row?.ok) break
+          const { data } = row.value
+          const kind = kinds[data.building.get().kind]
+          const up = kind.upgrade
+          if (!up || data.upgraded.present || data.site.present || data.rising.present) break
+          const blocked = upgradeBlock(up, resources.fate.get().rank, rules)
+          if (blocked) {
+            ui.toast(`${up.title} ${blocked}`)
+            break
+          }
+          const short = afford(up.cost)
+          if (short) {
+            ui.toast(short)
+            break
+          }
+          pay(up.cost)
+          take(up.cost.materials)
+          const service = maybe(data.service)
+          commands.insert(
+            row.value.entity.id,
+            Game.Command.entry(Upgraded, {}),
+            ...(service && up.service ? [Game.Command.entry(Service, { ...service, interval: ticks(up.service.seconds), range: up.service.range })] : [])
+          )
+          write(resources.chronicle, t, `The ${kind.title.toLowerCase()} is now a ${up.title.toLowerCase()}.`)
+          ui.toast(`${up.title} · −${up.cost.coins} coins`)
           break
         }
         case "reserve":

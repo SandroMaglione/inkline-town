@@ -57,13 +57,17 @@ six months.
     people for the same cost;
   - *food* is eaten by the resident: a walker's visit feeds a cottage one
     fish or loaf, a citizens' home two, a townhouse three;
-  - *the crown* asks for goods the town makes, more as the term goes on;
+  - *the crown* asks for goods the town makes, more as the term goes on
+    (and small again when a new term begins);
     sending them pays, and an unanswered request is a fine and a snub the
     town remembers;
   - *the market*: prices fall the more the town sells and rise, three
     times as fast, the more it buys; a dear price calms only slowly, so
     traders top up a shortfall but a town that lives on bought food pays
-    more for it every minute; stone and ore run out;
+    more for it every minute; the open stone and ore are quarried down to
+    worked faces, which give one more every 90 seconds, so a quarry or mine
+    beside them goes on at about a third of its pace (the chronicle says
+    when the last open rock is gone);
   - *approval*, from -100 to 100, follows needs met, taxes, unpaid wages,
     snubs from the crown, and hungry winters, and decides how many people
     each home holds. Taxes above 100% also send residents away directly,
@@ -79,15 +83,25 @@ six months.
   nothing until told to); the reserve itself;
   pausing a building (no workers, a quarter of its upkeep); answering the
   crown; and the speed of time (space pauses, 1, 2, 3 for 1×, 2×, 4×).
-- **The end**: the town is *complete* once it holds every goal for two
-  minutes (enough residents and coins for its size, three in ten of them
-  citizens, approval 15 or more, not losing coins over the last minute); you may retire or keep
-  governing. It is *lost* to bankruptcy (three minutes in debt), revolt
-  (approval at -50 or below for two minutes), abandonment (people fall
-  below 15% of their peak), or dismissal (three of the crown's requests
-  missed in a row). Otherwise the term runs out, and the town
-  is judged flourishing, holding on, or declining. The reckoning shows the
-  term's history and its chronicle.
+- **Ranks**: a town is founded as a hamlet and rises to a *village*, a
+  *town*, and a *city*. Each rank has its goals (residents and coins for
+  the land's size, a share of them citizens, approval, not losing coins over
+  the last minute; a city also wants 15% of its people burghers, in
+  townhouses). Hold every goal of the next rank for two minutes and the town
+  rises: the crown sends a reward, and play goes on. A rank is never lost.
+  The town panel shows the next rank's goals.
+- **Upgrades**: a town can turn its market into a *market hall*, and a city
+  its chapel into a *church*, where they stand (the building's panel):
+  paid at once in coins, planks, stone, and tools, the walker goes further
+  and more often, the street around it is finer, and the upkeep is higher.
+- **The end of a term**: it is *lost* to bankruptcy (three minutes in
+  debt), revolt (approval at -50 or below for two minutes), abandonment
+  (people fall below 15% of their peak), or dismissal (three of the crown's
+  requests missed in a row). Otherwise the term runs out, and the town is
+  judged flourishing, holding on, or declining. The reckoning shows the
+  term's history, its chronicle, and its score. Then stand for the **next
+  term** (the same town, new winters, the crown's requests small again) or
+  retire and found a new town.
 
 ## The neighbourhood
 

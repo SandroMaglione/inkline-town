@@ -335,23 +335,32 @@ quarry. The bots know the thresholds; the player only has the panel.
 `pnpm test` runs model-based tests built on Effect's `Schema` and
 `Arbitrary`. They generate sequences of what a mayor can do (roads, homes,
 buildings where they fit, bulldozing, taxes, trade, pausing, answering the
-crown, saving and loading, waiting through seasons, and fortune good and
-bad), play them on the real simulation, and after every command check what
+crown, upgrading a building, standing for the next term, saving and
+loading, waiting through seasons, and fortune good and bad), play them on
+the real simulation, and after every command check what
 must always be true: goods within their shelves, tiles on the land and
 apart, residents and workers within bounds, the census matching the homes,
 walkers belonging to standing buildings, approval and prices within their
-bounds, the clock and the record only going forward, and a term ending only
-in the allowed ways. A failure shrinks to the shortest sequence that still
+bounds, the clock and the record only going forward, rocks never below
+their worked faces, a rank never lost, and a term ending only in the
+allowed ways (and following only as the next term, when chosen). A failure shrinks to the shortest sequence that still
 breaks a rule. A second property checks that the same charter and commands
 always make the same town. `RUNS=200 pnpm test` searches harder;
 `SEED=…` replays.
+
+`test/endless.test.ts` checks the town that goes on, each in seconds of game
+time: each rank asks more than the last, a rock quarried down stays as a
+worked face and gives one more now and then, a market becomes a market hall
+only once the town is a town, and the next term carries on the same town with
+its own winters.
 
 `test/share.test.ts` checks the server's routes and what they refuse, and
 carries a real town through them into another headless town, which must
 then play on step for step the same as the original.
 
 `pnpm check` puts the real simulation into each way a term can end
-(complete, bankrupt, revolt, abandoned, dismissed, run out), checks an unanswered
+(bankrupt, revolt, abandoned, dismissed, run out), raises a town through its
+ranks and into its next term, checks an unanswered
 crown request, and checks that a town saved mid-term loads back the same. It
 also checks the neighbourhood: a citizens' home next to a smithy goes back to
 settlers; an unwatched row of cottages catches fire and the fire spreads, and

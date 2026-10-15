@@ -185,7 +185,7 @@ export const createHost = async (
     }
     stock.append(cell)
   }
-  // The crown's request, when there is one, and what threatens (or is about to complete) the term.
+  // The crown's request, when there is one, and what threatens the term (or is about to raise the town a rank).
   const request = el("div", "card request")
   const requestText = el("div", "cell")
   const send = el("button", "send", "send")
@@ -883,8 +883,12 @@ export const createHost = async (
     const sub = el("p", "sub")
     panel.append(header("town", iconEl("town", 30), sub))
 
-    // The goals that complete the town, and how near each one is.
-    const goals = section("goals", "goal", "Meet every goal at once and hold them for two minutes to complete the town.")
+    // The town's rank, the goals that raise it to the next, and how near each one is.
+    const goals = section(
+      "goals",
+      "goal",
+      "The town rises from a hamlet to a village, a town, and a city. Meet every goal of the next rank at once and hold them for two minutes: the crown sends a reward, and the game goes on. A rank is never lost."
+    )
     const goalRows: Array<{ line: HTMLElement; mark: HTMLElement; text: HTMLElement; value: HTMLElement }> = []
     const goalNote = el("p", "empty")
     panel.append(goals)
@@ -1062,7 +1066,7 @@ export const createHost = async (
     live.push(() => {
       const s = ui.stats
       if (!s) return
-      sub.textContent = `${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · ${s.charter.term}-minute term`
+      sub.textContent = `${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · a ${s.fate.rankTitle} · term ${s.fate.term}, ${s.charter.term} minutes`
       sub.title = `seed ${s.charter.seed}`
       // Goals.
       while (goalRows.length < s.goals.length) {
@@ -1077,17 +1081,18 @@ export const createHost = async (
         goalRows.push({ line, mark, text, value })
       }
       goals.append(goalNote)
+      goalRows.forEach((r, i) => (r.line.style.display = i < s.goals.length ? "" : "none"))
       s.goals.forEach((g, i) => {
         const r = goalRows[i]!
         r.line.classList.toggle("met", g.met)
         r.text.textContent = g.text
         r.value.textContent = g.value
       })
-      goalNote.textContent = s.fate.governing
-        ? "Complete: the mayor governs on to the end of the term."
-        : s.fate.complete !== null
-          ? `All met: hold them ${clockText(s.fate.complete)} more.`
-          : ""
+      goalNote.textContent = s.fate.nextTitle === null
+        ? `A ${s.fate.rankTitle}, the highest rank: keep it standing, term after term.`
+        : s.fate.rises !== null
+          ? `All met: hold them ${clockText(s.fate.rises)} more and the ${s.fate.rankTitle} is a ${s.fate.nextTitle}.`
+          : `A ${s.fate.rankTitle} now: these make it a ${s.fate.nextTitle}.`
       goalNote.style.display = goalNote.textContent ? "" : "none"
       // Approval.
       moodValue.textContent = `${signed(s.mood.approval)} → ${signed(s.mood.target)}`
@@ -1212,13 +1217,14 @@ export const createHost = async (
     if (p.type === "build") return buildMenu()
     if (p.type === "town") return townPanel()
 
-    const title = p.type === "building" ? kinds[p.kind].title.toLowerCase() : p.type === "house" ? tierHome[p.tier] : p.type === "park" ? "park" : "ruin"
+    const upgrade = p.type === "building" && p.upgraded ? kinds[p.kind].upgrade : undefined
+    const title = p.type === "building" ? (upgrade ?? kinds[p.kind]).title.toLowerCase() : p.type === "house" ? tierHome[p.tier] : p.type === "park" ? "park" : "ruin"
     const status = el("span", "pill")
     const about = el(
       "p",
       "sub",
       p.type === "building"
-        ? kinds[p.kind].blurb
+        ? (upgrade ?? kinds[p.kind]).blurb
         : p.type === "ruin"
           ? "bulldoze it to clear the plot"
           : p.type === "park"
@@ -1287,6 +1293,21 @@ export const createHost = async (
           pause.style.display = now.pausable ? "" : "none"
         })
         actions.append(pause)
+        // A building that can be upgraded where it stands (see `Kind.upgrade`).
+        if (p.upgrade) {
+          const up = el("button", "frame primary", `Upgrade: ${p.upgrade.title.toLowerCase()}`)
+          up.onclick = () => {
+            const now = ui.panel
+            if (now?.type === "building") ui.edits.push({ type: "upgrade", cell: now.cell })
+          }
+          live.push(() => {
+            const now = ui.panel
+            if (now?.type !== "building" || !now.upgrade) return
+            up.disabled = now.upgrade.blocked !== null
+            up.title = `${kinds[now.kind].upgrade?.blurb ?? ""} · ${now.upgrade.cost}${now.upgrade.blocked ? ` · ${now.upgrade.blocked}` : ""}`
+          })
+          actions.append(up)
+        }
       }
       if (p.type === "house") {
         const close = el("button", "frame", "Close home")
@@ -1318,7 +1339,11 @@ export const createHost = async (
   const syncPanel = () => {
     const p = ui.panel
     const next =
-      p === null ? "" : p.type === "build" || p.type === "town" ? p.type : `${p.type}|${p.id}|${p.type === "house" ? p.tier : ""}`
+      p === null
+        ? ""
+        : p.type === "build" || p.type === "town"
+          ? p.type
+          : `${p.type}|${p.id}|${p.type === "house" ? p.tier : p.type === "building" ? `${p.upgraded}|${p.upgrade !== null}` : ""}`
     if (next !== shape) {
       shape = next
       // Keep the old contents while the closed panel slides away.
@@ -1424,8 +1449,8 @@ export const createHost = async (
         "pave",
         sizeIds,
         (v) => sizes[v].title,
-        (v) => `goal ${chip("people", `${sizes[v].goal.residents} residents`)}${chip("coins", `${sizes[v].goal.coins} coins`)}`,
-        (v) => `Complete the town with ${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins`,
+        (v) => `a town at ${chip("people", `${sizes[v].goal.residents} residents`)}${chip("coins", `${sizes[v].goal.coins} coins`)}`,
+        (v) => `The town rank asks ${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins; a village less, a city more`,
         () => choice.size,
         (v) => (choice.size = v)
       ),
@@ -1540,7 +1565,7 @@ export const createHost = async (
       setSpeed(shareSpeed)
       return ui.toast(error instanceof Error ? error.message : "The picture could not be made")
     }
-    const name = `inkline-town-${s.fate.state === "playing" ? `year-${s.season.year}` : s.fate.state === "won" ? "complete" : "reckoning"}.png`
+    const name = `inkline-town-${s.fate.state === "playing" ? `year-${s.season.year}` : `term-${s.fate.term}`}.png`
     const caption = `${metaOf(facts).title} · ${metaOf(facts).description}`
     shareBox.replaceChildren()
     const sheet = el("div", "sheet")
@@ -1642,24 +1667,28 @@ export const createHost = async (
   const chart = (s: Stats): string => {
     const w = 520
     const h = 150
-    const end = Math.max(s.charter.term * 3600, ...s.history.map((p) => p.tick))
+    const from = s.fate.began * 3600
+    const span = s.charter.term * 3600
+    const history = s.history.filter((p) => p.tick >= from)
     const line = (values: ReadonlyArray<number>, lo: number, hi: number, color: string, dash = "") => {
       if (values.length < 2) return ""
-      const span = hi - lo || 1
-      const points = s.history
-        .map((p, i) => `${((p.tick / end) * w).toFixed(1)},${(h - 4 - ((values[i]! - lo) / span) * (h - 8)).toFixed(1)}`)
+      const range = hi - lo || 1
+      const points = history
+        .map((p, i) => `${(((p.tick - from) / span) * w).toFixed(1)},${(h - 4 - ((values[i]! - lo) / range) * (h - 8)).toFixed(1)}`)
         .join(" ")
       return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="${dash}" vector-effect="non-scaling-stroke"/>`
     }
-    const residents = s.history.map((p) => p.residents)
-    const coinsLine = s.history.map((p) => p.coins)
-    const approvalLine = s.history.map((p) => p.approval)
-    const top = Math.max(1, ...residents, sizes[s.charter.size].goal.residents)
-    const goal = h - 4 - (sizes[s.charter.size].goal.residents / top) * (h - 8)
-    const winters = Array.from({ length: 5 }, (_, i) => {
-      const y = i + 1
-      const from = ((y + 0.7) / 6) * w
-      return `<rect x="${from.toFixed(1)}" y="0" width="${((w * 0.3) / 6).toFixed(1)}" height="${h}" fill="#3d6db5" opacity="0.06"/>`
+    const residents = history.map((p) => p.residents)
+    const coinsLine = history.map((p) => p.coins)
+    const approvalLine = history.map((p) => p.approval)
+    const target = s.goals.find((g) => g.id === "residents")?.target ?? sizes[s.charter.size].goal.residents
+    const top = Math.max(1, ...residents, target)
+    const goal = h - 4 - (target / top) * (h - 8)
+    // The first term spares its first year a winter; later terms do not.
+    const winters = Array.from({ length: 6 }, (_, y) => {
+      if (y === 0 && s.fate.term === 1) return ""
+      const at = ((y + 0.7) / 6) * w
+      return `<rect x="${at.toFixed(1)}" y="0" width="${((w * 0.3) / 6).toFixed(1)}" height="${h}" fill="#3d6db5" opacity="0.06"/>`
     }).join("")
     return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${winters}<line x1="0" x2="${w}" y1="${goal}" y2="${goal}" stroke="#77817a" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>${line(coinsLine, Math.min(0, ...coinsLine), Math.max(1, ...coinsLine), "#d6ae2e")}${line(approvalLine, -100, 100, "#3d6db5", "4 3")}${line(residents, 0, top, "#3d4943")}</svg>`
   }
@@ -1678,20 +1707,10 @@ export const createHost = async (
       return
     }
     const id = `${s.charter.seed}|${s.fate.state}|${s.fate.at}`
-    result.textContent =
-      s.fate.state === "won"
-        ? "the town is complete · see how"
-        : s.fate.state === "lost"
-          ? "the term is lost · see how"
-          : "the term is over · see how"
+    result.textContent = s.fate.state === "lost" ? "the term is lost · see how" : `term ${s.fate.term} is over · see how`
     if (id === reckoned) return
     reckoned = id
-    const title =
-      s.fate.state === "won"
-        ? "the town is complete"
-        : s.fate.state === "lost"
-          ? s.fate.reason.split(":")[0]!.toLowerCase()
-          : `the term is over: ${verdictOf(s)}`
+    const title = s.fate.state === "lost" ? s.fate.reason.split(":")[0]!.toLowerCase() : `term ${s.fate.term} is over: ${verdictOf(s)}`
     reckoning.replaceChildren()
     const card = el("div", "sheet wide")
     card.append(el("h2", "", title), el("p", "sub", s.fate.reason))
@@ -1701,9 +1720,10 @@ export const createHost = async (
       f.append(el("b", "", value), el("span", "", label))
       facts.append(f)
     }
+    fact("rank", s.fate.rankTitle)
     fact("minutes in office", `${Math.round(s.fate.at)}`)
     fact("residents", `${s.settlers + s.citizens}`)
-    fact("citizens", `${s.citizens}`)
+    fact("citizens · burghers", `${s.citizens} · ${s.burghers}`)
     fact("coins", `${s.coins}`)
     fact("approval", signed(s.mood.approval))
     fact("crown met · missed", `${s.crown.met} · ${s.crown.missed}`)
@@ -1711,21 +1731,24 @@ export const createHost = async (
     card.append(facts)
     const graph = el("div", "chart")
     graph.innerHTML = chart(s)
-    card.append(graph, el("p", "legend", "— residents (dashed: the goal) · coins · - - approval · shaded: winters"))
+    card.append(graph, el("p", "legend", "— residents (dashed: the next rank) · coins · - - approval · shaded: winters"))
     const story = el("div", "chronicle")
-    story.innerHTML = s.chronicle.map((l) => `<p><b>${clockText(Math.round(l.tick / 60))}</b> ${l.text}</p>`).join("")
+    story.innerHTML = s.chronicle
+      .filter((l) => l.tick >= s.fate.began * 3600)
+      .map((l) => `<p><b>${clockText(Math.round(l.tick / 60))}</b> ${l.text}</p>`)
+      .join("")
     card.append(story)
     const actions = el("div", "actions")
-    if (s.fate.state === "won") {
-      const govern = el("button", "frame primary", "Keep governing")
-      govern.title = "Stay on to the end of the term: the town is already complete"
-      govern.onclick = () => {
-        ui.edits.push({ type: "govern" })
+    if (s.fate.state === "over") {
+      const stand = el("button", "frame primary", "Next term")
+      stand.title = `Stand for another ${s.charter.term} minutes: the same town, new winters, and the crown's requests start small again`
+      stand.onclick = () => {
+        ui.edits.push({ type: "nextTerm" })
         showReckoning(false)
       }
-      actions.append(govern)
+      actions.append(stand)
     }
-    const again = el("button", "frame" + (s.fate.state === "won" ? "" : " primary"), "Found a new town")
+    const again = el("button", "frame" + (s.fate.state === "over" ? "" : " primary"), s.fate.state === "over" ? "Retire: found a new town" : "Found a new town")
     again.onclick = () => {
       showReckoning(false)
       openCharter(true)
@@ -1829,7 +1852,7 @@ export const createHost = async (
         ? `Coins in the treasury · click for the town's last minute\nLast minute: ${signed(change)} (made ${cf.made}, used ${cf.used}${cf.traded !== 0 ? `, traded ${signed(cf.traded)}` : ""})\nAt the current rates: ${signed(s.net)}/min (taxes, trade, upkeep, administration)`
         : `Coins in the treasury, and what it gains (or loses) a minute at the current rates · click for the town's last minute`
       coins.classList.toggle("debt", s.coins < 0)
-      const left = Math.max(0, s.charter.term * 60 - Math.floor(s.minute * 60))
+      const left = Math.max(0, s.charter.term * 60 - Math.floor((s.minute - s.fate.began) * 60))
       const severity = (w: typeof s.season.coming) => (w === null ? "" : ` (${winters[w].title})`)
       const until = s.season.winter
         ? `${winters[s.season.severity ?? "normal"].title} winter · spring in ${clockText(s.season.left)}`
@@ -1882,7 +1905,7 @@ export const createHost = async (
         send.title = have < s.crown.amount ? `Not enough ${goods[s.crown.good].title} in store yet` : `Send ${s.crown.amount} ${goods[s.crown.good].title} to the crown for ${s.crown.reward} coins`
         send.disabled = have < s.crown.amount
       }
-      // What threatens the term, or is about to complete it.
+      // What threatens the term, or is about to raise the town a rank.
       const warnings: Array<string> = []
       if (s.fate.state === "playing") {
         if (s.fate.bankrupt !== null)
@@ -1894,7 +1917,7 @@ export const createHost = async (
         if (s.crown.streak > 0 && s.crown.streak >= s.crown.patience - 1) {
           warnings.push(`<b>The crown's patience:</b> ${s.crown.streak} requests missed in a row; one more and the mayor is dismissed`)
         }
-        if (s.fate.complete !== null) warnings.push(`<b>Every goal met:</b> the town is complete in ${clockText(s.fate.complete)}`)
+        if (s.fate.rises !== null && s.fate.nextTitle !== null) warnings.push(`<b>Every goal met:</b> the town is a ${s.fate.nextTitle} in ${clockText(s.fate.rises)}`)
       }
       const html = warnings
         .map((w) => `<div class="cell">${icon(w.startsWith("<b>Every goal") ? "goal" : "warning", 16)}<span>${w}</span></div>`)
@@ -1904,7 +1927,7 @@ export const createHost = async (
         alarm.innerHTML = html
       }
       alarm.classList.toggle("show", warnings.length > 0)
-      alarm.classList.toggle("good", warnings.length === 1 && s.fate.complete !== null)
+      alarm.classList.toggle("good", warnings.length === 1 && s.fate.rises !== null)
       // The ticker: what needs looking at now, then the news of the last minute and a half; click a line to go there.
       const minute = Math.round(s.minute * 3600)
       const news = s.chronicle.filter((l) => l.alarm && minute - l.tick < 90 * 60).slice(-3).reverse()

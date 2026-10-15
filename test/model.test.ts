@@ -15,7 +15,7 @@ import { test } from "node:test"
 import { Arbitrary, Data, Effect, Schema } from "effect"
 
 import {
-  CONDITION_MAX, crown, goodIds, groundIds, home, kindOrder, kinds, landIds, market, propIds, RESERVE_MAX, RISK_MAX, TAX_STEPS, TRADE_LOAD, type CharterValue
+  CONDITION_MAX, crown, goodIds, groundIds, home, kindOrder, kinds, landIds, market, propIds, ranks, RESERVE_MAX, RISK_MAX, TAX_STEPS, TRADE_LOAD, type CharterValue
 } from "../src/content.ts"
 import { canPlace, cellsOf, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/grid.ts"
 import { GRID, inside, type Point } from "../src/iso.ts"
@@ -65,7 +65,10 @@ const Command = Schema.Union([
   Schema.TaggedStruct("Reserve", { amount: between(0, RESERVE_MAX) }),
   Schema.TaggedStruct("Pause", { pick: Pick, on: Schema.Boolean }),
   Schema.TaggedStruct("Deliver", {}),
-  Schema.TaggedStruct("Govern", {}),
+  // Once a term has run out, another.
+  Schema.TaggedStruct("NextTerm", {}),
+  // A building upgraded where it stands, ready or not.
+  Schema.TaggedStruct("Upgrade", { pick: Pick }),
   Schema.TaggedStruct("SaveAndLoad", {}),
   // Not a lever the page has: fortune, good or bad, so runs reach debt and plenty.
   Schema.TaggedStruct("Windfall", { coins: between(-4000, 6000) }),
@@ -80,7 +83,7 @@ type Command = typeof Command.Type
  */
 const weights: Readonly<Record<Command["_tag"], number>> = {
   Build: 20, Homes: 15, Road: 12, Pave: 3, Park: 4, Furnish: 4, Season: 10, Wait: 8, Trade: 5, Tax: 4, Remove: 4, Pause: 4, Deliver: 4, SaveAndLoad: 3,
-  Windfall: 3, Reserve: 2, BuildAnywhere: 2, Govern: 2, ToTheEnd: 1
+  Windfall: 3, Reserve: 2, BuildAnywhere: 2, NextTerm: 2, Upgrade: 2, ToTheEnd: 1
 }
 const table = Object.entries(weights).flatMap(([tag, n]) => Array.from({ length: n }, () => tag as Command["_tag"]))
 const command = Arbitrary.flatMap(Arbitrary.schema(between(0, table.length - 1)), (i) =>
@@ -146,7 +149,8 @@ const apply = (town: Headless, command: Command): string | null => {
     case "ToTheEnd": {
       const s = town.snapshot()
       const charter = s.resources["Town/Charter"]
-      town.run(Math.max(0, charter.founded + charter.term * 3600 - s.resources["Town/Time"].tick) / 60 + 2)
+      const began = s.resources["Town/Fate"].began
+      town.run(Math.max(0, charter.founded + began + charter.term * 3600 - s.resources["Town/Time"].tick) / 60 + 2)
       return null
     }
     case "Road": {
@@ -204,9 +208,14 @@ const apply = (town: Headless, command: Command): string | null => {
     case "Deliver":
       edit({ type: "deliver" })
       break
-    case "Govern":
-      edit({ type: "govern" })
+    case "NextTerm":
+      edit({ type: "nextTerm" })
       break
+    case "Upgrade": {
+      const target = pick(look(town.snapshot()).standing.filter((t) => t.what === "building"), command.pick)
+      if (target) edit({ type: "upgrade", cell: { x: target.tile.x, y: target.tile.y } })
+      break
+    }
     case "SaveAndLoad": {
       // Through the page's own saving and loading: a save loads back to exactly what was saved.
       const world: World["Service"] = {
@@ -246,6 +255,8 @@ interface Memory {
   readonly missed: number
   readonly peak: number
   readonly samples: number
+  readonly term: number
+  readonly rank: number
 }
 
 const remember = (s: Snapshot): Memory => ({
@@ -254,7 +265,9 @@ const remember = (s: Snapshot): Memory => ({
   met: s.resources["Town/Crown"].met,
   missed: s.resources["Town/Crown"].missed,
   peak: s.resources["Town/Fate"].peak,
-  samples: s.resources["Town/History"].samples.length
+  samples: s.resources["Town/History"].samples.length,
+  term: s.resources["Town/Fate"].term,
+  rank: s.resources["Town/Fate"].rank
 })
 
 /** Every rule a town breaks, as a line each. */
@@ -325,6 +338,14 @@ const broken = (s: Snapshot, before: Memory | null, last: Command): Array<string
     // A cell of park is only park: nothing else stands on it, and nothing burns or wears there.
     if (e.components["Town/Park"] && (e.components["Town/Road"] || e.components["Town/House"] || e.components["Town/Building"] || e.components["Town/Risk"])) fail(`park ${e.id} is something else too`)
   }
+  // Rocks are quarried down to a worked face, never below; only a building with an upgrade has one.
+  for (const e of s.entities) {
+    const rock = e.components["Town/Rock"]
+    if (rock && rock.amount < 0) fail(`rock ${e.id} holds ${rock.amount}`)
+    const kind = e.components["Town/Building"]?.kind as keyof typeof kinds | undefined
+    if ("Town/Upgraded" in e.components && (!kind || !kinds[kind].upgrade)) fail(`entity ${e.id} is upgraded but has no upgrade`)
+  }
+  if (r["Town/Fate"].rank < 0 || r["Town/Fate"].rank >= ranks.length) fail(`the town is of rank ${r["Town/Fate"].rank}`)
   const cells = r["Town/Appeal"].cells as Array<number>
   if (cells.length !== 0 && cells.length !== GRID * GRID) fail(`desirability for ${cells.length} cells`)
   if (assigned > residents) fail(`${assigned} at work but only ${residents} residents`)
@@ -360,11 +381,15 @@ const broken = (s: Snapshot, before: Memory | null, last: Command): Array<string
     if (now.tick < before.tick) fail(`time went back from ${before.tick} to ${now.tick}`)
     if (now.met < before.met || now.missed < before.missed) fail("the crown's tally went down")
     if (now.peak < before.peak) fail("the peak went down")
-    if (now.samples < before.samples) fail("the history lost samples")
-    // A term ends once: lost and over stay; won goes on only by choosing to govern.
+    // A long reign thins its older history only as a new term begins.
+    if (now.samples < before.samples && last._tag !== "NextTerm") fail("the history lost samples")
+    if (now.rank < before.rank) fail(`the town fell from rank ${before.rank} to ${now.rank}`)
+    // A term ends once: a lost one stays lost; an over one goes on only as the next term, by choosing it.
     const moved = `${before.state}→${now.state}`
-    const allowed = ["playing→playing", "playing→won", "playing→lost", "playing→over", "won→won", "lost→lost", "over→over"]
-    if (!allowed.includes(moved) && !(moved === "won→playing" && last._tag === "Govern")) fail(`the term went ${moved}`)
+    const allowed = ["playing→playing", "playing→lost", "playing→over", "lost→lost", "over→over"]
+    const next = moved === "over→playing" && last._tag === "NextTerm" && now.term === before.term + 1
+    if (!allowed.includes(moved) && !next) fail(`the term went ${moved}`)
+    if (now.term !== before.term && !next) fail(`the term went from ${before.term} to ${now.term}`)
   }
   const samples = r["Town/History"].samples as Array<{ tick: number }>
   if (samples.some((p, i) => i > 0 && p.tick <= samples[i - 1]!.tick)) fail("history out of order")

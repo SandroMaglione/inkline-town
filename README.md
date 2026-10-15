@@ -1,9 +1,10 @@
 # Inkline Town
 
-**A town-builder drawn in ink, played in one sitting.** You are the mayor for
-a single term: 45, 60, or 90 minutes. Lay the roads, house the settlers, build
-the chains that feed and clothe them, and grow a busy town of citizens before
-your time runs out. Or watch it go bankrupt, revolt, or empty out.
+**A town-builder drawn in ink, played a term at a time.** You are the mayor
+for a term of 45, 60, or 90 minutes, and then another, for as long as the town
+stands. Lay the roads, house the settlers, build the chains that feed and
+clothe them, and raise a hamlet to a village, a town, and a city of
+burghers. Or watch it go bankrupt, revolt, or empty out.
 
 ![A complete town at the end of its fifth year: hundreds of homes, farms, mills, and workshops on a pale island](docs/screenshots/town-complete.webp)
 
@@ -91,17 +92,25 @@ how much to keep, which buildings to pause, and when to answer the crown.
 
 ![A mill selected: working, two workers, 261 batches of flour made](docs/screenshots/ui-building.webp)
 
-## Every term ends
+## Every term ends, the town goes on
 
-Hold every goal for two minutes (enough people and coins, three in ten of
-them citizens, a town that approves of you) and the town is **complete**.
-Retire, or keep governing to the end. Three minutes in debt, two minutes of
-uproar, a town that empties out, or three of the crown's requests ignored,
-and the term is **lost**. Otherwise time runs out and the town is judged:
-flourishing, holding on, or declining.
+A town is founded as a hamlet. Hold every goal of the next rank for two
+minutes (enough people and coins, a share of them citizens, a town that
+approves of you) and it rises to a **village**, then a **town**, then a
+**city**, whose finest streets must hold burghers in townhouses. Each rank
+brings a reward from the crown, and the town can upgrade its market to a
+market hall and its chapel to a church. Nothing ends when a rank is
+reached.
 
-The reckoning shows how it went: residents, coins, and approval across the
-whole term, with the winters shaded, and the chronicle of everything that
+Three minutes in debt, two minutes of uproar, a town that empties out, or
+three of the crown's requests ignored, and the term is **lost**. Otherwise
+time runs out and the term is judged: flourishing, holding on, or declining.
+Stand for the **next term** to carry on the same town, or retire and found a
+new one. The open stone and ore run out, but the worked faces they leave keep
+giving a little, so a long reign never runs dry.
+
+The reckoning shows how the term went: residents, coins, and approval
+across it, with the winters shaded, and the chronicle of everything that
 happened.
 
 <p align="center"><img src="docs/screenshots/reckoning.webp" width="640" alt="The reckoning of a complete town: 581 residents, 352 citizens, 9000 coins, a chart of the term, and its chronicle"></p>

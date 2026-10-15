@@ -127,8 +127,11 @@ export class BuildingView extends WorldView {
       buildingAsset(this.kindId, build, share, doors, open)
     )
     this.plate.use(`plate/${kind.size}/${build}`, () => plateAsset(kind.size, build))
-    this.body.root.scale.set(1 + this.pulse * 0.04, 1 - this.pulse * 0.06, 1 + this.pulse * 0.04)
-    const H = kind.roof === "gable" ? 20 : kind.stories * 32
+    // An upgraded building (a market hall, a church) stands taller.
+    const tall = look.upgraded ? 1.35 : 1
+    this.body.root.scale.set(1 + this.pulse * 0.04, tall * (1 - this.pulse * 0.06), 1 + this.pulse * 0.04)
+    const base = kind.roof === "gable" ? 20 : kind.stories * 32
+    const H = base * tall
     this.marker.root.position.set(
       0,
       (H +
@@ -154,13 +157,13 @@ export class BuildingView extends WorldView {
       this.motion.use("flag/" + this.kindId, () => makeFlag(this.kindId))
       const a = kind.half * U,
         pitch = (2 * a) / kind.bays
-      this.motion.root.position.copy(vertex3([-a + pitch * (kind.bays - 0.5), -a + pitch * 0.5, H + 24]))
+      this.motion.root.position.copy(vertex3([-a + pitch * (kind.bays - 0.5), -a + pitch * 0.5, base + 24]))
       this.motion.root.rotation.y = Math.sin(this.wave) * 0.15
       this.motion.root.scale.set(1 + Math.sin(this.wave) * 0.12, 1, 1 + Math.sin(this.wave) * 0.12)
     } else if (kind.topper === "sails") {
       if (look.working) this.wave += dt * 3.6
       this.motion.use("mill-sails", makeSails)
-      this.motion.root.position.copy(vertex3([kind.half * U + 3 * U, 0, H - 6]))
+      this.motion.root.position.copy(vertex3([kind.half * U + 3 * U, 0, base - 6]))
       this.motion.root.rotation.x = this.wave
     }
     const smoking=look.working&&kind.topper==="chimney"&&look.build>=1&&!look.burning
