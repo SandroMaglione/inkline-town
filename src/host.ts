@@ -5,7 +5,7 @@
  */
 import { Application, Graphics } from "pixi.js"
 
-import { drawBuilding, drawHouse, drawParkPiece, homeVariant, plate, plateHalf } from "./art.ts"
+import { drawParkPiece } from "./art.ts"
 import {
   categoryColor,
   categoryOrder,
@@ -62,6 +62,8 @@ import { PICTURE_HEIGHT, PICTURE_QUALITY, PICTURE_WIDTH } from "./share/format.t
 import { MapInput } from "./render3d/input.ts"
 import { portrait } from "./render3d/portrait.ts"
 import { serviceBuilding } from "./asset-lab/service-upgrades.ts"
+import { makeBuilding } from "./asset-lab/buildings.ts"
+import { house } from "./asset-lab/homes.ts"
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
   const node = document.createElement(tag)
@@ -722,29 +724,33 @@ export const createHost = async (
    * An upgraded market or chapel has no 2D drawing: its model is pictured
    * from the town's camera instead (see `portrait`).
    */
+  /**
+   * Pictures for the build menu and the panel. A building or a home is its 3D model, as the town draws it,
+   * turned to the town's camera (see `portrait`), so the picture matches what stands on the map; one model
+   * a frame, so a menu of them does not stall the page. A park piece is its drawing.
+   */
+  let portraits: Promise<unknown> = Promise.resolve()
+  const modelPicture = (make: () => Parameters<typeof portrait>[0]): Promise<string> => {
+    const url = portraits.then(() => new Promise<string>((done) => requestAnimationFrame(() => done(portrait(make())))))
+    portraits = url.catch(() => undefined)
+    return url
+  }
+  const both = { right: true, left: true }
   const picture = (what: KindId | Tier | `park:${GroundId | PropId}`, upgraded = false): HTMLImageElement => {
     const img = document.createElement("img")
     img.className = "thumb"
     img.alt = ""
     const id = `${String(what)}${upgraded ? "/upgraded" : ""}`
     let url = pictures.get(id)
-    if (!url && upgraded && (what === "market" || what === "chapel")) {
-      url = Promise.resolve(portrait(serviceBuilding(what, 2, { doors: { right: true, left: true } })))
-      pictures.set(id, url)
-    }
     if (!url) {
-      const g = new Graphics()
-      if (typeof what === "string" && what.startsWith("park:")) drawParkPiece(g, what.slice(5) as GroundId | PropId)
-      else if (what === 1 || what === 2 || what === 3) {
-        plate(g, plateHalf(1))
-        drawHouse(g, what, 1, { right: true, left: false }, homeVariant(0.1))
-      } else {
-        const kind = kinds[what as KindId]
-        plate(g, plateHalf(kind.size))
-        drawBuilding(g, kind, 1, 0, 0.6, { right: true, left: true })
-      }
-      url = app.renderer.extract.base64({ target: g, resolution: 2 })
-      void url.finally(() => g.destroy())
+      if (typeof what === "string" && what.startsWith("park:")) {
+        const g = new Graphics()
+        drawParkPiece(g, what.slice(5) as GroundId | PropId)
+        url = app.renderer.extract.base64({ target: g, resolution: 2 })
+        void url.finally(() => g.destroy())
+      } else if (what === 1 || what === 2 || what === 3) url = modelPicture(() => house(what, undefined, undefined, { doors: { right: true } }))
+      else if (upgraded && (what === "market" || what === "chapel")) url = modelPicture(() => serviceBuilding(what, 2, { doors: both }))
+      else url = modelPicture(() => makeBuilding(what as KindId, { doors: both, motion: false }))
       pictures.set(id, url)
     }
     void url.then((src) => (img.src = src))
@@ -869,7 +875,7 @@ export const createHost = async (
   }
 
   const buildMenu = () => {
-    panel.append(header("build", iconEl("build", 30), el("p", "sub", "Pick one, then click the map · Esc to stop")))
+    panel.append(header("build", iconEl("build", 30), el("p", "sub", touchScreen() ? "Pick one, then tap the map where it goes" : "Pick one, then click the map · Esc to stop")))
     for (const category of categoryOrder) {
       const options = kindOrder.filter((id) => kinds[id].category === category && kinds[id].buildable)
       if (options.length === 0) continue
