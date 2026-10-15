@@ -425,11 +425,11 @@ export type Need = "food" | "bread" | "cloth" | "faith"
 export const home = {
   /** Half the house's width, in units: a 1×1 cell is 8 units from centre to edge. */
   half: 5,
-  cost: { coins: 10, materials: { planks: 1 } } as Kind["cost"],
+  cost: { coins: 15, materials: { planks: 1 } } as Kind["cost"],
   tiers: {
-    1: { title: "settlers", residents: 4, tax: 2.5, height: 14, needs: ["food"], appeal: -100 },
-    2: { title: "citizens", residents: 8, tax: 5, height: 26, needs: ["bread", "cloth", "faith"], appeal: 5 },
-    3: { title: "burghers", residents: 12, tax: 6.5, height: 38, needs: ["bread", "cloth", "faith"], appeal: 12 }
+    1: { title: "settlers", residents: 4, tax: 2.5, height: 14, needs: ["food"], appeal: -100, rise: { coins: 0, materials: {} } },
+    2: { title: "citizens", residents: 8, tax: 5, height: 26, needs: ["bread", "cloth", "faith"], appeal: 5, rise: { coins: 35, materials: { planks: 4, stone: 2 } } },
+    3: { title: "burghers", residents: 12, tax: 6.5, height: 38, needs: ["bread", "cloth", "faith"], appeal: 12, rise: { coins: 45, materials: { planks: 4, stone: 4, tools: 1 } } }
   } as Readonly<Record<Tier, {
     readonly title: string
     readonly residents: number
@@ -438,6 +438,13 @@ export const home = {
     readonly needs: ReadonlyArray<Need>
     /** The desirability a home of this tier needs around it (see `appeal.ts`). */
     readonly appeal: number
+    /**
+     * What rebuilding a home into this tier costs, paid at once from the
+     * treasury and the store when it is ready to rise, as paving is: a home
+     * that cannot be paid for waits at its tier. Rising again after
+     * stepping down costs it again.
+     */
+    readonly rise: Kind["cost"]
   }>>,
   /** A resident moves in (or out) this often. */
   settle: ticks(3),
@@ -712,16 +719,16 @@ export const winters: Readonly<Record<WinterId, { readonly title: string; readon
 export const WINTER_WARNING = ticks(60)
 
 /**
- * Running a town costs more the bigger it gets: the town hall's
- * administration costs `perHome` coins a minute a home, and a further
- * (homes / `growth`) a home. Each more home costs `perHome` + 2·homes /
- * `growth`: about 6 coins a minute at 80 homes, about what a cottage
- * brings in once its food is paid for, and a full cottage's taxes by 140,
- * so past there a town grows by finer homes, not more of them. It is
- * reckoned by the home, so a townhouse of twelve costs no more than a
- * cottage of four.
+ * Running a town costs more the bigger it gets, and it is reckoned by the
+ * person, not the roof: the town hall's administration costs `perResident`
+ * coins a minute a resident, and a further (residents / `growth`) a
+ * resident. Each more resident costs `perResident` + 2·residents /
+ * `growth`: about half a settler's taxes at 320 residents (a medium
+ * town's goal), and all of them by about 580, so past there a town grows by
+ * finer homes; and a citizens' home of eight costs twice a cottage of
+ * four, so finer homes are not had for nothing either.
  */
-export const admin = { perHome: 0.5, growth: 30 }
+export const admin = { perResident: 0.125, growth: 490 }
 
 /**
  * Approval, -100 → +100: where the town's mood is heading, and how fast it

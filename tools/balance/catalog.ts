@@ -25,7 +25,7 @@ export const buildScenario = (rules: Rules) => {
   for (let x = lumber.tile.x - 3; x < lumber.tile.x + 3; x++) for (let y = 35; y < 39; y++) land.push({ tile: { x, y, size: 1 }, type: "tree", amount: 1, growth: rules.grown.tree })
   for (let x = quarry.tile.x; x < quarry.tile.x + 2; x++) land.push({ tile: { x, y: 34, size: 1 }, type: "stone", amount: rules.lands.fair.rock, growth: 0 })
   const scenario: Scenario = { ...template, land, name: "authored-bootstrap", coins: rules.lands.fair.coins - template.homes.length * rules.home.cost.coins - template.roads.length * rules.roadCost,
-    buildings: [{ ...hall, stock: initial }], trade: { buys: ["tools"], sells: [], reserve: 10 } }
+    buildings: [{ ...hall, stock: initial }], trade: { buys: ["tools", "planks"], sells: [], reserve: 10 } }
   const order: ReadonlyArray<readonly [KindId, number]> = [["sawmill", 0], ["lumberjack", 0], ["fishery", 0], ["quarry", 30], ["mill", 60], ["bakery", 90], ["farm", 120], ["sheep", 150], ["weaver", 180], ["market", 210], ["chapel", 240]]
   const builds: BuildAction[] = order.map(([kind, at]) => ({ kind, at, tile: template.buildings.find((b) => b.kind === kind)!.tile }))
   builds.push({ kind: "firewatch", at: 30, tile: { x: 6, y: 29, size: 2 } })

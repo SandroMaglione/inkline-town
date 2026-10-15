@@ -1,7 +1,7 @@
 import { amounts, goodIds, type Amounts } from "../../../src/content.ts"
 import { parkUpkeep } from "../../../src/appeal.ts"
 import { ruleTicks } from "../../../src/rules/config.ts"
-import { baseCollection, capacity, mealRate, rateOf, serveGoods, taxOf, tierFor } from "../../../src/rules/households.ts"
+import { baseCollection, capacity, mealRate, rateOf, serveGoods, shortOf, taxOf, tierFor } from "../../../src/rules/households.ts"
 import { seasonAt } from "../../../src/rules/seasons.ts"
 import { spoilExpectation } from "../../../src/rules/decay.ts"
 import { tradeCollection } from "../../../src/rules/trade.ts"
@@ -146,7 +146,13 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
       const settleCount = Math.floor(next.clock / rules.home.settle) - Math.floor(h.clock / rules.home.settle)
       const appeal = analysis.household.find((a) => a.id === h.id)?.desirability ?? 0
       for (let n = 0; n < settleCount; n++) {
-        next.tier = tierFor(next, appeal, next.meters, rules)
+        const tier = tierFor(next, appeal, next.meters, rules), rise = rules.home.tiers[tier].rise
+        // A rise is paid at once from the treasury and the store, as in the game; unpaid, the home waits.
+        if (tier > next.tier && shortOf(rise, coins, stock) === null) {
+          coins -= rise.coins
+          for (const [g, n] of Object.entries(rise.materials) as Array<[keyof Amounts, number]>) stock[g] -= n
+          next.tier = tier
+        } else if (tier <= next.tier) next.tier = tier
         const cap = analysis.household.find((a) => a.id === h.id)?.roadConnected ? capacity(next, approval, appeal, rules, rateOf(scenario.policy, next.tier)) : 0
         next.residents = Math.min(next.residents, rules.home.tiers[next.tier].residents)
         next.residents += Math.sign(cap - next.residents)
@@ -165,7 +171,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
     if (Math.floor(elapsed / (rules.ledgerTicks * rules.stepSeconds)) > Math.floor(second / (rules.ledgerTicks * rules.stepSeconds))) {
       const tax = homes.reduce((n, h) => { const a = analysis.household.find((a) => a.id === h.id); return n + (a?.taxConnected ? taxOf(h, scenario.policy, rules, a.desirability) : 0) }, 0), upkeep = buildings.reduce((n, b) => n + rules.kinds[b.kind].upkeep * (b.paused ? rules.pausedUpkeep : 1), 0)
       const parkCost = parks.reduce((n, p) => n + parkUpkeep(p, rules), 0)
-      coins += baseCollection(tax, upkeep + parkCost, homes.length, rules).delta
+      coins += baseCollection(tax, upkeep + parkCost, homes.reduce((n, h) => n + h.residents, 0), rules).delta
       if (scenario.trade) {
         const equipped = buildings.filter((b) => rules.kinds[b.kind].wear && b.stock.tools > 0).length
         const left = { ...stock, tools: Math.max(0, stock.tools - equipped) }, stores = buildings.filter((b) => rules.kinds[b.kind].holds?.accepts === "all" || rules.kinds[b.kind].keeps).map((b) => {

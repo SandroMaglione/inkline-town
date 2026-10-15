@@ -134,12 +134,12 @@ export interface HomeWorth {
   readonly gain: number
   /** Minutes the gain takes to pay for the cost. */
   readonly payback: number
-  /** The first home, counting from none, whose administration costs more than this tier pays. */
+  /** The resident, counting from none, whose administration costs more than a resident of this tier pays. */
   readonly breakEven: number
 }
 
-/** What a home rises a tier for: the content gives no price, so nothing. */
-export const promotionCost = (_tier: Tier, _rules: Rules = shippedRules): number => 0
+/** What a home rises to a tier for (see `home.tiers`), as coins. */
+export const promotionCost = (tier: Tier, rules: Rules = shippedRules): number => costWorth(rules.home.tiers[tier].rise as Kind["cost"], rules)
 
 export const homeWorth = (tier: Tier, rules: Rules = shippedRules): HomeWorth => {
   const t = rules.home.tiers[tier], residents = t.residents
@@ -153,7 +153,7 @@ export const homeWorth = (tier: Tier, rules: Rules = shippedRules): HomeWorth =>
   const cost = tier === 1 ? costWorth(rules.home.cost as Kind["cost"], rules) : promotionCost(tier, rules)
   const net = tax - eats, gain = below ? net - below.net : net
   let breakEven = 0
-  while (breakEven < 100_000 && moreAdmin(breakEven, 1, rules) < net) breakEven++
+  while (breakEven < 100_000 && moreAdmin(breakEven, 1, rules) < net / residents) breakEven++
   return { tier, residents, tax, eats, net, cost, gain, payback: gain > 0 ? cost / gain : Infinity, breakEven }
 }
 

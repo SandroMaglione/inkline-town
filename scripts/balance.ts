@@ -59,7 +59,7 @@ import { SAVE_FORMAT, SAVE_VERSION } from "../src/save.ts"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { fingerprint } from "../tools/balance/provenance.ts"
-import { capacity, mealsOf, taxOf } from "../src/rules/households.ts"
+import { capacity, mealsOf, moreAdmin, taxOf } from "../src/rules/households.ts"
 
 // ── Options ───────────────────────────────────────────────────────────────
 
@@ -424,8 +424,8 @@ const roadToward = (w: World, kind: Kind | null, limit = 16): Array<Point> => {
  */
 const cottageWorth = (w: World, fed: number) => {
   const cottage = { tier: 1 as const, food: 1, bread: 0, cloth: 0, faith: 0, residents: home.tiers[1].residents }
-  const cost = (n: number) => n * (rules.admin.perHome + n / rules.admin.growth)
-  return fed * taxOf({ ...cottage, residents: capacity(cottage, w.mood.approval, 0, rules, w.policy.settlers) }, w.policy, rules) - (cost(w.homes.length + 1) - cost(w.homes.length))
+  const residents = capacity(cottage, w.mood.approval, 0, rules, w.policy.settlers)
+  return fed * taxOf({ ...cottage, residents }, w.policy, rules) - moreAdmin(w.homes.reduce((n, h) => n + h.residents, 0), residents, rules)
 }
 
 /** What the bot wants next, in order: the first it can do, it does. */

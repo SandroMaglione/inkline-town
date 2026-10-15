@@ -87,7 +87,7 @@ import { capacity, CELL_STEPS, elapsed, goalsOf, larder, lockReason, met, season
 import { Townsfolk } from "./townsfolk.ts"
 import { emptyPreview, type Alert as Notice, type Group, type HitBox, type Legend, type Line, type View } from "./ui.ts"
 import { blockers as blockersOf, streetAdvice, streetShort, whyUnmet, type InTown, type Served, type Street } from "./rules/explain.ts"
-import { breadBonus, moreAdmin, streetTax, suppliedTaxOf, taxOutlook, type TaxedHome } from "./rules/households.ts"
+import { breadBonus, moreAdmin, shortOf, streetTax, suppliedTaxOf, taxOutlook, type TaxedHome } from "./rules/households.ts"
 import { approvalTarget } from "./rules/approval.ts"
 import { salvageOf, salvageText } from "./rules/salvage.ts"
 import { rockBlocks, type RockPart } from "./render3d/rock-blocks.ts"
@@ -430,17 +430,19 @@ export const Interact = Game.System(
     const parkText = (p: ParkValue) => `desirability ${signed(p.value)} out to ${p.reach} cells`
     /**
      * What new cottages would bring in, fed, at the settlers' rate on their streets, less what they add to the
-     * town hall's administration (see `moreAdmin`): the sum that turns once a town is large.
+     * town hall's administration for their residents (see `moreAdmin`): the sum that turns once a town is large.
      */
     const homesWorth = (at: ReadonlyArray<Point>) => {
       if (at.length === 0) return ""
-      const n = at.length, standing = houses.filter((row) => !row.data.closed.present).length
+      const standing = houses.filter((row) => !row.data.closed.present).reduce((n, row) => n + row.data.house.get().residents, 0)
       const fed = { tier: 1 as Tier, food: 1, bread: 0, cloth: 0, faith: 0, residents: home.tiers[1].residents }
+      let people = 0
       const pays = at.reduce((sum, c) => {
-        const d = appealAt(cells, c.x, c.y)
-        return sum + taxOf({ ...fed, residents: capacity(fed, approval, d, undefined, rates.settlers) }, rates, undefined, d)
+        const d = appealAt(cells, c.x, c.y), residents = capacity(fed, approval, d, undefined, rates.settlers)
+        people += residents
+        return sum + taxOf({ ...fed, residents }, rates, undefined, d)
       }, 0)
-      const worth = Math.round(pays - moreAdmin(standing, n))
+      const worth = Math.round(pays - moreAdmin(standing, people))
       return worth > 0 ? ` · ${signed(worth)} coins a minute once fed` : " · costs more to run than it pays: finer homes pay better"
     }
 
@@ -926,8 +928,15 @@ export const Interact = Game.System(
       else needs.push({ icon: "appeal", label: "street", value: signed(desirability), tone: "ok" })
       const services = blocks.find((b) => b.what === "services")
       if (services) needs.push({ icon: "order", label: "services", value: `for ${home.tiers[3].title}`, tone: "warn", note: services.text })
-      if (nextTier && blocks.length === 0)
-        needs.push({ icon: "citizens", label: `ready for ${home.tiers[nextTier].title}`, value: "✓", tone: "ok", note: "it grows as the next resident moves in" })
+      // Rising is a rebuilding, paid at once from the treasury and the store.
+      const short = nextTier ? shortOf(home.tiers[nextTier].rise, resources.treasury.get().coins, resources.stock.get()) : null
+      if (nextTier)
+        needs.push({
+          icon: "upkeep", label: "rebuilding", value: costText(home.tiers[nextTier].rise), tone: short ? "warn" : "ok",
+          note: short ? `the town is short of ${short}: it waits at its tier until the store can pay` : undefined
+        })
+      if (nextTier && blocks.length === 0 && !short)
+        needs.push({ icon: "citizens", label: `ready for ${home.tiers[nextTier].title}`, value: "✓", tone: "ok", note: "it grows as the next resident moves in, and pays for its rebuilding then" })
       const risky = r ? (["fire", "health", "order"] as const).filter((k) => r[k] >= RISK_MAX * 0.35) : []
       const cure = { fire: "a fire watch's watchman lowers it", health: "a healer's physician lowers it", order: "a watch house's constable lowers it" } as const
       const safety: Array<Line> = [

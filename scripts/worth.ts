@@ -30,7 +30,7 @@ console.table((["fish", "smoked", "bread", "cloth", "planks", "stone", "tools"] 
 }))
 
 console.log("Homes (100% tax, every need met, a plain street)")
-console.table(homes(rules).map((h) => ({ tier: h.tier, residents: h.residents, "tax/min": r(h.tax), "eats/min": r(h.eats), "net/min": r(h.net), cost: h.cost, "gain/min": r(h.gain), "payback min": r(h.payback), "pays its way to home": h.breakEven })))
+console.table(homes(rules).map((h) => ({ tier: h.tier, residents: h.residents, "tax/min": r(h.tax), "eats/min": r(h.eats), "net/min": r(h.net), cost: h.cost, "gain/min": r(h.gain), "payback min": r(h.payback), "pays its way to resident": h.breakEven })))
 
 const kit = openingKit(10, rules)
 console.log(`The first citizens' kit: ${kit.kinds.join(", ")} and 10 homes: ${kit.cost} coins, ${kit.upkeep}/min upkeep, all open at ${kit.unlockHomes} cottages`)

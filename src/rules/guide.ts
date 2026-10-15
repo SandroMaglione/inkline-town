@@ -330,7 +330,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     chapter: "Growing citizens",
     course: true,
     action: "Pick [select] and {tap|click} a home to see what it still lacks to hold citizens.",
-    why: "A home becomes a citizens' home with bread, cloth, and faith, on a street of desirability 5 or more. Its panel lists what is missing.",
+    why: "A home becomes a citizens' home with bread, cloth, and faith, on a street of desirability 5 or more, once the store can pay for its rebuilding: planks and stone. Its panel lists what is missing.",
     goal: "the first home holds citizens",
     focus: "hall",
     when: () => true,

@@ -16,7 +16,7 @@ import { test } from "node:test"
 import { amounts, type GoodId, type GroundId, type Need, type PropId } from "../src/content.ts"
 import { parksOf } from "../src/appeal.ts"
 import { shippedRules } from "../src/rules/config.ts"
-import { tierFor } from "../src/rules/households.ts"
+import { moreAdmin, tierFor } from "../src/rules/households.ts"
 import { chainWorth, crownMargin, dominates, homes, median, openingKit, producers, services } from "../src/rules/worth.ts"
 import { district } from "../tools/balance/scenario.ts"
 import { component, fixture } from "../tools/balance/verify/fixture.ts"
@@ -87,14 +87,21 @@ test("fisheries sharing one stretch of water share its catch", { todo: "water ne
 /** Minutes of what it adds that laying a home, or raising it a tier, should cost at least. */
 const HOME_PAYBACK = 2
 
-test("a home, and each tier it rises to, costs a few minutes of what it brings in", { todo: "a cottage pays back in 1.5 min; rising to citizens or burghers costs nothing" }, () => {
+test("a home, and each tier it rises to, costs a few minutes of what it brings in", () => {
   none(homes(rules).filter((h) => h.payback < HOME_PAYBACK)
     .map((h) => `tier ${h.tier}: costs ${h.cost}, adds ${round(h.gain)}/min, pays back in ${round(h.payback)} min`), "home too cheap")
 })
 
-test("administration weighs on finer homes as it does on cottages", { todo: "a citizens' home pays its way to the 490th home, a townhouse to the 1020th; a cottage only to the 123rd" }, () => {
-  const [cottage, ...finer] = homes(rules)
-  none(finer.filter((h) => h.breakEven > cottage!.breakEven * 2).map((h) => `tier ${h.tier}: pays its way to home ${h.breakEven}, a cottage to ${cottage!.breakEven}`), "administration too light")
+/** A finer home's people stop paying their way at most this many times further on than settlers. */
+const ADMIN_SPREAD = 3
+
+test("administration is charged by the resident, so finer homes pay for their people", () => {
+  const [cottage, citizens] = homes(rules)
+  // A citizens' home of eight costs the town hall twice what a cottage of four does.
+  const at = 300, cost = (n: number) => moreAdmin(at, n, rules)
+  assert(Math.abs(cost(citizens!.residents) / cost(cottage!.residents) - citizens!.residents / cottage!.residents) < 0.05)
+  none(homes(rules).slice(1).filter((h) => h.breakEven > cottage!.breakEven * ADMIN_SPREAD)
+    .map((h) => `tier ${h.tier}: pays its way to resident ${h.breakEven}, settlers to ${cottage!.breakEven}`), "administration too light")
 })
 
 // ── The opening ───────────────────────────────────────────────────────────

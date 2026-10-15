@@ -187,12 +187,13 @@ test("taxes above 100% empty homes directly, settlers sooner, so the most a rate
   assert(income.at(-1)! < income[best]!)
 })
 
-test("administration: each more home costs more, and about what a fed cottage pays near the medium goal", () => {
+test("administration: each more resident costs more, and about what a fed settler pays near the medium goal", () => {
   const rules = resolveRules()
-  assert(moreAdmin(80, 1, rules) > moreAdmin(20, 1, rules) * 2)
+  // 80 cottages and 150 cottages, by their residents.
+  assert(moreAdmin(320, 4, rules) > moreAdmin(80, 4, rules) * 2)
   const cottage = taxOf({ tier: 1, residents: 4, food: 1, bread: 0, cloth: 0, faith: 0 }, { settlers: 100, citizens: 100 }, rules)
-  assert(moreAdmin(80, 1, rules) > cottage * 0.5 && moreAdmin(80, 1, rules) < cottage, `${moreAdmin(80, 1, rules)} vs ${cottage}`)
-  assert(moreAdmin(150, 1, rules) > cottage)
+  assert(moreAdmin(320, 4, rules) > cottage * 0.5 && moreAdmin(320, 4, rules) < cottage, `${moreAdmin(320, 4, rules)} vs ${cottage}`)
+  assert(moreAdmin(600, 4, rules) > cottage)
 })
 
 test("buying drives a price up faster than selling drives it down, and a dear price calms slowly", () => {

@@ -102,7 +102,7 @@ export const analyze = ({ rules, scenario: s }: Inputs, options: AnalysisOptions
   const taxes = s.homes.reduce((sum, h) => sum + (hallRoads && nearest(hallRoads, doors(g, h.tile)) ? taxOf(h, s.policy, rules, appealAt(appeal, h.tile.x, h.tile.y)) : 0), 0)
   const upkeep = s.buildings.filter((b) => !b.site).reduce((sum, b) => sum + rules.kinds[b.kind].upkeep * (b.paused ? rules.pausedUpkeep : 1), 0)
   const parkCost = (s.parks ?? []).reduce((n, p) => n + parkUpkeep(p, rules), 0)
-  const collection = baseCollection(taxes, upkeep + parkCost, s.homes.length, rules), cashPerMinute = collection.delta * 60 / (rules.ledgerTicks * rules.stepSeconds)
+  const collection = baseCollection(taxes, upkeep + parkCost, s.homes.reduce((n, h) => n + h.residents, 0), rules), cashPerMinute = collection.delta * 60 / (rules.ledgerTicks * rules.stepSeconds)
   const profiles = options.services === false ? [] : s.buildings.flatMap((b) => { const p = serviceProfile(s, b, staff.get(b.id) ?? zero, rules); return p ? [p] : [] })
   const household = s.homes.map((h) => {
     const desirable = appealAt(appeal, h.tile.x, h.tile.y)

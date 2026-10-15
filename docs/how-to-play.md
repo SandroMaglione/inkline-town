@@ -50,11 +50,12 @@ six months.
   - *winters*: a term is six years, and every year but the first ends in a
     winter when fields do not grow, fisheries catch half as much, and homes
     eat faster;
-  - *administration*: the town hall costs more per home the more homes
-    there are; by about 80 homes another cottage costs about what it brings
-    in once its food is paid for (the build tooltip says what a home would bring in after it), so a
-    town grows past there by finer homes, which hold two or three times the
-    people for the same cost;
+  - *administration*: the town hall costs more per resident the more
+    residents there are, so a citizens' home of eight costs twice a cottage
+    of four; by about 500 residents another settler costs about what they
+    bring in once their food is paid for (the build tooltip says what a home
+    would bring in after it), so a town grows past there by finer homes,
+    whose people pay more each;
   - *food* is eaten by the resident: a walker's visit feeds a cottage one
     fish or loaf, a citizens' home two, a townhouse three;
   - *the crown* asks for goods the town makes, more as the term goes on
@@ -142,7 +143,11 @@ Nobody tells you to build it that way; it works best that way.
   something you choose to pay for. Bulldozing a cell takes its furnishing
   first, then its ground.
 - **Tiers.** Settlers live anywhere. A citizens' home needs desirability 5
-  as well as bread, cloth, and faith; a home whose street drops below 5
+  as well as bread, cloth, and faith, and its rebuilding is paid at once
+  from the treasury and the store (35 coins, 4 planks, 2 stone; a
+  townhouse 45 coins, 4 planks, 4 stone, and a tool): a home the store
+  cannot pay for waits at its tier, and one that steps down pays again to
+  rise. A home whose street drops below 5
   goes back to settlers even with every need met. A **townhouse** of
   burghers (12 residents, the best taxes) needs desirability 12 and a
   fire watch, a healer, and a watch house all calling on it. At
