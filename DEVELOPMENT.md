@@ -97,24 +97,30 @@ and elevation controls also work with a keyboard. The original view uses a
 
 | Collection | Entries | Coverage |
 | --- | ---: | --- |
-| Buildings | 37 | Every building kind, plus winter and worn material presets of the seven town services and stores |
+| Buildings | 39 | Every building kind, tier 2 market hall and church, plus winter and worn material presets of the seven town services and stores |
 | Homes | 21 | Four settler and citizen roof palettes, townhouse, and fine/poor/worn/winter material presets of every tier |
-| Land | 24 | Trees, rocks, crops, roads, water, raised stone paving, three retained park furnishings and the park layout |
+| Land | 30 | Trees, single-cell rocks and larger outcrops, crops, roads, water, raised stone paving, three retained park furnishings and the park layout |
 | People | 32 | Carriers, residents, market and chapel walkers, and five equipped service workers |
 | Cargo and vehicles | 75 | Twelve distinct goods and labelled crates; empty handcart/barrow and small/full loads of each good; the approved mixed goods plate |
 | Construction and effects | 14 | Sites, frame/walls, problem sign, smoke, placement outlines and three kinds of ruin |
 
-The 203 entries cover object families and representative seeded variants.
+The 211 entries cover object families and representative seeded variants.
 Continuous growth, construction progress, walk poses and colours can be
 generated; this is not a list of every possible random seed. Page icons
 remain the game's original 2D UI art.
 
 ![Complete 3D world catalogue at a rotated angle](screenshots/3d-catalogue.webp)
 
-`pnpm assets:build` exports 203 GLBs and editable geometry descriptions,
-a manifest, and five standalone viewers to `output/inkline-3d/`:
+[`/service-upgrades.html`](http://localhost:5232/service-upgrades.html) compares
+the market with the market hall and the chapel with the church. The four
+models share one scale and synchronized rotation, tilt and zoom. Each model
+has a GLB download. [The integration handoff](docs/service-upgrade-assets.md)
+describes the asset API and the gameplay work still needed.
+
+`pnpm assets:build` exports 211 GLBs and editable geometry descriptions,
+a manifest, and six standalone viewers to `output/inkline-3d/`:
 `inkline-3d-study.html`, `inkline-3d-map.html`, and
-`inkline-town-model-review.html`, `inkline-house-effects.html`, and `inkline-park.html`. It reimports every GLB and
+`inkline-town-model-review.html`, `inkline-house-effects.html`, `inkline-park.html`, and `inkline-service-upgrades.html`. It reimports every GLB and
 checks geometry and unlit materials. The viewers work without a dev server;
 their optional web fonts use the network. The game build remains separate.
 Material effects render in the viewers and live game. Ordinary GLB viewers

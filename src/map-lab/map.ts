@@ -119,7 +119,9 @@ const layout: Array<[string, number, number]> = [
   ["smithy", -2, 1],
   ["bakery", 3, 1],
   ["weaver", 7, 1],
-  ["fishery", 13, 1]
+  ["fishery", 13, 1],
+  ["market-hall", -7, -5],
+  ["church", -6.5, -8]
 ]
 for (const [id, x, y] of layout) place(id, x, y)
 // Services, food stores and a park along the south-west street.
