@@ -316,7 +316,7 @@ export const kindOrder: ReadonlyArray<KindId> = [
 ]
 
 export const costText = (cost: Kind["cost"]): string =>
-  [cost.coins > 0 ? `${cost.coins} coins` : "", ...Object.entries(cost.materials).map(([g, n]) => `${n} ${g}`)].filter((s) => s !== "").join(" · ")
+  [cost.coins > 0 ? `${cost.coins} coins` : "", ...Object.entries(cost.materials).map(([g, n]) => `${n} ${n === 1 && g.endsWith("s") ? g.slice(0, -1) : g}`)].filter((s) => s !== "").join(" · ")
 
 // ── Parks ─────────────────────────────────────────────────────────────────
 

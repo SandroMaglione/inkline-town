@@ -53,7 +53,7 @@ import { GRID } from "./iso.ts"
 import { goodIcon, icon, iconEl, type IconName } from "./icons.ts"
 import { generate } from "./mapgen.ts"
 import { askOf, priceOf } from "./sim/index.ts"
-import type { Line, Stats, Tool, TradeMode, UiValue, View } from "./ui.ts"
+import type { Group, Line, Stats, Tool, TradeMode, UiValue, View } from "./ui.ts"
 import { emptyPreview } from "./ui.ts"
 import { GameScene, type CameraView } from "./render3d/scene.ts"
 import { blobOf, cardFacts, drawCard, metaOf, scaled, verdictOf } from "./share/card.ts"
@@ -89,22 +89,77 @@ const namedThings: ReadonlyArray<{ readonly word: string; readonly ref: { readon
   { word: "loaves", ref: { good: "bread" as GoodId } },
   { word: "loaf", ref: { good: "bread" as GoodId } }
 ].sort((a, b) => b.word.length - a.word.length)
-const namedPattern = new RegExp(`\\b(${namedThings.map((t) => t.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b|\\(([A-Z])\\)`, "gi")
+/**
+ * Tools, panels, and map views a message can name in brackets ("[homes]",
+ * "[view:fire]"): a chip that picks the tool, opens the panel, or shows the
+ * view. The key goes beside it, for a keyboard (touch screens hide it).
+ */
+const toolRefs: Readonly<Record<string, { readonly label: string; readonly icon: IconName; readonly key?: string; readonly title: string }>> = {
+  select: { label: "select", icon: "select", key: "S", title: "Select: pick a building or home to see what it does" },
+  road: { label: "road", icon: "road", key: "R", title: "Road: drag to lay one" },
+  pave: { label: "pave", icon: "pave", key: "P", title: "Pave: drag along a road to pave it" },
+  homes: { label: "homes", icon: "homes", key: "H", title: "Homes: drag along a road to lay a row" },
+  build: { label: "build", icon: "build", key: "B", title: "Open the build menu" },
+  bulldoze: { label: "bulldoze", icon: "bulldoze", key: "X", title: "Bulldoze: remove what stands on a cell" },
+  town: { label: "town", icon: "town", key: "T", title: "Open the town panel: goals, taxes, and trade" },
+  speed: { label: "speed", icon: "clock", title: "Run time faster: 1×, 2×, 4×" },
+  pause: { label: "pause", icon: "pause", key: "space", title: "Pause the town, or run it again" },
+  "view:appeal": { label: "desirability map", icon: "appeal", key: "D", title: "Colour the map by desirability" },
+  "view:workers": { label: "workers map", icon: "workers", key: "W", title: "Colour the map by workers" },
+  "view:fire": { label: "fire map", icon: "fire", key: "F", title: "Colour the map by fire risk" },
+  "view:health": { label: "health map", icon: "health", key: "A", title: "Colour the map by health risk" },
+  "view:order": { label: "order map", icon: "order", key: "O", title: "Colour the map by the risk of theft" },
+  "view:condition": { label: "condition map", icon: "condition", key: "C", title: "Colour the map by the condition of buildings" }
+}
+const namedPattern = new RegExp(
+  `\\b(${namedThings.map((t) => t.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b|\\(([A-Z])\\)|\\[([a-z]+(?::[a-z]+)?)\\]`,
+  "gi"
+)
+/** Goods as numbers name them ("2 planks", "1 plank"), and as recipes do ("flour → bread"), by title. */
+const goodWords: ReadonlyArray<readonly [string, GoodId]> = [
+  ...goodIds.map((id) => [goods[id].title, id] as const),
+  ...goodIds.filter((id) => goods[id].title.endsWith("s")).map((id) => [goods[id].title.slice(0, -1), id] as const)
+].sort((a, b) => b[0].length - a[0].length)
+const goodAlternatives = goodWords.map(([w]) => w).join("|")
+const goodOf = (word: string) => goodWords.find(([w]) => w === word)![1]
+/**
+ * Amounts in a line of (escaped) text as icons, where the icon says it as
+ * well as the word: "3 coins a minute" as a coin and 3/min, "2 planks" as a
+ * plank and 2, "flour → bread" with each good's icon.
+ */
+const iconize = (html: string): string =>
+  html
+    .replace(/([+−-]?)(\d+) coins a minute/g, (_, sign: string, n: string) => `<span class="amount">${sign}${icon("coins", 13)}${n}/min</span>`)
+    .replace(/(\d+) coins\b/g, (_, n: string) => `<span class="amount">${icon("coins", 13)}${n}</span>`)
+    .replace(new RegExp(`(\\d+) (${goodAlternatives})\\b`, "g"), (_, n: string, w: string) => `<span class="amount">${goodIcon(goodOf(w), 13)}${n}</span>`)
+    .replace(new RegExp(`\\b(${goodAlternatives}) → (${goodAlternatives})\\b`, "g"), (_, a: string, b: string) => `<span class="amount">${goodIcon(goodOf(a), 13)}${a}</span> → <span class="amount">${goodIcon(goodOf(b), 13)}${b}</span>`)
+
+/** A finger rather than a mouse: messages say "tap", and keys are left out. */
+const touchScreen = () => matchMedia("(pointer: coarse)").matches
+/** `{tap|click}`: the first on a touch screen, the second with a mouse. */
+const forDevice = (text: string) => text.replace(/\{([^{}|]*)\|([^{}|]*)\}/g, (_, touch: string, mouse: string) => (touchScreen() ? touch : mouse))
 
 /**
  * A message as markup: each building it names becomes a chip to click (to
- * build one), each good a chip with its icon, and each key in brackets a key.
+ * build one), each good a chip with its icon, each key in round brackets a
+ * key, and each tool in square brackets a chip that picks it.
+ * `standing`: buildings the line is about, which stand already; their chips go to them rather than placing another.
+ * `asks`: when given, only these buildings become chips to place one; others it names are plain words.
  */
-/** `standing`: buildings the line is about, which stand already; their chips go to them rather than placing another. */
-const callouts = (text: string, standing: ReadonlySet<KindId> = new Set()): string =>
-  escapeHtml(text).replace(namedPattern, (match, word: string | undefined, key: string | undefined) => {
+const callouts = (text: string, standing: ReadonlySet<KindId> = new Set(), asks?: ReadonlySet<KindId>): string =>
+  escapeHtml(forDevice(text)).replace(namedPattern, (match, word: string | undefined, key: string | undefined, tool: string | undefined) => {
     if (key) return `<kbd class="key">${key}</kbd>`
+    if (tool) {
+      const ref = toolRefs[tool]
+      if (!ref) return match
+      return `<button class="ref tool" data-tool="${tool}" title="${escapeHtml(ref.title)}">${icon(ref.icon, 13)}${ref.label}${ref.key ? `<kbd>${ref.key}</kbd>` : ""}</button>`
+    }
     const thing = namedThings.find((t) => t.word === word!.toLowerCase())
     if (!thing) return match
     if ("good" in thing.ref) return `<span class="ref ware" title="${goods[thing.ref.good].title}">${goodIcon(thing.ref.good, 13)}${match}</span>`
     const kind = kinds[thing.ref.kind]
     if (standing.has(thing.ref.kind)) return `<button class="ref kind go" data-go="${thing.ref.kind}" title="Go to the ${kind.title.toLowerCase()}">${icon("locate", 13)}${match}</button>`
-    return kind.buildable
+    return kind.buildable && (!asks || asks.has(thing.ref.kind))
       ? `<button class="ref kind" data-kind="${thing.ref.kind}" title="Build a ${kind.title.toLowerCase()}: ${escapeHtml(kind.blurb)}">${icon("build", 13)}${match}</button>`
       : `<span class="ref kind" title="${escapeHtml(kind.blurb)}">${icon("town", 13)}${match}</span>`
   })
@@ -313,6 +368,11 @@ export const createHost = async (
     if (mapPress?.id === e.pointerId && Math.hypot(e.clientX - mapPress.x, e.clientY - mapPress.y) > 8) mapPress.moved = true
   })
   mount.addEventListener("pointerup", (e) => {
+    // A tap on the map puts a toast away (one it raised itself stays): a pan or a pinch, to look for the spot, does not.
+    if (mapPress?.id === e.pointerId && !mapPress.moved && toastBox.classList.contains("show") && Date.now() - toastAt > 250) {
+      window.clearTimeout(toastTimer)
+      toastBox.classList.remove("show")
+    }
     if (mapPress?.id === e.pointerId && !mapPress.moved && fold !== null) setFold(null)
     if (mapPress?.id === e.pointerId) mapPress = null
   })
@@ -325,6 +385,8 @@ export const createHost = async (
   }
 
   let toastTimer = 0
+  /** When the toast showing went up: a press on the map just after does not put it away. */
+  let toastAt = 0
   const ui: UiValue = {
     tool: "select",
     placing: null,
@@ -350,11 +412,14 @@ export const createHost = async (
     tints: new Map(),
     legend: null,
     flash: null,
+    // Long enough to read (about 15 letters a second, and a moment to look), and gone as soon as the mayor
+    // touches the map again: by then they have read it, or are acting on it.
     toast: (message) => {
       toastBox.textContent = message
       toastBox.classList.add("show")
+      toastAt = Date.now()
       window.clearTimeout(toastTimer)
-      toastTimer = window.setTimeout(() => toastBox.classList.remove("show"), 1800)
+      toastTimer = window.setTimeout(() => toastBox.classList.remove("show"), Math.min(8000, Math.max(2200, 1200 + message.length * 65)))
     }
   }
 
@@ -563,19 +628,22 @@ export const createHost = async (
     ui.placing = kind
     ui.menu = null
     choose("place")
-    ui.toast(`Click to place a ${kinds[kind].title.toLowerCase()} · Esc to stop`)
+    const title = kinds[kind].title.toLowerCase()
+    ui.toast(touchScreen() ? `Tap a spot for the ${title}, then tap it again to build it` : `Click to place a ${title} · Esc to stop`)
   }
   const layGround = (ground: GroundId) => {
     ui.ground = ground
     ui.menu = null
     choose("ground")
-    ui.toast(`Drag a rectangle to lay ${grounds[ground].title.toLowerCase()} · Esc to stop`)
+    const title = grounds[ground].title.toLowerCase()
+    ui.toast(touchScreen() ? `Drag a rectangle to lay ${title}, then tap Build` : `Drag a rectangle to lay ${title} · Esc to stop`)
   }
   const furnish = (prop: PropId) => {
     ui.prop = prop
     ui.menu = null
     choose("prop")
-    ui.toast(`Click a cell of park to set a ${props[prop].title.toLowerCase()} · Esc to stop`)
+    const title = props[prop].title.toLowerCase()
+    ui.toast(touchScreen() ? `Tap a cell of park for the ${title}, then tap it again to set it` : `Click a cell of park to set a ${title} · Esc to stop`)
   }
   choose("select")
 
@@ -1179,13 +1247,14 @@ export const createHost = async (
 
   /** A line of a description as a row: its icon and what it is about, its value, any goods as chips, and a note underneath saying why. */
   const renderLine = (row: HTMLElement, l: Line) => {
-    // A value too long to sit beside the label goes under it, aligned with it.
-    row.className = `line ${l.tone ?? ""}${(l.value ?? "").length > 14 ? " long" : ""}`
+    // Every row the same way: what on the left, its value on the right, any note under both.
+    row.className = `line ${l.tone ?? ""}`
     const chips = l.goods ? `<span class="chips">${l.goods.map((g) => `<span class="chip" title="${goods[g.good].title}">${goodIcon(g.good, 14)}${g.count}</span>`).join("")}</span>` : ""
-    row.innerHTML = `<span class="mark">${icon(l.icon, 16)}</span><span class="what"></span><span class="count"></span>${chips}${l.note ? `<small class="note"></small>` : ""}`
+    // Goods take the value's place: chips on the right.
+    row.innerHTML = `<span class="mark">${icon(l.icon, 16)}</span><span class="what"></span>${chips || `<span class="count"></span>`}${l.note ? `<small class="note"></small>` : ""}`
     row.querySelector<HTMLElement>(".what")!.textContent = l.label
-    row.querySelector<HTMLElement>(".count")!.textContent = l.value ?? ""
-    if (l.note) row.querySelector<HTMLElement>(".note")!.textContent = l.note
+    if (!chips) row.querySelector<HTMLElement>(".count")!.innerHTML = iconize(escapeHtml(l.value ?? ""))
+    if (l.note) row.querySelector<HTMLElement>(".note")!.innerHTML = iconize(escapeHtml(l.note))
   }
   /** Keeps a box of rows in step with its lines, touching only the rows that changed. */
   const syncLines = (box: HTMLElement, rows: Array<HTMLElement>, lines: ReadonlyArray<Line>) => {
@@ -1224,26 +1293,36 @@ export const createHost = async (
           : p.type === "park"
             ? "every cell of ground that touches this one: lay more, or set furnishings on it, to make the streets around it nicer"
           : p.tier === 1
-            ? "settlers: fish or bread from a market keeps them; they do the rough work"
+            ? "settlers live here and do the rough work"
             : p.tier === 2
-              ? "citizens: they need bread, cloth, and faith, and a street with desirability 5; they do the skilled work"
-              : `burghers: a citizens' home on a fine street (desirability ${home.tiers[3].appeal}) that every service calls on`
+              ? "citizens live here, do the skilled work, and pay twice as much"
+              : "burghers live here, and pay the best taxes"
     )
     const below = el("div", "")
     below.append(status, about)
     panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier), below))
-    const box = section(p.type === "building" ? "at work" : p.type === "ruin" ? "what is left" : p.type === "park" ? "what makes it" : "household", p.type === "building" ? "jobs" : p.type === "park" ? "appeal" : "homes")
-    box.classList.add("lines")
-    const rows: Array<HTMLElement> = []
-    panel.append(box)
-    // A home: what keeps it from the next tier, in its own box, so the cause is never a word in a longer line.
-    const nextBox = p.type === "house" && p.tier < 3 ? section(`to become ${home.tiers[(p.tier + 1) as Tier].title}`, "citizens", "Every line here must clear before the home grows. Needs come from walkers; the street from what stands around it.") : null
-    const nextRows: Array<HTMLElement> = []
-    const nextNote = el("p", "empty")
-    if (nextBox) {
-      nextBox.classList.add("lines")
-      nextBox.append(nextNote)
-      panel.append(nextBox)
+    // A building or a home: its rows in boxes under headings, kept in step with what the town says each frame.
+    // A park or a ruin: one box.
+    const holder = el("div", "")
+    panel.append(holder)
+    const slots: Array<{ box: HTMLElement; rows: Array<HTMLElement>; key: string }> = []
+    const syncGroups = (groups: ReadonlyArray<Group>) => {
+      groups.forEach((g, i) => {
+        const key = `${g.title}|${g.icon}|${g.help ?? ""}`
+        let slot = slots[i]
+        if (!slot || slot.key !== key) {
+          const box = section(g.title, g.icon, g.help)
+          box.classList.add("lines")
+          const fresh = { box, rows: [] as Array<HTMLElement>, key }
+          if (slot) slot.box.replaceWith(box)
+          else holder.append(box)
+          slots[i] = fresh
+          slot = fresh
+        }
+        slot.box.style.display = ""
+        syncLines(slot.box, slot.rows, g.lines)
+      })
+      for (const extra of slots.slice(groups.length)) extra.box.style.display = "none"
     }
     live.push(() => {
       const now = ui.panel
@@ -1251,24 +1330,19 @@ export const createHost = async (
       if (now.type === "building") {
         status.textContent = now.problem ?? now.status
         status.className = `pill ${now.problem !== null ? "problem" : now.status === "working" ? "working" : ""}`
+        syncGroups(now.groups)
       } else if (now.type === "house") {
-        status.textContent = `${home.tiers[now.tier].residents} at most`
-        status.className = "pill working"
+        status.textContent = now.summary
+        status.className = `pill ${now.trouble ? "problem" : "working"}`
+        syncGroups(now.groups)
       } else if (now.type === "park") {
         status.textContent = `${now.value > 0 ? "+" : ""}${now.value} out to ${now.reach} cells`
         status.className = "pill working"
+        syncGroups([{ title: "what makes it", icon: "appeal", lines: now.lines }])
       } else {
         status.textContent = now.cause
         status.className = "pill problem"
-      }
-      syncLines(box, rows, now.lines)
-      if (nextBox && now.type === "house") {
-        // A closed home has nobody in it to grow.
-        nextBox.style.display = now.closed ? "none" : ""
-        syncLines(nextBox, nextRows, now.blockers)
-        nextNote.textContent = now.blockers.length === 0 ? "nothing stands in the way: it grows when the next resident settles in" : ""
-        nextNote.style.display = now.blockers.length === 0 ? "" : "none"
-        nextBox.append(nextNote)
+        syncGroups([{ title: "what is left", icon: "condition", lines: now.lines }])
       }
     })
     if (!(p.type === "building" && p.kind === "townhall")) {
@@ -1758,14 +1832,36 @@ export const createHost = async (
     input.reset()
   }
 
+  /** What a tool chip in a message does (see `toolRefs`): picks the tool, opens the panel, or shows the map view. */
+  const useTool = (id: string) => {
+    setFold(null)
+    if (id.startsWith("view:")) {
+      const view = id.slice(5) as View
+      return setView(ui.view === view ? "none" : view)
+    }
+    if (id === "build" || id === "town") return ui.menu === id ? undefined : toggleMenu(id)
+    if (id === "speed") return setSpeed(ui.speed === 0 ? lastSpeed : ui.speed === 4 ? 1 : ui.speed * 2)
+    if (id === "pause") return setSpeed(ui.speed === 0 ? lastSpeed : 0)
+    ui.menu = null
+    choose(id === "homes" ? "home" : (id as Tool))
+  }
   /** Ticker lines the mayor has put away, by what they say (and, for news, when). */
   const dismissed = new Set<string>()
   let tickerLines: { guide: Stats["guide"]["step"]; alerts: Stats["alerts"]; news: Stats["chronicle"] } = { guide: null, alerts: [], news: [] }
   ticker.onclick = (event) => {
     event.stopPropagation()
-    // On a phone the peeking line opens the guide in full.
-    if (ticker.classList.contains("peek")) return setFold("guide")
     const target = event.target as HTMLElement
+    // A tool, panel, or map view the line names: pick it, with the map in view.
+    const tool = target.closest<HTMLElement>("[data-tool]")
+    if (tool) return useTool(tool.dataset.tool!)
+    // On a phone: tuck the step away into the bulb, or open the guide in full.
+    if (target.closest("[data-tuck]")) {
+      tucked = stepNow
+      if (!toldWhere) ui.toast("The guide is in the bulb at the top right")
+      toldWhere = true
+      return
+    }
+    if (ticker.classList.contains("peek") && !target.closest("[data-kind]")) return setFold("guide")
     const off = target.closest<HTMLElement>("[data-dismiss]")
     if (off) {
       dismissed.add(off.dataset.dismiss!)
@@ -1788,13 +1884,19 @@ export const createHost = async (
       const row = go.closest<HTMLElement>("[data-alert]")
       const there = row ? tickerLines.alerts[Number(row.dataset.alert)]?.places?.[go.dataset.go as KindId] : undefined
       if (there) goTo(there.at, there.size, there.id)
+      // The guide's step names the building it points at.
+      const guide = tickerLines.guide
+      if (!row && go.closest("[data-guide]") && guide?.at) goTo(guide.at, guide.size, guide.id)
       return
     }
     const ref = target.closest<HTMLElement>("[data-kind]")
     if (ref) {
       const kind = ref.dataset.kind as KindId
-      // Straight to placing it: the placement itself says if the town cannot build it yet.
-      if (kinds[kind].buildable) place(kind)
+      // Straight to placing it, with the map in view: the placement itself says if the town cannot build it yet.
+      if (kinds[kind].buildable) {
+        setFold(null)
+        place(kind)
+      }
       return
     }
     const line = target.closest<HTMLElement>(".cell.place")
@@ -1808,9 +1910,14 @@ export const createHost = async (
 
   /** The last chronicle line announced. */
   let lastNews = ""
-  /** The guide step last shown, and the timer that hides its peek. */
-  let lastStep = ""
-  let peekTimer = 0
+  /**
+   * A phone's guide: the step stays above the tool bar until the mayor tucks it away (`tucked`: the step and
+   * state they tucked; a new step, or the same one under way, comes out again). Tucked away, the bulb pulses,
+   * and the first time a toast says where the guide went.
+   */
+  let stepNow = ""
+  let tucked = ""
+  let toldWhere = false
   /** Copies the town's numbers and preview into the page, once a frame. */
   const syncPage = () => {
     syncPanel()
@@ -1921,10 +2028,22 @@ export const createHost = async (
       // The guide's step first: what to do next, and why.
       const g = s.guide.step
       const guideHtml = g
-        ? [
-            `<div class="head guide"><span>guide · ${escapeHtml(g.chapter)}</span><span class="progress" title="Steps of the guide done">${s.guide.done} of ${s.guide.total} done</span><button class="quiet" data-guide-off title="Turn the guide off (the guide button in the bottom right turns it back on)">hide guide</button></div>`,
-            `<div class="cell alert hint guide${g.at !== null ? " place" : ""}" data-guide>${icon("hint", 16, "mark")}<span class="text">${callouts(g.text)}<span class="goal">${icon("goal", 12)}<span>done when ${callouts(g.goal)}</span></span></span><span class="acts">${g.at !== null ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="Skip this step">${icon("close", 12)}</button></span></div>`
-          ]
+        ? (() => {
+            const asks = new Set(g.asks)
+            const say = (text: string) => callouts(text, new Set(g.near ? [g.near] : []), asks)
+            const count = g.count ? `step ${g.count.at} of ${g.count.of}` : ""
+            return [
+              `<div class="head guide"><span>guide · ${escapeHtml(g.chapter)}</span><span class="progress" title="${g.count ? "The first steps of a new town" : ""}">${count}</span><button class="quiet" data-guide-off title="Turn the guide off (the guide button in the bottom right turns it back on)">hide guide</button></div>`,
+              `<div class="cell alert hint guide${g.waiting ? " waiting" : g.locked ? " locked" : ""}${g.at !== null ? " place" : ""}" data-guide>${icon(g.waiting ? "clock" : g.locked ? "caution" : "hint", 16, "mark")}<span class="text">` +
+                `<span class="do">${say(g.text)}</span>` +
+                (g.waiting ? `<span class="why now">${say(g.waiting)}</span>` : g.locked ? `<span class="why now">${say(g.locked)}</span>` : `<span class="why">${say(g.why)}</span>`) +
+                `<span class="goal">${icon("goal", 12)}<span>done when ${say(g.goal)}</span></span>` +
+                (g.next ? `<span class="goal next">${icon("clock", 12)}<span>${say(g.next)}</span></span>` : "") +
+                `</span>` +
+                `<span class="acts">${g.at !== null ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="Skip this step">${icon("close", 12)}</button></span>` +
+                `<button class="act tuck" data-tuck title="Hide: the guide stays in the bulb at the top right">${icon("close", 12)}</button></div>`
+            ]
+          })()
         : []
       const tickerHtml = [
         ...guideHtml,
@@ -1947,18 +2066,18 @@ export const createHost = async (
       ticker.classList.toggle("show", tickerHtml !== "" && s.fate.state === "playing")
       // The phone's guide button: the step it is on, or how many things need looking at.
       const bad = alerts.some((a) => a.tone === "bad")
-      const badge = g ? `${s.guide.done + 1}/${s.guide.total}` : alerts.length > 0 ? String(alerts.length) : ""
+      const things = alerts.length + (g ? 1 : 0)
+      const badge = g?.count ? `${g.count.at}/${g.count.of}` : things > 0 ? String(things) : ""
       if (guideBadge.textContent !== badge) guideBadge.textContent = badge
       guideBulb.classList.toggle("alert", bad)
-      // A new step peeks out above the tool bar for a few seconds.
-      const stepKey = g?.key ?? ""
-      // Not behind the town picker: the step waits until the town is founded.
-      if (stepKey !== lastStep && !ui.founding) {
-        lastStep = stepKey
-        window.clearTimeout(peekTimer)
-        ticker.classList.toggle("peek", stepKey !== "" && phone.matches && fold === null)
-        if (stepKey !== "") peekTimer = window.setTimeout(() => ticker.classList.remove("peek"), 7000)
-      }
+      // On a phone the step stays out above the tool bar, until tucked away; not behind the town picker or an open sheet.
+      const stepKey = g ? `${g.key}${g.waiting ? ":under way" : g.locked ? ":locked" : ""}` : ""
+      stepNow = stepKey
+      const peeking = stepKey !== "" && phone.matches && fold === null && tucked !== stepKey && !ui.founding && s.fate.state === "playing"
+      if (ticker.classList.contains("peek") !== peeking) ticker.classList.toggle("peek", peeking)
+      document.body.classList.toggle("peeking", peeking)
+      const nudge = stepKey !== "" && phone.matches && tucked === stepKey && fold !== "guide"
+      if (guideBulb.classList.contains("nudge") !== nudge) guideBulb.classList.toggle("nudge", nudge)
       // News as it happens: a toast for each new alarm line.
       const latest = s.chronicle.at(-1)
       const seen = `${s.charter.seed}|${latest?.tick ?? -1}|${s.chronicle.length}`
@@ -1987,7 +2106,7 @@ export const createHost = async (
     strokeBar.classList.toggle("open", held)
     document.body.classList.toggle("stroke-held", held)
     if (text && screenPointer) {
-      tooltip.textContent = text
+      setHtml(tooltip, iconize(escapeHtml(text)))
       tooltip.style.display = "block"
       tooltip.style.left = `${Math.min(screenPointer.x, window.innerWidth - tooltip.offsetWidth - 20)}px`
       tooltip.style.top = `${screenPointer.y}px`

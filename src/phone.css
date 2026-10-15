@@ -70,15 +70,24 @@
   .fold-buttons .badge:empty { display: none; }
   .fold-buttons .alert .badge { background: #b04a39; }
 
-  /* ── The guide: folded to the bulb; a new step peeks above the tool bar; open, a sheet ── */
+  /* ── The guide: its step stays above the tool bar until tucked into the bulb; open, a sheet ── */
   .hud .ticker.show { display: none; width: auto; }
   .hud .ticker.show.peek {
     display: flex; position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(58px + env(safe-area-inset-bottom));
     width: min(460px, calc(100vw - 16px)); cursor: pointer;
   }
-  .hud .ticker.peek > :not(.cell.guide), .hud .ticker.peek .goal, .hud .ticker.peek .acts { display: none; }
+  /* The peek is what to do now: the step, or once under way, what the town is doing about it. */
+  .hud .ticker.peek > :not(.cell.guide), .hud .ticker.peek .cell.guide .goal, .hud .ticker.peek .acts, .hud .ticker.peek .cell.guide .why, .hud .ticker.peek .cell.guide.waiting .do, .hud .ticker.peek .cell.guide.locked .do { display: none; }
+  .hud .ticker.peek .cell.guide .why.now { display: inline; margin: 0; }
   .hud .ticker.peek .cell.guide { padding: 7px 10px 7px 12px; font-size: 11px; line-height: 1.45; }
-  .hud .ticker.peek .cell.guide .text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  .hud .ticker.peek .cell.guide .text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+  .hud .ticker.peek .cell.guide .do { display: inline; }
+  .hud .ticker.peek .act.tuck { display: flex; flex: none; align-self: center; width: 30px; height: 30px; margin: -4px -4px -4px 0; opacity: 0.6; }
+  /* A toast goes above the guide's step, not over it. */
+  .peeking .toast { bottom: calc(150px + env(safe-area-inset-bottom)); }
+  /* Tucked away, the bulb pulses a few times, so the mayor sees where the guide went. */
+  @keyframes guide-nudge { 0% { box-shadow: 0 0 0 0 rgba(47, 90, 156, 0.55); } 70% { box-shadow: 0 0 0 10px rgba(47, 90, 156, 0); } 100% { box-shadow: 0 0 0 0 rgba(47, 90, 156, 0); } }
+  .fold-buttons button.nudge { animation: guide-nudge 1.4s ease-out 4; }
   .fold-guide .hud.left { z-index: 4; }
   .fold-guide .fold-buttons { z-index: 5; }
   .fold-guide .hud .ticker.show {
@@ -135,7 +144,7 @@
     font-size: 12px; gap: 10px; padding: 7px 12px 7px 9px; min-height: 34px; justify-content: flex-start; color: #3d4943;
   }
 
-  .toast { bottom: calc(108px + env(safe-area-inset-bottom)); max-width: calc(100vw - 28px); white-space: normal; text-align: center; }
+  .toast { bottom: calc(108px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px); white-space: normal; text-align: center; font-size: 13px; line-height: 1.4; padding: 9px 14px; }
   .stroke-bar { bottom: calc(56px + env(safe-area-inset-bottom)); }
   /* A held stroke's buttons take the guide's place above the tool bar. */
   .stroke-held .hud .ticker.peek { display: none; }
