@@ -34,8 +34,9 @@ model's eaves (for surface effects and fire) and its top (for the problem
 marker). The market hall drops the market's flag. The model cache key includes
 the tier.
 
-The panel's picture of a building is still the 2D drawing of the tier 1
-building.
+The building panel pictures an upgraded building with its model
+(`src/render3d/portrait.ts`): drawn once from the town's own camera, at the
+town's scale and cropped to the model, beside the 2D pictures of the rest.
 
 oes not activate upgrades.
 

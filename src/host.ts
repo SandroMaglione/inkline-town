@@ -60,6 +60,8 @@ import { blobOf, cardFacts, drawCard, metaOf, scaled, verdictOf } from "./share/
 import { handheld, offerLink, offerPicture, upload } from "./share/client.ts"
 import { PICTURE_HEIGHT, PICTURE_QUALITY, PICTURE_WIDTH } from "./share/format.ts"
 import { MapInput } from "./render3d/input.ts"
+import { portrait } from "./render3d/portrait.ts"
+import { serviceBuilding } from "./asset-lab/service-upgrades.ts"
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
   const node = document.createElement(tag)
@@ -645,13 +647,21 @@ export const createHost = async (
 
   // ── Pictures of buildings, for the build menu and the panel ──
   const pictures = new Map<string, Promise<string>>()
-  /** A building (or a home of a tier) drawn as the town draws it, as an image. */
-  const picture = (what: KindId | Tier | `park:${GroundId | PropId}`): HTMLImageElement => {
+  /**
+   * A building (or a home of a tier) drawn as the town draws it, as an image.
+   * An upgraded market or chapel has no 2D drawing: its model is pictured
+   * from the town's camera instead (see `portrait`).
+   */
+  const picture = (what: KindId | Tier | `park:${GroundId | PropId}`, upgraded = false): HTMLImageElement => {
     const img = document.createElement("img")
     img.className = "thumb"
     img.alt = ""
-    const id = String(what)
+    const id = `${String(what)}${upgraded ? "/upgraded" : ""}`
     let url = pictures.get(id)
+    if (!url && upgraded && (what === "market" || what === "chapel")) {
+      url = Promise.resolve(portrait(serviceBuilding(what, 2, { doors: { right: true, left: true } })))
+      pictures.set(id, url)
+    }
     if (!url) {
       const g = new Graphics()
       if (typeof what === "string" && what.startsWith("park:")) drawParkPiece(g, what.slice(5) as GroundId | PropId)
@@ -1237,7 +1247,7 @@ export const createHost = async (
     )
     const below = el("div", "")
     below.append(status, about)
-    panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier), below))
+    panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier, p.type === "building" && p.upgraded), below))
     const box = section(p.type === "building" ? "at work" : p.type === "ruin" ? "what is left" : p.type === "park" ? "what makes it" : "household", p.type === "building" ? "jobs" : p.type === "park" ? "appeal" : "homes")
     box.classList.add("lines")
     const rows: Array<HTMLElement> = []
