@@ -916,7 +916,7 @@ export const createHost = async (
     const parks = section(
       "parks",
       "decor",
-      `Lay ground, then set furnishings on it. Ground that touches is one park: the more it holds the nicer the streets around it (citizens need ${home.tiers[2].appeal}, townhouses ${home.tiers[3].appeal}). One furnishing counts for every ${parkRules.cellsPerProp} cells.`
+      `Lay ground, then set furnishings on it. Ground that touches is one park: the more it holds the nicer the streets around it (citizens need ${home.tiers[2].appeal}, townhouses ${home.tiers[3].appeal}). One furnishing counts for every ${parkRules.cellsPerProp} cells; where parks meet, the finest counts in full.`
     )
     parks.style.borderTop = "3px solid #4f9a6a"
     const pieces: ReadonlyArray<{ readonly id: GroundId | PropId; readonly piece: ParkPiece; readonly pick: () => void; readonly ground: boolean }> = [

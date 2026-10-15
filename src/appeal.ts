@@ -28,9 +28,10 @@ export interface AppealSource {
   /**
    * `sum`: adds up with others; `nature` and `paved`: only the strongest of
    * their kind counts; `homes`: adds up, to `appeal.homesMost` at most, and
-   * never on the home's own cell.
+   * never on the home's own cell; `park`: the finest counts in full, the
+   * others `park.others` of theirs.
    */
-  readonly mode: "sum" | "nature" | "paved" | "homes"
+  readonly mode: "sum" | "nature" | "paved" | "homes" | "park"
   /** A park: the cells it covers, inside the square (x, y, size) around them. */
   readonly cells?: ReadonlyArray<Point>
 }
@@ -95,7 +96,18 @@ export const appealGrid = (sources: ReadonlyArray<AppealSource>, rules: Rules = 
   const nature = new Int32Array(GRID * GRID)
   const paved = new Int32Array(GRID * GRID)
   const homes = new Int32Array(GRID * GRID)
+  const parkBest = new Int32Array(GRID * GRID)
+  const parkAll = new Int32Array(GRID * GRID)
   for (const s of sources) {
+    if (s.mode === "park") {
+      for (let y = Math.max(0, s.y - s.reach); y < Math.min(GRID, s.y + s.size + s.reach); y++)
+        for (let x = Math.max(0, s.x - s.reach); x < Math.min(GRID, s.x + s.size + s.reach); x++) {
+          const e = effectOf(s, ringTo(s, x, y)), k = key(x, y)
+          parkAll[k] = parkAll[k]! + e
+          if (e > parkBest[k]!) parkBest[k] = e
+        }
+      continue
+    }
     const into = s.mode === "sum" ? sum : s.mode === "nature" ? nature : s.mode === "paved" ? paved : homes
     for (let y = Math.max(0, s.y - s.reach); y < Math.min(GRID, s.y + s.size + s.reach); y++) {
       for (let x = Math.max(0, s.x - s.reach); x < Math.min(GRID, s.x + s.size + s.reach); x++) {
@@ -107,7 +119,8 @@ export const appealGrid = (sources: ReadonlyArray<AppealSource>, rules: Rules = 
       }
     }
   }
-  return Array.from({ length: GRID * GRID }, (_, k) => clamp(sum[k]! + nature[k]! + paved[k]! + Math.min(rules.appeal.homesMost, homes[k]!), rules))
+  const parks = (k: number) => parkBest[k]! + Math.trunc((parkAll[k]! - parkBest[k]!) * rules.park.others)
+  return Array.from({ length: GRID * GRID }, (_, k) => clamp(sum[k]! + nature[k]! + paved[k]! + Math.min(rules.appeal.homesMost, homes[k]!) + parks(k), rules))
 }
 
 /** One cell's desirability and what makes it, strongest first: "park +6", "bakery −4". */
@@ -115,14 +128,20 @@ export const appealParts = (sources: ReadonlyArray<AppealSource>, cell: { readon
   const parts = new Map<string, number>()
   const best = { nature: { label: "", value: 0 }, paved: { label: "", value: 0 } }
   let homes = { label: "", value: 0 }
+  const parks: Array<number> = []
   for (const s of sources) {
     const e = effectOf(s, ringTo(s, cell.x, cell.y))
     if (e === 0) continue
-    if (s.mode === "sum") parts.set(s.label, (parts.get(s.label) ?? 0) + e)
+    if (s.mode === "park") parks.push(e)
+    else if (s.mode === "sum") parts.set(s.label, (parts.get(s.label) ?? 0) + e)
     else if (s.mode === "homes") homes = { label: s.label, value: Math.min(rules.appeal.homesMost, homes.value + e) }
     else if (Math.abs(e) > Math.abs(best[s.mode].value)) best[s.mode] = { label: s.label, value: e }
   }
   for (const b of [best.nature, best.paved, homes]) if (b.value !== 0) parts.set(b.label, (parts.get(b.label) ?? 0) + b.value)
+  if (parks.length > 0) {
+    const finest = Math.max(...parks), all = parks.reduce((n, e) => n + e, 0)
+    parts.set("park", (parts.get("park") ?? 0) + finest + Math.trunc((all - finest) * rules.park.others))
+  }
   const list = [...parts].map(([label, value]) => ({ label, value })).filter((p) => p.value !== 0)
   list.sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
   return { value: clamp(list.reduce((n, p) => n + p.value, 0), rules), parts: list }
@@ -159,7 +178,7 @@ const tenth = (n: number) => Math.round(n * 10) / 10
 /**
  * One park's worth: its ground (each cell a little, flower beds more, up to
  * `park.groundMost`), and its furnishings, the best first: one for every
- * `park.cellsPerProp` cells counts, and each one of a kind after the first
+ * `park.cellsPerProp` whole cells counts, and each one of a kind after the first
  * counts `park.repeat` of the one before; and its entrances, each walk or
  * square beside a road (`road`), up to `park.entrances`. A lawn is
  * pleasant; a lawn with walks in from the street, lamps, and a statue is a
@@ -169,7 +188,7 @@ export const parkValue = (cells: ReadonlyArray<ParkCell>, road: (x: number, y: n
   const { grounds, props, park } = rules
   const groundRaw = cells.reduce((n, c) => n + grounds[c.ground].beauty, 0)
   const ground = Math.min(park.groundMost, groundRaw)
-  const room = Math.ceil(cells.length / park.cellsPerProp)
+  const room = Math.floor(cells.length / park.cellsPerProp)
   const placed = cells.filter((c) => c.prop !== "none").map((c) => c.prop as PropId)
   // Each furnishing's worth given those of its kind before it; the best count first.
   const seen = new Map<PropId, number>()
@@ -242,7 +261,7 @@ export const parkSources = (cells: ReadonlyArray<ParkCell>, road?: (x: number, y
       const y = Math.min(...ys)
       const size = Math.max(Math.max(...xs) - x, Math.max(...ys) - y) + 1
       // A bigger park gives its whole worth further out: half its reach, rounded down.
-      return { x, y, size, value: p.value, reach: p.reach, full: Math.max(1, Math.floor(p.reach / 2)), label: "park", mode: "sum", cells: p.cells }
+      return { x, y, size, value: p.value, reach: p.reach, full: Math.max(1, Math.floor(p.reach / 2)), label: "park", mode: "park", cells: p.cells }
     })
 
 /** Per-minute upkeep paid for a park cell, including its furnishing. */

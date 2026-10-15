@@ -14,7 +14,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { amounts, type GoodId, type GroundId, type Need, type PropId } from "../src/content.ts"
-import { parksOf } from "../src/appeal.ts"
+import { appealGrid, parkSources, parksOf, type ParkCell } from "../src/appeal.ts"
 import { shippedRules } from "../src/rules/config.ts"
 import { moreAdmin, tierFor } from "../src/rules/households.ts"
 import { chainWorth, crownMargin, dominates, homes, median, openingKit, producers, services } from "../src/rules/worth.ts"
@@ -145,7 +145,7 @@ test("a bigger building for a service walks at least as far for its upkeep as a 
 const ONE_CELL_MOST = 2
 const road = (_x: number, y: number) => y === 0
 
-test("a park of one cell gives little, whatever stands on it", { todo: "a lamp makes it 3, a fountain 6, a statue 7: more than a chapel" }, () => {
+test("a park of one cell gives little, whatever stands on it", () => {
   const out: Array<string> = []
   for (const ground of ["lawn", "flowers", "path", "square"] as Array<GroundId>)
     for (const prop of ["none", "lamp", "fountain", "statue"] as Array<PropId | "none">) {
@@ -155,15 +155,16 @@ test("a park of one cell gives little, whatever stands on it", { todo: "a lamp m
   none(out, "one-cell park too fine")
 })
 
-test("cells laid as separate parks give no more than the same cells as one", { todo: "parks touching only at a corner are separate, and their values add up" }, () => {
+test("cells laid as separate parks give a street no more than the same cells as one", () => {
   const out: Array<string> = []
-  for (const n of [2, 3, 4, 5])
+  /** The finest desirability any cell gets from these park cells. */
+  const finest = (cells: ReadonlyArray<ParkCell>) => Math.max(...appealGrid(parkSources(cells, road, rules), rules))
+  for (const n of [2, 3, 4, 5, 6])
     for (const prop of ["none", "lamp"] as const) {
       // A diagonal of cells (each its own park) against a row of them (one park), both beside the road.
-      const apart = Array.from({ length: n }, (_, i) => ({ x: 2 * i, y: 1 + (i % 2), ground: "path" as const, prop }))
-      const joined = Array.from({ length: n }, (_, i) => ({ x: i, y: 1, ground: "path" as const, prop }))
-      const value = (cells: typeof apart) => parksOf(cells, road, rules).reduce((s, p) => s + p.value, 0)
-      if (value(apart) > value(joined)) out.push(`${n} paths${prop === "none" ? "" : ` with ${prop}s`}: ${value(apart)} apart, ${value(joined)} as one`)
+      const apart = Array.from({ length: n }, (_, i) => ({ x: 10 + 2 * i, y: 1 + (i % 2), ground: "path" as const, prop }))
+      const joined = Array.from({ length: n }, (_, i) => ({ x: 10 + i, y: 1, ground: "path" as const, prop }))
+      if (finest(apart) > finest(joined)) out.push(`${n} paths${prop === "none" ? "" : ` with ${prop}s`}: ${finest(apart)} apart, ${finest(joined)} as one`)
     }
   none(out, "splitting a park pays")
 })

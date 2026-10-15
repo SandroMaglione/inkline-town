@@ -402,7 +402,7 @@ export const props: Readonly<Record<PropId, ParkPiece>> = {
 export const park = {
   /** Ground counts for this much beauty at most, however big the park. */
   groundMost: 4,
-  /** One furnishing counts for every this many cells: a park crowded with benches is no nicer. */
+  /** One furnishing counts for every this many whole cells (none on a park of one): a park crowded with benches is no nicer. */
   cellsPerProp: 2,
   /** Each furnishing of a kind after the first counts this share of the one before. */
   repeat: 0.5,
@@ -411,6 +411,12 @@ export const park = {
   entrances: 2,
   /** The most a park gives the streets around it. */
   most: 15,
+  /**
+   * Where several parks reach a cell, the finest counts in full and the
+   * others this share of theirs: a street lined with scraps of park is
+   * not a park.
+   */
+  others: 0.5,
   /** How far it reaches: `reach[0]` cells, and one more for every `reach[1]` cells of park, up to `reach[2]`. */
   reach: [2, 6, 5] as const
 }

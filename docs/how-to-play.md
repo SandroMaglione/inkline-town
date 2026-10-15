@@ -132,11 +132,13 @@ Nobody tells you to build it that way; it works best that way.
   live in town, a statue once 20 are citizens). Ground that touches is one
   park, and the whole park is what the streets around it feel: its beauty
   adds up from its ground (at most 4), its furnishings (the first of a
-  kind in full, each more of it half as much, and one for every two
-  cells), and its ways in from the street (a walk or a square beside a
-  road: 1.5 each, two count), up to 15, out to 2 cells and one more for
-  every 6 cells of park, up to 5; its whole worth reaches half that far
-  before it fades. A lone statue is worth little; a lawn
+  kind in full, each more of it half as much, and one for every two whole
+  cells, so none on a park of one), and its ways in from the street (a
+  walk or a square beside a road: 1.5 each, two count), up to 15, out to
+  2 cells and one more for every 6 cells of park, up to 5; its whole worth
+  reaches half that far before it fades. Where several parks reach a
+  street, the finest counts in full and the others half, so scraps of park
+  are no match for one park. A lone statue is worth little; a lawn
   with walks in from the street, lamps, and a statue is worth a street of
   citizens.
   Parks cost upkeep by the cell and by the furnishing: a fine centre is
