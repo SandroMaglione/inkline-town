@@ -172,6 +172,8 @@ export interface Stats {
   readonly taxes: number
   /** What the same homes would pay a minute with every need met: taxes left on the table when it is more. */
   readonly suppliedTaxes: number
+  /** Taxes a minute at each step of a tier's rate, once the homes settle at it; empty while the tier has no homes. */
+  readonly taxOutlook: Readonly<Record<"settlers" | "citizens", ReadonlyArray<{ readonly rate: number; readonly taxes: number }>>>
   readonly trade: number
   readonly upkeep: number
   readonly admin: number

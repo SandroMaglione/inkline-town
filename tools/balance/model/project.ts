@@ -1,7 +1,7 @@
 import { amounts, goodIds, type Amounts } from "../../../src/content.ts"
 import { parkUpkeep } from "../../../src/appeal.ts"
 import { ruleTicks } from "../../../src/rules/config.ts"
-import { baseCollection, capacity, mealRate, serveGoods, taxOf, tierFor } from "../../../src/rules/households.ts"
+import { baseCollection, capacity, mealRate, rateOf, serveGoods, taxOf, tierFor } from "../../../src/rules/households.ts"
 import { seasonAt } from "../../../src/rules/seasons.ts"
 import { spoilExpectation } from "../../../src/rules/decay.ts"
 import { tradeCollection } from "../../../src/rules/trade.ts"
@@ -147,7 +147,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
       const appeal = analysis.household.find((a) => a.id === h.id)?.desirability ?? 0
       for (let n = 0; n < settleCount; n++) {
         next.tier = tierFor(next, appeal, next.meters, rules)
-        const cap = analysis.household.find((a) => a.id === h.id)?.roadConnected ? capacity(next, approval, appeal, rules) : 0
+        const cap = analysis.household.find((a) => a.id === h.id)?.roadConnected ? capacity(next, approval, appeal, rules, rateOf(scenario.policy, next.tier)) : 0
         next.residents = Math.min(next.residents, rules.home.tiers[next.tier].residents)
         next.residents += Math.sign(cap - next.residents)
       }

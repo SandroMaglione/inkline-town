@@ -29,7 +29,7 @@ export const tradeCollection = (initial: ReadonlyArray<Shelf>, policy: TradePoli
       let wanted = Math.min(load, policy.reserve - held, Math.floor(coins / ask))
       if (wanted > 0) {
         coins -= wanted * ask; traded -= wanted * ask
-        prices[good] = Math.min(rules.market.ceiling, prices[good] + wanted * rules.market.perUnit)
+        prices[good] = Math.min(rules.market.ceiling, prices[good] + wanted * rules.market.perBought)
         for (const inv of [...stores].sort((a, b) => a.stock[good] - b.stock[good])) {
           if (wanted <= 0) break
           const put = inv.accepts.includes(good) ? Math.min(wanted, inv.cap - inv.stock[good]) : 0
@@ -39,8 +39,9 @@ export const tradeCollection = (initial: ReadonlyArray<Shelf>, policy: TradePoli
         if (wanted > 0) { coins += wanted * ask; traded += wanted * ask }
       }
     }
+    // A cheap price recovers by a tenth of the gap; a dear one calms more slowly.
     const gap = 100 - prices[good]
-    prices[good] += gap === 0 ? 0 : Math.sign(gap) * Math.max(1, Math.round(Math.abs(gap) / 10))
+    prices[good] += gap === 0 ? 0 : Math.sign(gap) * Math.max(1, Math.round(Math.abs(gap) / (gap > 0 ? 10 : rules.market.calms)))
   }
   return { stores, prices, coins, traded }
 }

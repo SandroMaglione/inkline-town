@@ -10,13 +10,14 @@ import { amounts, goodIds, type GoodId } from "../content.ts"
 import { Appeal, Building, Burning, Census, Charter, Flow, Game, Rules, Grid, House, Inventory, Ledger, Market, Mood, Park, Paused, Policy, Rising, Risk, Sick, Site, Staff, Storage, Tile, Time, TownHall, Treasury, maybe } from "../schema.ts"
 import { connected, elapsed, seasonAt } from "./shared.ts"
 
-import { ageNeeds, baseCollection, mealDecay, adminOf, capacity, met, taxOf, tierFor } from "../rules/households.ts"
+import { ageNeeds, baseCollection, mealDecay, adminOf, capacity, met, rateOf, taxOf, tierFor } from "../rules/households.ts"
 export { adminOf, appealOf, askOf, capacity, kept, met, priceOf, satisfaction, taxOf, tierFor, type Rates } from "../rules/households.ts"
 
 /**
  * Needs wear off, food faster in winter. Every so often a home settles
  * into its tier (see `tierFor`) and one resident moves in or out towards
- * what the home holds (half as many while it is sick). Everyone leaves a
+ * what the home holds (half as many while it is sick, fewer under heavy
+ * taxes). Everyone leaves a
  * home with no road, or on fire.
  */
 export const Households = Game.System(
@@ -40,7 +41,8 @@ export const Households = Game.System(
       mood: Game.System.readResource(Mood),
       appeal: Game.System.readResource(Appeal),
       time: Game.System.readResource(Time),
-      charter: Game.System.readResource(Charter)
+      charter: Game.System.readResource(Charter),
+      policy: Game.System.readResource(Policy)
     },
     services: { rules: Game.System.service(Rules) }
   },
@@ -50,6 +52,7 @@ export const Households = Game.System(
 
     const grid = resources.grid.get()
     const approval = resources.mood.get().approval
+    const policy = resources.policy.get()
     const cells = resources.appeal.get().cells
     const t = elapsed(resources.time.get(), resources.charter.get())
     // In winter a meal lasts two thirds as long.
@@ -63,7 +66,7 @@ export const Households = Game.System(
         const tile = data.tile.get()
         const desirability = appealAt(cells, tile.x, tile.y)
         next.tier = tierFor(next, desirability, maybe(data.risk) ?? { fire: 0, health: 0, order: 0 }, rules)
-        const well = connected(grid, tile) ? capacity(next, approval, desirability, rules) : 0
+        const well = connected(grid, tile) ? capacity(next, approval, desirability, rules, rateOf(policy, next.tier)) : 0
         const cap = data.sick.present ? Math.floor(well * risk.health.sickly) : well
         next.residents = Math.min(next.residents, home.tiers[next.tier].residents)
         next.residents += Math.sign(cap - next.residents)

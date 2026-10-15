@@ -2,7 +2,7 @@ import { amounts, goodIds, type GoodId, type WinterId } from "../../../src/conte
 import { appealAt, appealGrid, buildingSource, homeSource, landSource, parkSources, parkUpkeep } from "../../../src/appeal.ts"
 import { doors, nearest, reach } from "../../../src/grid.ts"
 import { assignWorkers, type Assignment } from "../../../src/rules/production.ts"
-import { baseCollection, wantsCitizenGoods, mealRate, refreshLevel, taxOf, tierFor } from "../../../src/rules/households.ts"
+import { baseCollection, wantsCitizenGoods, mealRate, mealsOf, refreshLevel, taxOf, tierFor } from "../../../src/rules/households.ts"
 import { riskIncrements, near } from "../../../src/rules/risks.ts"
 import { seasonAt } from "../../../src/rules/seasons.ts"
 import { spoilExpectation } from "../../../src/rules/decay.ts"
@@ -86,10 +86,11 @@ export const analyze = ({ rules, scenario: s }: Inputs, options: AnalysisOptions
   const spoil = { ...amounts({}) }
   for (const b of s.buildings.filter((b) => !b.site)) for (const g of goodIds) spoil[g] += spoilExpectation(b.stock[g], g, rules.kinds[b.kind].keeps ?? 1, rules) * 60 / (rules.spoilTicks * rules.stepSeconds)
   const foodDecay = mealRate(severity !== null)
+  const meals = s.homes.reduce((n, h) => n + mealsOf(h, rules), 0)
   const clothHomes = s.homes.filter(h => wantsCitizenGoods(h, appealAt(appeal, h.tile.x, h.tile.y), rules)).length
   const needBounds = {
     clothRecipients: clothHomes,
-    food: { min: s.homes.length * foodDecay * 60 / (rules.home.lasts.food * rules.stepSeconds), frequent: s.homes.length * foodDecay * 60 / ((rules.home.lasts.food - refreshLevel("food", rules)) * rules.stepSeconds) },
+    food: { min: meals * foodDecay * 60 / (rules.home.lasts.food * rules.stepSeconds), frequent: meals * foodDecay * 60 / ((rules.home.lasts.food - refreshLevel("food", rules)) * rules.stepSeconds) },
     cloth: { min: clothHomes * 60 / (rules.home.lasts.cloth * rules.stepSeconds), frequent: clothHomes * 60 / ((rules.home.lasts.cloth - refreshLevel("cloth", rules)) * rules.stepSeconds) },
     citizenCloth: { min: s.homes.filter((h) => h.tier >= 2).length * 60 / (rules.home.lasts.cloth * rules.stepSeconds), frequent: s.homes.filter((h) => h.tier >= 2).length * 60 / ((rules.home.lasts.cloth - refreshLevel("cloth", rules)) * rules.stepSeconds) }
   }

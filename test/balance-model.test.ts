@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { readFileSync, readdirSync } from "node:fs"
-import { amounts, kinds } from "../src/content.ts"
+import { amounts, goodIds, kinds } from "../src/content.ts"
 import { resolveRules } from "../src/rules/config.ts"
 import { analyze } from "../tools/balance/model/analyze.ts"
 import { project } from "../tools/balance/model/project.ts"
@@ -13,7 +13,9 @@ import { verifyBuilds } from "../tools/balance/verify/builds.ts"
 import { provenance } from "../tools/balance/provenance.ts"
 import { assessTransfers } from "../tools/balance/model/transport.ts"
 import { fixture } from "../tools/balance/verify/fixture.ts"
-import { serveGoods, wantsCitizenGoods } from "../src/rules/households.ts"
+import { capacity, moreAdmin, serveGoods, taxOf, taxOutlook, taxRoom, wantsCitizenGoods } from "../src/rules/households.ts"
+import { approvalTarget } from "../src/rules/approval.ts"
+import { tradeCollection } from "../src/rules/trade.ts"
 import { assignWorkers } from "../src/rules/production.ts"
 import { planPatrols } from "../src/rules/patrol.ts"
 import { scenarioGrid } from "../tools/balance/scenario.ts"
@@ -139,7 +141,7 @@ test("the mathematical plan reaches citizens through ordinary game construction"
 
 
 test("promotion-aware goods preserve cloth and feed an eligible settler bread before food expires", () => {
-  const rules = resolveRules(), house = { tier: 1 as const, food: rules.home.lasts.food, bread: 0, cloth: 0, faith: 0 }
+  const rules = resolveRules(), house = { tier: 1 as const, residents: 4, food: rules.home.lasts.food, bread: 0, cloth: 0, faith: 0 }
   const eligible = serveGoods(house, amounts({ bread: 2, cloth: 2, fish: 2 }), rules, rules.home.tiers[2].appeal)
   assert(eligible.house.bread > 0 && eligible.house.cloth > 0)
   const worker = serveGoods({ ...house, food: 0 }, amounts({ bread: 2, cloth: 2, fish: 2 }), rules, 0)
@@ -149,6 +151,60 @@ test("promotion-aware goods preserve cloth and feed an eligible settler bread be
   assert.equal(wantsCitizenGoods(house, 0, rules), false)
   const fallback = serveGoods({ ...house, food: 0 }, amounts({ bread: 1 }), rules, 0)
   assert(fallback.house.food > 0)
+})
+
+test("a visit feeds a home by its residents: a cottage one meal, a citizens' home two, a townhouse three", () => {
+  const rules = resolveRules(), hungry = { food: 0, bread: 0, cloth: 0, faith: 0 }
+  const cottage = serveGoods({ ...hungry, tier: 1 as const, residents: 4 }, amounts({ fish: 10 }), rules, 0)
+  assert.equal(cottage.eaten, 1)
+  assert.equal(cottage.basket.fish, 9)
+  const citizens = serveGoods({ ...hungry, tier: 2 as const, residents: 8 }, amounts({ bread: 10, cloth: 2 }), rules, rules.home.tiers[2].appeal)
+  assert.equal(citizens.basket.bread, 8)
+  assert.equal(citizens.house.food, rules.home.lasts.food)
+  const townhouse = serveGoods({ ...hungry, tier: 3 as const, residents: 12 }, amounts({ bread: 10 }), rules, rules.home.tiers[3].appeal)
+  assert.equal(townhouse.basket.bread, 7)
+  // A basket short of bread makes up the meal with fish, and a basket short of both feeds the home for part of the time.
+  const mixed = serveGoods({ ...hungry, tier: 3 as const, residents: 12 }, amounts({ bread: 1, fish: 1 }), rules, rules.home.tiers[3].appeal)
+  assert.equal(mixed.eaten, 2)
+  assert.equal(mixed.house.food, Math.round(rules.home.lasts.food * 2 / 3))
+  assert.equal(mixed.house.bread, Math.round(rules.home.lasts.bread / 3))
+})
+
+test("taxes above 100% empty homes directly, settlers sooner, so the most a rate brings in comes before the top", () => {
+  const rules = resolveRules(), fed = { tier: 1 as const, residents: 4, food: 1, bread: 0, cloth: 0, faith: 0 }
+  assert.equal(taxRoom(100, 1, rules), 1)
+  assert.equal(taxRoom(50, 1, rules), 1)
+  assert(Math.abs(taxRoom(150, 1, rules) - 0.8) < 1e-9)
+  assert(Math.abs(taxRoom(200, 1, rules) - 0.5) < 1e-9)
+  assert(taxRoom(200, 2, rules) > taxRoom(200, 1, rules))
+  assert.equal(capacity(fed, 0, 0, rules, 200), 2)
+  // A town of fed cottages: income rises and then falls with the rate.
+  const homes = Array.from({ length: 40 }, () => ({ ...fed, desirability: 0, paying: true }))
+  const approvalAt = (r: { settlers: number; citizens: number }, memory: number) => approvalTarget(homes, r, 1000, 0, false, rules, memory).target
+  const income = [100, 125, 150, 175, 200].map((rate) => taxOutlook(homes, { settlers: 100, citizens: 100 }, "settlers", rate, approvalAt, rules))
+  const best = income.indexOf(Math.max(...income))
+  assert(best > 0 && best < income.length - 1, JSON.stringify(income))
+  assert(income.at(-1)! < income[best]!)
+})
+
+test("administration: each more home costs more, and about what a fed cottage pays near the medium goal", () => {
+  const rules = resolveRules()
+  assert(moreAdmin(80, 1, rules) > moreAdmin(20, 1, rules) * 2)
+  const cottage = taxOf({ tier: 1, residents: 4, food: 1, bread: 0, cloth: 0, faith: 0 }, { settlers: 100, citizens: 100 }, rules)
+  assert(moreAdmin(80, 1, rules) > cottage * 0.5 && moreAdmin(80, 1, rules) < cottage, `${moreAdmin(80, 1, rules)} vs ${cottage}`)
+  assert(moreAdmin(150, 1, rules) > cottage)
+})
+
+test("buying drives a price up faster than selling drives it down, and a dear price calms slowly", () => {
+  const rules = resolveRules(), prices = amounts(Object.fromEntries(goodIds.map((g) => [g, 100])))
+  const shelf = { stock: amounts({ fish: 0 }), accepts: goodIds, cap: 1000 }
+  const bought = tradeCollection([shelf], { sells: [], buys: ["fish"], reserve: 12 }, prices, 10000, rules)
+  assert.equal(bought.stores[0]!.stock.fish, 12)
+  const dear = bought.prices.fish
+  assert(dear >= 100 + 12 * rules.market.perBought - 5, String(dear))
+  let calm = dear
+  for (let i = 0; i < 6; i++) calm = tradeCollection([{ ...shelf, stock: amounts({ fish: 1000 }) }], { sells: [], buys: [], reserve: 0 }, { ...prices, fish: calm }, 0, rules).prices.fish
+  assert(calm > 100 + (dear - 100) / 2, `a minute later fish is still dear: ${calm}`)
 })
 
 test("surplus citizens fill rough jobs after skilled jobs without an apprentice penalty", () => {

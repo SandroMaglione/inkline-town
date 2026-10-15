@@ -51,15 +51,26 @@ six months.
     winter when fields do not grow, fisheries catch half as much, and homes
     eat faster;
   - *administration*: the town hall costs more per home the more homes
-    there are, so a big town of poor homes cannot pay its way;
+    there are; by about 80 homes another cottage costs about what it brings
+    in once its food is paid for (the build tooltip says what a home would bring in after it), so a
+    town grows past there by finer homes, which hold two or three times the
+    people for the same cost;
+  - *food* is eaten by the resident: a walker's visit feeds a cottage one
+    fish or loaf, a citizens' home two, a townhouse three;
   - *the crown* asks for goods the town makes, more as the term goes on;
     sending them pays, and an unanswered request is a fine and a snub the
     town remembers;
-  - *the market*: prices fall the more the town sells and rise the more
-    it buys; stone and ore run out;
+  - *the market*: prices fall the more the town sells and rise, three
+    times as fast, the more it buys; a dear price calms only slowly, so
+    traders top up a shortfall but a town that lives on bought food pays
+    more for it every minute; stone and ore run out;
   - *approval*, from -100 to 100, follows needs met, taxes, unpaid wages,
     snubs from the crown, and hungry winters, and decides how many people
-    each home holds. Taxes above 125% also leave a *grudge* that builds
+    each home holds. Taxes above 100% also send residents away directly,
+    settlers sooner than citizens (a cottage holds 80% at 150% and half at
+    200%), so the most a rate brings in comes before the top of the slider:
+    the town panel shows what each rate would bring in once the homes
+    settle. Taxes above 125% also leave a *grudge* that builds
     for as long as they stay high and fades over ten minutes or so, so a
     term of squeezing cannot be undone by cutting taxes at the end.
 - **The levers**, each a slider: taxes per tier (50% to 200%); for each

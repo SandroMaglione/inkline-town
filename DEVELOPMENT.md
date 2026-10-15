@@ -268,7 +268,8 @@ averaged over the seeds still in office every few minutes.
 ```sh
 pnpm balance -- --size large --term 90 --land harsh
 pnpm balance -- --bot greedy          # sensible (default), greedy (taxes at 200%, sells everything, ignores the crown), idle,
-                                      # crowded (homes packed beside industry, no parks), uncovered (no fire, health, or order services)
+                                      # crowded (homes packed beside industry, no parks), uncovered (no fire, health, or order services),
+                                      # sprawl (taxes as high as the town stands, cottages everywhere, fish caught or bought, no finer homes)
 pnpm balance -- --versus crowded      # the bot against another on the same seeds: citizens, burghers, homes lost
 pnpm balance -- --versus uncovered
 pnpm balance -- --set kinds.sawmill.crew=settlers --set risk.fire.wooden=0   # content changes, numbers or words
@@ -278,6 +279,15 @@ pnpm balance -- --set crown.fine=2 --set kinds.fishery.recipe.seconds=3
 pnpm balance -- --seeds 1 --verbose --every 1   # minute by minute
 pnpm balance -- --snapshot 40                   # save each seed's town at minute 40 (see above)
 ```
+
+The economy is tuned so that spreading cottages stops paying: food goes by the
+resident, administration per home climbs (each more home costs about 6 coins a
+minute at 80 homes), taxes above 100% empty homes directly, and bought goods
+grow dear fast and calm slowly. On a medium fair 60-minute term (10 seeds for
+sensible, 5 for the rest), the sensible bot wins about 7 in 10, crowded wins
+rarely, and sprawl and greedy always lose (sprawl to bankruptcy around minute
+20, greedy to revolt). Under the old numbers sprawl lasted the whole term with
+10,000+ coins.
 
 ## Sharing a town
 
