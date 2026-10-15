@@ -58,7 +58,7 @@ export const townBuildingNotes: Partial<Record<KindId, string>> = {
   firewatch: "A timber lookout and alarm bell above the red roof; ladder, buckets and a water butt below.",
   healer: "An apothecary with a mortar sign, herb beds, medicine jars and a waiting bench.",
   hospital: "Pale green ward windows, a roof lantern, medical emblems and a waiting bench.",
-  watchhouse: "Blue shield, barred windows, a lantern and a street noticeboard.",
+  watchhouse: "A guarded timber entrance with bracing and viewing grilles, beneath a blue shield; barred windows, a lantern and a street noticeboard remain.",
   builder: "Open timber racks, trestle workbench, mallet, ladder and dressed stone."
 }
 

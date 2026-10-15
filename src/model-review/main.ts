@@ -4,6 +4,7 @@ import { buildAsset, exportAsset } from "../asset-lab/renderer.ts"
 import "./style.css"
 
 const families = {
+  trades: { title: "Trade buildings", ids: ["mill", "warehouse", "fishery", "bakery", "weaver", "watchhouse"] },
   workshops: { title: "Workshop batch", ids: ["mine", "smithy", "sawmill", "townhall"] },
   fixes: { title: "Review fixes", ids: ["mill","bakery","weaver","warehouse","mine","farm","chapel","hospital","smokehouse","builder","townhouse","quarry","stone-full","stone-quarried","ore-full","ore-quarried","stone-full-2x1","stone-full-2x2","stone-full-3x3","ore-full-2x1","ore-full-2x2","ore-full-3x3","problem-marker","smoke","firewatch"] },
   buildings: { title: "Buildings", ids: ["granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder"] },
@@ -28,6 +29,14 @@ renderer.domElement.className = "models"; document.body.append(renderer.domEleme
 let family: Family = "buildings", yaw = 0, pitch = 30, renders = 0
 let sheetUrl = ""
 let models: Array<{ scene: THREE.Scene; camera: THREE.OrthographicCamera; built: ReturnType<typeof buildAsset>; view: HTMLElement; center: THREE.Vector3; size: THREE.Vector3 }> = []
+// Include both the tower height and the ground plane projected into the view.
+// Taking only the larger dimension clips the mill's foreground at street angle.
+function viewHeight(size: THREE.Vector3, heading: number, angle: number, aspect: number) {
+  const width = Math.abs(Math.cos(heading)) * size.x + Math.abs(Math.sin(heading)) * size.z
+  const depth = Math.abs(Math.sin(heading)) * size.x + Math.abs(Math.cos(heading)) * size.z
+  const height = Math.abs(Math.cos(angle)) * size.y + Math.abs(Math.sin(angle)) * depth
+  return Math.max(height, width / aspect, 18) * 1.12
+}
 function render() {
   renderer.setSize(innerWidth, innerHeight, false)
   renderer.setScissorTest(false); renderer.clear(); renderer.setScissorTest(true)
@@ -35,8 +44,7 @@ function render() {
     const r = model.view.getBoundingClientRect()
     if (r.bottom <= 0 || r.top >= innerHeight) continue
     const heading = (45 + yaw) * Math.PI / 180, angle = pitch * Math.PI / 180,
-      extent = Math.max(model.size.y, Math.hypot(model.size.x, model.size.z) * 0.75, 18) * 1.3,
-      vertical = Math.max(extent, Math.hypot(model.size.x, model.size.z) * r.height / r.width * 1.4), camera = model.camera
+      vertical = viewHeight(model.size, heading, angle, r.width / r.height), camera = model.camera
     camera.top = vertical / 2; camera.bottom = -camera.top; camera.left = -vertical * r.width / r.height / 2; camera.right = -camera.left
     camera.position.copy(model.center).add(new THREE.Vector3(Math.sin(heading) * Math.cos(angle), Math.sin(angle), Math.cos(heading) * Math.cos(angle)).multiplyScalar(1000))
     camera.lookAt(model.center); camera.updateProjectionMatrix(); camera.updateMatrixWorld()
@@ -52,14 +60,16 @@ function select(next: Family) {
   if (sheetUrl) URL.revokeObjectURL(sheetUrl)
   sheetUrl = ""; root.querySelector<HTMLAnchorElement>("#sheet-link")!.hidden = true
   family = next; models.forEach(m => m.built.dispose()); models = []; grid.replaceChildren()
-  const workshop = family === "workshops"
-  root.querySelector(".intro h1")!.innerHTML = workshop ? "Room to work.<br>The same ink." : "New places.<br>The same ink."
-  root.querySelector(".eyebrow")!.textContent = workshop ? "The first building batch" : "A town with a little more life"
+  const workshop = family === "workshops", trade = family === "trades"
+  root.querySelector(".intro h1")!.innerHTML = trade ? "Built for the job.<br>The same ink." : workshop ? "Room to work.<br>The same ink." : "New places.<br>The same ink."
+  root.querySelector(".eyebrow")!.textContent = trade ? "The second building batch" : workshop ? "The first building batch" : "A town with a little more life"
   root.querySelector(".intro > div > p:last-child")!.textContent = workshop
     ? "Open work yards around real tools, and a civic entrance for the town hall. Turn the models to inspect their working space."
+    : trade ? "Loading aprons, a fishing net, an open oven and a working loom. Inspect the equipment and entrances from every side."
     : "Inspect the models together, turn them around, then open any one for a closer look."
   root.querySelector(".intro aside")!.innerHTML = workshop
     ? "4 revised buildings<br>3 open work yards<br><span>Original plots, pale surfaces,<br>fine ink and purposeful tools.</span>"
+    : trade ? "6 revised buildings<br>Original plots<br><span>Timber loading doors, open bays,<br>and equipment for each trade.</span>"
     : "7 buildings<br>3 park furnishings<br>3 home tiers<br><span>Plus people, hazards, paving,<br>snow and signs of wear.</span>"
   for (const [i, id] of families[family].ids.entries()) {
     const asset = assetById.get(id)!
@@ -95,7 +105,7 @@ root.querySelector<HTMLButtonElement>("#sheet")!.onclick = () => {
   renderer.setSize(width, 270, false); renderer.setScissorTest(false)
   models.forEach((model, i) => {
     const camera = model.camera, heading = (45 + yaw) * Math.PI / 180, angle = pitch * Math.PI / 180,
-      vertical = Math.max(model.size.y, Math.hypot(model.size.x, model.size.z) * 0.75, 18) * 1.3
+      vertical = viewHeight(model.size, heading, angle, width / 270)
     camera.top = vertical / 2; camera.bottom = -camera.top; camera.left = -vertical * width / 270 / 2; camera.right = -camera.left
     camera.position.copy(model.center).add(new THREE.Vector3(Math.sin(heading) * Math.cos(angle), Math.sin(angle), Math.cos(heading) * Math.cos(angle)).multiplyScalar(1000))
     camera.lookAt(model.center); camera.updateProjectionMatrix(); camera.updateMatrixWorld(); model.built.updateContours(camera)

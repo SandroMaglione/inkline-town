@@ -205,6 +205,12 @@ That is how the README's screenshots of grown towns were made.
 
 ### Reviewing the new town models
 
+[`/model-review.html?collection=trades`](http://localhost:5232/model-review.html?collection=trades)
+groups the mill, warehouse, fishery, bakery, weaver and watch house revisions.
+`src/asset-lab/trades.ts` owns their equipment, loading doors, open yards and the
+bakery smoke origin. The mill keeps its animated sails. Cargo sits on the ground
+or loading apron, and the four new yard layouts turn towards connected roads.
+
 [`/model-review.html?collection=workshops`](http://localhost:5232/model-review.html?collection=workshops)
 groups the revised mine, smithy, sawmill and town hall. The three workshops have
 open yards and road-facing layouts. `src/asset-lab/workshops.ts` owns their

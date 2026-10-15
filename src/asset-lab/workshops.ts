@@ -8,9 +8,9 @@ import type { BuildingOptions } from "./buildings.ts"
 export const workshopIds = ["mine", "smithy", "sawmill"] as const
 export type WorkshopId = typeof workshopIds[number]
 export const isWorkshop = (id: KindId): id is WorkshopId => workshopIds.some(kind => kind === id)
-const wood = [0xe9d2a8, 0xd0b58c, 0xb08a5e] as const
-const stone = [0xeeefea, 0xdcded7, 0xc9ccc4] as const
-const iron = [0xa4ada6, 0x79847d, 0x5a645e] as const
+export const wood = [0xe9d2a8, 0xd0b58c, 0xb08a5e] as const
+export const stone = [0xeeefea, 0xdcded7, 0xc9ccc4] as const
+export const iron = [0xa4ada6, 0x79847d, 0x5a645e] as const
 const floorScale = 32 * Math.SQRT2, heightScale = 1 / Math.cos(Math.PI / 6)
 
 /** Local +v is the open working face. Orient it towards a connected road. */
@@ -29,18 +29,18 @@ export function workshopSmokeOrigin(id: WorkshopId, doors?: BuildingOptions["doo
   return id === "smithy" ? workshopPoint([-6 * U, 2 * U, 56.3], doors) : null
 }
 
-function orient(asset: InkAsset, doors?: BuildingOptions["doors"]) {
+export function orient(asset: InkAsset, doors?: BuildingOptions["doors"]) {
   for (const face of asset.faces) face.points = face.points.map(p => workshopPoint(p, doors))
   for (const stroke of asset.strokes) stroke.points = stroke.points.map(p => workshopPoint(p, doors))
   return asset
 }
 
-function block(d: Drawing, u: number, v: number, a: number, b: number, z: number, h: number, colors: readonly [number, number, number] = wood, width = 0.8) {
+export function block(d: Drawing, u: number, v: number, a: number, b: number, z: number, h: number, colors: readonly [number, number, number] = wood, width = 0.8) {
   d.box(u, v, a, b, z, h, ...colors, width)
 }
 
 /** Square-section structural member. Width is in rendered world units. */
-function beam(d: Drawing, from: Vertex, to: Vertex, width = 1.5, colors: readonly [number, number, number] = wood) {
+export function beam(d: Drawing, from: Vertex, to: Vertex, width = 1.5, colors: readonly [number, number, number] = wood) {
   const a = [from[0] * floorScale, from[1] * floorScale, from[2] * heightScale],
     b = [to[0] * floorScale, to[1] * floorScale, to[2] * heightScale]
   const delta = b.map((n, i) => n - a[i]!), length = Math.hypot(...delta)
@@ -59,12 +59,12 @@ function beam(d: Drawing, from: Vertex, to: Vertex, width = 1.5, colors: readonl
   d.face(upper, colors[0], 0.65)
 }
 
-function post(d: Drawing, u: number, v: number, height: number, bottom = 2) {
+export function post(d: Drawing, u: number, v: number, height: number, bottom = 2) {
   block(d, u, v, 0.8 * U, 0.8 * U, 0, bottom, stone)
   if (height > bottom) block(d, u, v, 0.55 * U, 0.55 * U, bottom, height - bottom)
 }
 
-function roof(d: Drawing, a: number, b: number, v: number, z: number, rise: number, color: number, offsetU = 0) {
+export function roof(d: Drawing, a: number, b: number, v: number, z: number, rise: number, color: number, offsetU = 0) {
   const startFace = d.asset.faces.length, startStroke = d.asset.strokes.length
   d.face([[-a, v - b, z], [-a, v + b, z], [0, v + b, z + rise], [0, v - b, z + rise]], pale(color, 0.74), 1)
   d.face([[a, v - b, z], [a, v + b, z], [0, v + b, z + rise], [0, v - b, z + rise]], pale(color, 0.58), 1)
@@ -78,7 +78,7 @@ function roof(d: Drawing, a: number, b: number, v: number, z: number, rise: numb
 }
 
 /** Wheel with a horizontal axle, with real thickness and an open centre. */
-function wheel(d: Drawing, u: number, v: number, z: number, radius: number, spokes = true) {
+export function wheel(d: Drawing, u: number, v: number, z: number, radius: number, spokes = true) {
   const n = 20, point = (i: number, r: number, x: number): Vertex => {
     const t = i / n * Math.PI * 2
     return [u + x, v + Math.cos(t) * r / floorScale, z + Math.sin(t) * r / heightScale]

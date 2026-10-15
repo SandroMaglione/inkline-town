@@ -10,6 +10,7 @@ import type { Preview } from "../ui.ts"
 import { withAppearance, type Appearance } from "../asset-lab/appearance.ts"
 import { setts } from "../asset-lab/town-props.ts"
 import { isWorkshop, workshopConstruction } from "../asset-lab/workshops.ts"
+import { isTradeYard, tradeConstruction } from "../asset-lab/trades.ts"
 
 export type DoorSet = Record<Side, boolean>
 export const noDoors: DoorSet = { right: false, left: false, backRight: false, backLeft: false }
@@ -68,6 +69,7 @@ export function buildingAsset(id: KindId, build: number, share: number | null, d
     stage = buildStages(build)
   if (build < 0.78) return isWorkshop(id)
     ? workshopConstruction(id, build, share, doors)
+    : isTradeYard(id) ? tradeConstruction(id, build, share, doors)
     : constructionAsset(kind.size, kind.half, kind.roof === "gable" ? 20 : kind.stories * 32, build, share)
   const asset = makeBuilding(id, { doors, open, fit: stage.fit, plate: false, motion: false } satisfies BuildingOptions)
   const dimensions = buildingDimensions(id)
