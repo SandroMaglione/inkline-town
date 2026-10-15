@@ -31,7 +31,7 @@ const root = document.querySelector<HTMLDivElement>("#lab")!
 root.innerHTML = `
   <header><a href="/model-review.html">Model review ↗</a><span>COMPLETE ASSET CATALOGUE</span><a href="/effects-lab.html">Animated house effects ↗</a></header>
   <div class="intro"><div><h1>The same ink.<br>A different angle.</h1><p>Original game drawings and complete 3D assets, side by side.</p></div><span class="tag">Procedural · Orthographic · Rotatable</span></div>
-  <div class="filters"><label>Collection <select id="category"></select></label><label>Find <input id="search" type="search" placeholder="Name or material"></label><a href="/map-lab.html">See everything on the map ↗</a></div><nav class="assets" aria-label="Choose an asset"></nav>
+  <div class="filters"><label>Collection <select id="category"></select></label><label>Find <input id="search" type="search" placeholder="Name or material"></label><a href="/service-upgrades.html">Compare service tiers ↗</a><a href="/map-lab.html">See everything on the map ↗</a></div><nav class="assets" aria-label="Choose an asset"></nav>
   <section class="comparison" aria-label="Compare the original drawing with the 3D model">
     <div class="view"><div class="view-label"><span>01 / CURRENT GAME</span><span>Fixed isometric drawing</span></div><canvas id="reference" aria-label="Original 2D asset"></canvas><span class="view-foot">Original art.ts drawing</span></div>
     <div class="view"><div class="view-label"><span>02 / 3D STUDY</span><span id="angle-label">Original angle</span></div><div id="viewer" role="img" aria-label="Rotatable 3D asset. Drag horizontally to rotate."></div><span class="view-foot">Drag to rotate · wheel to zoom</span></div>
@@ -235,7 +235,9 @@ function render() {
   const ref = references.get(selected.id)!
   const model = models.get(selected.id)!
   const effectBounds=selected.smokeEffect||selected.fountains?.length?new THREE.Box3().setFromObject(model.group):null
-  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds?effectBounds.getSize(new THREE.Vector3()).y*1.45:0) / zoom
+  const upgraded = selected.reference?.type === "building" && selected.reference.tier === 2
+  const bounds = upgraded ? new THREE.Box3().setFromObject(model.group).getBoundingSphere(new THREE.Sphere()) : null
+  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds?effectBounds.getSize(new THREE.Vector3()).y*1.45:0, bounds ? bounds.radius * 2.4 * Math.max(1, height / width) : 0) / zoom
   renderer.setSize(width, height, false)
   camera.left = (-vertical * width) / height / 2
   camera.right = -camera.left
@@ -243,7 +245,7 @@ function render() {
   camera.bottom = -camera.top
   const heading = ((45 + yaw) * Math.PI) / 180,
     altitude = (pitch * Math.PI) / 180
-  const target = effectBounds?effectBounds.getCenter(new THREE.Vector3()):new THREE.Vector3(0, -(ref.y + ref.height / 2) / Math.cos(Math.PI / 6), 0)
+  const target = bounds?.center ?? (effectBounds?effectBounds.getCenter(new THREE.Vector3()):new THREE.Vector3(0, -(ref.y + ref.height / 2) / Math.cos(Math.PI / 6), 0))
   camera.position
     .copy(target)
     .add(

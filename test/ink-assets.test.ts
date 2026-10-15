@@ -47,6 +47,19 @@ test("all geometry is finite, nondegenerate and uses valid ink weights", () => {
   }
 })
 
+test("service upgrades retain the original plot and declare their family and tier", () => {
+  for (const [id, kind] of [["market-hall", "market"], ["church", "chapel"]] as const) {
+    const asset = assetById.get(id)!, original = assetById.get(kind)!
+    assert.deepEqual(asset.reference, { type: "building", kind, tier: 2 })
+    assert.equal(asset.footprint, original.footprint)
+    const points = [...asset.faces, ...asset.strokes].flatMap(part => part.points)
+    const edge = (kinds[kind].size * 8 - 1) * U
+    assert.ok(points.every(([u, v]) => Math.abs(u) <= edge && Math.abs(v) <= edge), `${id}: geometry leaves its plot`)
+    const height = (a: typeof asset) => Math.max(...a.faces.flatMap(f => f.points.map(p => p[2])))
+    assert.ok(height(asset) > height(original), `${id}: upgrade should have a taller silhouette`)
+  }
+})
+
 test("the review map includes every catalogue model at least once", () => {
   const represented = new Set(testMap.buildings.map((p) => p.asset))
   assert.deepEqual([...represented].sort(), inkAssets.map((a) => a.id).sort())

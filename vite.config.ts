@@ -16,7 +16,8 @@ export default defineConfig({
             map: "map-lab.html",
             models: "model-review.html",
             effects: "effects-lab.html",
-            parks: "park-lab.html"
+            parks: "park-lab.html",
+            services: "service-upgrades.html"
           }
         }
       }

@@ -71,7 +71,8 @@ for (const [input, directory, filename] of [
   ["map-lab.html", "map-viewer", "inkline-3d-map.html"],
   ["model-review.html", "town-viewer", "inkline-town-model-review.html"],
   ["effects-lab.html", "effects-viewer", "inkline-house-effects.html"],
-  ["park-lab.html", "park-viewer", "inkline-park.html"]
+  ["park-lab.html", "park-viewer", "inkline-park.html"],
+  ["service-upgrades.html", "service-viewer", "inkline-service-upgrades.html"]
 ]) {
   await build({
     configFile: false,

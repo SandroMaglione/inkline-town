@@ -20,7 +20,7 @@ export interface Stroke {
 }
 export type AssetCategory = "buildings" | "homes" | "land" | "people" | "cargo" | "construction"
 export type AssetReference =
-  | { type: "building"; kind: KindId; build?: number }
+  | { type: "building"; kind: KindId; tier?: 1 | 2; build?: number }
   | { type: "house"; tier: Tier; variant: number; build?: number }
   | { type: "tree"; x: number; y: number; grown: number }
   | { type: "rock"; x: number; y: number; ore: boolean; amount: number }
