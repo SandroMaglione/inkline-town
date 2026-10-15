@@ -1,9 +1,13 @@
 import * as THREE from "three"
 import { assetById } from "../asset-lab/assets.ts"
 import { buildAsset, exportAsset } from "../asset-lab/renderer.ts"
+import { kindIds } from "../content.ts"
+import { ruralIds } from "../asset-lab/rural.ts"
 import "./style.css"
 
 const families = {
+  town: { title: "All buildings", ids: [...kindIds, "market-hall", "church"] },
+  rural: { title: "Final refinements", ids: ruralIds },
   trades: { title: "Trade buildings", ids: ["mill", "warehouse", "fishery", "bakery", "weaver", "watchhouse"] },
   workshops: { title: "Workshop batch", ids: ["mine", "smithy", "sawmill", "townhall"] },
   fixes: { title: "Review fixes", ids: ["mill","bakery","weaver","warehouse","mine","farm","chapel","hospital","smokehouse","builder","townhouse","quarry","stone-full","stone-quarried","ore-full","ore-quarried","stone-full-2x1","stone-full-2x2","stone-full-3x3","ore-full-2x1","ore-full-2x2","ore-full-3x3","problem-marker","smoke","firewatch"] },
@@ -16,6 +20,12 @@ const families = {
   wear: { title: "Building condition", ids: ["granary-worn", "smokehouse-worn", "firewatch-worn", "healer-worn", "hospital-worn", "watchhouse-worn", "builder-worn"] }
 } as const
 type Family = keyof typeof families
+const introductions: Partial<Record<Family, { heading: string; eyebrow: string; description: string; aside: string }>> = {
+  town: { heading: "The whole town.<br>The same ink.", eyebrow: "The complete building collection", description: "Every building kind, plus the market hall and church. Compare their silhouettes, turn the collection, and open any building for a closer look.", aside: `${kindIds.length} building kinds<br>2 upgraded buildings<br><span>Work yards, homes for trades,<br>stores and town services.</span>` },
+  rural: { heading: "Small things.<br>A better town.", eyebrow: "The final building pass", description: "Timber entrances, nursery beds, farm details, a quieter chapel and a connected fire-watch lookout. Inspect all nine refinements together.", aside: "9 refined buildings<br>Original plots<br><span>Connected structures,<br>clear entrances and useful yards.</span>" },
+  workshops: { heading: "Room to work.<br>The same ink.", eyebrow: "The first building batch", description: "Open work yards around real tools, and a civic entrance for the town hall. Turn the models to inspect their working space.", aside: "4 revised buildings<br>3 open work yards<br><span>Original plots, pale surfaces,<br>fine ink and purposeful tools.</span>" },
+  trades: { heading: "Built for the job.<br>The same ink.", eyebrow: "The second building batch", description: "Loading aprons, a fishing net, an open oven and a working loom. Inspect the equipment and entrances from every side.", aside: "6 revised buildings<br>Original plots<br><span>Timber loading doors, open bays,<br>and equipment for each trade.</span>" }
+}
 const root = document.querySelector<HTMLElement>("#review")!
 root.innerHTML = `<header><a href="/">Inkline Town</a><span>TOWN MODEL REVIEW</span><a href="/map-lab.html">Town map ↗</a></header>
   <section class="intro"><div><p class="eyebrow">A town with a little more life</p><h1>New places.<br>The same ink.</h1><p>Inspect the models together, turn them around, then open any one for a closer look.</p></div><aside>7 buildings<br>3 park furnishings<br>3 home tiers<br><span>Plus people, hazards, paving,<br>snow and signs of wear.</span></aside></section>
@@ -60,17 +70,11 @@ function select(next: Family) {
   if (sheetUrl) URL.revokeObjectURL(sheetUrl)
   sheetUrl = ""; root.querySelector<HTMLAnchorElement>("#sheet-link")!.hidden = true
   family = next; models.forEach(m => m.built.dispose()); models = []; grid.replaceChildren()
-  const workshop = family === "workshops", trade = family === "trades"
-  root.querySelector(".intro h1")!.innerHTML = trade ? "Built for the job.<br>The same ink." : workshop ? "Room to work.<br>The same ink." : "New places.<br>The same ink."
-  root.querySelector(".eyebrow")!.textContent = trade ? "The second building batch" : workshop ? "The first building batch" : "A town with a little more life"
-  root.querySelector(".intro > div > p:last-child")!.textContent = workshop
-    ? "Open work yards around real tools, and a civic entrance for the town hall. Turn the models to inspect their working space."
-    : trade ? "Loading aprons, a fishing net, an open oven and a working loom. Inspect the equipment and entrances from every side."
-    : "Inspect the models together, turn them around, then open any one for a closer look."
-  root.querySelector(".intro aside")!.innerHTML = workshop
-    ? "4 revised buildings<br>3 open work yards<br><span>Original plots, pale surfaces,<br>fine ink and purposeful tools.</span>"
-    : trade ? "6 revised buildings<br>Original plots<br><span>Timber loading doors, open bays,<br>and equipment for each trade.</span>"
-    : "7 buildings<br>3 park furnishings<br>3 home tiers<br><span>Plus people, hazards, paving,<br>snow and signs of wear.</span>"
+  const intro = introductions[family] ?? { heading: "New places.<br>The same ink.", eyebrow: "A town with a little more life", description: "Inspect the models together, turn them around, then open any one for a closer look.", aside: "7 buildings<br>3 park furnishings<br>3 home tiers<br><span>Plus people, hazards, paving,<br>snow and signs of wear.</span>" }
+  root.querySelector(".intro h1")!.innerHTML = intro.heading
+  root.querySelector(".eyebrow")!.textContent = intro.eyebrow
+  root.querySelector(".intro > div > p:last-child")!.textContent = intro.description
+  root.querySelector(".intro aside")!.innerHTML = intro.aside
   for (const [i, id] of families[family].ids.entries()) {
     const asset = assetById.get(id)!
     if (!asset) throw new Error(`Missing review model: ${id}`)

@@ -4,6 +4,7 @@ import { Drawing, palette, pale, square, sides, type Vertex, type Side } from ".
 import { finishTownBuilding, townBuildingNotes, institutionDoor, makeQuarry } from "./services.ts"
 import { isWorkshop, makeWorkshop, workshopSmokeOrigin, townHallEntrance } from "./workshops.ts"
 import { isTradeYard, makeTradeYard, tradeSmokeOrigin, tradeEntrance, millHoist } from "./trades.ts"
+import { chapelPorch, hayBands, isRuralDoor, lumberRack, nursery, ruralEntrance, ruralNotes, sheepTrough } from "./rural.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
   townhall: { accent: 0x8a58a8, glass: 0xf3dca6 },
@@ -53,7 +54,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
   const d = new Drawing(
     id,
     kind.title,
-    townBuildingNotes[id] ?? (id === "mill"
+    ruralNotes[id] ?? townBuildingNotes[id] ?? (id === "mill"
       ? "Upright lattice sails and a tapered roof, with braced grain-loading doors, a sack hoist and coopered flour barrels."
       : id === "market"
         ? "Striped canopy, coloured goods crates and roof flag, all built as geometry."
@@ -78,6 +79,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
     if (kind.roof === "flat" && fit > 0.4)
       for (let floor = 0; floor < kind.stories; floor++)
         for (const s of positions) {
+          if (id === "granary" && floor === 1) continue
           if (id === "chapel") {
             const z = floor * 32 + 9,
               w = 1 / 16,
@@ -89,7 +91,11 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
     if (door && fit > 0.15) {
       if (id === "townhall") townHallEntrance(d, side, a, fit, options.open ?? 0)
       else if (id === "mill" || id === "watchhouse") tradeEntrance(d, id, side, a, fit, options.open ?? 0)
-      else if (id === "chapel" || id === "hospital") institutionDoor(d,side,a,id,fit)
+      else if (isRuralDoor(id)) ruralEntrance(d, id, side, a, fit, options.open ?? 0)
+      else if (id === "chapel" || id === "hospital") {
+        institutionDoor(d,side,a,id,fit)
+        if (id === "chapel") chapelPorch(d, side, a, fit)
+      }
       else d.door(side, a, Math.max(2, Math.round(Math.min(16, H - 8) * fit)), 5 * U, 6 * U, 2.5 * U, accent, true, options.open ?? 0)
     }
     if (kind.roof === "gable" && !door && fit > 0.4) d.window(side, a, 0, 6)
@@ -120,6 +126,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
     for (let row = 0; row < kind.bays; row++)
       for (let col = 0; col < kind.bays; col++) {
         if (
+          id === "chapel" ||
           (kind.topper === "flag" && row === 0 && col === kind.bays - 1) ||
           (["chimney", "cupola", "crates"].includes(kind.topper) && row === 0 && col === 0)
         )
@@ -217,7 +224,7 @@ export function buildingDimensions(id: KindId) {
   return {
     half: isWorkshop(id) ? 13.5 * U : kind.half * U,
     height,
-    top: id === "sawmill" ? 36.7 : id === "mine" || id === "smithy" ? 56 : height + topper
+    top: id === "firewatch" ? 55 : id === "sawmill" ? 36.7 : id === "mine" || id === "smithy" ? 56 : height + topper
   }
 }
 
@@ -266,15 +273,12 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
     )
   const bush = (x: number, y: number, r: number, shade = 0xc6d4b2, light = 0xe4ecd6) =>
     d.ellipsoid(x, y, r, r / 45.2548, r / 45.2548, r * 0.866, shade, 1, light)
-  const pyramid = (x: number, y: number, half: number, z: number, rise: number, color: number) => {
-    const base = square(x, y, half, z)
-    for (let i = 0; i < 4; i++) d.face([base[i]!, base[(i + 1) % 4]!, [x, y, z + rise]], pale(color, i >= 2 ? 0.7 : 0.52))
-  }
   if (fit <= 0.75) return
   finishTownBuilding(d, id, a, p, H)
   if (id === "mill") millHoist(d, a)
   switch (id) {
     case "lumberjack": {
+      lumberRack(d, a, p)
       for (const [du, z] of [
         [-1.6, 0],
         [0, 0],
@@ -282,7 +286,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
         [-0.8, 2.6],
         [0.8, 2.6]
       ])
-        d.log("v", c + du! * U, a + 0.5 * U, p - 0.5 * U, z!, 1.6, 0xb08a5e, 0xe9d2a8)
+        d.log("v", c + du! * U, a + 0.5 * U, p - 0.5 * U, z! + 1.5, 1.6, 0xb08a5e, 0xe9d2a8)
       const y = -a - 1.5 * U
       d.cylinder(c, y, 1.3 * U, 0, 3, 0xb08a5e, 0xe9d2a8, 1.5)
       d.line(
@@ -297,14 +301,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
       break
     }
     case "forester":
-      for (const [x, y, s] of [
-        [c, c, 0.8],
-        [c, -a - 2 * U, 0.6],
-        [-a - 2 * U, c, 0.55]
-      ]) {
-        d.cylinder(x!, y!, 1.2 * U, 0, 3, 0xd5a86c, 0x7d6140, 1.5)
-        d.fir(x!, y!, 3, s!, 2)
-      }
+      nursery(d, a, p)
       break
     case "quarry": {
       for (const [x, y, z] of [
@@ -350,8 +347,10 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
         [c - 1.2 * U, 0],
         [c + 1.2 * U, 0],
         [c, 5.3]
-      ])
+      ]) {
         d.log("u", y!, a + 2 * U, a + 7 * U, z!, 3, 0xe9cf7c, 0xf3e3a8)
+        hayBands(d, y!, a + 2 * U, a + 7 * U, z!, 3)
+      }
       break
     case "sheep": {
       const s = a + U,
@@ -363,14 +362,20 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
         [e, e]
       ])
         post(x!, y!, 6)
-      for (const z of [2.5, 5.5])
+      for (const z of [2.5, 5.5]) {
         d.line([
           [s, s, z],
-          [s, e, z],
-          [e, e, z],
           [e, s, z],
+          [e, e, z],
+          [s, e, z],
+          [s, 21 * U, z]
+        ])
+        d.line([
+          [s, 17 * U, z],
           [s, s, z]
         ])
+      }
+      for (const y of [17 * U, 21 * U]) post(s, y, 6)
       for (const [x, y, facing] of [
         [s + 3 * U, s + 4 * U, 1],
         [s + 6 * U, s + 2.5 * U, -1],
@@ -389,6 +394,7 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
         d.ellipsoid(x! + facing! * 0.1, y!, 5.5, 0.032, 0.032, 1.4, palette.ink, 0)
       }
       d.cylinder(c, -a - 3 * U, 2 * U, 0, 5, 0xe9cf7c, 0xf3e3a8, 1.5)
+      sheepTrough(d, a)
       break
     }
     case "chapel":

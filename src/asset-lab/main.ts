@@ -235,9 +235,8 @@ function render() {
   const ref = references.get(selected.id)!
   const model = models.get(selected.id)!
   const effectBounds=selected.smokeEffect||selected.fountains?.length?new THREE.Box3().setFromObject(model.group):null
-  const upgraded = selected.reference?.type === "building" && selected.reference.tier === 2
-  const bounds = upgraded ? new THREE.Box3().setFromObject(model.group).getBoundingSphere(new THREE.Sphere()) : null
-  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds?effectBounds.getSize(new THREE.Vector3()).y*1.45:0, bounds ? bounds.radius * 2.4 * Math.max(1, height / width) : 0) / zoom
+  const bounds = selected.reference?.type === "building" ? new THREE.Box3().setFromObject(model.group).getBoundingSphere(new THREE.Sphere()) : null
+  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds?effectBounds.getSize(new THREE.Vector3()).y*1.45:0, bounds ? bounds.radius * 2.6 * Math.max(1, height / width) : 0) / zoom
   renderer.setSize(width, height, false)
   camera.left = (-vertical * width) / height / 2
   camera.right = -camera.left
