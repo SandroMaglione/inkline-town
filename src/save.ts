@@ -18,9 +18,9 @@ export const SAVE_FORMAT = "inkline-town/save"
  * winters). 4: parks and patrols. 5: the grudge over taxes, and where each piece of news happened.
  * 6: how much of each good may be traded at a collection. 7: the mayor's guide. 8: terms that follow one
  * another, the town's rank, and upgraded buildings.
- * Version 4 to 7 saves are carried forward (see `carry`); older ones cannot be loaded.
+ * Version 4 to 8 saves are carried forward (see `carry`); older ones cannot be loaded.
  */
-export const SAVE_VERSION = 8
+export const SAVE_VERSION = 9
 
 /**
  * Fills in what a save from an earlier version lacks, so a town in progress
@@ -29,14 +29,21 @@ export const SAVE_VERSION = 8
  * guide from its start (it puts away at once what the town has already
  * done); from 7, its first term, and its rank: a town that was complete
  * (or governed on after) is a town, any other a hamlet that rises as its
- * goals hold. A complete town waiting on its mayor carries on playing.
+ * goals hold. A complete town waiting on its mayor carries on playing;
+ * from 8, its water as never fished.
  * Anything else is left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
-  if (version < 4 || version > 7 || typeof world !== "object" || world === null) return null
-  const w = world as { resources?: Record<string, unknown> }
+  if (version < 4 || version > 8 || typeof world !== "object" || world === null) return null
+  const w = world as { resources?: Record<string, unknown>; entities?: Array<{ components?: Record<string, unknown> }> }
   const r = w.resources
   if (!r || typeof r !== "object") return null
+  // From 8, water that was never fished.
+  for (const e of Array.isArray(w.entities) ? w.entities : []) {
+    const water = e.components?.["Town/Water"]
+    if (water && typeof water === "object" && !("fished" in water)) e.components!["Town/Water"] = { fished: -1_000_000 }
+  }
+  if (version === 8) return w
   const fate = r["Town/Fate"] as Record<string, unknown> | undefined
   if (fate && typeof fate === "object" && !("rank" in fate)) {
     const { governing, won, ...rest } = fate

@@ -59,7 +59,8 @@ export const Rising = Descriptor.ConstructedComponent(Decode.struct({ ticks: int
 
 export const Tree = Descriptor.ConstructedComponent(Decode.struct({ growth: integer }))("Town/Tree")
 export const Rock = Descriptor.ConstructedComponent(Decode.struct({ ore: Decode.boolean, amount: integer }))("Town/Rock")
-export const Water = Descriptor.Tag("Town/Water")
+/** A cell of water: the step it was last fished (see `RESTOCK_TICKS`). */
+export const Water = Descriptor.ConstructedComponent(Decode.struct({ fished: integer }))("Town/Water")
 export const Field = Descriptor.ConstructedComponent(Decode.struct({ growth: integer }))("Town/Field")
 
 // ── Homes ─────────────────────────────────────────────────────────────────

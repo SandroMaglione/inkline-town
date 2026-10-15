@@ -105,7 +105,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
       const k = rules.kinds[row.kind], r = k.recipe!, transport = analysis.transport.find((t) => t.id === row.id)?.sharedGoodsPerMinuteCeiling ?? Infinity
       let jobs = Math.min(row.capacity.outputPerMinute, transport) * share / r.batch
       if (r.input) jobs = Math.min(jobs, stock[r.input] / Math.max(1, r.inputs))
-      if (k.gathers?.source === "water" && row.sourceCeiling === 0) jobs = 0
+      if (k.gathers?.source === "water") jobs = Math.min(jobs, (row.sourceCeiling ?? Infinity) * share)
       if (k.gathers?.source === "field") {
         const b = buildings.find((b) => b.id === row.id)!, state = crop(b)
         if (!season.winter) {

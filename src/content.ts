@@ -231,9 +231,9 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     wear: 50, dusty: true, appeal: { value: -8, reach: 4 }
   },
   fishery: {
-    id: "fishery", title: "Fishery", blurb: "catches fish; needs water within two cells",
+    id: "fishery", title: "Fishery", blurb: "catches fish; needs its own stretch of water within two cells",
     category: "food", size: 2, half: 10, stories: 1, roof: "gable", bays: 2, window: 4, topper: "none",
-    cost: { coins: 60, materials: { planks: 3 } }, upkeep: 3, workers: 2, crew: "settlers", unlock: free, buildable: true,
+    cost: { coins: 60, materials: { planks: 3 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: free, buildable: true,
     recipe: { input: null, inputs: 0, output: "fish", batch: 1, seconds: 4 }, gathers: { source: "water", radius: 2 }, carriers: 2,
     appeal: { value: -2, reach: 2 }
   },
@@ -463,6 +463,12 @@ export const home = {
   /** A settlers' cottage with bread on the table pays this much more: bread is worth baking before anyone is a citizen. */
   breadBonus: 0.5,
   /**
+   * The need a finer home cannot be without: a citizens' home or a
+   * townhouse out of bread goes back to settlers, however much fish it
+   * eats (cloth or faith alone may lapse a while).
+   */
+  staple: "bread" as Need,
+  /**
    * A walker's visit feeds a home one fish or loaf for every `perMeal`
    * residents (rounded up): a cottage one, a citizens' home two, a
    * townhouse three. Food demand grows with the people, not the roofs.
@@ -627,6 +633,12 @@ export const ROCK_AMOUNT = 40
  * about a third of its pace instead of stopping for good.
  */
 export const FACE_TICKS = ticks(90)
+/**
+ * A cell of water fished rests this long before it gives another catch,
+ * so a fishery needs a good stretch of shore to itself to work at full
+ * pace, and fisheries crowded on one lake share its fish.
+ */
+export const RESTOCK_TICKS = ticks(40)
 
 // ── The charter: what a new town is founded on ────────────────────────────
 

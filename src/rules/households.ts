@@ -64,13 +64,14 @@ export const kept = (r: { readonly fire: number; readonly health: number; readon
  * The tier a home settles into: settlers whose every citizens' need is met,
  * on a street desirable enough, become citizens; citizens with a street
  * nicer still and all three services calling become burghers in a
- * townhouse. A home that loses more than one of its needs, or whose street
- * falls below its tier, steps back down.
+ * townhouse. A home that loses its staple (bread: fish will not do), or
+ * more than one of its needs, or whose street falls below its tier, steps
+ * back down.
  */
 export const tierFor = (h: Needs, desirability: number, r: { readonly fire: number; readonly health: number; readonly order: number }, rules: Rules = shippedRules): Tier => {
   const fits = (tier: Tier) => desirability >= rules.home.tiers[tier].appeal
   if (h.tier === 1) return satisfaction(h, 2, rules) === 1 && fits(2) ? 2 : 1
-  if (satisfaction(h, h.tier, rules) < 2 / 3 || !fits(2)) return 1
+  if (satisfaction(h, h.tier, rules) < 2 / 3 || !met(h, rules.home.staple) || !fits(2)) return 1
   if (h.tier === 2) return satisfaction(h, 3, rules) === 1 && fits(3) && kept(r, rules) ? 3 : 2
   return fits(3) && kept(r, rules) ? 3 : 2
 }

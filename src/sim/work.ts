@@ -16,7 +16,7 @@ const FLOW_SLICES = 6
 
 const each = (f: (g: (typeof goodIds)[number]) => number): Amounts => Object.fromEntries(goodIds.map((g) => [g, f(g)])) as Amounts
 import { around, doors, GridBuilder, key, ownerAt, reach, roadPrint, useAt } from "../grid.ts"
-import { Building, Burning, Charter, Chronicle, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Treasury, Tree, maybe, type Status as StatusValue } from "../schema.ts"
+import { Building, Burning, Charter, Chronicle, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Site, Staff, Status, Stock, Storage, Tile, Time, Treasury, Tree, maybe, type Status as StatusValue, Water } from "../schema.ts"
 import { connected, elapsed, seasonAt, TileRead, useOf, write } from "./shared.ts"
 
 import { assignWorkers, equipmentPace, effort, paced } from "../rules/production.ts"
@@ -272,8 +272,9 @@ export const AssignStaff = Game.System(
  * One step of every recipe. A job starts when there is room for what it
  * makes, its input is in, and (for a gatherer) the land has what it needs
  * within reach: a grown tree is felled, a rock chipped, a ripe field
- * reaped. Then the crew puts its worker-steps in; a full crew finishes in
- * `period` steps. It goes at half pace without the tools it wears out, and
+ * reaped, a rested cell of water fished. Then the crew puts its
+ * worker-steps in; a full crew finishes in `period` steps. It goes at half
+ * pace without the tools it wears out, and
  * at half pace again once it is run down; in winter, fishing goes at the
  * winter's pace (a hard winter's is a quarter).
  */
@@ -297,7 +298,8 @@ export const Work = Game.System(
       }),
       trees: Game.Query({ selection: { tree: Game.Query.read(Tree) } }),
       rocks: Game.Query({ selection: { rock: Game.Query.write(Rock) } }),
-      fields: Game.Query({ selection: { field: Game.Query.write(Field) } })
+      fields: Game.Query({ selection: { field: Game.Query.write(Field) } }),
+      waters: Game.Query({ selection: { water: Game.Query.write(Water) } })
     },
     resources: {
       grid: Game.System.readResource(Grid),
@@ -326,6 +328,7 @@ export const Work = Game.System(
     const trees = lazy(() => new Map(queries.trees.each().map((row) => [row.entity.id as number, row])))
     const rocks = lazy(() => new Map(queries.rocks.each().map((row) => [row.entity.id as number, row])))
     const fields = lazy(() => new Map(queries.fields.each().map((row) => [row.entity.id as number, row])))
+    const waters = lazy(() => new Map(queries.waters.each().map((row) => [row.entity.id as number, row])))
     const used = new Set<number>()
     // A worked face gives one more now and then.
     if (tick % rules.faceTicks === 0)
@@ -340,7 +343,14 @@ export const Work = Game.System(
         const use = useAt(grid, c.x, c.y)
         const id = ownerAt(grid, c.x, c.y)
         if (used.has(id)) continue
-        if (source === "water" && use === "water") return true
+        if (source === "water" && use === "water") {
+          // A cell fished rests a while before it gives another catch.
+          const water = waters().get(id)
+          if (!water || tick - water.data.water.get().fished < rules.restockTicks) continue
+          water.data.water.set({ fished: tick })
+          used.add(id)
+          return true
+        }
         if (source === "tree" && use === "tree") {
           const tree = trees().get(id)
           if (!tree || tree.data.tree.get().growth < GROWN.tree) continue

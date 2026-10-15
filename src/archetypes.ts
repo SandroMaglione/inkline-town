@@ -81,5 +81,7 @@ export const parkDraft = (cell: Point, ground: GroundId) => Game.Command.spawn([
 export const roadDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Road, {}])
 export const treeDraft = (cell: Point, growth: number) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Tree, { growth }])
 export const rockDraft = (cell: Point, ore: boolean, amount: number) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Rock, { ore, amount }])
-export const waterDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Water, {}])
+/** A cell of water never fished: long rested. */
+export const UNFISHED = -1_000_000
+export const waterDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Water, { fished: UNFISHED }])
 export const fieldDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Field, { growth: 0 }])

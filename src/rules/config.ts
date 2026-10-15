@@ -16,7 +16,7 @@ const inputs = () => ({
   commute: content.COMMUTE, apprentice: content.APPRENTICE, toolStock: content.TOOL_STOCK,
   conditionMax: content.CONDITION_MAX, riskMax: content.RISK_MAX, pausedUpkeep: content.PAUSED_UPKEEP, salvage: content.salvage,
   buildTicks: content.BUILD_TICKS, roadCost: content.ROAD_COST, paveCost: content.PAVE_COST, pavedPace: content.PAVED_PACE,
-  grown: content.GROWN, faceTicks: content.FACE_TICKS, yearsPerTerm: content.YEARS_PER_TERM, staffTicks: content.ticks(0.5), riskTicks: 60,
+  grown: content.GROWN, faceTicks: content.FACE_TICKS, restockTicks: content.RESTOCK_TICKS, yearsPerTerm: content.YEARS_PER_TERM, staffTicks: content.ticks(0.5), riskTicks: 60,
   spreadTicks: content.ticks(1.5), growTicks: 10
 })
 

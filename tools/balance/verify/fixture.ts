@@ -39,7 +39,7 @@ export const fixture = (scenario: Scenario, rules: Rules): Headless => {
     const grid = scenarioGrid(scenario, rules).value()
     for (const [i, l] of scenario.land.entries()) {
       if (ownerAt(grid, l.tile.x, l.tile.y) !== -1 - i) continue
-      const component = l.type === "tree" ? { "Town/Tree": { growth: l.growth } } : l.type === "field" ? { "Town/Field": { growth: l.growth } } : l.type === "water" ? { "Town/Water": {} } : { "Town/Rock": { amount: l.amount, ore: l.type === "ore" } }
+      const component = l.type === "tree" ? { "Town/Tree": { growth: l.growth } } : l.type === "field" ? { "Town/Field": { growth: l.growth } } : l.type === "water" ? { "Town/Water": { fished: -1_000_000 } } : { "Town/Rock": { amount: l.amount, ore: l.type === "ore" } }
       add({ "Town/Tile": l.tile, ...component })
     }
     s.resources["Town/Land"] = { mask: scenario.mask ?? "1".repeat(GRID * GRID), cells: GRID * GRID }

@@ -1,6 +1,6 @@
 import type { ParkCell } from "../../src/appeal.ts"
 import { amounts, goodIds, type KindId, type Tier } from "../../src/content.ts"
-import { GridBuilder, canPlace, doors, nearest, reach, type Use, type TileLike } from "../../src/grid.ts"
+import { GridBuilder, canPlace, doors, key, nearest, reach, type Use, type TileLike } from "../../src/grid.ts"
 import { GRID } from "../../src/iso.ts"
 import { shippedRules, type Rules } from "../../src/rules/config.ts"
 import type { Snapshot } from "../../src/sim/headless.ts"
@@ -92,10 +92,15 @@ export const district = (name: string, tiers: ReadonlyArray<Tier>, kinds: Readon
     grid.claim(tile, id, "building")
   }
   const land: Scenario["land"][number][] = []
-  for (const b of buildings) if (b.kind === "fishery") for (let x = b.tile.x; x < b.tile.x + b.tile.size; x++) land.push({ tile: { x, y: b.tile.y + b.tile.size, size: 1 }, type: "water", amount: 1, growth: 0 })
   for (const b of buildings) if (b.kind === "farm") {
     for (let i = 0; i < rules.kinds.farm.plants!.max; i++) land.push({ tile: { x: b.tile.x + i % 4, y: b.tile.y + b.tile.size + Math.floor(i / 4), size: 1 }, type: "field", amount: 1, growth: rules.grown.field })
   }
+  // A fishery's own stretch of shore, two cells deep and wide enough to fish at full pace (see `RESTOCK_TICKS`).
+  const taken = new Set(land.map((l) => key(l.tile.x, l.tile.y)))
+  for (const b of buildings) if (b.kind === "fishery")
+    for (let x = b.tile.x - 2; x < b.tile.x + b.tile.size + 2; x++)
+      for (let y = b.tile.y + b.tile.size; y < b.tile.y + b.tile.size + 2; y++)
+        if (!taken.has(key(x, y))) land.push({ tile: { x, y, size: 1 }, type: "water", amount: 1, growth: 0 })
   return { name, charter: { size: "medium", term: 60, land: "fair", seed: 1000 }, tick: 0, coins: rules.lands.fair.coins, approval: 40,
     policy: { settlers: 100, citizens: 100 }, homes: houses, buildings, roads, land }
 }

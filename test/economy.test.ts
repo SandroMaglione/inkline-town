@@ -49,7 +49,7 @@ test("no way of making a food is cheaper on every count than another that meets 
   none(chains.flatMap((a) => chains.filter((b) => a !== b && same(a.meets, b.meets) && dominates(a, b)).map((b) => `${a.good} dominates ${b.good}`)), "dominated food")
 })
 
-test("foods that all meet a need cost within a few times one another to keep making", { todo: "bread's chain costs 4.8× fish's upkeep a unit, and stops in winter" }, () => {
+test("foods that all meet a need cost within a few times one another to keep making", () => {
   const chains = foods.map((g) => chainWorth(g, rules))
   const out: Array<string> = []
   for (const need of ["food"] as const) {
@@ -60,12 +60,12 @@ test("foods that all meet a need cost within a few times one another to keep mak
   none(out, "substitutes too far apart")
 })
 
-test("a tier's staple is needed to keep the tier: a citizens' home fed fish instead of bread steps down", { todo: "a citizens' home keeps its tier on fish, cloth, and faith (2 of 3 needs)" }, () => {
+test("a tier's staple is needed to keep the tier: a citizens' home fed fish instead of bread steps down", () => {
   const fish = { tier: 2 as const, food: 100, bread: 0, cloth: 100, faith: 100 }
   assert.equal(tierFor(fish, rules.home.tiers[3].appeal, { fire: 0, health: 0, order: 0 }, rules), 1)
 })
 
-test("fisheries sharing one stretch of water share its catch", { todo: "water never runs out: every fishery on it catches at full pace" }, () => {
+test("fisheries sharing one stretch of water share its catch", () => {
   const base = district("shared-water", [1, 1, 1, 1], ["fishery", "fishery"], false, rules)
   const [a, b] = base.buildings.filter((x) => x.kind === "fishery")
   // One cell of water, within reach of both.
@@ -77,9 +77,9 @@ test("fisheries sharing one stretch of water share its catch", { todo: "water ne
     town.run(1)
   }
   const made = [a!, b!].map((f) => component(town.snapshot(), f.id, "Town/Recipe").made as number)
-  const alone = 60 / rules.kinds.fishery.recipe!.seconds
-  assert(made[0]! > 0 && made[1]! > 0, `both fish: ${made}`)
-  assert(made[0]! + made[1]! <= alone * 1.25, `two fisheries on one cell of water caught ${made.join(" + ")}, one alone catches ${alone}`)
+  // One cell gives a catch, then rests: a minute holds two catches at most, whoever makes them.
+  const most = Math.floor(60 / (rules.restockTicks * rules.stepSeconds)) + 1
+  assert(made[0]! + made[1]! <= most, `two fisheries on one cell of water caught ${made.join(" + ")}; the water gives ${most} a minute`)
 })
 
 // ── Homes ─────────────────────────────────────────────────────────────────

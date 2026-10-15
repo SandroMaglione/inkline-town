@@ -43,7 +43,8 @@ export const sourceCeiling = (b: ModelBuilding, scenario: Scenario, grid: GridBu
   if (!g) return Infinity
   const ids = new Set(around(b.tile, g.radius).filter((p) => useAt(grid.value(), p.x, p.y) === (g.source === "ore" || g.source === "stone" ? "rock" : g.source)).map((p) => ownerAt(grid.value(), p.x, p.y)))
   const sources = scenario.land.filter((l, i) => ids.has(-1 - i) && l.type === g.source)
-  if (g.source === "water") return sources.length > 0 ? Infinity : 0
+  // Each cell of water gives a catch, then rests (see `RESTOCK_TICKS`): shared with other fisheries, this is a ceiling.
+  if (g.source === "water") return sources.length * 60 / (rules.restockTicks * rules.stepSeconds)
   if (g.source === "field") {
     const ripe = sources.filter((l) => l.growth >= rules.grown.field).length
     return severity === null ? Math.max(sources.length, k.plants?.max ?? 0) * 60 / (rules.grown.field * rules.stepSeconds) : ripe / Math.max(minutes, 1 / 60)
