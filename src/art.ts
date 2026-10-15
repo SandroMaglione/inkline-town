@@ -638,7 +638,8 @@ const dresses: Readonly<Record<KindId, Dress>> = {
   healer: { accent: 0x4f9a8a },
   hospital: { accent: 0x4f9a8a, glass: glassCool },
   watchhouse: { accent: 0x3d4f6e, flag: 0x3d4f6e },
-  builder: { accent: 0x8a6a45, roof: roofOf(0xb08a5a) }
+  builder: { accent: 0x8a6a45, roof: roofOf(0xb08a5a) },
+  carpenter: { accent: 0x9a6b3f, roof: roofOf(0x9a6b3f) }
 }
 
 /**

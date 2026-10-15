@@ -12,7 +12,7 @@ export const ticks = (seconds: number): number => Math.round(seconds / STEP_SECO
 
 // ── Goods ─────────────────────────────────────────────────────────────────
 
-export const goodIds = ["wood", "planks", "stone", "ore", "tools", "fish", "smoked", "wheat", "flour", "bread", "wool", "cloth"] as const
+export const goodIds = ["wood", "planks", "stone", "ore", "tools", "fish", "smoked", "wheat", "flour", "bread", "wool", "cloth", "furniture"] as const
 export type GoodId = (typeof goodIds)[number]
 
 /** Each good's crate label colour (the only colour a good has), and what traders pay for one. */
@@ -28,7 +28,8 @@ export const goods: Readonly<Record<GoodId, { readonly title: string; readonly c
   flour: { title: "flour", color: 0xc9b48a, price: 3 },
   bread: { title: "bread", color: 0xc4523f, price: 4 },
   wool: { title: "wool", color: 0xa7ada4, price: 2 },
-  cloth: { title: "cloth", color: 0x8a58a8, price: 6 }
+  cloth: { title: "cloth", color: 0x8a58a8, price: 6 },
+  furniture: { title: "furniture", color: 0x9a6b3f, price: 9 }
 }
 
 /**
@@ -42,7 +43,7 @@ export const RESERVE_MAX = 200
 export const trade = { sells: [] as ReadonlyArray<GoodId>, reserve: 25 }
 
 export type Amounts = Readonly<Record<GoodId, number>>
-export const none: Amounts = { wood: 0, planks: 0, stone: 0, ore: 0, tools: 0, fish: 0, smoked: 0, wheat: 0, flour: 0, bread: 0, wool: 0, cloth: 0 }
+export const none: Amounts = { wood: 0, planks: 0, stone: 0, ore: 0, tools: 0, fish: 0, smoked: 0, wheat: 0, flour: 0, bread: 0, wool: 0, cloth: 0, furniture: 0 }
 export const amounts = (some: Partial<Record<GoodId, number>>): Amounts => ({ ...none, ...some })
 export const total = (a: Amounts): number => goodIds.reduce((sum, g) => sum + a[g], 0)
 /** Amounts made good by good. */
@@ -53,9 +54,9 @@ export const each = (f: (good: GoodId) => number): Amounts => {
 }
 
 /** Goods a market walker hands out to homes. */
-export const provisions: ReadonlyArray<GoodId> = ["fish", "smoked", "bread", "cloth"]
+export const provisions: ReadonlyArray<GoodId> = ["fish", "smoked", "bread", "cloth", "furniture"]
 /** Goods the top bar shows, in order. */
-export const shownGoods: ReadonlyArray<GoodId> = ["wood", "planks", "stone", "tools", "fish", "smoked", "bread", "cloth"]
+export const shownGoods: ReadonlyArray<GoodId> = ["wood", "planks", "stone", "tools", "fish", "smoked", "bread", "cloth", "furniture"]
 /** Goods that are food in store (see `larder`). */
 export const foods: ReadonlyArray<GoodId> = ["fish", "smoked", "bread"]
 
@@ -94,7 +95,7 @@ export type Topper = "none" | "chimney" | "flag" | "cupola" | "sails" | "crates"
 export const kindIds = [
   "townhall", "warehouse", "lumberjack", "forester", "quarry", "mine", "fishery", "sawmill",
   "smithy", "farm", "mill", "bakery", "sheep", "weaver", "market", "chapel",
-  "granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder"
+  "granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder", "carpenter"
 ] as const
 export type KindId = (typeof kindIds)[number]
 
@@ -375,11 +376,18 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     recipe: { input: "wool", inputs: 1, output: "cloth", batch: 1, seconds: 6 }, holds: { accepts: ["wool", "cloth"], cap: 8 }, carriers: 2,
     wear: 60, appeal: { value: -2, reach: 2 }
   },
+  carpenter: {
+    id: "carpenter", title: "Carpenter", blurb: "makes furniture from planks, for the burghers' townhouses",
+    category: "crafts", size: 2, half: 12, stories: 1, roof: "gable", bays: 2, window: 4, topper: "chimney",
+    cost: { coins: 160, materials: { planks: 4, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 0, citizens: 20 }, buildable: true,
+    recipe: { input: "planks", inputs: 2, output: "furniture", batch: 1, seconds: 8 }, holds: { accepts: ["planks", "furniture"], cap: 8 }, carriers: 2,
+    wear: 60, appeal: { value: -2, reach: 2 }
+  },
   market: {
-    id: "market", title: "Market", blurb: "a walker carries fish, bread, and cloth to the homes it passes",
+    id: "market", title: "Market", blurb: "a walker carries fish, bread, cloth, and furniture to the homes it passes",
     category: "services", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "flag",
     cost: { coins: 120, materials: { planks: 6, stone: 2 } }, upkeep: 6, workers: 2, crew: "citizens", unlock: free, buildable: true,
-    holds: { accepts: ["fish", "smoked", "bread", "cloth"], cap: 12 },
+    holds: { accepts: ["fish", "smoked", "bread", "cloth", "furniture"], cap: 12 },
     service: { service: "goods", seconds: 6, range: 18 }, appeal: { value: 2, reach: 3, full: 2 },
     upgrade: {
       title: "Market hall", blurb: "a covered hall: its walker goes further, more often, and the street around it is finer", rank: 2,
@@ -436,7 +444,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
 }
 
 export const kindOrder: ReadonlyArray<KindId> = [
-  "warehouse", "granary", "lumberjack", "forester", "quarry", "mine", "sawmill", "smithy", "sheep", "weaver",
+  "warehouse", "granary", "lumberjack", "forester", "quarry", "mine", "sawmill", "smithy", "sheep", "weaver", "carpenter",
   "fishery", "smokehouse", "farm", "mill", "bakery", "market", "chapel", "firewatch", "healer", "hospital", "watchhouse", "builder"
 ]
 
@@ -512,8 +520,8 @@ export const park = {
 
 export type Tier = 1 | 2 | 3
 export const tierIds: ReadonlyArray<Tier> = [1, 2, 3]
-/** What a home can be short of. Settlers need food (fish, smoked fish, or bread); citizens and burghers bread, cloth, and faith. */
-export type Need = "food" | "bread" | "cloth" | "faith"
+/** What a home can be short of. Settlers need food (fish, smoked fish, or bread); citizens bread, cloth, and faith; burghers furniture besides. */
+export type Need = "food" | "bread" | "cloth" | "faith" | "furniture"
 
 export const home = {
   /** Half the house's width, in units: a 1×1 cell is 8 units from centre to edge. */
@@ -522,7 +530,7 @@ export const home = {
   tiers: {
     1: { title: "settlers", residents: 4, tax: 2.5, height: 14, needs: ["food"], appeal: -100, rise: { coins: 0, materials: {} } },
     2: { title: "citizens", residents: 8, tax: 5, height: 26, needs: ["bread", "cloth", "faith"], appeal: 5, rise: { coins: 35, materials: { planks: 4, stone: 2 } } },
-    3: { title: "burghers", residents: 12, tax: 6.5, height: 38, needs: ["bread", "cloth", "faith"], appeal: 12, rise: { coins: 45, materials: { planks: 4, stone: 4, tools: 1 } } }
+    3: { title: "burghers", residents: 12, tax: 7, height: 38, needs: ["bread", "cloth", "faith", "furniture"], appeal: 12, rise: { coins: 45, materials: { planks: 4, stone: 4, tools: 1, furniture: 2 } } }
   } as Readonly<Record<Tier, {
     readonly title: string
     readonly residents: number
@@ -542,7 +550,7 @@ export const home = {
   /** A resident moves in (or out) this often. */
   settle: ticks(3),
   /** How long each need stays met after a walker's visit: cloth and faith last longer than a meal. */
-  lasts: { food: ticks(90), bread: ticks(120), cloth: ticks(240), faith: ticks(180) } as Readonly<Record<Need, number>>,
+  lasts: { food: ticks(90), bread: ticks(120), cloth: ticks(240), faith: ticks(180), furniture: ticks(300) } as Readonly<Record<Need, number>>,
   /** Where nobody wants to live: the desirability the map's legend calls squalid. */
   squalid: -5,
   /**
@@ -707,7 +715,7 @@ export const condition = {
 /** Tax rates the town can set, in percent of the usual. */
 export const TAX_STEPS = [50, 75, 100, 125, 150, 200] as const
 
-export const needTitle: Readonly<Record<Need, string>> = { food: "food", bread: "bread", cloth: "cloth", faith: "faith" }
+export const needTitle: Readonly<Record<Need, string>> = { food: "food", bread: "bread", cloth: "cloth", faith: "faith", furniture: "furniture" }
 
 // ── The town ──────────────────────────────────────────────────────────────
 

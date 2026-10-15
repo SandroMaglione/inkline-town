@@ -220,12 +220,13 @@ export const createHost = async (
     flour: "a mill's; a bakery bakes it into bread",
     bread: "food that citizens need, and a cottage with bread pays half again: it rots in about five minutes",
     wool: "sheep farms shear it; a weaver weaves it into cloth",
-    cloth: "citizens need it: only brought to streets with desirability 5 or more"
+    cloth: "citizens need it: only brought to streets with desirability 5 or more",
+    furniture: "burghers need it in their townhouses: a carpenter makes it from planks; only brought to streets fine enough for townhouses"
   }
   const groups: ReadonlyArray<ReadonlyArray<GoodId>> = [
     ["wood", "planks", "stone", "ore", "tools"],
     ["fish", "smoked", "wheat", "flour", "bread"],
-    ["wool", "cloth"]
+    ["wool", "cloth", "furniture"]
   ]
   stock.title = "Goods in the town's storage, and which way each is going · click for what the town makes and uses"
   const goodCells = new Map<GoodId, HTMLElement>()
@@ -1116,15 +1117,16 @@ export const createHost = async (
     const needs = section(
       "homes supplied",
       "homes",
-      "A hungry home pays no taxes. Settlers need food (fish, smoked fish, or bread) from a market, and a cottage with bread besides pays half again; a visit feeds a home a fish or a loaf for every four residents, so a citizens' home eats twice what a cottage does and a townhouse three times; citizens and burghers need bread, cloth, and faith. Cloth is only brought to streets with desirability 5 or more. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
+      "A hungry home pays no taxes. Settlers need food (fish, smoked fish, or bread) from a market, and a cottage with bread besides pays half again; a visit feeds a home a fish or a loaf for every four residents, so a citizens' home eats twice what a cottage does and a townhouse three times; citizens and burghers need bread, cloth, and faith, and burghers furniture from a carpenter besides. Cloth is only brought to streets with desirability 5 or more, furniture to streets of 12 or more. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
     )
-    const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith", IconName>> = {
+    const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith" | "furniture", IconName>> = {
       food: "fish",
       bread: "bread",
       cloth: "cloth",
-      faith: "faith"
+      faith: "faith",
+      furniture: "furniture"
     }
-    const bars = (["food", "bread", "cloth", "faith"] as const).map((n) => {
+    const bars = (["food", "bread", "cloth", "faith", "furniture"] as const).map((n) => {
       const line = el("div", "need")
       const label = el("span", "label")
       label.innerHTML = icon(needIcons[n], 16)
@@ -1263,10 +1265,12 @@ export const createHost = async (
         ? "every workplace has its crew"
         : `${s.shortStaffed.length} short of workers: ${s.shortStaffed.slice(0, 4).map((w) => `${w.title} ${w.assigned}/${w.needed}${w.nobodyNear ? " (nobody within reach)" : ""}`).join(", ")}${s.shortStaffed.length > 4 ? ", …" : ""} · click the jobs counter to visit them`
       for (const b of bars) {
-        const share = s.homes > 0 ? s.needs[b.n] / s.homes : 0
+        // Furniture is counted against the townhouses: no other home keeps it.
+        const of = b.n === "furniture" ? Math.max(s.townhouses, s.needs.furniture) : s.homes
+        const share = of > 0 ? s.needs[b.n] / of : 0
         b.fill.style.width = `${Math.round(share * 100)}%`
-        b.fill.className = `fill ${share < 0.34 ? "none" : share < 0.67 ? "low" : ""}`
-        b.value.textContent = `${s.needs[b.n]}/${s.homes}`
+        b.fill.className = `fill ${of === 0 ? "" : share < 0.34 ? "none" : share < 0.67 ? "low" : ""}`
+        b.value.textContent = `${s.needs[b.n]}/${of}`
       }
       larderLine.textContent = `${s.larder}`
       eatenLine.textContent = `${s.eaten} · ${s.rotted}`

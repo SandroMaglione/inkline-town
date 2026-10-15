@@ -36,7 +36,8 @@ makes a different island, with a wandering coast and capes reaching out.
 
 Lumberjacks fell trees and sawmills cut planks. Quarries and mines dig stone
 and ore for the smithy's tools. Farms grow wheat for the mill and the
-bakery, sheep give wool for the weaver, and fisheries feed the first
+bakery, sheep give wool for the weaver, a carpenter turns planks into
+furniture for the townhouses, and fisheries feed the first
 settlers. You never move a crate yourself: carriers push their carts along
 the roads, each loaded with what it carries, and markets send walkers
 through the streets with baskets of fish, bread, and cloth.
@@ -54,7 +55,8 @@ Every street has a desirability. A smithy or a quarry drags it down for
 several cells around; parks you lay out yourself (lawns, flower beds,
 walks in from the street, lamps, a fountain, a statue), a chapel, and paved streets
 lift it. Citizens will only live on a decent street, and the
-finest streets, with every service calling, grow three-storey townhouses.
+finest streets, with every service calling and furniture in the parlour,
+grow three-storey townhouses.
 Settlers do the rough work and citizens the skilled, and nobody walks more
 than fifteen road cells to a job, so the far-off mine needs its own
 workers' cottages. Zone the town well and it sorts itself into a fine

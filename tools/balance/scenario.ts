@@ -72,7 +72,7 @@ export const district = (name: string, tiers: ReadonlyArray<Tier>, kinds: Readon
   if (branch) for (const x of [15, 23, 31, 39, 47]) for (let y = 24; y <= 36; y++) if (y !== 30) roads.push({ x, y })
   const homeCells = Array.from({ length: 44 }, (_, i) => ({ x: 9 + i, y: 29, size: 1 })).filter((p) => !roads.some((r) => r.x === p.x && r.y === p.y))
   const houses = tiers.map((tier, i): ModelHome => ({ id: i + 1, tile: homeCells[i]!, tier, residents: rules.home.tiers[tier].residents,
-    food: rules.home.lasts.food, bread: tier >= 2 ? rules.home.lasts.bread : 0, cloth: tier >= 2 ? rules.home.lasts.cloth : 0, faith: tier >= 2 ? rules.home.lasts.faith : 0,
+    food: rules.home.lasts.food, bread: tier >= 2 ? rules.home.lasts.bread : 0, cloth: tier >= 2 ? rules.home.lasts.cloth : 0, faith: tier >= 2 ? rules.home.lasts.faith : 0, furniture: tier >= 3 ? rules.home.lasts.furniture : 0,
     clock: 0, condition: rules.conditionMax, meters: { fire: 0, health: 0, order: 0 } }))
   const buildings: ModelBuilding[] = [], grid = new GridBuilder()
   for (const p of roads) grid.claim({ ...p, size: 1 }, -1, "road")

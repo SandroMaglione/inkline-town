@@ -7,7 +7,7 @@
  */
 import type { Need, Tier } from "../content.ts"
 import { shippedRules, type Rules } from "./config.ts"
-import { kept as keptBy, met, wantsCitizenGoods, type Needs } from "./households.ts"
+import { kept as keptBy, met, wantsBurgherGoods, wantsCitizenGoods, type Needs } from "./households.ts"
 
 export interface Part {
   readonly label: string
@@ -24,6 +24,7 @@ export interface InTown {
   readonly smoked: number
   readonly bread: number
   readonly cloth: number
+  readonly furniture: number
 }
 /** Whether a walker of each kind can reach the home at all: a market's (or the town hall's) with provisions, and a chapel's. */
 export interface Served {
@@ -83,6 +84,13 @@ export const whyUnmet = (need: Need, h: Needs, street: Street, inTown: InTown, s
     case "faith": {
       if (!served.faith) return noWalker("chapel", rules)
       return "the chapel's walker has not passed lately"
+    }
+    case "furniture": {
+      if (!wantsBurgherGoods(h, street.desirability, rules))
+        return `furniture is not brought here: the street is at ${signed(street.desirability)} and a townhouse needs ${rules.home.tiers[3].appeal}${against(street.parts) ? ` (${against(street.parts)})` : ""}`
+      if (!served.goods) return noWalker("market", rules)
+      if (inTown.furniture === 0) return "the town has no furniture: a carpenter makes it from planks"
+      return "the market's walker has not passed with furniture lately"
     }
   }
 }

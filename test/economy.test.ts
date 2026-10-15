@@ -61,7 +61,7 @@ test("foods that all meet a need cost within a few times one another to keep mak
 })
 
 test("a tier's staple is needed to keep the tier: a citizens' home fed fish instead of bread steps down", () => {
-  const fish = { tier: 2 as const, food: 100, bread: 0, cloth: 100, faith: 100 }
+  const fish = { tier: 2 as const, food: 100, bread: 0, cloth: 100, faith: 100, furniture: 0 }
   assert.equal(tierFor(fish, rules.home.tiers[3].appeal, { fire: 0, health: 0, order: 0 }, rules), 1)
 })
 

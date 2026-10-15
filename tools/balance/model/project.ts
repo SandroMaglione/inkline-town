@@ -87,7 +87,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
       const p = pending[i]!
       if (p.ready > second) continue
       const id = nextId++
-      if (p.action.kind === "home") homes.push({ id, tile: p.action.tile, tier: 1, residents: 0, clock: 0, food: 0, bread: 0, cloth: 0, faith: 0, condition: rules.conditionMax, meters: { fire: 0, health: 0, order: 0 } })
+      if (p.action.kind === "home") homes.push({ id, tile: p.action.tile, tier: 1, residents: 0, clock: 0, food: 0, bread: 0, cloth: 0, faith: 0, furniture: 0, condition: rules.conditionMax, meters: { fire: 0, health: 0, order: 0 } })
       else buildings.push({ id, kind: p.action.kind, tile: p.action.tile, paused: false, site: false, condition: rules.conditionMax, stock: amounts({}) })
       pending.splice(i, 1)
     }

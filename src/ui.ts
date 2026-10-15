@@ -216,7 +216,9 @@ export interface Stats {
   readonly net: number
   readonly homes: number
   /** Homes with each need met. */
-  readonly needs: { readonly food: number; readonly bread: number; readonly cloth: number; readonly faith: number }
+  readonly needs: { readonly food: number; readonly bread: number; readonly cloth: number; readonly faith: number; readonly furniture: number }
+  /** Homes that are townhouses (the ones that keep furniture). */
+  readonly townhouses: number
   readonly policy: {
     readonly settlers: number
     readonly citizens: number

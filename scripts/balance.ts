@@ -428,7 +428,7 @@ const roadToward = (w: World, kind: Kind | null, limit = 16): Array<Point> => {
  * were fed as often as the town's homes are now (`fed`, the share of them fed).
  */
 const cottageWorth = (w: World, fed: number) => {
-  const cottage = { tier: 1 as const, food: 1, bread: 0, cloth: 0, faith: 0, residents: home.tiers[1].residents }
+  const cottage = { tier: 1 as const, food: 1, bread: 0, cloth: 0, faith: 0, furniture: 0, residents: home.tiers[1].residents }
   const residents = capacity(cottage, w.mood.approval, 0, rules, w.policy.settlers)
   return fed * taxOf({ ...cottage, residents }, w.policy, rules) - moreAdmin(w.homes.reduce((n, h) => n + h.residents, 0), residents, rules)
 }
@@ -486,6 +486,8 @@ const plan = (w: World): ReadonlyArray<{ readonly kind: KindId; readonly when: b
     { kind: "bakery", when: count(w, "bakery") < Math.min(bakeries, count(w, "mill")) },
     { kind: "sheep", when: count(w, "sheep") < weavers },
     { kind: "weaver", when: count(w, "weaver") < Math.min(weavers, count(w, "sheep")) },
+    // Townhouses want furniture: a carpenter once there are citizens to rise.
+    { kind: "carpenter", when: w.census.citizens! >= 20 && count(w, "carpenter") < 1 + Math.floor(w.census.burghers! / 120) },
     { kind: "warehouse", when: count(w, "warehouse") < Math.floor(homes / 25) },
     // Fish and bread rot: a granary keeps them, and smoked fish keeps.
     { kind: "granary", when: homes >= 40 && count(w, "granary") < 1 + Math.floor(homes / 70) },

@@ -33,7 +33,7 @@ const service = Decode.literal(...serviceIds)
 /** A count of every good. */
 const amounts = Decode.struct({
   wood: integer, planks: integer, stone: integer, ore: integer, tools: integer, fish: integer, smoked: integer,
-  wheat: integer, flour: integer, bread: integer, wool: integer, cloth: integer
+  wheat: integer, flour: integer, bread: integer, wool: integer, cloth: integer, furniture: integer
 })
 
 export const statuses = ["building", "idle", "working", "starved", "blocked", "unstaffed", "unconnected", "paused"] as const
@@ -73,6 +73,7 @@ export const House = Descriptor.ConstructedComponent(Decode.struct({
   bread: integer,
   cloth: integer,
   faith: integer,
+  furniture: integer,
   clock: integer
 }))("Town/House")
 
@@ -211,6 +212,7 @@ export const Census = Descriptor.ConstructedResource(Decode.struct({
   bread: integer,
   cloth: integer,
   faith: integer,
+  furniture: integer,
   /** Homes sick, and homes and buildings on fire, right now. */
   sick: integer,
   burning: integer

@@ -466,6 +466,18 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     done: (f) => f.finerHomes > 0
   },
   {
+    id: "carpenter",
+    chapter: "Growing citizens",
+    action: "Build a carpenter: it makes furniture from planks.",
+    why: "Burghers live in townhouses, and a townhouse wants furniture: two pieces to rise to one, and a fresh piece from the market now and then to stay one. Townhouses pay the most and hold the most people.",
+    goal: "a carpenter stands",
+    asks: ["carpenter"],
+    focus: "hall",
+    when: (f) => f.citizens >= 20 && f.finerHomes >= 3,
+    done: (f) => has(f, "carpenter"),
+    waiting: rising("carpenter")
+  },
+  {
     id: "healer",
     chapter: "Keeping it standing",
     action: "Build a healer on a road among the homes.",

@@ -19,8 +19,8 @@ import { capacity, streetRoom, streetTax, taxOf } from "../src/rules/households.
 import { approvalTarget, grudgeAfter } from "../src/rules/approval.ts"
 import { headless } from "../src/sim/headless.ts"
 
-const settlers = { tier: 1 as const, residents: 4, food: 100, bread: 100, cloth: 0, faith: 100, clock: 0 }
-const plenty: InTown = { fish: 20, smoked: 0, bread: 30, cloth: 188 }
+const settlers = { tier: 1 as const, residents: 4, food: 100, bread: 100, cloth: 0, faith: 100, furniture: 0, clock: 0 }
+const plenty: InTown = { fish: 20, smoked: 0, bread: 30, cloth: 188, furniture: 0 }
 const served: Served = { goods: true, faith: true }
 const quarryStreet: Street = { desirability: -4, parts: [{ label: "quarry", value: -6 }, { label: "chapel", value: 2 }] }
 
@@ -42,7 +42,7 @@ test("on a street fit for citizens the reason moves to the walker or the store",
   assert.match(whyUnmet("cloth", settlers, fine, plenty, { goods: false, faith: true })!, new RegExp(`${kinds.market.service!.range} road cells`))
   assert.equal(whyUnmet("faith", settlers, fine, plenty, served), null)
   assert.match(whyUnmet("faith", { ...settlers, faith: 0 }, fine, plenty, { goods: true, faith: false })!, /no chapel walker/)
-  assert.match(whyUnmet("food", { ...settlers, food: 0 }, fine, { fish: 0, smoked: 0, bread: 0, cloth: 0 }, served)!, /no food in store/)
+  assert.match(whyUnmet("food", { ...settlers, food: 0 }, fine, { fish: 0, smoked: 0, bread: 0, cloth: 0, furniture: 0 }, served)!, /no food in store/)
   assert.equal(streetShort(quarryStreet, 5), "−4 here, 5 needed: quarry −6")
 })
 

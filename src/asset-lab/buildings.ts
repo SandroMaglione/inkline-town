@@ -30,7 +30,8 @@ const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }>
   healer: { accent: 0x4f9a8a },
   hospital: { accent: 0x4f9a8a, glass: 0xc9d6ee },
   watchhouse: { accent: 0x3d4f6e },
-  builder: { accent: 0x8a6a45, roof: 0xb08a5a }
+  builder: { accent: 0x8a6a45, roof: 0xb08a5a },
+  carpenter: { accent: 0x9a6b3f, roof: 0x9a6b3f }
 }
 
 export interface BuildingOptions {

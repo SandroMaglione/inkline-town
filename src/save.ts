@@ -30,7 +30,8 @@ export const SAVE_VERSION = 9
  * done); from 7, its first term, and its rank: a town that was complete
  * (or governed on after) is a town, any other a hamlet that rises as its
  * goals hold. A complete town waiting on its mayor carries on playing;
- * from 8, its water as never fished and its upgrades as the first.
+ * from 8, its water as never fished, its upgrades as the first, and no
+ * furniture anywhere yet.
  * Anything else is left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
@@ -45,6 +46,26 @@ const carry = (version: number, world: unknown): unknown | null => {
     const upgraded = e.components?.["Town/Upgraded"]
     if (upgraded && typeof upgraded === "object" && !("level" in upgraded)) e.components!["Town/Upgraded"] = { level: 1 }
   }
+  // From 8 too, furniture: none of it anywhere, stores and markets that take it, homes and the census without it.
+  const furnish = (o: unknown) => (o && typeof o === "object" && !("furniture" in o) ? { ...o, furniture: 0 } : o)
+  for (const e of Array.isArray(w.entities) ? w.entities : []) {
+    const c = e.components
+    if (!c) continue
+    for (const [name, field] of [["Town/Site", "owed"], ["Town/Works", "owed"], ["Town/Inventory", "stock"], ["Town/Roam", "basket"]] as const) {
+      const v = c[name] as Record<string, unknown> | undefined
+      if (v && typeof v === "object") c[name] = { ...v, [field]: furnish(v[field]) }
+    }
+    if (c["Town/House"]) c["Town/House"] = furnish(c["Town/House"])
+    const inventory = c["Town/Inventory"] as { accepts?: Array<string> } | undefined, kind = (c["Town/Building"] as { kind?: string } | undefined)?.kind
+    if (inventory && Array.isArray(inventory.accepts) && !inventory.accepts.includes("furniture")
+      && (kind === "market" || goodIds.every((g) => g === "furniture" || inventory.accepts!.includes(g))))
+      inventory.accepts = [...inventory.accepts, "furniture"]
+  }
+  if (r["Town/Census"]) r["Town/Census"] = furnish(r["Town/Census"])
+  const market = r["Town/Market"] as { prices?: unknown } | undefined
+  if (market && typeof market === "object") r["Town/Market"] = { ...market, prices: furnish(market.prices) }
+  const loads = (r["Town/Policy"] as { loads?: Record<string, unknown> } | undefined)?.loads
+  if (loads && typeof loads === "object" && !("furniture" in loads)) loads.furniture = TRADE_LOAD
   if (version === 8) return w
   const fate = r["Town/Fate"] as Record<string, unknown> | undefined
   if (fate && typeof fate === "object" && !("rank" in fate)) {

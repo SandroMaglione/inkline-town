@@ -1,5 +1,5 @@
 import { transport } from "../rules/config.ts"
-import { wantsCitizenGoods } from "../rules/households.ts"
+import { wantsBurgherGoods, wantsCitizenGoods } from "../rules/households.ts"
 import { appealAt } from "../appeal.ts"
 import { preferDelivery } from "../rules/transport.ts"
 /**
@@ -115,12 +115,18 @@ export const Dispatch = Game.System(
       const service = maybe(data.service)?.service
       if (service === "goods") {
         const roads = reach(grid, [ds[0]!]), range = maybe(data.service)!.range
-        const citizenDistrict = queries.homes.each().some(({ data: h }) => {
+        let citizenDistrict = false, burgherDistrict = false
+        for (const { data: h } of queries.homes.each()) {
           const tile = h.tile.get(), found = nearest(roads, doors(grid, tile))
-          return found !== null && found.distance < range && wantsCitizenGoods(h.house.get(), appealAt(resources.appeal.get().cells, tile.x, tile.y), rules)
-        })
+          if (found === null || found.distance >= range) continue
+          const desirability = appealAt(resources.appeal.get().cells, tile.x, tile.y)
+          citizenDistrict ||= wantsCitizenGoods(h.house.get(), desirability, rules)
+          burgherDistrict ||= wantsBurgherGoods(h.house.get(), desirability, rules)
+          if (burgherDistrict) break
+        }
         for (const g of provisions) {
           if (g === "cloth" && !citizenDistrict) continue
+          if (g === "furniture" && !burgherDistrict) continue
           const cap = Math.min(inventory.cap, rules.transport.basket)
           wants.push({ id: entity.id, doors: ds, good: g, site: false,
             want: () => cap - inventory.stock[g] - inbound(entity.id, g), fill: () => (inventory.stock[g] + inbound(entity.id, g)) / cap })

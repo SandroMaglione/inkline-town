@@ -7,6 +7,7 @@ export interface Needs {
   readonly bread: number
   readonly cloth: number
   readonly faith: number
+  readonly furniture: number
 }
 
 export const met = (h: Needs, need: Need): boolean => h[need] > 0
@@ -64,16 +65,17 @@ export const kept = (r: { readonly fire: number; readonly health: number; readon
  * The tier a home settles into: settlers whose every citizens' need is met,
  * on a street desirable enough, become citizens; citizens with a street
  * nicer still and all three services calling become burghers in a
- * townhouse. A home that loses its staple (bread: fish will not do), or
+ * townhouse once furnished. A home that loses its staple (bread: fish will not do), or
  * more than one of its needs, or whose street falls below its tier, steps
- * back down.
+ * back down; a townhouse whose furniture has worn out is a citizens' home
+ * again.
  */
 export const tierFor = (h: Needs, desirability: number, r: { readonly fire: number; readonly health: number; readonly order: number }, rules: Rules = shippedRules): Tier => {
   const fits = (tier: Tier) => desirability >= rules.home.tiers[tier].appeal
   if (h.tier === 1) return satisfaction(h, 2, rules) === 1 && fits(2) ? 2 : 1
   if (satisfaction(h, h.tier, rules) < 2 / 3 || !met(h, rules.home.staple) || !fits(2)) return 1
   if (h.tier === 2) return satisfaction(h, 3, rules) === 1 && fits(3) && kept(r, rules) ? 3 : 2
-  return fits(3) && kept(r, rules) ? 3 : 2
+  return fits(3) && kept(r, rules) && met(h, "furniture") ? 3 : 2
 }
 
 /** Coins a minute the town hall's administration costs for `residents` people in its homes, less the share a finer hall `saves`. */
@@ -109,7 +111,7 @@ export const taxOf = (h: Needs & { readonly residents: number }, rates: Rates, r
     : 0
 /** What the same home would pay with every need met and bread on the table: the money a town leaves on the table. */
 export const suppliedTaxOf = (h: Needs & { readonly residents: number }, rates: Rates, rules: Rules = shippedRules, desirability = 0): number =>
-  taxOf({ ...h, food: 1, bread: 1, cloth: 1, faith: 1 }, rates, rules, desirability)
+  taxOf({ ...h, food: 1, bread: 1, cloth: 1, faith: 1, furniture: 1 }, rates, rules, desirability)
 
 export const refreshLevel = (need: Need, rules: Rules = shippedRules) => rules.home.lasts[need] / 2
 export const lowNeed = (left: number, need: Need, rules: Rules = shippedRules) => left < refreshLevel(need, rules)
@@ -119,12 +121,15 @@ export const mealRate = (winter: boolean) => (mealDecay(0, winter) + mealDecay(1
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
 export const ageNeeds = <T extends Needs & { readonly clock: number }>(h: T, eat: number): Mutable<T> => ({
   ...h, clock: h.clock + 1, food: Math.max(0, h.food - eat), bread: Math.max(0, h.bread - eat),
-  cloth: Math.max(0, h.cloth - 1), faith: Math.max(0, h.faith - 1)
+  cloth: Math.max(0, h.cloth - 1), faith: Math.max(0, h.faith - 1), furniture: Math.max(0, h.furniture - 1)
 })
 
 /** Citizen goods also reach settlers whose neighbourhood permits promotion. */
 export const wantsCitizenGoods = (house: Needs, desirability: number, rules: Rules = shippedRules) =>
   house.tier >= 2 || desirability >= rules.home.tiers[2].appeal
+/** Furniture goes to townhouses, and to citizens on a street fine enough for one. */
+export const wantsBurgherGoods = (house: Needs, desirability: number, rules: Rules = shippedRules) =>
+  house.tier >= 3 || (house.tier === 2 && desirability >= rules.home.tiers[3].appeal)
 
 /** Fish or loaves a home eats at a visit: one for every `home.perMeal` residents, rounded up, and at least one. */
 export const mealsOf = (h: { readonly residents: number }, rules: Rules = shippedRules): number => Math.max(1, Math.ceil(h.residents / rules.home.perMeal))
@@ -139,7 +144,7 @@ export const mealsOf = (h: { readonly residents: number }, rules: Rules = shippe
  * from the basket's surplus (more than half of it left), so the citizens
  * further along the walk are not left without. A home fed only part of
  * its meal is fed for that part of the time. Cloth goes only where
- * citizens could live.
+ * citizens could live, furniture only where burghers could.
  */
 export const serveGoods = <T extends Needs & { readonly residents: number }>(house: T, available: Readonly<Record<GoodId, number>>, rules: Rules = shippedRules, desirability = 0) => {
   const h = { ...house } as Mutable<T>, basket = { ...available }
@@ -169,6 +174,9 @@ export const serveGoods = <T extends Needs & { readonly residents: number }>(hou
   }
   if (citizens && lowNeed(h.cloth, "cloth", rules) && basket.cloth > 0) {
     basket.cloth -= 1; h.cloth = rules.home.lasts.cloth
+  }
+  if (wantsBurgherGoods(h, desirability, rules) && lowNeed(h.furniture, "furniture", rules) && basket.furniture > 0) {
+    basket.furniture -= 1; h.furniture = rules.home.lasts.furniture
   }
   return { house: h, basket, eaten }
 }

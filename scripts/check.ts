@@ -101,7 +101,7 @@ const settle = (s: Snapshot, homes: number) => {
       id: s.nextEntity++,
       components: {
         "Town/Tile": { x, y, size: 1 },
-        "Town/House": { tier: 2, residents: 8, food: forever, bread: forever, cloth: forever, faith: forever, clock: 1 }
+        "Town/House": { tier: 2, residents: 8, food: forever, bread: forever, cloth: forever, faith: forever, furniture: forever, clock: 1 }
       }
     })
     placed += 1
@@ -125,6 +125,9 @@ const check = (name: string, ok: boolean, detail: string) => {
   t.change((s) => {
     placed = settle(s, 25)
     s.resources["Town/Treasury"].coins = 10_000
+    // Furniture in store, so the finest of them can rise to townhouses.
+    const hall = s.entities.find((e) => e.components["Town/TownHall"])!.components["Town/Inventory"]
+    hall.stock.furniture = 30
   })
   t.run(8 * 60)
   const f = t.fate()
@@ -250,7 +253,7 @@ const homeAt = (s: Snapshot, x: number, y: number, tier: 1 | 2 | 3, residents: n
     id,
     components: {
       "Town/Tile": { x, y, size: 1 },
-      "Town/House": { tier, residents, food: needs ? forever : 0, bread: needs ? forever : 0, cloth: needs ? forever : 0, faith: needs ? forever : 0, clock: 1 },
+      "Town/House": { tier, residents, food: needs ? forever : 0, bread: needs ? forever : 0, cloth: needs ? forever : 0, faith: needs ? forever : 0, furniture: needs ? forever : 0, clock: 1 },
       "Town/Risk": { fire: r.fire ?? 0, health: r.health ?? 0, order: r.order ?? 0, thefts: 0 },
       "Town/Condition": { value: CONDITION_MAX }
     }

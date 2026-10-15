@@ -340,7 +340,7 @@ let hungryUntil = 0
 const HUNGER_PATIENCE = ticks(20)
 /** A view's colour over a model: pale, so the ink still reads. */
 const TINT = { good: 0xbcd2ee, fair: 0xf3e3a8, bad: 0xf2b9a0, cool: 0xdccbe8, mark: 0xd5dad3, settlers: 0xead7bd, fine: 0xa9c4e8, plain: 0xffffff }
-const needIcons = { food: "food", bread: "bread", cloth: "cloth", faith: "faith" } as const
+const needIcons = { food: "food", bread: "bread", cloth: "cloth", faith: "faith", furniture: "furniture" } as const
 
 const appealColor = (v: number) =>
   v >= home.tiers[3].appeal ? 0x1f4f8f : v >= home.tiers[2].appeal ? GOOD : v >= 0 ? 0xc6d4e4 : v > home.squalid ? 0xeaa26a : BAD
@@ -442,7 +442,7 @@ export const Interact = Game.System(
     const homesWorth = (at: ReadonlyArray<Point>) => {
       if (at.length === 0) return ""
       const standing = houses.filter((row) => !row.data.closed.present).reduce((n, row) => n + row.data.house.get().residents, 0)
-      const fed = { tier: 1 as Tier, food: 1, bread: 0, cloth: 0, faith: 0, residents: home.tiers[1].residents }
+      const fed = { tier: 1 as Tier, food: 1, bread: 0, cloth: 0, faith: 0, furniture: 0, residents: home.tiers[1].residents }
       let people = 0
       const pays = at.reduce((sum, c) => {
         const d = appealAt(cells, c.x, c.y), residents = capacity(fed, approval, d, undefined, rates.settlers)
@@ -861,7 +861,7 @@ export const Interact = Game.System(
     /** What the town has of each provision, in storage and on market shelves. */
     const inTown = (): InTown => {
       const stock = resources.stock.get()
-      const sum = { fish: stock.fish, smoked: stock.smoked, bread: stock.bread, cloth: stock.cloth }
+      const sum = { fish: stock.fish, smoked: stock.smoked, bread: stock.bread, cloth: stock.cloth, furniture: stock.furniture }
       for (const { data } of buildings) {
         const inv = maybe(data.inventory)
         if (!inv || maybe(data.service)?.service !== "goods" || data.site.present || data.rising.present) continue
@@ -869,6 +869,7 @@ export const Interact = Game.System(
         sum.smoked += inv.stock.smoked
         sum.bread += inv.stock.bread
         sum.cloth += inv.stock.cloth
+        sum.furniture += inv.stock.furniture
       }
       return sum
     }
@@ -945,7 +946,7 @@ export const Interact = Game.System(
       const needs: Array<Line> = []
       const nowNeeds = new Set<Need>(tier.needs)
       const growNeeds = new Set<Need>(nextTier ? home.tiers[nextTier].needs : [])
-      for (const n of ["food", "bread", "cloth", "faith"] as const) {
+      for (const n of ["food", "bread", "cloth", "faith", "furniture"] as const) {
         if (!nowNeeds.has(n) && !growNeeds.has(n)) continue
         if (met(h, n)) {
           needs.push({ icon: needIcons[n], label: needTitle[n], value: "✓", tone: "ok" })
@@ -1506,7 +1507,8 @@ export const Interact = Game.System(
       admin: ledger.admin,
       net,
       homes: census.homes,
-      needs: { food: census.food, bread: census.bread, cloth: census.cloth, faith: census.faith },
+      needs: { food: census.food, bread: census.bread, cloth: census.cloth, faith: census.faith, furniture: census.furniture },
+      townhouses: houses.filter(({ data }) => data.house.get().tier === 3).length,
       policy: rates,
       stock,
       prices: resources.market.get().prices,

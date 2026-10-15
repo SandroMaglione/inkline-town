@@ -133,6 +133,7 @@ const quarter: Array<[string, number, number]> = [
   ["granary", -9.5, 1],
   ["smokehouse", 10, 1],
   ["hospital", 9.5, -11],
+  ["carpenter", 14.5, -11],
   ["park-sample", 2.5, -8],
   ["park-lamp", -13.5, -8],
   ["park-statue", 9.5, -8],

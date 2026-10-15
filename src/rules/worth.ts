@@ -58,7 +58,7 @@ export const producers = (rules: Rules = shippedRules): Array<ProducerWorth> =>
 
 // ── Chains: what a unit of a good a minute takes, from the land up ──────
 
-const needIds: ReadonlyArray<Need> = ["food", "bread", "cloth", "faith"]
+const needIds: ReadonlyArray<Need> = ["food", "bread", "cloth", "faith", "furniture"]
 
 /** The needs a good meets when a walker hands it to a home: every food meets food; a good named for a need meets it. */
 export const meets = (good: GoodId): ReadonlyArray<Need> => [
@@ -143,12 +143,13 @@ export const promotionCost = (tier: Tier, rules: Rules = shippedRules): number =
 
 export const homeWorth = (tier: Tier, rules: Rules = shippedRules): HomeWorth => {
   const t = rules.home.tiers[tier], residents = t.residents
-  const needs = { food: 1, bread: tier >= 2 ? 1 : 0, cloth: tier >= 2 ? 1 : 0, faith: tier >= 2 ? 1 : 0 }
+  const needs = { food: 1, bread: tier >= 2 ? 1 : 0, cloth: tier >= 2 ? 1 : 0, faith: tier >= 2 ? 1 : 0, furniture: tier >= 3 ? 1 : 0 }
   const tax = taxOf({ tier, residents, ...needs }, { settlers: 100, citizens: 100 }, rules)
   const seconds = (ticks: number) => ticks * rules.stepSeconds
   const meals = mealsOf({ residents }, rules) * 60 / seconds(rules.home.lasts.food)
   const staple = tier >= 2 ? rules.goods.bread.price : rules.goods.fish.price
   const eats = meals * staple + (tier >= 2 ? (60 / seconds(rules.home.lasts.cloth)) * rules.goods.cloth.price : 0)
+    + (tier >= 3 ? (60 / seconds(rules.home.lasts.furniture)) * rules.goods.furniture.price : 0)
   const below = tier > 1 ? homeWorth((tier - 1) as Tier, rules) : null
   const cost = tier === 1 ? costWorth(rules.home.cost as Kind["cost"], rules) : promotionCost(tier, rules)
   const net = tax - eats, gain = below ? net - below.net : net

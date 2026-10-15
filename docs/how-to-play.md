@@ -164,17 +164,20 @@ Nobody tells you to build it that way; it works best that way.
 - **Tiers.** Settlers live anywhere. A citizens' home needs desirability 5
   as well as bread, cloth, and faith, and its rebuilding is paid at once
   from the treasury and the store (35 coins, 4 planks, 2 stone; a
-  townhouse 45 coins, 4 planks, 4 stone, and a tool): a home the store
+  townhouse 45 coins, 4 planks, 4 stone, a tool, and 2 furniture): a home the store
   cannot pay for waits at its tier, and one that steps down keeps its
   rebuilding and rises back into it for nothing. A home whose street drops below 5
   goes back to settlers even with every need met. A **townhouse** of
-  burghers (12 residents, the best taxes) needs desirability 12 and a
-  fire watch, a healer, and a watch house all calling on it. At
+  burghers (12 residents, the best taxes) needs desirability 12, a
+  fire watch, a healer, and a watch house all calling on it, and
+  furniture: a carpenter makes it from planks, and a market's walker
+  brings a fresh piece every few minutes. A townhouse whose furniture
+  wears out is a citizens' home again until the next piece comes. At
   desirability −5 or less a home is squalid and holds fewer people.
 - **Workers by tier, and the commute.** Settlers do the rough work
   (lumberjack, forester, quarry, mine, fishery, smokehouse, farm, sheep,
   storage, fire watch, watch house, builder's yard); citizens the skilled
-  (sawmill, smithy, mill, bakery, weaver, market, chapel, healer,
+  (sawmill, smithy, mill, bakery, weaver, carpenter, market, chapel, healer,
   hospital). Skilled jobs take their own crew first; citizens left over do
   rough work, and until there are citizens, settlers stand in at a
   skilled job as apprentices, at three-quarters pace. The jobs counter in
@@ -298,8 +301,9 @@ over with a new one.
   (fish, smoked fish, or bread); with bread, cloth, and faith on a street
   with desirability 5 a home becomes a two-story citizens' home that holds
   and pays twice as much, and on a fine street (12) with every service
-  calling, a three-story townhouse. Cloth is only brought to a street fit
-  for citizens, however much is in store: the home's panel says so, and
+  calling and furniture from a carpenter, a three-story townhouse. Cloth is
+  only brought to a street fit for citizens, and furniture to one fit for
+  burghers, however much is in store: the home's panel says so, and
   what the street is short of.
 - **Pulling down** a building or a home costs a tenth of what it cost in
   coins, and half its materials (rounded down) go back into storage, to
