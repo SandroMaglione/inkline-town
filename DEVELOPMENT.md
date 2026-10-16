@@ -178,7 +178,24 @@ in the page's save slot from the console and press **load**:
 localStorage.setItem("inkline-town/save/manual", /* the file's contents */)
 ```
 
-That is how the README's screenshots of grown towns were made.
+`scripts/look-readme.ts` takes the README's pictures and film from such a
+save, through the real page with the news, overlays and camera buttons
+hidden. It runs on Playwright's clock, so the film steps the town exactly
+two thirtieths of a second a frame however slow the screenshot:
+
+```sh
+node scripts/balance.ts --size large --land rich --term 90 --seeds 3 --snapshot 80 --out snapshots
+SAVE=snapshots/large-rich-1000-80min.json RECKON=1 node scripts/look-readme.ts       # charter, town, street, panels, reckoning
+MODE=wide WIDE=0.75 NAME=large SAVE=... node scripts/look-readme.ts                  # one wide view of another town
+MODE=film SIZE=1600x900 SCALE=1 SAVE=... node scripts/look-readme.ts                 # 900 frames to output/look-readme/frames
+ffmpeg -framerate 30 -i output/look-readme/frames/%04d.png -vf "scale=960:-2,format=yuv420p" \
+  -c:v libsvtav1 -preset 4 -crf 46 -g 300 -f avif -loop 0 docs/media/inkline-town.avif
+ffmpeg -framerate 30 -i output/look-readme/frames/%04d.png -vf scale=1280:-2 \
+  -c:v libx264 -preset veryslow -tune animation -pix_fmt yuv420p -crf 28 -movflags +faststart docs/media/inkline-town.mp4
+```
+
+The README shows the film as an animated AVIF, because GitHub plays no
+`<video>` from the repository; browsers without AVIF see the still.
 
 ## Code
 
@@ -258,6 +275,18 @@ samples the roof triangles for animated fire, smoke and ember emitters.
 rendered pixels, checks phone layout and exports a five-second MP4 to
 `output/inkline-3d/house-effects/`. The runtime and this preview share the
 same instanced renderer and effect code.
+
+The complete proportion comparison is at
+[`/proportion-review.html`](http://localhost:5232/proportion-review.html): 36
+building appearances and nine shared-prop examples, with the approved
+originals beside the revised geometry. Both sides share a camera and an
+unchanged walker. Turn, zoom, choose one scale across the catalogue, or save a
+comparison PNG. `/model-review.html?collection=handoff` turns the carpenter
+and building upgrades, compares scaffolding as materials arrive, and downloads
+their GLBs. `?collection=milestones` sets the town hall, guildhall and city
+hall side by side; `?collection=works` shows the one reusable construction
+scaffold on six building forms, its bays, platforms, ladders and supplies set
+by plot size, building height and delivered share.
 
 The original 2D menu drawings remain in `art.ts` for comparison. The live
 3D town uses the new geometry, including equipped service workers and cured
