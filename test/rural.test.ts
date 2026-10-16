@@ -29,17 +29,18 @@ function verticalHits(asset: InkAsset, u: number, v: number, from: number, to: n
 
 test("the fire-watch ladder landing and every roof tread connect to the lookout without roof obstruction", () => {
   const asset = makeBuilding("firewatch")
+  const landing = buildingDimensions("firewatch").height + 8.5
   const stations = [
-    [12.3, -4.5, 28.5],
+    [12.3, -4.5, landing],
     ...Array.from({ length: 7 }, (_, i) => {
       const t = (i + 0.5) / 7
-      return [11 - 7 * t, -4.5 + 2.7 * t, 28.5 + 6 * (i + 1) / 7]
+      return [11 - 7 * t, -4.5 + 2.7 * t, landing + 6 * (i + 1) / 7]
     }),
-    [3.9, -1.8, 34.5]
+    [3.9, -1.8, landing + 6]
   ]
   for (const [u, v, z] of stations) {
     assert.ok(verticalHits(asset, u!, v!, z! + 0.1, z! - 0.65).length > 0, `Unsupported route at ${u}/${v}/${z}`)
-    assert.equal(verticalHits(asset, u!, v!, z! + 0.1, z! + 4).length, 0, `Roof obstructs route at ${u}/${v}/${z}`)
+    assert.equal(verticalHits(asset, u!, v!, z! + 0.1, z! + 17).length, 0, `Roof obstructs a walker at ${u}/${v}/${z}`)
   }
   const highest = Math.max(...asset.faces.flatMap(face => face.points.map(p => p[2])))
   assert.ok(buildingDimensions("firewatch").top >= highest, "Problem marker must sit above the lookout roof")

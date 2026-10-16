@@ -130,6 +130,10 @@ different on every cell.
 ![All 24 building kinds, including the carpenter, plus the market hall and church](docs/screenshots/sheet-buildings.webp)
 
 The carpenter and building upgrades can be inspected in the model review.
+The complete proportion comparison is at `/proportion-review.html`: 36 building
+appearances and nine shared-prop examples, with the approved originals beside
+the revised geometry. Both sides share a camera and an unchanged walker.
+Turn, zoom, choose one scale across the catalogue, or save a comparison PNG.
 Run `pnpm dev`, then open `/model-review.html?collection=handoff` to turn the models, compare
 scaffolding as materials arrive, and download their GLBs.
 

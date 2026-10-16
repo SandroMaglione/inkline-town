@@ -17,6 +17,7 @@
     "check:browser": "node scripts/check-browser.ts",
     "check:phone": "node scripts/check-phone.ts",
     "check:models": "node scripts/check-town-models.ts",
+    "check:proportions": "node scripts/check-proportions.ts",
     "check:effects": "node scripts/check-house-effects.ts",
     "check:revisions": "node scripts/check-model-revisions.ts",
     "check:park": "node scripts/check-park.ts",

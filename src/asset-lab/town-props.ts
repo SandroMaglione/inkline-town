@@ -9,6 +9,7 @@ import { props, type GroundId, type PropId } from "../content.ts"
 import { cellOf, DIRS, key } from "../grid.ts"
 import { U } from "../iso.ts"
 import { hash } from "./land.ts"
+import { human } from "./dimensions.ts"
 import { Drawing, palette, square, type Vertex } from "./primitives.ts"
 
 const green = 0xd8e6c9
@@ -25,9 +26,9 @@ export function flowerBed(d: Drawing, u: number, v: number, width = 3, color = 0
   }
 }
 export function bench(d: Drawing, u: number, v: number) {
-  for (const x of [-2.5, 2.5]) d.box(u + x * U, v, 0.4 * U, 1.2 * U, 0, 4, palette.ink, palette.ink, palette.ink, 0.75)
-  for (const y of [-0.7, 0.7]) d.box(u, v + y * U, 3.5 * U, 0.55 * U, 4, 1, 0xe9d2a8, 0xd0b58c, 0xb08a5e, 0.75)
-  for (const z of [6, 8]) d.box(u, v - 1.3 * U, 3.5 * U, 0.35 * U, z, 1, 0xe9d2a8, 0xd0b58c, 0xb08a5e, 0.75)
+  for (const x of [-2.5, 2.5]) d.box(u + x * U, v, 0.4 * U, 1.2 * U, 0, human.seat, palette.ink, palette.ink, palette.ink, 0.75)
+  for (const y of [-0.7, 0.7]) d.box(u, v + y * U, 3.5 * U, 0.55 * U, human.seat, .65, 0xe9d2a8, 0xd0b58c, 0xb08a5e, 0.75)
+  for (const z of [7, 9]) d.box(u, v - 1.3 * U, 3.5 * U, 0.35 * U, z, .65, 0xe9d2a8, 0xd0b58c, 0xb08a5e, 0.75)
 }
 /** Raised staggered setts share a pitch across neighbouring road cells. */
 export function setts(d: Drawing, x: number, y: number, half: number, z: number) {

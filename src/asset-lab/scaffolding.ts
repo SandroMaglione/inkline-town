@@ -1,6 +1,7 @@
 import { U } from "../iso.ts"
 import { Drawing, type Vertex } from "./primitives.ts"
 import { beam as solidBeam, block as solidBlock, stone, wood } from "./workshops.ts"
+import { human } from "./dimensions.ts"
 
 // Repeated scaffold members retain solid faces, with one ink edge per edge.
 // Outlining every face separately would duplicate the same lines many times.
@@ -31,8 +32,8 @@ export function scaffoldAsset(size: number, height: number, share: number) {
   const stations=Array.from({length:n+1},(_,i)=>-s+2*s*i/n).filter(x=>Math.abs(x)>U)
   const levels:number[]=[]
   const deck=Math.max(2,rise-6)
-  for(let z=8;z<deck-1;z+=12)levels.push(z)
-  if(!levels.length||deck-levels[levels.length-1]!>2)levels.push(deck)
+  for(let z=deck-human.floor;z>=8;z-=human.floor)levels.unshift(z)
+  levels.push(deck)
   const platformLevels=levels.slice(-2)
   for(let side=0;side<4;side++) {
     const p=(along:number,out:number,z:number):Vertex=>{
@@ -57,7 +58,8 @@ export function scaffoldAsset(size: number, height: number, share: number) {
             const q=p((a+b)/2,inner+t*U,z+.15)
             block(d,q[0],q[1],(side%2?.18*U:(b-a)/2),(side%2?(b-a)/2:.18*U),z+.15,.5,wood,.45)
           }
-          if(z+5<rise)beam(d,p(a,s,z+5),p(b,s,z+5),.55)
+          beam(d,p(a,s,z+8),p(b,s,z+8),.55)
+          for(const x of [a,b])beam(d,p(x,s,z),p(x,s,z+8),.5)
         }
       }
       // Diagonal braces stay away from the entrances.
@@ -69,10 +71,10 @@ export function scaffoldAsset(size: number, height: number, share: number) {
   }
   // The ladder rests on a rear bay and meets the highest working platform.
   const a=-s*.8,b=-s*.57
-  for(const offset of [-.45*U,.45*U])beam(d,[a+offset,-s,0],[b+offset,-s,deck+.8],.6)
-  for(let z=2;z<deck;z+=3) {
+  for(const offset of [-.8*U,.8*U])beam(d,[a+offset,-s,0],[b+offset,-s,deck+.8],.6)
+  for(let z=2;z<deck;z+=2.5) {
     const x=a+(b-a)*z/(deck+.8)
-    beam(d,[x-.45*U,-s,z],[x+.45*U,-s,z],.5)
+    beam(d,[x-.8*U,-s,z],[x+.8*U,-s,z],.5)
   }
   // Compact corner piles work even when the building fills most of its plot.
   const c=s-1.4*U

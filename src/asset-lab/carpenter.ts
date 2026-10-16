@@ -34,10 +34,10 @@ export function makeCarpenter(options: BuildingOptions = {}) {
     block(d, -6 * U, -3 * U, 1.2 * U, 0.4 * U, 8.8, 0.7, iron, 0.5)
     block(d, -2 * U, -1.2 * U, 0.7 * U, 0.4 * U, 7, 2.3, iron, 0.5)
     beam(d, [-2 * U, -0.7 * U, 8], [-2 * U, 0.5 * U, 8], 0.6, iron)
-    beam(d, [-U, -10.3 * U, 18], [7 * U, -10.3 * U, 18], 0.7)
+    beam(d, [-U, -10.3 * U, 14], [7 * U, -10.3 * U, 14], 0.7)
     for (const u of [1, 4, 6]) {
-      beam(d, [u * U, -10 * U, 14], [u * U, -10 * U, 20], 0.5)
-      block(d, u * U, -10 * U, 0.7 * U, 0.15 * U, 19.5, 0.7, iron, 0.4)
+      beam(d, [u * U, -10 * U, 10], [u * U, -10 * U, 16], 0.5)
+      block(d, u * U, -10 * U, 0.7 * U, 0.15 * U, 15.5, 0.7, iron, 0.4)
     }
     for (const v of [6, 10]) {
       beam(d, [-7 * U, v * U, 0.5], [-5 * U, v * U, 7.5], 0.85)

@@ -17,25 +17,25 @@ export function institutionDoor(d: Drawing, side: Side, a: number, kind: "chapel
     d.line([p(-3*U,12,0.032),p(3*U,12,0.032)],1,0x6d7469)
   } else {
     d.face([p(-4*U,0),p(4*U,0),p(4*U,23),p(-4*U,23)],0xe3e6dd,1)
-    d.face([p(-3*U,0,0.025),p(3*U,0,0.025),p(3*U,18,0.025),p(-3*U,18,0.025)],0x839a89,1)
+    d.face([p(-3*U,0,0.025),p(3*U,0,0.025),p(3*U,20,0.025),p(-3*U,20,0.025)],0x839a89,1)
     for(const x of [-1.6,1.6])d.face([p((x-0.8)*U,10,0.03),p((x+0.8)*U,10,0.03),p((x+0.8)*U,16,0.03),p((x-0.8)*U,16,0.03)],0xdbe9e7,0.75)
     d.face([p(-3*U,19,0.025),p(3*U,19,0.025),p(3*U,21.5,0.025),p(-3*U,21.5,0.025)],0xdbe9e7,0.75)
-    d.line([p(0,0,0.03),p(0,18,0.03)],1,0x596c60)
+    d.line([p(0,0,0.03),p(0,20,0.03)],1,0x596c60)
   }
   for(const x of [-0.6,0.6])d.line([p(x*U,8,0.04),p(x*U,10,0.04)],1.2,0xceb887)
   d.line([p(-4*U,0.3,0.04),p(4*U,0.3,0.04)],1.5,0xb6bead)
 }
 
 export function makeQuarry(options: BuildingOptions = {}) {
-  const fit = options.fit ?? 1, p = 15*U, H = 32
+  const fit = options.fit ?? 1, p = 15*U, H = 25
   const d = new Drawing("quarry", "Quarry", "A two-cell stonecutting yard with a stepped rock face, timber derrick, dressed blocks and a small workshop.")
   d.asset.category="buildings";d.asset.reference={type:"building",kind:"quarry"};d.asset.footprint=kinds.quarry.size
   if(options.plate!==false)d.plate(2)
   d.box(-9*U,-6*U,4*U,7*U,0,H)
   if(fit>0)d.box(-9*U,-6*U,4.3*U,7.3*U,H,1.5*fit,0xd1d7ca,0xb8c2b1,0xa6b49f,1)
   if(fit>0.4){
-    d.face([[-11*U,1*U+0.005,0],[-7*U,1*U+0.005,0],[-7*U,1*U+0.005,17],[-11*U,1*U+0.005,17]],0x8f9891,1)
-    d.line([[-9*U,1*U+0.01,1],[-9*U,1*U+0.01,16]],1)
+    d.face([[-11*U,1*U+0.005,0],[-7*U,1*U+0.005,0],[-7*U,1*U+0.005,20],[-11*U,1*U+0.005,20]],0x8f9891,1)
+    d.line([[-9*U,1*U+0.01,1],[-9*U,1*U+0.01,19]],1)
     d.face([[-4.9*U,-8*U,12],[-4.9*U,-4*U,12],[-4.9*U,-4*U,20],[-4.9*U,-8*U,20]],0xdbe6ea,1)
   }
   if(fit>0.75){
@@ -77,16 +77,16 @@ export function finishTownBuilding(d: Drawing, id: KindId, a: number, p: number,
     for (const side of sides) {
       const at = (s: number, z: number) => d.wall(side, a, s, z, 0.015)
       for (const x of [-a + U, a - U]) d.line([at(x, 0), at(x, H)], 1.5, 0x9f8b69)
-      d.line([at(-a + U, 28), at(0, 40), at(a - U, 28)], 1, 0x9f8b69)
+      d.line([at(-a + U, 25), at(0, 32), at(a - U, 25)], 1, 0x9f8b69)
       granaryVents(d, side, a)
     }
-    post(c, -a * 0.4, 43)
-    d.line([[c, -a * 0.4, 43], [c, a * 0.5, 43], [c, a * 0.5, 33]], 1.5, 0x8a6a45)
-    d.sack(c, a * 0.5, 27)
+    post(c, -a * 0.4, 34)
+    d.line([[c, -a * 0.4, 34], [c, a * 0.5, 34], [c, a * 0.5, 24]], 1.5, 0x8a6a45)
+    d.sack(c, a * 0.5, 18)
     for (const y of [-a + U, -a + 4 * U, a - U]) d.sack(c, y)
     d.cylinder(-a - 2 * U, c, 1.5 * U, 0, 7, 0xc4b08b, 0xe9cf7c, 1, 12)
   } else if (id === "smokehouse") {
-    d.box(-a / 2, -a / 2, 2.1 * U, 2.1 * U, H + 20, 4, 0x8f988b, 0xb2b9a9, 0x9ea792, 1)
+    d.box(-a / 2, -a / 2, 1.8 * U, 1.8 * U, H + 12, 4, 0x8f988b, 0xb2b9a9, 0x9ea792, 1)
     const y0 = -a - 2.5 * U, y1 = -a + 5 * U
     post(c, y0, 14); post(c, y1, 14)
     d.line([[c, y0, 14], [c, y1, 14]], 1.5, 0x8a6a45)
@@ -101,9 +101,9 @@ export function finishTownBuilding(d: Drawing, id: KindId, a: number, p: number,
     for (const [y,z] of [[-0.55,0],[0.55,0],[0,2.2]]) d.log("u", c + y!*U, -a + U, -a + 5 * U, z!, 1.3, 0xb08a5e, 0xe9d2a8)
   } else if (id === "firewatch") {
     const half = 3 * U, z = H + 13
-    for (const [u, v] of square(0, 0, half)) post(u, v, 15, z)
+    for (const [u, v] of square(0, 0, half)) post(u, v, 20, z)
     d.box(0, 0, half + U, half + U, z, 1.5, 0xe9d2a8, 0xd0b58c, 0xb08a5e, 1)
-    d.pyramid(half + U, z + 15, 7, pale(0xc4523f, 0.7), pale(0xc4523f, 0.52))
+    d.pyramid(half + U, z + 20, 7, pale(0xc4523f, 0.7), pale(0xc4523f, 0.52))
     d.cylinder(0, 0, 1.5 * U, z + 5, 1, 0xc2ac70, 0xe4d29a, 1, 12)
     d.ellipsoid(0, 0, z + 7, U, U, 2, 0xd3bd84, 1, undefined, 12)
     d.line([[0, 0, z + 9], [0, 0, z + 14]], 1)
@@ -112,7 +112,7 @@ export function finishTownBuilding(d: Drawing, id: KindId, a: number, p: number,
     for (const y of [-2, 1]) d.cylinder(-a - 2 * U, c + y * U, U, 0, 4, 0xbda07a, 0xa9c5d0, 1, 12)
   } else if (id === "healer" || id === "hospital") {
     for (const side of sides) {
-      const at = (s: number, z: number): Vertex => d.wall(side, a, s, z, 0.02), z = id === "hospital" ? 49 : 22
+      const at = (s: number, z: number): Vertex => d.wall(side, a, s, z, 0.02), z = id === "hospital" ? 37 : 18
       d.face([at(-2 * U, z), at(2 * U, z), at(2 * U, z + 7), at(-2 * U, z + 7)], 0xeef3e6, 1, 0x809b87)
       d.line([at(0, z + 1.5), at(0, z + 5.5)], 2, 0x719383)
       d.line([at(-U, z + 3.5), at(U, z + 3.5)], 2, 0x719383)
@@ -140,8 +140,8 @@ export function finishTownBuilding(d: Drawing, id: KindId, a: number, p: number,
   } else if (id === "watchhouse") {
     for (const side of sides) {
       const at = (s: number, z: number) => d.wall(side, a, s, z, 0.02)
-      d.face([at(-2 * U, 28), at(2 * U, 28), at(2 * U, 23), at(0, 20), at(-2 * U, 23)], 0xa8bdd1, 1)
-      d.line([at(0, 22), at(0, 27)], 1, 0x3d6db5)
+      d.face([at(-2 * U, 24), at(2 * U, 24), at(2 * U, 20), at(0, 17), at(-2 * U, 20)], 0xa8bdd1, 1)
+      d.line([at(0, 19), at(0, 23)], 1, 0x3d6db5)
       for (const x of [-a / 2, a / 2]) for (const dx of [-0.5, 0.5]) d.line([at(x + dx * U, 12), at(x + dx * U, 20)], 0.75)
     }
     post(c, -a / 2, 20)

@@ -37,7 +37,7 @@ test("the bakery oven is recessed masonry, with smoke attached to its actual flu
     assert.ok(hits(asset, at(12), at(-2)).length > 0, `${side}: the oven needs a back`)
     const origin = buildingSmokeOrigin("bakery", doors)!
     assert.deepEqual(asset.smokeEffect?.origin, origin)
-    const mouth = asset.faces.find(face => face.points.every(p => Math.abs(p[2] - 48.02) < 0.0001))!
+    const mouth = asset.faces.find(face => face.color === 0x68726c && face.points.every(p => p[2] > origin[2] - .5 && p[2] < origin[2]))!
     assert.ok(mouth)
     const center = mouth.points.reduce((sum, p) => [sum[0]! + p[0], sum[1]! + p[1]], [0, 0]).map(n => n / mouth.points.length)
     assert.ok(Math.abs(center[0]! - origin[0]) < 0.0001 && Math.abs(center[1]! - origin[1]) < 0.0001)

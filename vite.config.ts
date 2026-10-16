@@ -15,6 +15,7 @@ export default defineConfig({
             assets: "asset-lab.html",
             map: "map-lab.html",
             models: "model-review.html",
+            proportions: "proportion-review.html",
             effects: "effects-lab.html",
             parks: "park-lab.html",
             services: "service-upgrades.html"

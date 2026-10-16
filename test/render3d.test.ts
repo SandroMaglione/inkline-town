@@ -47,7 +47,7 @@ test("live service upgrades retain their taller models and material bounds besid
     assert.equal(upgraded.effects?.height, upgradeHeights[id].eave)
     assert.equal(upgraded.effects?.state.snow, 1)
   }
-  for (const [id, height] of [["bakery", 28], ["weaver", 30], ["fishery", 20], ["carpenter", 28]] as const)
+  for (const [id, height] of [["bakery", 26], ["weaver", 26], ["fishery", 24], ["carpenter", 28]] as const)
     assert.equal(buildingHeight(id), height, `${id}: public height must follow the revised model`)
 })
 

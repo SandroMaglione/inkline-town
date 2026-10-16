@@ -43,7 +43,7 @@ export function makeSite(share: number, size = 2) {
 }
 export function makeConstruction(kindId: KindId, progress: number) {
   const kind = kinds[kindId],
-    a = kind.half * U,
+    a = buildingDimensions(kindId).half,
     H = buildingDimensions(kindId).height,
     stage = buildStages(progress)
   const d = new Drawing(

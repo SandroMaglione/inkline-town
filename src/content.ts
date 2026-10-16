@@ -528,9 +528,9 @@ export const home = {
   half: 5,
   cost: { coins: 15, materials: { planks: 1 } } as Kind["cost"],
   tiers: {
-    1: { title: "settlers", residents: 4, tax: 2.5, height: 14, needs: ["food"], appeal: -100, rise: { coins: 0, materials: {} } },
-    2: { title: "citizens", residents: 8, tax: 5, height: 26, needs: ["bread", "cloth", "faith"], appeal: 5, rise: { coins: 35, materials: { planks: 4, stone: 2 } } },
-    3: { title: "burghers", residents: 12, tax: 7, height: 38, needs: ["bread", "cloth", "faith", "furniture"], appeal: 12, rise: { coins: 45, materials: { planks: 4, stone: 4, tools: 1, furniture: 2 } } }
+    1: { title: "settlers", residents: 4, tax: 2.5, height: 24, needs: ["food"], appeal: -100, rise: { coins: 0, materials: {} } },
+    2: { title: "citizens", residents: 8, tax: 5, height: 46, needs: ["bread", "cloth", "faith"], appeal: 5, rise: { coins: 35, materials: { planks: 4, stone: 2 } } },
+    3: { title: "burghers", residents: 12, tax: 7, height: 68, needs: ["bread", "cloth", "faith", "furniture"], appeal: 12, rise: { coins: 45, materials: { planks: 4, stone: 4, tools: 1, furniture: 2 } } }
   } as Readonly<Record<Tier, {
     readonly title: string
     readonly residents: number

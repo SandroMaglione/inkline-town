@@ -26,7 +26,7 @@ export function workshopPoint(point: Vertex, doors?: BuildingOptions["doors"]): 
 }
 
 export function workshopSmokeOrigin(id: WorkshopId, doors?: BuildingOptions["doors"]): Vertex | null {
-  return id === "smithy" ? workshopPoint([-6 * U, 2 * U, 56.3], doors) : null
+  return id === "smithy" ? workshopPoint([-6 * U, 2 * U, 49.3], doors) : null
 }
 
 export function orient(asset: InkAsset, doors?: BuildingOptions["doors"]) {
@@ -164,29 +164,29 @@ function mine(d: Drawing, fit: number) {
 }
 
 function smithy(d: Drawing, fit: number, open: number) {
-  block(d, -5.5 * U, -12 * U, 6.5 * U, 0.7 * U, 1, 31, stone)
-  block(d, -12 * U, -5.5 * U, 0.7 * U, 6.5 * U, 1, 31, stone)
-  for (const u of [-12 * U, U]) post(d, u, U, 32)
-  post(d, U, -12 * U, 32)
-  beam(d, [-12 * U, U, 31], [U, U, 31], 2)
-  beam(d, [-12 * U, U, 23], [-8 * U, U, 31], 1.7)
-  beam(d, [U, U, 23], [-3 * U, U, 31], 1.7)
-  if (fit > 0) roof(d, 8 * U, 8 * U, -5.5 * U, 32, 9 * fit, 0xb04a39, -5.5 * U)
+  block(d, -5.5 * U, -12 * U, 6.5 * U, 0.7 * U, 1, 26, stone)
+  block(d, -12 * U, -5.5 * U, 0.7 * U, 6.5 * U, 1, 26, stone)
+  for (const u of [-12 * U, U]) post(d, u, U, 27)
+  post(d, U, -12 * U, 27)
+  beam(d, [-12 * U, U, 26], [U, U, 26], 1.6)
+  beam(d, [-12 * U, U, 20], [-8 * U, U, 26], 1.3)
+  beam(d, [U, U, 20], [-3 * U, U, 26], 1.3)
+  if (fit > 0) roof(d, 8 * U, 8 * U, -5.5 * U, 27, 9 * fit, 0xb04a39, -5.5 * U)
   const u = -6 * U, v = 2 * U
   block(d, u, v, 4 * U, 4 * U, 1, 7, stone)
-  block(d, u, v - 3.2 * U, 4 * U, 0.8 * U, 8, 16, stone)
-  for (const x of [u - 3.3 * U, u + 3.3 * U]) block(d, x, v, 0.7 * U, 3 * U, 8, 16, stone)
-  d.face([[u - 2.6 * U, v - 2.3 * U, 8], [u + 2.6 * U, v - 2.3 * U, 8], [u + 2.6 * U, v - 2.3 * U, 20], [u - 2.6 * U, v - 2.3 * U, 20]], 0x4b524e, 0)
+  block(d, u, v - 3.2 * U, 4 * U, 0.8 * U, 8, 13, stone)
+  for (const x of [u - 3.3 * U, u + 3.3 * U]) block(d, x, v, 0.7 * U, 3 * U, 8, 13, stone)
+  d.face([[u - 2.6 * U, v - 2.3 * U, 8], [u + 2.6 * U, v - 2.3 * U, 8], [u + 2.6 * U, v - 2.3 * U, 17], [u - 2.6 * U, v - 2.3 * U, 17]], 0x4b524e, 0)
   if (fit > 0.15) {
     const base = [[-4, -4], [4, -4], [4, 4], [-4, 4]], top = [[-2, -2], [2, -2], [2, 2], [-2, 2]]
     for (let i = 0; i < 4; i++) {
       const j = (i + 1) % 4
       const p = (xy: number[], z: number): Vertex => [u + xy[0]! * U, v + xy[1]! * U, z]
-      d.face([p(base[i]!, 24), p(base[j]!, 24), p(top[j]!, 33), p(top[i]!, 33)], i % 2 ? 0x9da69b : 0xc4cbc0, 0.8)
+      d.face([p(base[i]!, 21), p(base[j]!, 21), p(top[j]!, 29), p(top[i]!, 29)], i % 2 ? 0x9da69b : 0xc4cbc0, 0.8)
     }
-    block(d, u, v, 2 * U, 2 * U, 33, 23 * fit, stone)
-    block(d, u, v, 2.4 * U, 2.4 * U, 33 + 23 * fit - 2, 2, stone)
-    d.face([[u - 1.5 * U, v - 1.5 * U, 33 + 23 * fit + 0.02], [u + 1.5 * U, v - 1.5 * U, 33 + 23 * fit + 0.02], [u + 1.5 * U, v + 1.5 * U, 33 + 23 * fit + 0.02], [u - 1.5 * U, v + 1.5 * U, 33 + 23 * fit + 0.02]], 0x68726c, 0)
+    block(d, u, v, 1.7 * U, 1.7 * U, 29, 20 * fit, stone)
+    block(d, u, v, 2 * U, 2 * U, 29 + 20 * fit - 2, 2, stone)
+    d.face([[u - 1.2 * U, v - 1.2 * U, 29 + 20 * fit + 0.02], [u + 1.2 * U, v - 1.2 * U, 29 + 20 * fit + 0.02], [u + 1.2 * U, v + 1.2 * U, 29 + 20 * fit + 0.02], [u - 1.2 * U, v + 1.2 * U, 29 + 20 * fit + 0.02]], 0x68726c, 0)
   }
   if (fit <= 0.75) return
   block(d, u, v, 2.4 * U, 2.8 * U, 8, 0.4, [open > 0.25 ? 0xd8aa5e : 0x8a7860, 0x8a7860, 0x6d7469], 0)
@@ -206,26 +206,26 @@ function smithy(d: Drawing, fit: number, open: number) {
 }
 
 function workbench(d: Drawing, u: number, v: number) {
-  for (const x of [-2.5 * U, 2.5 * U]) for (const y of [-U, U]) block(d, u + x, v + y, 0.35 * U, 0.35 * U, 1, 5)
-  block(d, u, v, 3.2 * U, 1.7 * U, 6, 1)
+  for (const x of [-2.5 * U, 2.5 * U]) for (const y of [-U, U]) block(d, u + x, v + y, 0.35 * U, 0.35 * U, 1, 6)
+  block(d, u, v, 3.2 * U, 1.7 * U, 7, 1)
 }
 
 function sawmill(d: Drawing, fit: number) {
-  block(d, 0, -12 * U, 12 * U, 0.6 * U, 1, 35, stone)
+  block(d, 0, -12 * U, 12 * U, 0.6 * U, 1, 29, stone)
   for (const u of [-12 * U, 12 * U]) {
-    post(d, u, -12 * U, 36)
-    post(d, u, 4 * U, 32)
-    beam(d, [u, -12 * U, 36], [u, 4 * U, 32], 1.8)
-    beam(d, [u, 4 * U, 24], [u, -U, 33.25], 1.5)
+    post(d, u, -12 * U, 30)
+    post(d, u, 4 * U, 26)
+    beam(d, [u, -12 * U, 30], [u, 4 * U, 26], 1.4)
+    beam(d, [u, 4 * U, 20], [u, -U, 27.25], 1.2)
   }
-  beam(d, [-12 * U, 4 * U, 32], [12 * U, 4 * U, 32], 2)
+  beam(d, [-12 * U, 4 * U, 26], [12 * U, 4 * U, 26], 1.5)
   if (fit > 0) {
-    const top: Vertex[] = [[-13.5 * U, -13 * U, 36.7], [13.5 * U, -13 * U, 36.7], [13.5 * U, 5 * U, 32.3], [-13.5 * U, 5 * U, 32.3]]
+    const top: Vertex[] = [[-13.5 * U, -13 * U, 30.7], [13.5 * U, -13 * U, 30.7], [13.5 * U, 5 * U, 26.3], [-13.5 * U, 5 * U, 26.3]]
     const bottom = top.map(([u, v, z]): Vertex => [u, v, z - 0.8])
     d.face(top, pale(0x8a6a45, 0.76), 1)
     d.face([...bottom].reverse(), pale(0x8a6a45, 0.65), 0)
     for (let i = 0; i < 4; i++) d.face([bottom[i]!, bottom[(i + 1) % 4]!, top[(i + 1) % 4]!, top[i]!], pale(0x8a6a45, 0.58), 0.6)
-    block(d, 0, 4.8 * U, 13.5 * U, 0.35 * U, 31, 1.3, [pale(0xd27a34, 0.4), pale(0xd27a34, 0.4), pale(0xd27a34, 0.25)])
+    block(d, 0, 4.8 * U, 13.5 * U, 0.35 * U, 25, 1.3, [pale(0xd27a34, 0.4), pale(0xd27a34, 0.4), pale(0xd27a34, 0.25)])
   }
   // The cutting frame stands in the open bay. Logs run through its centre.
   for (const u of [-4 * U, 4 * U]) {
@@ -264,7 +264,7 @@ export function workshopConstruction(id: WorkshopId, build: number, share: numbe
   }
   if (stage.walls > 0) block(d, 0, 0, 13.5 * U, 13.5 * U, 0, Math.max(0.1, stage.walls), stone, 0)
   if (stage.frame > 0) {
-    const height = (id === "mine" ? 49 : 32) * stage.frame
+    const height = (id === "mine" ? 49 : id === "smithy" ? 27 : 30) * stage.frame
     const us = id === "mine" ? [-6 * U, 6 * U] : [-12 * U, id === "smithy" ? U : 12 * U]
     const vs = id === "mine" ? [-10 * U, -3 * U] : [-12 * U, id === "sawmill" ? 4 * U : U]
     for (const u of us) for (const v of vs) {
@@ -273,7 +273,7 @@ export function workshopConstruction(id: WorkshopId, build: number, share: numbe
     beam(d, [us[0]!, vs[0]!, height], [us[1]!, vs[0]!, height], 1.4)
   }
   if (stage.walls > 0) {
-    const height = Math.max(0.1, 32 * stage.walls)
+    const height = Math.max(0.1, (id === "mine" ? 27 : id === "smithy" ? 26 : 29) * stage.walls)
     block(d, id === "smithy" ? -5.5 * U : 0, -12 * U, (id === "smithy" ? 6.5 : 12) * U, 0.6 * U, 1, height, stone)
     if (id === "smithy") block(d, -12 * U, -5.5 * U, 0.6 * U, 6.5 * U, 1, height, stone)
   }

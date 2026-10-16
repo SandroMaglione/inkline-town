@@ -4,7 +4,7 @@ import { beam, block, orient, roof, stone } from "./workshops.ts"
 import type { BuildingOptions } from "./buildings.ts"
 
 const violet = 0x806397, blue = 0x66859e, gold = [0xe8d5a2, 0xc8ad6d, 0xa78b4e] as const
-export const civicEave = (level: number) => level >= 2 ? 80 : 64
+export const civicEave = (level: number) => level >= 2 ? 80 : 58
 
 function hip(d: Drawing, u: number, v: number, a: number, z: number, rise: number, color: number) {
   const ring: Vertex[] = [[u-a,v-a,z],[u+a,v-a,z],[u+a,v+a,z],[u-a,v+a,z]]
@@ -60,21 +60,21 @@ function entrance(d: Drawing, v: number, half: number, height: number) {
 }
 
 function guildhall(d: Drawing) {
-  block(d,0,0,18*U,16*U,0,64,stone,1.4)
+  block(d,0,0,18*U,16*U,0,58,stone,1.4)
   block(d,0,0,18.5*U,16.5*U,0,3,stone)
   // Broad roof ridges run along the hall, with a projecting clock tower.
-  roof(d,19*U,17*U,0,64,23,violet)
+  roof(d,19*U,17*U,0,58,23,violet)
   for (const side of sides) {
     const a=(side==="left"||side==="backLeft"?16:18)*U
     for (const s of [-11*U,11*U]) {
-      window(d,side,a,s,12,1.8*U,15)
-      window(d,side,a,s,41,1.8*U,16)
+      window(d,side,a,s,10,1.6*U,13)
+      window(d,side,a,s,36,1.6*U,14)
     }
     const p=(s:number,z:number)=>d.wall(side,a,s,z,.04)
-    beam(d,p(-a,33),p(a,33),1.6,stone)
-    beam(d,p(-a,61),p(a,61),1.8,stone)
+    beam(d,p(-a,28),p(a,28),1.3,stone)
+    beam(d,p(-a,55),p(a,55),1.5,stone)
   }
-  for (const u of [-17*U,17*U]) for (const v of [-15*U,15*U]) block(d,u,v,.75*U,.75*U,0,64,stone)
+  for (const u of [-17*U,17*U]) for (const v of [-15*U,15*U]) block(d,u,v,.75*U,.75*U,0,58,stone)
   // The tower has a foundation, an entrance and a sheltered balcony.
   const v=12.5*U,a=5*U
   block(d,0,v,a,a,0,108,stone,1.3)
@@ -101,15 +101,15 @@ function guildhall(d: Drawing) {
     beam(d,[u,17.5*U,24],[u,20.5*U,31],1.2,stone)
   }
   block(d,0,19*U,6.3*U,2.2*U,31,1.8,stone)
-  for (const u of [-5.5,-3.3,-1.1,1.1,3.3,5.5]) block(d,u*U,21*U,.2*U,.2*U,33,6,stone,.55)
-  beam(d,[-6*U,21*U,39],[6*U,21*U,39],.9,stone)
-  window(d,"left",17.55*U,0,33,2.2*U,26)
-  banner(d,-7.5*U,16.1*U,55,violet)
-  banner(d,7.5*U,16.1*U,55,violet)
+  for (const u of [-5.5,-3.3,-1.1,1.1,3.3,5.5]) block(d,u*U,21*U,.2*U,.2*U,33,8,stone,.55)
+  beam(d,[-6*U,21*U,41],[6*U,21*U,41],.9,stone)
+  window(d,"left",17.55*U,0,33,1.8*U,20)
+  banner(d,-7.5*U,16.1*U,51,violet)
+  banner(d,7.5*U,16.1*U,51,violet)
   // Roof dormers break up the rear ridge as well as the street silhouette.
   for (const sign of [-1,1]) for (const y of [-9*U,2*U]) {
-    block(d,sign*10*U,y,2*U,2*U,72,8,stone)
-    hip(d,sign*10*U,y,2.7*U,80,6,violet)
+    block(d,sign*10*U,y,2*U,2*U,66,8,stone)
+    hip(d,sign*10*U,y,2.7*U,74,6,violet)
   }
 }
 
@@ -117,29 +117,29 @@ function cityhall(d: Drawing) {
   // A taller central hall and lower wings replace the single flat block.
   block(d,0,0,10*U,16*U,0,80,stone,1.4)
   for (const u of [-15*U,15*U]) {
-    block(d,u,0,5*U,15*U,0,50,stone,1.2)
-    block(d,u,0,5.5*U,15.5*U,47,3,stone)
-    roof(d,5.5*U,15.5*U,0,50,10,blue,u)
+    block(d,u,0,5*U,15*U,0,46,stone,1.2)
+    block(d,u,0,5.5*U,15.5*U,43,3,stone)
+    roof(d,5.5*U,15.5*U,0,46,10,blue,u)
     for (const v of [-11*U,11*U]) {
-      block(d,u,v,4.2*U,4.2*U,0,60,stone,1.2)
-      block(d,u,v,4.7*U,4.7*U,58,2,stone)
-      hip(d,u,v,5*U,60,12,blue)
-      d.cylinder(u,v,.45*U,71.5,3.5,gold[1],gold[0],.5,10)
+      block(d,u,v,4.2*U,4.2*U,0,54,stone,1.2)
+      block(d,u,v,4.7*U,4.7*U,52,2,stone)
+      hip(d,u,v,5*U,54,12,blue)
+      d.cylinder(u,v,.45*U,65.5,3.5,gold[1],gold[0],.5,10)
     }
   }
   block(d,0,0,10.7*U,16.7*U,76,4,stone)
   for (const side of sides) {
     const front=side==="left"||side==="backLeft",a=(front?16:20)*U
-    for (const s of front?[-15*U,15*U]:[-10*U,0,10*U]) for (const z of [12,35]) window(d,side,front?15.2*U:a,s,z,1.4*U,11)
+    for (const s of front?[-15*U,15*U]:[-10*U,0,10*U]) for (const z of [10,33]) window(d,side,front?15.2*U:a,s,z,1.4*U,10)
     if (front) {
-      for (const s of [-6*U,0,6*U]) window(d,side,a,s,53,1.5*U,17)
+      for (const s of [-6*U,0,6*U]) window(d,side,a,s,60,1.5*U,13)
       const p=(s:number,z:number)=>d.wall(side,a,s,z,.04)
-      beam(d,p(-10*U,49),p(10*U,49),1.4,stone)
+      beam(d,p(-10*U,52),p(10*U,52),1.2,stone)
     }
   }
   for (const u of [-9*U,9*U]) for (const v of [-15.5*U,15.5*U]) block(d,u,v,.65*U,.65*U,0,76,stone)
   // A wide ceremonial stair leads into the columned portico.
-  for (let i=0;i<4;i++) block(d,0,(21-i*.7)*U,(11-i*.45)*U,(1.5+i*.15)*U,i,1,stone)
+  for (let i=0;i<5;i++) block(d,0,(21-i*.65)*U,(11-i*.35)*U,(1.5+i*.15)*U,i*.8,.8,stone)
   entrance(d,16*U,3.4*U,27)
   for (const u of [-8*U,-4*U,4*U,8*U]) {
     block(d,u,20*U,.85*U,.85*U,4,2,stone)
