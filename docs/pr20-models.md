@@ -66,18 +66,19 @@ Validation commands are `pnpm typecheck`, `pnpm test`, `pnpm check`,
 `pnpm assets:build`, and the browser workflows `check:models`, `check:proportions`,
 `check:revisions`, `check:phone`, `check:effects`, `check:park`,
 `check:browser` and `look:upgrades`, with `GAME_BASE_URL` set to the server.
-The economy hand playtest and optional v8 save fixture from the original
-handoff are outside this model pass.
+Economy balance and save-migration changes belong to the parent PR.
 
-The proportion pass passes typecheck, build, all 119 tests, `pnpm check`,
+The proportion pass passes typecheck, build, the full test suite, `pnpm check`,
 all 45 comparison pairs, model gallery and revision browser checks, and
 export/reimport of all 236 GLBs. Geometry checks cover walker-sized home doors,
 floor clearance, unchanged plots, marker clearance in every orientation and
 the lookout route with full walker headroom.
 Both civic upgrades complete through the real upgrade command. The live
 upgrade and phone menu/portrait checks also pass without
-browser errors. Effects and park checks also pass with the revised geometry. The full game
-browser check still times out at `scripts/check-browser.ts:72`, waiting
-for the first settlers. The identical timeout was reproduced on the
-untouched PR head `e610f70`, with no browser errors and the preceding
-selection, road, home and building placement checks passing.
+browser errors. Effects and park checks also pass with the revised geometry.
+After rebasing onto parent head `44e6ef9`, the full game browser check passes:
+construction, walker movement, selection at all eight angles, save/load,
+scene restoration, phone gestures, reckoning and sharing. The parent's road
+connection fix resolves the earlier settler timeout. The 45-pair comparison
+workflow, typecheck, full tests, simulation checks and build were rerun on
+that combined revision.
