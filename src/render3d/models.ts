@@ -3,12 +3,12 @@ import { makeBuilding, buildingDimensions, type BuildingOptions } from "../asset
 import { house } from "../asset-lab/homes.ts"
 import { Drawing, palette, square, type InkAsset, type Vertex, type Side } from "../asset-lab/primitives.ts"
 import { hash } from "../asset-lab/land.ts"
-import { kinds, home, type KindId, type Tier } from "../content.ts"
+import { kinds, home, type GroundId, type KindId, type PropId, type Tier } from "../content.ts"
 import { GRID, U, type Point } from "../iso.ts"
 import { key, cellOf, DIRS } from "../grid.ts"
 import type { Preview } from "../ui.ts"
 import { withAppearance, type Appearance } from "../asset-lab/appearance.ts"
-import { setts } from "../asset-lab/town-props.ts"
+import { parkAsset, setts } from "../asset-lab/town-props.ts"
 import { isWorkshop, workshopConstruction } from "../asset-lab/workshops.ts"
 import { isTradeYard, tradeConstruction } from "../asset-lab/trades.ts"
 import { serviceBuilding, upgradeHeights, type ServiceKind } from "../asset-lab/service-upgrades.ts"
@@ -386,4 +386,23 @@ export function overlayAsset(cells: ReadonlyArray<OverlayCell>) {
     if (c.ring) d.line([...ring, ring[0]!], 1.5, c.color, 0.95)
   }
   return d.asset
+}
+
+/** What a panel or menu pictures: a kind at a level of upgrades, a home's tier, or a piece of park. */
+export type Pictured = KindId | Tier | `park:${GroundId | PropId}`
+/** The ground a furnishing is pictured on: a lamp along a walk, a fountain or a statue on a paved square. */
+const furnishingGround: Readonly<Record<PropId, GroundId>> = { lamp: "path", fountain: "square", statue: "square" }
+/**
+ * The model a picture shows: the very one the map draws, built finished, through the same functions as the
+ * views (`buildingAsset`, `homeAsset`, `parkAsset`), so a picture can never fall behind its model.
+ */
+export function pictureAsset(what: Pictured, level = 0): InkAsset {
+  if (what === 1 || what === 2 || what === 3) return homeAsset(what, 0, 1, null, { ...noDoors, right: true })
+  if (typeof what === "string" && what.startsWith("park:")) {
+    const piece = what.slice(5) as GroundId | PropId
+    const ground = piece in furnishingGround ? furnishingGround[piece as PropId] : (piece as GroundId)
+    const prop = piece in furnishingGround ? (piece as PropId) : "none"
+    return parkAsset(new Map([[key(0, 0), { x: 0, y: 0, ground, prop }]]))
+  }
+  return buildingAsset(what as KindId, 1, null, { ...noDoors, right: true, left: true }, 0, {}, level)
 }
