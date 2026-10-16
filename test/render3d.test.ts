@@ -11,6 +11,7 @@ import { ModelHandle, ModelPool } from "../src/render3d/pool.ts"
 import { assetById } from "../src/asset-lab/assets.ts"
 import { surfaceState, hazardStrength } from "../src/render3d/surface-state.ts"
 import { StructureEffects } from "../src/render3d/structure-effects.ts"
+import { vertex3 } from "../src/asset-lab/renderer.ts"
 
 function valid(asset: InkAsset) {
   for (const face of asset.faces) {
@@ -46,13 +47,13 @@ test("live service upgrades retain their taller models and material bounds besid
     assert.equal(upgraded.effects?.height, upgradeHeights[id].eave)
     assert.equal(upgraded.effects?.state.snow, 1)
   }
-  for (const [id, height] of [["bakery", 28], ["weaver", 30], ["fishery", 20]] as const)
+  for (const [id, height] of [["bakery", 28], ["weaver", 30], ["fishery", 20], ["carpenter", 28]] as const)
     assert.equal(buildingHeight(id), height, `${id}: public height must follow the revised model`)
 })
 
-test("every other upgrade keeps its building's own model, adds to it inside its plot, and stands taller", () => {
-  for (const id of dressed) for (const level of id === "townhall" ? [1, 2] : [1]) {
-    const doors = { ...noDoors, right: true }
+test("workplace and civic upgrades stay inside their plots in every orientation and retain marker clearance", () => {
+  for (const id of dressed) for (const level of id === "townhall" ? [1, 2] : [1]) for (const side of Object.keys(noDoors)) {
+    const doors = { ...noDoors, [side]: true }
     const base = buildingAsset(id, 1, null, doors, 1), up = buildingAsset(id, 1, null, doors, 1, {}, level)
     valid(up)
     const plot = kinds[id].size * 8 * U + 1e-9
@@ -60,6 +61,54 @@ test("every other upgrade keeps its building's own model, adds to it inside its 
     assert.ok(reach(up) <= plot, `${id}/${level}: the upgrade reaches past its plot (${reach(up)} > ${plot})`)
     assert.ok(up.faces.length + up.strokes.length > base.faces.length + base.strokes.length, `${id}/${level}: nothing is added`)
     assert.ok(buildingTop(id, level) >= buildingTop(id, 0), `${id}/${level}: its marker sinks`)
+    const actualTop = Math.max(...up.faces.flatMap(f => f.points.map(p => p[2])), ...up.strokes.flatMap(s => s.points.map(p => p[2])))
+    assert.ok(buildingTop(id, level) + 0.1 >= actualTop, `${id}/${level}: marker bounds miss geometry (${actualTop})`)
+  }
+})
+
+test("civic milestones have progressively taller silhouettes, road-facing entrances and correct surface bounds", () => {
+  let previous=buildingTop("townhall")
+  for(const level of [1,2]) {
+    assert.ok(buildingTop("townhall",level)>previous+5,"Each civic milestone must change the skyline")
+    previous=buildingTop("townhall",level)
+    for(const side of Object.keys(noDoors)) {
+      const asset=buildingAsset("townhall",1,null,{...noDoors,[side]:true},1,{winter:true},level)
+      const door=asset.faces.find(f=>f.color===0xbda683)!
+      assert.ok(door,"A civic milestone needs a visible entrance")
+      const u=door.points.reduce((n,p)=>n+p[0],0)/door.points.length,v=door.points.reduce((n,p)=>n+p[1],0)/door.points.length
+      assert.equal(Math.abs(u)>Math.abs(v)?u>0?"right":"backRight":v>0?"left":"backLeft",side)
+      assert.equal(asset.effects?.height,buildingHeight("townhall",level))
+      assert.equal(asset.effects?.state.snow,1)
+    }
+  }
+})
+
+test("guildhall clock faces are circular in world space on every tower wall", () => {
+  for (const side of Object.keys(noDoors)) {
+    const asset=buildingAsset("townhall",1,null,{...noDoors,[side]:true},1,{},1)
+    const clocks=asset.faces.filter(face=>face.color===0xf7f5e9)
+    assert.equal(clocks.length,4)
+    for (const face of clocks) {
+      const points=face.points.slice(0,-1).map(vertex3)
+      const center=points.reduce((sum,p)=>sum.add(p),new THREE.Vector3()).divideScalar(points.length)
+      const radius=points[0]!.distanceTo(center)
+      assert.ok(points.every(p=>Math.abs(p.distanceTo(center)-radius)<1e-8),`${side}: squashed clock face`)
+    }
+  }
+})
+
+test("the same scaffold fits every building footprint and leaves all four central approaches clear", () => {
+  for(const id of kindIds)for(const share of [0,.15,.5,.9,1]) {
+    const size=kinds[id].size,asset=scaffoldAsset(size,buildingHeight(id),share),half=size/2
+    valid(asset)
+    assert.ok([...asset.faces,...asset.strokes].flatMap(p=>p.points).every(p=>Math.abs(p[0])<=half&&Math.abs(p[1])<=half),id)
+    for(const [u,v,du,dv]of [[0,half+.1,0,-1],[half+.1,0,-1,0],[0,-half-.1,0,1],[-half-.1,0,1,0]]) {
+      const origin=new THREE.Vector3(u,v,6),ray=new THREE.Ray(origin,new THREE.Vector3(du,dv,0))
+      for(const f of asset.faces)for(let i=1;i<f.points.length-1;i++) {
+        const hit=ray.intersectTriangle(new THREE.Vector3(...f.points[0]!),new THREE.Vector3(...f.points[i]!),new THREE.Vector3(...f.points[i+1]!),false,new THREE.Vector3())
+        assert.ok(!hit||hit.distanceTo(origin)>.6,`${id}/${share}: scaffold blocks a central entrance`)
+      }
+    }
   }
 })
 

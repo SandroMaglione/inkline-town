@@ -136,7 +136,7 @@ export class BuildingView extends WorldView {
     const works = look.works ?? null
     this.scaffold.root.visible = works !== null && build >= 1
     if (works !== null && build >= 1) {
-      const step = Math.round(works * 6) / 6, height = buildingHeight(this.kindId, level)
+      const step = Math.round(works * 24) / 24, height = buildingHeight(this.kindId, level)
       this.scaffold.use(`scaffold/${kind.size}/${height}/${step}`, () => scaffoldAsset(kind.size, height, step))
     }
     this.plate.use(`plate/${kind.size}/${build}`, () => plateAsset(kind.size, build))
@@ -164,7 +164,7 @@ export class BuildingView extends WorldView {
     this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
     this.shade = 0xffffff
     // The market hall has no flag of its own: the flag stays on the tier 1 market.
-    this.motion.root.visible = look.build >= 1 && !serviceModel && (kind.topper === "flag" || kind.topper === "sails")
+    this.motion.root.visible = look.build >= 1 && !serviceModel && !(upgraded && this.kindId === "townhall") && (kind.topper === "flag" || kind.topper === "sails")
     if (kind.topper === "flag") {
       this.wave += dt * (look.working ? 6 : 3)
       this.motion.use("flag/" + this.kindId, () => makeFlag(this.kindId))

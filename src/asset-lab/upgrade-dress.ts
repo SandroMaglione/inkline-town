@@ -1,134 +1,108 @@
-/**
- * How a building upgraded where it stands is told apart from the one it
- * was (the market hall and the church have models of their own, see
- * `service-upgrades.ts`): what the upgrade adds to it, drawn over the
- * building's own model and never past its plot. A guildhall's clock tower,
- * a city hall's dome, a depot's hoist, an ovenworks' second chimney, a
- * masonry's derrick, an estate's dovecote, a fire brigade's bell. And the
- * scaffolding that stands inside a building's plot while an upgrade is under
- * way, rising with the share of its materials in.
- */
+/** Supported additions to the existing buildings, inside their plots. */
 import { U } from "../iso.ts"
-import { kinds, type KindId } from "../content.ts"
-import { Drawing, palette, square, type InkAsset, type Vertex } from "./primitives.ts"
+import type { KindId } from "../content.ts"
+import { Drawing, square, type InkAsset } from "./primitives.ts"
+import { beam, block, iron, orient, post, roof, stone, wheel, wood } from "./workshops.ts"
+import type { BuildingOptions } from "./buildings.ts"
+import { civicBuilding } from "./civic.ts"
+export { scaffoldAsset } from "./scaffolding.ts"
 
-const brick = { top: 0xd99a7e, left: 0xc77d63, right: 0xb5654a }
-const stone = { top: 0xf0f1eb, left: 0xe1e5dc, right: 0xd3d9cf }
-const slate = { face: 0x8f9891, shade: 0x6f7872 }
-const timber = { top: 0xeee2c8, left: 0xdcc9a8, right: 0xc6b18e }
-
-/** A four-sided roof to a point over (u, v). */
-const spire = (d: Drawing, u: number, v: number, a: number, z: number, rise: number, face: number, shade: number) => {
-  const base: Array<Vertex> = square(u, v, a, z)
-  for (let i = 0; i < 4; i++) d.face([base[i]!, base[(i + 1) % 4]!, [u, v, z + rise]], i === 2 || i === 3 ? face : shade)
+const brick = [0xd99a7e, 0xc77d63, 0xb5654a] as const
+const spire = (d: Drawing, u: number, v: number, a: number, z: number, rise: number) => {
+  const base = square(u, v, a, z)
+  for (let i = 0; i < 4; i++) d.face([base[i]!, base[(i + 1) % 4]!, [u, v, z + rise]], i >= 2 ? 0xb0b9b0 : 0x8f9990, 0.8)
 }
 
-/** The kinds that can be upgraded and are drawn by dressing their own model (not the market and chapel). */
 export const dressed = ["townhall", "warehouse", "bakery", "quarry", "farm", "firewatch"] as const satisfies ReadonlyArray<KindId>
 export type DressedKind = (typeof dressed)[number]
 export const isDressed = (id: KindId): id is DressedKind => (dressed as ReadonlyArray<KindId>).includes(id)
 
-/** What an upgrade adds, and the height of its highest point (for the marker over it). */
-const dress = (id: DressedKind, level: number, eave: number): { readonly asset: InkAsset; readonly top: number } => {
+function dress(id: DressedKind, level: number, eave: number): InkAsset {
   const d = new Drawing(`${id}-upgrade-${level}`, "Upgrade", "")
-  const plot = kinds[id].size * 8 * U
   switch (id) {
     case "townhall": {
-      if (level >= 2) {
-        // A city hall: a broad drum and a dome over the old roof.
-        d.box(0, 0, 7 * U, 7 * U, eave, 18, stone.top, stone.left, stone.right)
-        d.cylinder(0, 0, 6 * U, eave + 18, 10, 0xd3d9cf, 0xf0f1eb, 1, 24)
-        d.ellipsoid(0, 0, eave + 28, 6 * U, 6 * U, 14, 0xb8c9d6, 1, 0xdfe8ee, 20)
-        d.cylinder(0, 0, 0.8 * U, eave + 41, 8, 0xb39a61, 0xd5c18b, 0.7, 10)
-        return { asset: d.asset, top: eave + 50 }
-      }
-      // A guildhall: a clock tower on the roof.
-      d.box(0, 0, 5 * U, 5 * U, eave, 26, stone.top, stone.left, stone.right)
-      // A clock face on each side the camera sees.
-      const w = 5.01 * U, c = 2.2 * U, z = eave + 15
-      d.face([[w, -c, z], [w, c, z], [w, c, z + 8], [w, -c, z + 8]], 0xf7f8f4, 1)
-      d.face([[-c, w, z], [c, w, z], [c, w, z + 8], [-c, w, z + 8]], 0xf7f8f4, 1)
-      d.line([[w, 0, z + 4], [w, 0, z + 7]], 1)
-      d.line([[0, w, z + 4], [1.6 * U, w, z + 4]], 1)
-      spire(d, 0, 0, 6 * U, eave + 26, 16, slate.face, slate.shade)
-      return { asset: d.asset, top: eave + 42 }
+      return civicBuilding(level, { plate: false })
     }
     case "warehouse": {
-      // A depot: a hoist over the yard, and crates stacked on the roof.
-      const c = plot - 2 * U
-      d.line([[c, c, 0], [c, c, eave + 22]], 1.5)
-      d.line([[c, -c, 0], [c, -c, eave + 22]], 1.5)
-      d.line([[c, c, eave + 22], [c, -c, eave + 22]], 1.5)
-      d.line([[c, 0, eave + 22], [c, 0, eave + 8]], 0.8, palette.ink, 0.7)
-      d.crate(c - 0.5 * U, 0, eave + 2, 0x6e8f36, 1.2 * U, 5)
-      for (const [u, v, z] of [[-8 * U, -8 * U, eave], [-5 * U, -8 * U, eave], [-8 * U, -5 * U, eave], [-6.5 * U, -6.5 * U, eave + 5]] as const)
-        d.crate(u, v, z, 0x8a58a8, 1.2 * U, 5)
-      return { asset: d.asset, top: eave + 26 }
+      // A gantry spans the loading apron. Cargo stays in the yard.
+      for (const u of [-16 * U, 16 * U]) {
+        post(d, u, 18 * U, 52)
+        beam(d, [u, 18 * U, 40], [u * 0.72, 18 * U, 51], 1.4)
+      }
+      beam(d, [-16 * U, 18 * U, 52], [16 * U, 18 * U, 52], 2)
+      block(d, 8 * U, 18 * U, 1.3 * U, 0.8 * U, 50.5, 1.5, iron)
+      wheel(d, 8 * U, 18 * U, 50, 1.5)
+      d.line([[8 * U, 18 * U, 49], [8 * U, 18 * U, 16]], 0.75, wood[2])
+      d.crate(8 * U, 18 * U, 8, 0x8a58a8, 1.8 * U, 6)
+      d.line([[6.2 * U, 18 * U, 14], [8 * U, 18 * U, 16], [9.8 * U, 18 * U, 14]], 0.75)
+      break
     }
     case "bakery": {
-      // An ovenworks: a second, taller brick chimney.
-      d.box(-6 * U, 5 * U, 1.8 * U, 1.8 * U, 0, eave + 30, brick.top, brick.left, brick.right)
-      d.box(-6 * U, 5 * U, 2.2 * U, 2.2 * U, eave + 30, 2, brick.top, brick.left, brick.right)
-      return { asset: d.asset, top: eave + 34 }
+      block(d, -3 * U, -3 * U, 1.8 * U, 1.8 * U, 1, 59, brick)
+      block(d, -3 * U, -3 * U, 2.2 * U, 2.2 * U, 59, 2, brick)
+      d.face(square(-3 * U, -3 * U, 1.4 * U, 61.02), 0x68726c, 0)
+      for (const z of [43, 49, 55]) d.line([[-4.8 * U, -1.18 * U, z], [-1.2 * U, -1.18 * U, z]], 0.45, 0x9a654f)
+      break
     }
     case "quarry": {
-      // A masonry: a derrick over the pit, and dressed blocks waiting by it.
-      const c = plot - 2.5 * U
-      d.line([[c, c, 0], [c, c, 52]], 2)
-      d.line([[c, c, 50], [-c * 0.4, -c * 0.4, 30]], 1.5)
-      d.line([[c, c, 0], [c - 4 * U, c, 0], [c, c, 30]], 1, palette.ink, 0.8)
-      d.line([[-c * 0.4, -c * 0.4, 30], [-c * 0.4, -c * 0.4, 14]], 0.8, palette.ink, 0.7)
-      for (const [u, v, z] of [[-c, c, 0], [-c + 2.6 * U, c, 0], [-c + 1.3 * U, c, 4]] as const) d.box(u, v, 1.2 * U, 1.2 * U, z, 4, stone.top, stone.left, stone.right, 1)
-      return { asset: d.asset, top: 56 }
+      post(d, 12 * U, 9 * U, 52)
+      beam(d, [12 * U, 9 * U, 45], [U, 3 * U, 42], 2)
+      beam(d, [12 * U, 9 * U, 23], [3 * U, 4 * U, 42], 1.5)
+      beam(d, [8 * U, 12 * U, 0], [12 * U, 9 * U, 28], 1.2)
+      d.line([[U, 3 * U, 42], [U, 3 * U, 32]], 0.75, wood[2])
+      block(d, U, 3 * U, 1.4 * U, 1.2 * U, 25, 6, stone)
+      d.line([[-0.4 * U, 3 * U, 31], [U, 3 * U, 32], [2.4 * U, 3 * U, 31]], 0.75)
+      for (const z of [0, 5]) block(d, 12 * U, -5 * U, 1.2 * U, 1.3 * U, z, 5, stone)
+      break
     }
     case "farm": {
-      // An estate: a dovecote in a corner of the yard, and a hayrick.
-      const c = plot - 3 * U
-      d.box(c, -c, 2.2 * U, 2.2 * U, 0, 22, timber.top, timber.left, timber.right)
-      spire(d, c, -c, 2.8 * U, 22, 10, slate.face, slate.shade)
-      d.ellipsoid(-c, c, 0, 3 * U, 3 * U, 10, 0xe6c85a, 1, 0xf1dc8a, 16)
-      return { asset: d.asset, top: Math.max(eave + 12, 34) }
+      // The dovecote is clear of the silo and the hay shelter stays open.
+      const u = -18 * U, v = -16 * U
+      for (const du of [-1.5 * U, 1.5 * U]) for (const dv of [-1.5 * U, 1.5 * U]) post(d, u + du, v + dv, 15)
+      block(d, u, v, 2.2 * U, 2.2 * U, 15, 11, wood)
+      spire(d, u, v, 2.8 * U, 26, 7)
+      for (const dx of [-U, U]) d.face([[u + dx - 0.4 * U, v + 2.21 * U, 18], [u + dx + 0.4 * U, v + 2.21 * U, 18], [u + dx + 0.4 * U, v + 2.21 * U, 21], [u + dx - 0.4 * U, v + 2.21 * U, 21]], 0x68726c, 0.4)
+      beam(d, [u - 2 * U, v + 3 * U, 17.5], [u + 2 * U, v + 3 * U, 17.5], 0.6)
+      for (const dx of [-1.5 * U, 1.5 * U]) beam(d, [u + dx, v + 2.2 * U, 20], [u + dx, v + 3 * U, 17.5], 0.45)
+      for (const x of [-20, -14]) for (const y of [10, 19]) post(d, x * U, y * U, 16)
+      roof(d, 3.8 * U, 5.3 * U, 14.5 * U, 16, 5, 0x8a6a45, -17 * U)
+      for (const y of [12, 17]) d.log("u", y * U, -19 * U, -15 * U, 1, 2, 0xe9cf7c, 0xf3e3a8)
+      break
     }
     case "firewatch": {
-      // A fire brigade: a bell frame with its bell over the roof.
-      const z = eave + 26
-      for (const [u, v] of square(0, 0, 2 * U)) d.line([[u, v, z], [u, v, z + 12]], 1.2)
-      spire(d, 0, 0, 2.6 * U, z + 12, 6, 0xc4523f, 0xa8432f)
-      d.ellipsoid(0, 0, z + 4, 1.2 * U, 1.2 * U, 4, 0xb39a61, 1, 0xd5c18b, 12)
-      return { asset: d.asset, top: z + 20 }
+      // Equip the yard rather than floating a second bell above the lookout.
+      const u = -11 * U, v = 10 * U
+      block(d, u, v, 1.1 * U, 1.1 * U, 0, 1, stone)
+      d.cylinder(u, v, 0.5 * U, 1, 8, iron[1], iron[0], 0.6, 12)
+      beam(d, [u, v, 8], [u + 2 * U, v, 10], 0.8, iron)
+      beam(d, [u, v, 6], [u, v + 1.8 * U, 6], 0.8, iron)
+      d.barrel(u, v + 2 * U, U, 0, 3.5, 0xa8c7c1)
+      const x = 11 * U, y = 9 * U
+      block(d, x, y, 1.5 * U, 3 * U, 2.5, 1.2, wood)
+      for (const dx of [-1.8 * U, 1.8 * U]) wheel(d, x + dx, y, 2.5, 2.3)
+      beam(d, [x - 1.8 * U, y, 2.5], [x + 1.8 * U, y, 2.5], 0.7, iron)
+      for (const dx of [-U, U]) beam(d, [x + dx, y, 3.5], [x + dx, y + 5 * U, 4.5], 0.8)
+      for (let i = 0; i < 3; i++) d.cylinder(x, y, 1.25 * U, 3.7 + i * 0.7, 0.55, 0xb6a37a, 0xd4c8a7, 0.45, 16)
+      break
     }
   }
+  return d.asset
 }
 
-/** A building's own model with its upgrades drawn on: what it looks like at `level`. */
-export function dressedBuilding(id: DressedKind, level: number, base: InkAsset, eave: number): InkAsset {
-  const extra = dress(id, level, eave).asset
+export function dressedBuilding(id: DressedKind, level: number, base: InkAsset, eave: number, doors?: BuildingOptions["doors"]): InkAsset {
+  if (id === "townhall") return {
+    ...civicBuilding(level, { doors: doors ?? {}, plate: base.faces.some(f => f.points.every(p => p[2] < 0)) }), id: `${base.id}-${level}`
+  }
+  const raw = dress(id, level, eave)
+  const extra = id === "warehouse" || id === "bakery" ? orient(raw, doors) : raw
   return { ...base, id: `${base.id}-${level}`, faces: [...base.faces, ...extra.faces], strokes: [...base.strokes, ...extra.strokes] }
 }
-
-/** The highest point of an upgraded building, for the marker drawn over it. */
-export const dressedTop = (id: DressedKind, level: number, eave: number): number => dress(id, level, eave).top
-
-/**
- * Scaffolding inside a building's plot while it is upgraded: poles at its
- * corners, ledgers and boards rising with the `share` of its materials in,
- * and the crates the carriers have brought stacked by them.
- */
-export function scaffoldAsset(size: number, height: number, share: number): InkAsset {
-  const d = new Drawing("scaffold", "Scaffolding", ""),
-    s = (size * 8 - 1.2) * U,
-    top = height + 8,
-    rise = Math.max(4, Math.round(top * Math.min(1, share)))
-  for (const [u, v] of square(0, 0, s)) d.line([[u, v, 0], [u, v, top]], 1.2, 0x8a6a45)
-  // A ledger every few feet of what is in, and the boards they carry.
-  for (let z = 6; z <= rise; z += 8) {
-    d.line([...square(0, 0, s, z), [s, s, z]], 1, 0x8a6a45, 0.9)
-    d.line([[s, s, z + 0.2], [s, -s, z + 0.2]], 2.2, 0xd5a86c, 0.85)
-  }
-  // Diagonal braces on the two faces the camera sees most.
-  d.line([[s, s, 0], [s, -s, rise]], 0.8, 0x8a6a45, 0.7)
-  d.line([[s, s, 0], [-s, s, rise]], 0.8, 0x8a6a45, 0.7)
-  const crates = Math.ceil(Math.min(1, share) * 3)
-  for (let i = 0; i < crates; i++) d.crate(s - 1.4 * U, s - (1.4 + i * 2.6) * U, 0, 0x8f9891, 1.1 * U, 4)
-  return d.asset
+const tops = new Map<string, number>()
+export const dressedTop = (id: DressedKind, level: number, eave: number): number => {
+  const key=`${id}/${level}/${eave}`,cached=tops.get(key)
+  if(cached!==undefined)return cached
+  const a = dress(id, level, eave)
+  const top=Math.max(0, ...a.faces.flatMap(f => f.points.map(p => p[2])), ...a.strokes.flatMap(s => s.points.map(p => p[2])))
+  tops.set(key,top)
+  return top
 }

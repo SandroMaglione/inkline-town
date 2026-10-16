@@ -5,6 +5,7 @@ import { finishTownBuilding, townBuildingNotes, institutionDoor, makeQuarry } fr
 import { isWorkshop, makeWorkshop, workshopSmokeOrigin, townHallEntrance } from "./workshops.ts"
 import { isTradeYard, makeTradeYard, tradeSmokeOrigin, tradeEntrance, millHoist } from "./trades.ts"
 import { chapelPorch, hayBands, isRuralDoor, lumberRack, nursery, ruralEntrance, ruralNotes, sheepTrough } from "./rural.ts"
+import { makeCarpenter } from "./carpenter.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
   townhall: { accent: 0x8a58a8, glass: 0xf3dca6 },
@@ -42,6 +43,7 @@ export interface BuildingOptions {
   motion?: boolean
 }
 export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
+  if (id === "carpenter") return makeCarpenter(options)
   if (isWorkshop(id)) return makeWorkshop(id, options)
   if (isTradeYard(id)) return makeTradeYard(id, options)
   if (id === "quarry") return makeQuarry(options)
@@ -205,6 +207,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
 
 /** Shared by catalogue geometry and working-building emitters. Open yards have no flue. */
 export function buildingSmokeOrigin(id: KindId, doors?: BuildingOptions["doors"]): Vertex | null {
+  if (id === "carpenter") return null
   if (isWorkshop(id)) return workshopSmokeOrigin(id, doors)
   if (isTradeYard(id)) return tradeSmokeOrigin(id, doors)
   const kind = kinds[id]
@@ -215,6 +218,7 @@ export function buildingSmokeOrigin(id: KindId, doors?: BuildingOptions["doors"]
 
 /** Presentation dimensions stay separate from simulation footprints and content costs. */
 export function buildingDimensions(id: KindId) {
+  if (id === "carpenter") return { half: 13.5 * U, height: 28, top: 38 }
   if (isTradeYard(id)) return {
     half: (id === "warehouse" ? 21 : 13.5) * U,
     height: id === "fishery" ? 20 : id === "bakery" ? 28 : id === "weaver" ? 30 : 32,
@@ -225,7 +229,7 @@ export function buildingDimensions(id: KindId) {
   return {
     half: isWorkshop(id) ? 13.5 * U : kind.half * U,
     height,
-    top: id === "firewatch" ? 55 : id === "sawmill" ? 36.7 : id === "mine" || id === "smithy" ? 56 : height + topper
+    top: id === "quarry" ? 43 : id === "farm" ? 37 : id === "firewatch" ? 55 : id === "sawmill" ? 36.7 : id === "mine" || id === "smithy" ? 56 : height + topper
   }
 }
 

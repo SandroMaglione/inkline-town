@@ -4,8 +4,12 @@ import { buildAsset, exportAsset } from "../asset-lab/renderer.ts"
 import { kindIds } from "../content.ts"
 import { ruralIds } from "../asset-lab/rural.ts"
 import "./style.css"
+import "./handoff.css"
 
 const families = {
+  milestones: { title: "Civic milestones", ids: ["townhall", "guildhall", "cityhall"] },
+  works: { title: "Reusable building works", ids: ["upgrade-works-15", "upgrade-works-50", "upgrade-works-90", "works-carpenter-0", "works-warehouse-0", "works-quarry-0", "works-farm-0", "works-townhall-1", "works-townhall-2"] },
+  handoff: { title: "PR #20 · new models", ids: ["carpenter", "guildhall", "cityhall", "depot", "ovenworks", "masonry", "estate", "fire-brigade", "market-hall", "church", "upgrade-works-15", "upgrade-works-50", "upgrade-works-90", "cart-furniture-4"] },
   town: { title: "All buildings", ids: [...kindIds, "market-hall", "church"] },
   rural: { title: "Final refinements", ids: ruralIds },
   trades: { title: "Trade buildings", ids: ["mill", "warehouse", "fishery", "bakery", "weaver", "watchhouse"] },
@@ -16,12 +20,15 @@ const families = {
   homes: { title: "Homes & neighbourhoods", ids: ["cottage", "citizen", "townhouse", "cottage-fine", "citizen-fine", "townhouse-fine", "cottage-poor", "citizen-worn", "townhouse-worn"] },
   winter: { title: "Winter", ids: ["cottage-winter", "citizen-winter", "townhouse-winter", "granary-winter", "smokehouse-winter", "firewatch-winter", "healer-winter", "hospital-winter", "watchhouse-winter", "builder-winter"] },
   hazards: { title: "Ruins", ids: ["ruin-burnt-1", "ruin-collapsed-1", "ruin-derelict-1"] },
-  people: { title: "People & cargo", ids: ["service-watchman", "service-firefighter", "service-physician", "service-constable", "service-builder", "goods-smoked", "cart-smoked-4", "barrow-smoked-4"] },
+  people: { title: "People & cargo", ids: ["service-watchman", "service-firefighter", "service-physician", "service-constable", "service-builder", "goods-smoked", "cart-smoked-4", "barrow-smoked-4", "goods-furniture", "cart-furniture-4", "barrow-furniture-4"] },
   wear: { title: "Building condition", ids: ["granary-worn", "smokehouse-worn", "firewatch-worn", "healer-worn", "hospital-worn", "watchhouse-worn", "builder-worn"] },
   upgrades: { title: "Upgrades & worked faces", ids: ["market", "market-hall", "chapel", "church", "stone-full", "stone-quarried", "stone-worked", "ore-full", "ore-quarried", "ore-worked"] }
 } as const
 type Family = keyof typeof families
 const introductions: Partial<Record<Family, { heading: string; eyebrow: string; description: string; aside: string }>> = {
+  milestones: { heading: "A town's<br>great occasions.", eyebrow: "Town hall · Guildhall · City hall", description: "A familiar town hall becomes a steep-roofed guild house with a clock tower and balcony, then a domed civic palace with a ceremonial stair, colonnade and lower wings. These three views share one camera scale.", aside: "3 civic milestones<br>Original three-cell plot<br><span>Distinct silhouettes,<br>stonework and civic colour.</span>" },
+  works: { heading: "One scaffold.<br>Every workplace.", eyebrow: "Reusable construction geometry", description: "The same modular scaffold on a civic hall, open workshop, warehouse, quarry and farm. Plot size, building height and delivered share are its only inputs. Central bays stay open on every side.", aside: "1 shared generator<br>6 different building forms<br><span>Platforms, access ladders,<br>canvas screens and supplies.</span>" },
+  handoff: { heading: "New work.<br>The same ink.", eyebrow: "PR #20 · Carpenter and upgrades", description: "An open carpenter's workshop, civic towers and additions to the town's working yards. Turn the models to inspect their tools and supports, then compare them with the existing building collections.", aside: "1 new workshop<br>9 upgrade appearances<br><span>Plus scaffold progress<br>and furniture deliveries.</span>" },
   town: { heading: "The whole town.<br>The same ink.", eyebrow: "The complete building collection", description: "Every building kind, plus the market hall and church. Compare their silhouettes, turn the collection, and open any building for a closer look.", aside: `${kindIds.length} building kinds<br>2 upgraded buildings<br><span>Work yards, homes for trades,<br>stores and town services.</span>` },
   rural: { heading: "Small things.<br>A better town.", eyebrow: "The final building pass", description: "Timber entrances, nursery beds, farm details, a quieter chapel and a connected fire-watch lookout. Inspect all nine refinements together.", aside: "9 refined buildings<br>Original plots<br><span>Connected structures,<br>clear entrances and useful yards.</span>" },
   workshops: { heading: "Room to work.<br>The same ink.", eyebrow: "The first building batch", description: "Open work yards around real tools, and a civic entrance for the town hall. Turn the models to inspect their working space.", aside: "4 revised buildings<br>3 open work yards<br><span>Original plots, pale surfaces,<br>fine ink and purposeful tools.</span>" },
@@ -71,6 +78,7 @@ function select(next: Family) {
   if (sheetUrl) URL.revokeObjectURL(sheetUrl)
   sheetUrl = ""; root.querySelector<HTMLAnchorElement>("#sheet-link")!.hidden = true
   family = next; models.forEach(m => m.built.dispose()); models = []; grid.replaceChildren()
+  grid.classList.toggle("handoff", family === "handoff")
   const intro = introductions[family] ?? { heading: "New places.<br>The same ink.", eyebrow: "A town with a little more life", description: "Inspect the models together, turn them around, then open any one for a closer look.", aside: "7 buildings<br>3 park furnishings<br>3 home tiers<br><span>Plus people, hazards, paving,<br>snow and signs of wear.</span>" }
   root.querySelector(".intro h1")!.innerHTML = intro.heading
   root.querySelector(".eyebrow")!.textContent = intro.eyebrow
@@ -91,6 +99,11 @@ function select(next: Family) {
       a.href = url; a.download = `inkline-${id}.glb`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
     }
   }
+  if (family === "milestones") {
+    const bounds = new THREE.Box3()
+    for (const model of models) bounds.union(new THREE.Box3().setFromObject(model.built.group))
+    for (const model of models) { bounds.getCenter(model.center); bounds.getSize(model.size) }
+  }
   nav.querySelectorAll("button").forEach(b => { b.setAttribute("aria-pressed", String(b.dataset.family === next)) })
   history.replaceState(null, "", `?collection=${next}`); render()
 }
@@ -102,7 +115,7 @@ elevation.onchange = () => { pitch = Number(elevation.value); render() }
 root.querySelector<HTMLButtonElement>("#rear")!.onclick = () => { yaw = yaw === 180 ? 0 : 180; render() }
 root.querySelector<HTMLButtonElement>("#reset")!.onclick = () => { yaw = 0; pitch = 30; elevation.value = "30"; render() }
 root.querySelector<HTMLButtonElement>("#sheet")!.onclick = () => {
-  const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d")!, columns = 3, width = 400, height = 350
+  const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d")!, columns = family === "handoff" ? 2 : 3, width = family === "handoff" ? 600 : 400, height = 350
   canvas.width = columns * width; canvas.height = 100 + Math.ceil(models.length / columns) * height
   ctx.fillStyle = "#f0f2ec"; ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.fillStyle = "#3d4943"; ctx.font = "30px Georgia"; ctx.fillText(`Inkline Town / ${families[family].title}`, 30, 48)

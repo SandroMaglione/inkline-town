@@ -127,7 +127,26 @@ colour of what it makes and keeps its work in its yard: a log pile, a silo,
 a pen of sheep, a striped market stall. Trees, rocks, water, and roads are
 different on every cell.
 
-![Every building: town hall, warehouse, lumberjack, forester, quarry, mine, fishery, sawmill, smithy, farm, mill, bakery, sheep farm, weaver, market, chapel](docs/screenshots/sheet-buildings.webp)
+![All 24 building kinds, including the carpenter, plus the market hall and church](docs/screenshots/sheet-buildings.webp)
+
+The carpenter and building upgrades can be inspected in the model review.
+Run `pnpm dev`, then open `/model-review.html?collection=handoff` to turn the models, compare
+scaffolding as materials arrive, and download their GLBs.
+
+The civic milestones have their own comparison at
+`/model-review.html?collection=milestones`. The guildhall's clock tower,
+steep roof and guild banners give way to the city hall's domed centre,
+lower wings and columned entrance.
+
+![Town hall, guildhall and city hall at one camera scale](docs/screenshots/sheet-civic.webp)
+
+`/model-review.html?collection=works` shows one reusable construction
+scaffold on six building forms. Plot size, building height and delivered
+share determine its bays, platforms, ladders and supplies.
+
+![Reusable scaffolding on civic buildings, a carpenter, warehouse, quarry and farm](docs/screenshots/sheet-works.webp)
+
+![Carpenter, civic and workplace upgrades, scaffolding progress and furniture cargo](docs/screenshots/sheet-upgrades.webp)
 
 ![Carriers pushing handcarts and barrows, each loaded with its good: logs, planks, stone, ore, tools, fish, wheat, flour, bread, wool, cloth](docs/screenshots/sheet-walkers.webp)
 

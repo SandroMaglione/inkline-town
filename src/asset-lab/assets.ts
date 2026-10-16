@@ -4,7 +4,7 @@ import { kindIds, goodIds, kinds, home, propIds } from "../content.ts"
 import { withAppearance } from "./appearance.ts"
 import { groundAsset } from "../render3d/models.ts"
 import { key } from "../grid.ts"
-import { makeBuilding } from "./buildings.ts"
+import { makeBuilding, buildingDimensions } from "./buildings.ts"
 import { house } from "./homes.ts"
 import { marketHall, church } from "./service-upgrades.ts"
 import { U } from "../iso.ts"
@@ -12,6 +12,7 @@ import { makeTree, makeRock, makeField, makeRoadPatch, makeWater } from "./land.
 import { personCatalogue, makeCarrier, makeGoods, makeCrate } from "./people.ts"
 import { makeSite, makeConstruction, makeMarker, makeSmoke, makePlot } from "./construction.ts"
 import { makeParkProp, makeRuin, makeSamplePark } from "./town-props.ts"
+import { upgradeCatalogue } from "./upgrade-catalogue.ts"
 
 import { Drawing, mix, pale, square, sides, palette, type InkAsset, type Vertex } from "./primitives.ts"
 export * from "./primitives.ts"
@@ -109,7 +110,7 @@ baseFir.footprint = 1
 for (const face of baseFir.faces) if (face.contour) face.contourWidth = 1.5
 approvedAssets.find((asset) => asset.id === "goods")!.category = "cargo"
 approvedAssets.find((asset) => asset.id === "goods")!.footprint = 2
-const additional: Array<InkAsset> = [marketHall(), church()]
+const additional: Array<InkAsset> = [marketHall(), church(), ...upgradeCatalogue()]
 for (const kind of kindIds) if (!approvedAssets.some((asset) => asset.id === kind)) additional.push(makeBuilding(kind))
 const names = ["terracotta", "slate", "thatch", "moss"]
 for (const tier of [1, 2] as const)
@@ -128,8 +129,8 @@ for (const tier of [1, 2, 3] as const) for (const appearance of ["fine", "poor",
   additional.push(model)
 }
 for (const id of ["granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder"] as const) for (const appearance of ["winter", "worn"] as const) {
-  const kind = kinds[id], base = makeBuilding(id)
-  const model = withAppearance(base, kind.half * U, kind.roof === "gable" ? 20 : kind.stories * 32, { winter: appearance === "winter", worn: appearance === "worn" })
+  const kind = kinds[id], base = makeBuilding(id), dimensions = buildingDimensions(id)
+  const model = withAppearance(base, dimensions.half, dimensions.height, { winter: appearance === "winter", worn: appearance === "worn" })
   model.id = `${id}-${appearance}`; model.title = `${kind.title} · ${appearance}`; model.appearance = appearance
   additional.push(model)
 }

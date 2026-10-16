@@ -2,6 +2,7 @@ import { carrierDress, cartLook, residentDress, serviceDress, homeVariant, type 
 import { goods, type GoodId } from "../content.ts"
 import { Drawing, palette, type Vertex } from "./primitives.ts"
 import { U } from "../iso.ts"
+import { chair, chest } from "./furniture.ts"
 
 const R = 45.2548
 export type ServiceRole = "watchman" | "firefighter" | "physician" | "constable" | "builder"
@@ -241,15 +242,8 @@ export function drawCargo(d: Drawing, good: GoodId, count: number, u: number, v:
       d.box(u + 0.03, v, 0.035, 0.018, z + 8, 1.6, 0x8f9891, 0x8f9891, 0x7c857d, 0.75)
       break
     case "furniture": {
-      // A chest, and a chair on it (two chairs side by side in a full load).
-      d.box(u, v, 1.8 * U, 1.1 * U, z, 3, 0xc9965f, 0xb5814c, 0x9a6b3f, 1)
-      for (const c of n >= 2 ? [-0.8, 0.8] : [0]) {
-        const y = v + c * U
-        d.box(u, y, 0.6 * U, 0.6 * U, z + 5, 0.8, 0xe0b27e, 0xc9965f, 0xb5814c, 0.75)
-        d.box(u - 0.5 * U, y, 0.12 * U, 0.6 * U, z + 5.8, 4, 0xe0b27e, 0xc9965f, 0xb5814c, 0.75)
-        for (const [a, b] of [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]] as const)
-          d.line([[u + a * U, y + b * U, z + 3], [u + a * U, y + b * U, z + 5]], 0.6, 0x8a6a45)
-      }
+      chest(d, u, v, z)
+      if (n >= 2) chair(d, u, v, z + 4.65)
       break
     }
   }

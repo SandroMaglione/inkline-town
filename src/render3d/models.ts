@@ -13,6 +13,8 @@ import { isWorkshop, workshopConstruction } from "../asset-lab/workshops.ts"
 import { isTradeYard, tradeConstruction } from "../asset-lab/trades.ts"
 import { serviceBuilding, upgradeHeights, type ServiceKind } from "../asset-lab/service-upgrades.ts"
 import { dressedBuilding, dressedTop, isDressed, scaffoldAsset } from "../asset-lab/upgrade-dress.ts"
+import { carpenterConstruction } from "../asset-lab/carpenter.ts"
+import { civicEave } from "../asset-lab/civic.ts"
 export { scaffoldAsset }
 
 export type DoorSet = Record<Side, boolean>
@@ -69,7 +71,7 @@ export function constructionAsset(size: number, half: number, height: number, bu
 }
 /** The height a building of a kind is drawn to its eaves at its level of upgrades (see `upgradeHeights`). */
 export const buildingHeight = (id: KindId, level = 0) =>
-  level > 0 && isUpgradable(id) ? upgradeHeights[id].eave : buildingDimensions(id).height
+  level > 0 && id === "townhall" ? civicEave(level) : level > 0 && isUpgradable(id) ? upgradeHeights[id].eave : buildingDimensions(id).height
 /** Its highest point, for the marker over it. */
 export const buildingTop = (id: KindId, level = 0) =>
   level > 0 && isUpgradable(id) ? upgradeHeights[id].top : level > 0 && isDressed(id) ? Math.max(buildingDimensions(id).top, dressedTop(id, level, buildingDimensions(id).height)) : buildingDimensions(id).top
@@ -82,14 +84,15 @@ export function buildingAsset(id: KindId, build: number, share: number | null, d
   if (build < 0.78) return isWorkshop(id)
     ? workshopConstruction(id, build, share, doors)
     : isTradeYard(id) ? tradeConstruction(id, build, share, doors)
-    : constructionAsset(kind.size, kind.half, kind.roof === "gable" ? 20 : kind.stories * 32, build, share)
-  // An upgraded building is only ever a standing one: the upgrade is paid and done at once.
+    : id === "carpenter" ? carpenterConstruction(build, share, doors)
+    : constructionAsset(kind.size, kind.half, buildingDimensions(id).height, build, share)
+  // Completed upgrades use their final model; works are drawn separately.
   if (upgraded && isUpgradable(id)) return withAppearance(serviceBuilding(id, 2, { plate: false, doors }), kind.half * U, buildingHeight(id, level), appearance)
   const dimensions = buildingDimensions(id)
   const own = makeBuilding(id, { doors, open, fit: stage.fit, plate: false, motion: false } satisfies BuildingOptions)
   // Any other upgrade is the building's own model with what the upgrade adds drawn on (see `upgrade-dress.ts`).
-  const asset = upgraded && isDressed(id) && build >= 1 ? dressedBuilding(id, level, own, dimensions.height) : own
-  return build >= 1 ? withAppearance(asset, dimensions.half, dimensions.height, appearance) : asset
+  const asset = upgraded && isDressed(id) && build >= 1 ? dressedBuilding(id, level, own, dimensions.height, doors) : own
+  return build >= 1 ? withAppearance(asset, dimensions.half, buildingHeight(id, level), appearance) : asset
 }
 export function homeAsset(tier: Tier, n: number, build: number, share: number | null, doors: DoorSet, appearance: Appearance = {}) {
   if (build < 0.78) return constructionAsset(1, home.half + (tier >= 2 ? 1 : 0), home.tiers[tier].height, build, share)

@@ -2,6 +2,7 @@ import { Drawing, palette, square, type Vertex } from "./primitives.ts"
 import { buildStages } from "../art.ts"
 import { kinds, type KindId } from "../content.ts"
 import { U } from "../iso.ts"
+import { buildingDimensions } from "./buildings.ts"
 
 export function makeSite(share: number, size = 2) {
   const d = new Drawing(
@@ -43,7 +44,7 @@ export function makeSite(share: number, size = 2) {
 export function makeConstruction(kindId: KindId, progress: number) {
   const kind = kinds[kindId],
     a = kind.half * U,
-    H = kind.roof === "gable" ? 20 : kind.stories * 32,
+    H = buildingDimensions(kindId).height,
     stage = buildStages(progress)
   const d = new Drawing(
     `build-${kindId}-${progress}`,
