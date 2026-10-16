@@ -586,6 +586,9 @@ export const home = {
   taxFlight: { linear: 0.3, square: 0.2, citizens: 0.6 }
 }
 
+/** A word with its article: "a guildhall", "an estate". */
+export const anA = (word: string): string => `${/^[aeiou]/i.test(word) ? "an" : "a"} ${word}`
+
 /** What a tier's homes are called, and what its residents are. */
 export const tierHome: Readonly<Record<Tier, string>> = { 1: "settlers' cottage", 2: "citizens' home", 3: "townhouse" }
 

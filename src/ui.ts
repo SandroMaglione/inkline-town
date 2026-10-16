@@ -24,6 +24,8 @@ export interface Line {
   readonly note?: string | undefined
   readonly tone?: Tone | undefined
   readonly goods?: ReadonlyArray<{ readonly good: GoodId; readonly count: number }> | undefined
+  /** What to do about it, under the note: and, when it is to build something, what (the panel offers to place it). */
+  readonly fix?: { readonly text: string; readonly build?: KindId | undefined } | undefined
 }
 
 /**
@@ -135,6 +137,8 @@ export type Panel =
       readonly status: Status
       /** Why it is not working, when it is not. */
       readonly problem: string | null
+      /** How it is, as a row of its own above the rest: working, or what keeps it from it and what to do. */
+      readonly state: Line
       /** Whether it can be paused (not the town hall, not a site), and whether it is. */
       readonly pausable: boolean
       readonly paused: boolean
@@ -155,6 +159,8 @@ export type Panel =
         readonly title: string
         readonly blurb: string
         readonly price: string
+        /** Coins now, and the materials carriers bring. */
+        readonly cost: { readonly coins: number; readonly materials: Partial<Record<GoodId, number>> }
         readonly changes: ReadonlyArray<string>
         readonly blocked: string | null
         readonly short: string | null

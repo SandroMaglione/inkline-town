@@ -8,7 +8,7 @@
  */
 import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft } from "../archetypes.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
-import { amounts, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, ticks, total, upgradeAt, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
+import { amounts, anA, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, ticks, total, upgradeAt, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
@@ -425,7 +425,7 @@ export const ApplyEdits = Game.System(
           const owed = amounts(up.cost.materials)
           commands.insert(row.value.entity.id, Game.Command.entry(Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }))
           const was = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
-          write(resources.chronicle, t, `Works begin on the ${was}: it is to be a ${up.title.toLowerCase()}.`)
+          write(resources.chronicle, t, `Works begin on the ${was}: it is to be ${anA(up.title.toLowerCase())}.`)
           ui.toast(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)
           break
         }

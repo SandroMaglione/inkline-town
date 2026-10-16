@@ -8,7 +8,7 @@ import { wildTreeSpots, canSeedTree } from "../rules/land.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { fieldDraft, treeDraft } from "../archetypes.ts"
-import { amounts, asUpgraded, crewOf, goodIds, ticks, total, upgradeAt, worksNeeded, type Amounts, type Crew } from "../content.ts"
+import { amounts, anA, asUpgraded, crewOf, goodIds, ticks, total, upgradeAt, worksNeeded, type Amounts, type Crew } from "../content.ts"
 
 /** The flow of goods is counted in slices this many seconds long, and the last `FLOW_SLICES` of them (a minute) are kept. */
 const FLOW_SLICE = 10
@@ -214,7 +214,7 @@ export const Raise = Game.System(
       if (carriers && kind.carriers) commands.insert(entity.id, Game.Command.entry(Carriers, { count: kind.carriers }))
       if (service && kind.service) commands.insert(entity.id, Game.Command.entry(Service, { ...service, interval: ticks(kind.service.seconds), range: kind.service.range }))
       const was = (upgradeAt(base, works.level - 1)?.title ?? base.title).toLowerCase()
-      write(resources.chronicle, elapsed(resources.time.get(), resources.charter.get()), `The ${was} is now a ${upgradeAt(base, works.level)!.title.toLowerCase()}.`, true)
+      write(resources.chronicle, elapsed(resources.time.get(), resources.charter.get()), `The ${was} is now ${anA(upgradeAt(base, works.level)!.title.toLowerCase())}.`, true)
     }
 
     for (const { entity, data } of queries.sites.each()) {

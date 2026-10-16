@@ -886,6 +886,8 @@ export interface BuildingLook {
   readonly level?: number
   /** An upgrade under way: the share of its materials in (scaffolding rises with it), else `null`. */
   readonly works?: number | null
+  /** An upgrade it could begin now: show the upgrade marker over it. */
+  readonly upgradable?: boolean
 }
 
 /** A building as drawn: its plate on the floor, its body among the other objects, and its problem marker above everything. */

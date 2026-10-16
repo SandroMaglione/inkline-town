@@ -88,6 +88,21 @@ export function makeMarker() {
   }
   return d.asset
 }
+/** Over a building the town can upgrade now: a gold arrow up, on the same thin sign as the problem marker. */
+export function makeUpgradeMarker() {
+  const d = new Drawing("upgrade-marker", "Upgrade marker", "A gold arrow on a thin world-space sign: this building can be upgraded now.")
+  d.asset.category = "construction"
+  d.asset.reference = { type: "none" }
+  d.asset.footprint = 1
+  const gold = 0xb8862f
+  const p = (x: number, z: number, out = 0): Vertex => [x / 64 + out, -x / 64 + out, z]
+  d.face([p(-7.5, 0), p(7.5, 0), p(7.5, 15), p(-7.5, 15)], 0xfbf6e8, 1, gold)
+  for (const out of [-0.008, 0.008]) {
+    d.face([p(0, 12.6, out), p(4.6, 7.6, out), p(-4.6, 7.6, out)], gold, 0)
+    d.face([p(-1.6, 2.6, out), p(1.6, 2.6, out), p(1.6, 7.8, out), p(-1.6, 7.8, out)], gold, 0)
+  }
+  return d.asset
+}
 export function makeSmoke() {
   const d = new Drawing("smoke", "Chimney smoke", "Animated soft smoke rises and disperses from a flue. The plume uses the same particle shader as the live game.")
   d.asset.category = "construction"

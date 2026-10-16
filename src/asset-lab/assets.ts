@@ -10,7 +10,7 @@ import { marketHall, church } from "./service-upgrades.ts"
 import { U } from "../iso.ts"
 import { makeTree, makeRock, makeField, makeRoadPatch, makeWater } from "./land.ts"
 import { personCatalogue, makeCarrier, makeGoods, makeCrate } from "./people.ts"
-import { makeSite, makeConstruction, makeMarker, makeSmoke, makePlot } from "./construction.ts"
+import { makeSite, makeConstruction, makeMarker, makeUpgradeMarker, makeSmoke, makePlot } from "./construction.ts"
 import { makeParkProp, makeRuin, makeSamplePark } from "./town-props.ts"
 import { upgradeCatalogue } from "./upgrade-catalogue.ts"
 
@@ -163,6 +163,7 @@ additional.push(
   makeConstruction("warehouse", 0.3),
   makeConstruction("warehouse", 0.65),
   makeMarker(),
+  makeUpgradeMarker(),
   makeSmoke(),
   ...(["burnt", "collapsed", "derelict"] as const).map((cause) => makeRuin(1, cause)),
   makeRuin(2, "burnt"),

@@ -16,7 +16,7 @@ import { U, type Point } from "../iso.ts"
 import { vertex3 } from "../asset-lab/renderer.ts"
 import { Drawing, type Vertex } from "../asset-lab/primitives.ts"
 import { makeSails, makeFlag, buildingSmokeOrigin, buildingDimensions } from "../asset-lab/buildings.ts"
-import { makeMarker } from "../asset-lab/construction.ts"
+import { makeMarker, makeUpgradeMarker } from "../asset-lab/construction.ts"
 import { makeRuin } from "../asset-lab/town-props.ts"
 import { StructureEffects } from "./structure-effects.ts"
 import { SmokePlume } from "./smoke-effects.ts"
@@ -89,6 +89,7 @@ export class BuildingView extends WorldView {
   private body: ModelHandle
   private plate: ModelHandle
   private marker: ModelHandle
+  private upgradeMarker: ModelHandle
   private motion: ModelHandle
   private scaffold: ModelHandle
   private smoke: SmokePlume | null = null
@@ -107,6 +108,9 @@ export class BuildingView extends WorldView {
     this.scaffold = this.model()
     this.marker.use("problem-marker", makeMarker)
     this.marker.root.visible = false
+    this.upgradeMarker = this.model()
+    this.upgradeMarker.use("upgrade-marker", makeUpgradeMarker)
+    this.upgradeMarker.root.visible = false
     this.body.root.add(this.motion.root)
 
   }
@@ -146,6 +150,9 @@ export class BuildingView extends WorldView {
     this.marker.root.position.set(0, (top + 8) / Math.cos(Math.PI / 6), 0)
     const signed = !!look.burning || (look.alert !== null && look.alert !== undefined)
     this.marker.root.visible = look.problem && look.build >= 1 && !signed
+    // An upgrade it could begin now: a gold arrow in the marker's place, bobbing gently, when nothing is wrong.
+    this.upgradeMarker.root.visible = !!look.upgradable && look.build >= 1 && !look.problem && !signed
+    if (this.upgradeMarker.root.visible) this.upgradeMarker.root.position.set(0, (top + 8 + Math.sin(performance.now() / 420 + this.entity) * 1.5) / Math.cos(Math.PI / 6), 0)
     const state = structureState(look,this.stage.frost)
     this.body.effects = build >= 1 ? state : surfaceState()
     const serviceModel = upgraded && (this.kindId === "market" || this.kindId === "chapel")
@@ -192,6 +199,7 @@ export class BuildingView extends WorldView {
   }
   override orient() {
     this.marker.root.rotation.y = this.stage.heading - Math.PI / 4
+    this.upgradeMarker.root.rotation.y = this.stage.heading - Math.PI / 4
   }
   override destroy() { this.smoke?.dispose();this.smoke=null;super.destroy() }
 

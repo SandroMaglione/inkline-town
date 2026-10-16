@@ -96,10 +96,10 @@ six months.
   rises: the crown sends a reward, and play goes on. A rank is never lost.
   The town panel shows the next rank's goals.
 - **Upgrades** are made where a building stands, so they need no more
-  land. The build menu's *upgrades* lists every one, what it gives and
-  what it costs: pick one and the buildings it can go to are outlined;
-  hover one to see the same, and click it to begin (or use the button in
-  its panel). The coins are paid when the works begin; carriers then
+  land. A gold arrow floats over every building the town can upgrade now
+  (the rank reached, the coins in hand). Select the building: its panel
+  says what the upgrade gives and costs, and its button begins it. The
+  coins are paid when the works begin; carriers then
   bring the planks, stone, and tools, builders work them in as they come,
   and scaffolding rises inside its plot. It goes on working meanwhile.
   - a village: the town hall becomes a *guildhall* (holds twice as much,

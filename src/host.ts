@@ -53,7 +53,7 @@ import { GRID } from "./iso.ts"
 import { goodIcon, icon, iconEl, type IconName } from "./icons.ts"
 import { generate } from "./mapgen.ts"
 import { askOf, priceOf } from "./sim/index.ts"
-import type { Group, Line, Stats, Tool, TradeMode, UiValue, View } from "./ui.ts"
+import type { Group, Line, Panel, Stats, Tool, TradeMode, UiValue, View } from "./ui.ts"
 import { emptyPreview } from "./ui.ts"
 import { GameScene, type CameraView } from "./render3d/scene.ts"
 import { blobOf, cardFacts, drawCard, metaOf, scaled, verdictOf } from "./share/card.ts"
@@ -648,14 +648,6 @@ export const createHost = async (
     const title = grounds[ground].title.toLowerCase()
     ui.toast(touchScreen() ? `Drag a rectangle to lay ${title}, then tap Build` : `Drag a rectangle to lay ${title} · Esc to stop`)
   }
-  /** Picks a kind's buildings to upgrade: each one it can go to is outlined, and the tooltip says what it gives and costs. */
-  const upgradeTool = (kind: KindId) => {
-    ui.menu = null
-    choose("upgrade")
-    ui.upgrading = kind
-    const title = kinds[kind].title.toLowerCase()
-    ui.toast(touchScreen() ? `Tap a ${title} to see its upgrade, then tap it again to begin` : `Click a ${title} to begin its upgrade · Esc to stop`)
-  }
   const furnish = (prop: PropId) => {
     ui.prop = prop
     ui.menu = null
@@ -927,41 +919,6 @@ export const createHost = async (
       }
       panel.append(box)
     }
-    // Upgrades: every building that can be upgraded where it stands, what it becomes, what it gives, and what it costs.
-    const upgrades = section(
-      "upgrades",
-      "build",
-      "An upgrade is made where the building stands, so it needs no more land. Its coins are paid when the works begin; carriers then bring its materials, scaffolding rises around it, and it goes on working meanwhile. Pick one, then click the building."
-    )
-    upgrades.style.borderTop = "3px solid #b39a61"
-    // The town hall's first: it grows with the town; then the rest in the build menu's order.
-    for (const u of [...(ui.stats?.upgrades ?? [])].sort((a, b) => Number(b.kind === "townhall") - Number(a.kind === "townhall"))) {
-      const option = el("button", "option")
-      const cost = costChips({ coins: u.coins, materials: u.materials })
-      cost.box.prepend(el("span", "cap", "cost"))
-      const terms = el("span", "gives")
-      terms.innerHTML = `<span class="cap">gives</span>${u.changes.map((c) => `<span class="change">${c}</span>`).join("")}`
-      const blurb = el("span", "blurb", u.blurb)
-      option.append(picture(u.kind, u.level + 1), el("span", "name", `${u.from} → ${u.to}`), cost.box, terms, blurb)
-      option.title = `${u.from} → ${u.to}: ${u.blurb} · ${u.price} · ${u.changes.join(" · ")}`
-      option.onclick = () => upgradeTool(u.kind)
-      live.push(() => {
-        const now = ui.stats?.upgrades.find((x) => x.kind === u.kind && x.level === u.level)
-        option.style.display = now ? "" : "none"
-        if (!now) return
-        const short = cost.refresh()
-        option.disabled = now.blocked !== null || now.ready === 0
-        option.classList.toggle("short", now.blocked === null && short)
-        option.classList.toggle("on", ui.tool === "upgrade" && ui.upgrading === u.kind)
-        blurb.textContent = now.blocked
-          ? now.blocked
-          : now.ready === 0
-            ? now.underway > 0 ? `under way: ${now.underway}` : `build a ${kinds[u.kind].title.toLowerCase()} first`
-            : `${now.ready} ready${now.underway > 0 ? ` · ${now.underway} under way` : ""} · ${u.blurb}`
-      })
-      upgrades.append(option)
-    }
-    panel.append(upgrades)
     // Parks are laid out piece by piece: ground first, then what stands on it.
     const parks = section(
       "parks",
@@ -1331,6 +1288,20 @@ export const createHost = async (
     row.querySelector<HTMLElement>(".what")!.textContent = l.label
     if (!chips) row.querySelector<HTMLElement>(".count")!.innerHTML = iconize(escapeHtml(l.value ?? ""))
     if (l.note) row.querySelector<HTMLElement>(".note")!.innerHTML = iconize(escapeHtml(l.note))
+    // What to do about it, on a row of its own: a building to place shows its picture, and the row places one.
+    if (l.fix) {
+      const build = l.fix.build && kinds[l.fix.build].buildable ? l.fix.build : undefined
+      const fix = el(build ? "button" : "div", "fix")
+      if (build) {
+        fix.dataset.build = build
+        fix.title = `Build a ${kinds[build].title.toLowerCase()}`
+        fix.append(picture(build))
+      } else fix.append(iconEl("hint", 14))
+      const text = el("span", "do")
+      text.innerHTML = iconize(callouts(l.fix.text))
+      fix.append(text)
+      row.append(fix)
+    }
   }
   /** Keeps a box of rows in step with its lines, touching only the rows that changed. */
   const syncLines = (box: HTMLElement, rows: Array<HTMLElement>, lines: ReadonlyArray<Line>) => {
@@ -1347,6 +1318,31 @@ export const createHost = async (
       row.style.display = l ? "" : "none"
       if (l) renderLine(row, l)
     })
+  }
+
+  /** What upgrading a building would give and cost, said in full before the mayor pays for it, with the button that begins it. */
+  const upgradeBox = (offer: NonNullable<Extract<Panel, { type: "building" }>["upgrade"]>) => {
+    const box = section(`upgrade to ${offer.title.toLowerCase()}`, "build", offer.blurb)
+    box.classList.add("lines", "upgrade")
+    const cost = costChips(offer.cost)
+    cost.box.prepend(el("span", "cap", "cost"))
+    const list = el("ul", "changes")
+    for (const c of offer.changes) list.append(el("li", "", c))
+    const begin = el("button", "frame primary", `Begin the ${offer.title.toLowerCase()}`)
+    begin.onclick = () => {
+      const now = ui.panel
+      if (now?.type === "building") ui.edits.push({ type: "upgrade", cell: now.cell })
+    }
+    const why = el("p", "sub", "")
+    live.push(() => {
+      const now = ui.panel
+      if (now?.type !== "building" || !now.upgrade) return
+      cost.refresh()
+      begin.disabled = now.upgrade.blocked !== null || now.upgrade.short !== null
+      why.textContent = now.upgrade.blocked ?? now.upgrade.short ?? "the coins are paid now; carriers bring the rest, scaffolding rises, and it goes on working"
+    })
+    box.append(cost.box, list, begin, why)
+    return box
   }
 
   const buildPanel = () => {
@@ -1375,8 +1371,24 @@ export const createHost = async (
               : "burghers live here, and pay the best taxes"
     )
     const below = el("div", "")
-    below.append(status, about)
+    // A building says how it is in a box of its own, under the header; a home, a park, or a ruin in a word here.
+    if (p.type === "building") below.append(about)
+    else below.append(status, about)
     panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier, p.type === "building" ? p.level : 0), below))
+    // A building: how it is first, and what to do about it; then its upgrade, when it has one to offer.
+    if (p.type === "building") {
+      const box = section("status", p.problem !== null ? "warning" : "jobs")
+      box.classList.add("lines", "state")
+      const rows: Array<HTMLElement> = []
+      live.push(() => {
+        const now = ui.panel
+        if (now?.type !== "building") return
+        box.classList.toggle("trouble", now.problem !== null)
+        syncLines(box, rows, [now.state])
+      })
+      panel.append(box)
+    }
+    if (p.type === "building" && p.upgrade) panel.append(upgradeBox(p.upgrade))
     // A building or a home: its rows in boxes under headings, kept in step with what the town says each frame.
     // A park or a ruin: one box.
     const holder = el("div", "")
@@ -1421,28 +1433,6 @@ export const createHost = async (
         syncGroups([{ title: "what is left", icon: "condition", lines: now.lines }])
       }
     })
-    // What upgrading it would give and cost, said in full before the mayor pays for it.
-    if (p.type === "building" && p.upgrade) {
-      const box = section(`upgrade to ${p.upgrade.title.toLowerCase()}`, "build", p.upgrade.blurb)
-      box.classList.add("lines")
-      const price = el("p", "sub", p.upgrade.price)
-      const list = el("ul", "changes")
-      for (const c of p.upgrade.changes) list.append(el("li", "", c))
-      const begin = el("button", "frame primary", `Begin the ${p.upgrade.title.toLowerCase()}`)
-      begin.onclick = () => {
-        const now = ui.panel
-        if (now?.type === "building") ui.edits.push({ type: "upgrade", cell: now.cell })
-      }
-      const why = el("p", "sub", "")
-      live.push(() => {
-        const now = ui.panel
-        if (now?.type !== "building" || !now.upgrade) return
-        begin.disabled = now.upgrade.blocked !== null || now.upgrade.short !== null
-        why.textContent = now.upgrade.blocked ?? now.upgrade.short ?? "the coins are paid now; carriers bring the rest, and it goes on working"
-      })
-      box.append(price, list, begin, why)
-      panel.append(box)
-    }
     if (p.type === "building" && p.kind === "townhall") return
     {
       const actions = el("div", "actions")
@@ -1947,6 +1937,18 @@ export const createHost = async (
     ui.menu = null
     choose(id === "homes" ? "home" : (id as Tool))
   }
+  // A panel row's fix: place the building it names, or pick the tool or panel it names.
+  panel.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement
+    const tool = target.closest<HTMLElement>(".fix [data-tool]")
+    if (tool) return useTool(tool.dataset.tool!)
+    const build = target.closest<HTMLElement>("[data-build], .fix [data-kind]")
+    const kind = (build?.dataset.build ?? build?.dataset.kind) as KindId | undefined
+    if (kind && kinds[kind].buildable) {
+      ui.selected = null
+      place(kind)
+    }
+  })
   /** Ticker lines the mayor has put away, by what they say (and, for news, when). */
   const dismissed = new Set<string>()
   let tickerLines: { guide: Stats["guide"]["step"]; alerts: Stats["alerts"]; news: Stats["chronicle"] } = { guide: null, alerts: [], news: [] }

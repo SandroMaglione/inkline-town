@@ -434,8 +434,25 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel .lines .line.ok .count { color: #4f8a3e; }
 .panel .lines .line.warn .count { color: #b8782e; }
 .panel .lines .line.bad .count { color: #b04a39; font-weight: 700; }
-.panel .lines .line.bad .note { color: #8f3f31; }
-.panel .lines .line.warn .note { color: #8a5a22; }
+/* Why, in grey under the row; what to do, in a box of its own aligned with it, coloured by how pressing it is. */
+.panel .lines .line .fix {
+  grid-column: 2 / -1; display: flex; align-items: center; gap: 8px; margin-top: 3px; padding: 5px 8px;
+  border: 1px solid #dfe3da; border-left: 3px solid #9aa29b; border-radius: 6px; background: #f1f3ee;
+  font: inherit; font-size: 11.5px; line-height: 1.4; color: #3d4943; text-align: left;
+}
+.panel .lines .line .fix .thumb { width: 30px; height: 26px; object-fit: contain; flex: none; }
+.panel .lines .line .fix > .icon { flex: none; opacity: 0.7; }
+.panel .lines .line button.fix { cursor: pointer; }
+.panel .lines .line button.fix:hover { border-color: #3d4943; border-left-color: inherit; background: #eceee8; }
+.panel .lines .line.bad .fix { border-left-color: #b04a39; }
+.panel .lines .line.warn .fix { border-left-color: #b8782e; }
+/* A building's status, first under its header; and its upgrade, gold, when it has one to offer. */
+.panel section.state .line .what { font-weight: 700; }
+.panel section.state.trouble { border-top: 3px solid #b04a39; }
+.panel section.state.trouble .line .what { color: #b04a39; }
+.panel section.upgrade { border-top: 3px solid #b39a61; }
+.panel section.upgrade .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 2px 0 6px; }
+.panel section.upgrade .cap { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #9aa29b; margin-right: 4px; }
 .panel .lines .line.dim .count, .panel .lines .line.dim .what { color: #8a938c; font-weight: 400; }
 .panel .lines .line .chip { background: #eef0ea; border-radius: 4px; padding: 1px 6px 1px 4px; }
 /* An amount as its icon and number: a coin and 3/min, a plank and 2. */
