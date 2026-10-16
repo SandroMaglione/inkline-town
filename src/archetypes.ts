@@ -71,7 +71,7 @@ export const rolesOf = (kind: Kind, rules: Rules = shippedRules) => {
 export const houseDraft = (cell: Point) =>
   Game.Command.spawn(
     [Tile, { x: cell.x, y: cell.y, size: 1 }],
-    [House, { tier: 1, residents: 0, food: 0, bread: 0, cloth: 0, faith: 0, clock: 0 }]
+    [House, { tier: 1, residents: 0, food: 0, bread: 0, cloth: 0, faith: 0, furniture: 0, clock: 0 }]
   )
 export const houseStart = (rules: Rules = shippedRules) => [site(rules.home.cost), ...wearOf(rules)]
 export const ruinDraft = (tile: { readonly x: number; readonly y: number; readonly size: number }, cause: "burnt" | "collapsed" | "derelict") =>
@@ -81,5 +81,7 @@ export const parkDraft = (cell: Point, ground: GroundId) => Game.Command.spawn([
 export const roadDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Road, {}])
 export const treeDraft = (cell: Point, growth: number) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Tree, { growth }])
 export const rockDraft = (cell: Point, ore: boolean, amount: number) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Rock, { ore, amount }])
-export const waterDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Water, {}])
+/** A cell of water never fished: long rested. */
+export const UNFISHED = -1_000_000
+export const waterDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Water, { fished: UNFISHED }])
 export const fieldDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Field, { growth: 0 }])

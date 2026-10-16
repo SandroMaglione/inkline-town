@@ -638,7 +638,8 @@ const dresses: Readonly<Record<KindId, Dress>> = {
   healer: { accent: 0x4f9a8a },
   hospital: { accent: 0x4f9a8a, glass: glassCool },
   watchhouse: { accent: 0x3d4f6e, flag: 0x3d4f6e },
-  builder: { accent: 0x8a6a45, roof: roofOf(0xb08a5a) }
+  builder: { accent: 0x8a6a45, roof: roofOf(0xb08a5a) },
+  carpenter: { accent: 0x9a6b3f, roof: roofOf(0x9a6b3f) }
 }
 
 /**
@@ -881,8 +882,12 @@ export interface BuildingLook {
   readonly site: number | null
   /** A map view's colour washed over it, when one is shown. */
   readonly tint?: number | undefined
-  /** Upgraded where it stands (see `Kind.upgrade`): drawn taller. */
-  readonly upgraded?: boolean
+  /** Upgrades it has had where it stands (see `Kind.upgrade`): drawn as its upgrade. */
+  readonly level?: number
+  /** An upgrade under way: the share of its materials in (scaffolding rises with it), else `null`. */
+  readonly works?: number | null
+  /** An upgrade it could begin now: show the upgrade marker over it. */
+  readonly upgradable?: boolean
 }
 
 /** A building as drawn: its plate on the floor, its body among the other objects, and its problem marker above everything. */

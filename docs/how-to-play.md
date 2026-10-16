@@ -50,11 +50,12 @@ six months.
   - *winters*: a term is six years, and every year but the first ends in a
     winter when fields do not grow, fisheries catch half as much, and homes
     eat faster;
-  - *administration*: the town hall costs more per home the more homes
-    there are; by about 80 homes another cottage costs about what it brings
-    in once its food is paid for (the build tooltip says what a home would bring in after it), so a
-    town grows past there by finer homes, which hold two or three times the
-    people for the same cost;
+  - *administration*: the town hall costs more per resident the more
+    residents there are, so a citizens' home of eight costs twice a cottage
+    of four; by about 500 residents another settler costs about what they
+    bring in once their food is paid for (the build tooltip says what a home
+    would bring in after it), so a town grows past there by finer homes,
+    whose people pay more each;
   - *food* is eaten by the resident: a walker's visit feeds a cottage one
     fish or loaf, a citizens' home two, a townhouse three;
   - *the crown* asks for goods the town makes, more as the term goes on
@@ -85,17 +86,38 @@ six months.
   pausing a building (no workers, a quarter of its upkeep); answering the
   crown; and the speed of time (space pauses, 1, 2, 3 for 1×, 2×, 4×).
 - **Ranks**: a town is founded as a hamlet and rises to a *village*, a
-  *town*, and a *city*. Each rank has its goals (residents and coins for
-  the land's size, a share of them citizens, approval, not losing coins over
-  the last minute; a city also wants 15% of its people burghers, in
-  townhouses). Hold every goal of the next rank for two minutes and the town
+  *town*, and a *city*. Each rank has its goals (residents and an income
+  for the land's size, a share of them citizens, approval; a city also
+  wants 15% of its people burghers, in townhouses, and a guildhall). The
+  income goal is coins a minute after upkeep and administration, over the
+  last minute, out of debt: a medium town asks 150 a minute, a village
+  less, a city more. Coins held count for nothing: a treasury is for
+  spending. Hold every goal of the next rank for two minutes and the town
   rises: the crown sends a reward, and play goes on. A rank is never lost.
   The town panel shows the next rank's goals.
-- **Upgrades**: a town can turn its market into a *market hall*, and its
-  chapel into a *church*, where they stand (the building's panel):
-  paid at once in coins, planks, stone, and tools, the walker goes further
-  and more often, the street around it is finer, and the upkeep is higher.
-  Pulling one down gives back part of what both cost.
+- **Upgrades** are made where a building stands, so they need no more
+  land. A gold arrow floats over a building when the town needs its
+  upgrade, and can make it: a town hall the next rank asks for, a store
+  whose shelves are full, a quarry worked out, a farm whose mills wait on
+  wheat, a bakery flat out while homes lack bread, a market or chapel whose
+  walkers leave homes out, a fire watch with homes at high fire risk (one
+  arrow a kind). Select any upgradable building: its panel says whether it
+  is needed now, what the upgrade gives and costs, and its button begins it. The
+  coins are paid when the works begin; carriers then
+  bring the planks, stone, and tools, builders work them in as they come,
+  and scaffolding rises inside its plot. It goes on working meanwhile.
+  - a village: the town hall becomes a *guildhall* (holds twice as much,
+    more carriers, a longer walk, a tenth less administration), and a
+    warehouse a *depot* (holds 120, two more carriers);
+  - a town: the guildhall a *city hall* (a fifth less administration),
+    the market a *market hall*, the chapel a *church*, the bakery an
+    *ovenworks* (bread every 4 s, a third baker), the farm an *estate*
+    (a third hand, half again as fast), the quarry a *masonry* (cuts
+    worked-out rock at full pace), and the fire watch a *fire brigade*
+    (four firefighters, a longer walk).
+  Every upgrade costs more upkeep. None is ever needed: each pays for
+  itself in under an hour of play, in coins or in what it does. Pulling
+  one down gives back part of what all of it cost.
 - **The end of a term**: it is *lost* to bankruptcy (three minutes in
   debt), revolt (approval at -50 or below for two minutes), abandonment
   (people fall below 15% of their peak), or dismissal (three of the crown's
@@ -131,26 +153,35 @@ Nobody tells you to build it that way; it works best that way.
   live in town, a statue once 20 are citizens). Ground that touches is one
   park, and the whole park is what the streets around it feel: its beauty
   adds up from its ground (at most 4), its furnishings (the first of a
-  kind in full, each more of it half as much, and one for every two
-  cells), and its ways in from the street (a walk or a square beside a
-  road: 1.5 each, two count), up to 15, out to 2 cells and one more for
-  every 6 cells of park, up to 5; its whole worth reaches half that far
-  before it fades. A lone statue is worth little; a lawn
+  kind in full, each more of it half as much, and one for every two whole
+  cells, so none on a park of one), and its ways in from the street (a
+  walk or a square beside a road: 1.5 each, two count), up to 15, out to
+  2 cells and one more for every 6 cells of park, up to 5; its whole worth
+  reaches half that far before it fades. Where several parks reach a
+  street, the finest counts in full and the others half, so scraps of park
+  are no match for one park. A lone statue is worth little; a lawn
   with walks in from the street, lamps, and a statue is worth a street of
   citizens.
   Parks cost upkeep by the cell and by the furnishing: a fine centre is
   something you choose to pay for. Bulldozing a cell takes its furnishing
   first, then its ground.
 - **Tiers.** Settlers live anywhere. A citizens' home needs desirability 5
-  as well as bread, cloth, and faith; a home whose street drops below 5
+  as well as bread, cloth, and faith, and its rebuilding is paid at once
+  from the treasury and the store (35 coins, 4 planks, 2 stone; a
+  townhouse 45 coins, 4 planks, 4 stone, a tool, and 2 furniture): a home the store
+  cannot pay for waits at its tier, and one that steps down keeps its
+  rebuilding and rises back into it for nothing. A home whose street drops below 5
   goes back to settlers even with every need met. A **townhouse** of
-  burghers (12 residents, the best taxes) needs desirability 12 and a
-  fire watch, a healer, and a watch house all calling on it. At
+  burghers (12 residents, the best taxes) needs desirability 12, a
+  fire watch, a healer, and a watch house all calling on it, and
+  furniture: a carpenter makes it from planks, and a market's walker
+  brings a fresh piece every few minutes. A townhouse whose furniture
+  wears out is a citizens' home again until the next piece comes. At
   desirability −5 or less a home is squalid and holds fewer people.
 - **Workers by tier, and the commute.** Settlers do the rough work
   (lumberjack, forester, quarry, mine, fishery, smokehouse, farm, sheep,
   storage, fire watch, watch house, builder's yard); citizens the skilled
-  (sawmill, smithy, mill, bakery, weaver, market, chapel, healer,
+  (sawmill, smithy, mill, bakery, weaver, carpenter, market, chapel, healer,
   hospital). Skilled jobs take their own crew first; citizens left over do
   rough work, and until there are citizens, settlers stand in at a
   skilled job as apprentices, at three-quarters pace. The jobs counter in
@@ -196,7 +227,7 @@ goals again. *Governing*: the ranks, up to a city (and, once the town rank opens
 a market hall where homes lie beyond every walker). While a step's homes or building
 are going up it says so (carriers bringing planks to the site), so you know
 you did your part; when the town cannot build what a step asks for yet, it
-says what opens it (*the farm opens at 30 residents*), or that the treasury
+says what opens it (*the farm opens at 60 residents*), or that the treasury
 must save up, and goes on to a building it can. It never asks for a
 building before the town needs it, as upkeep starts the day it stands: the
 lumberjack and sawmill wait until planks fall below 25, the quarry until
@@ -266,7 +297,7 @@ over with a new one.
   figure under them are the treasury's last minute, every coin in and out
   (taxes and refunds made; upkeep, administration, building, and fines used;
   trade). Click them for the same table, with the treasury on its first row.
-  The goal of not losing coins goes by the steady rate (taxes, trade, upkeep,
+  The income goal goes by the steady rate (taxes, trade, upkeep,
   administration) shown when you hover over them.
 - **Materials** (planks, stone, tools) come from storage: a new building is a
   site until carriers have brought what it costs, then it goes up.
@@ -274,8 +305,9 @@ over with a new one.
   (fish, smoked fish, or bread); with bread, cloth, and faith on a street
   with desirability 5 a home becomes a two-story citizens' home that holds
   and pays twice as much, and on a fine street (12) with every service
-  calling, a three-story townhouse. Cloth is only brought to a street fit
-  for citizens, however much is in store: the home's panel says so, and
+  calling and furniture from a carpenter, a three-story townhouse. Cloth is
+  only brought to a street fit for citizens, and furniture to one fit for
+  burghers, however much is in store: the home's panel says so, and
   what the street is short of.
 - **Pulling down** a building or a home costs a tenth of what it cost in
   coins, and half its materials (rounded down) go back into storage, to

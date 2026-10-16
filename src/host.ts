@@ -53,7 +53,7 @@ import { GRID } from "./iso.ts"
 import { goodIcon, icon, iconEl, type IconName } from "./icons.ts"
 import { generate } from "./mapgen.ts"
 import { askOf, priceOf } from "./sim/index.ts"
-import type { Group, Line, Stats, Tool, TradeMode, UiValue, View } from "./ui.ts"
+import type { Group, Line, Panel, Stats, Tool, TradeMode, UiValue, View } from "./ui.ts"
 import { emptyPreview } from "./ui.ts"
 import { GameScene, type CameraView } from "./render3d/scene.ts"
 import { blobOf, cardFacts, drawCard, metaOf, scaled, verdictOf } from "./share/card.ts"
@@ -62,7 +62,8 @@ import { PICTURE_HEIGHT, PICTURE_QUALITY, PICTURE_WIDTH } from "./share/format.t
 import { MapInput } from "./render3d/input.ts"
 import { portrait } from "./render3d/portrait.ts"
 import { serviceBuilding } from "./asset-lab/service-upgrades.ts"
-import { makeBuilding } from "./asset-lab/buildings.ts"
+import { buildingDimensions, makeBuilding } from "./asset-lab/buildings.ts"
+import { dressedBuilding, isDressed, type DressedKind } from "./asset-lab/upgrade-dress.ts"
 import { house } from "./asset-lab/homes.ts"
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
@@ -219,12 +220,13 @@ export const createHost = async (
     flour: "a mill's; a bakery bakes it into bread",
     bread: "food that citizens need, and a cottage with bread pays half again: it rots in about five minutes",
     wool: "sheep farms shear it; a weaver weaves it into cloth",
-    cloth: "citizens need it: only brought to streets with desirability 5 or more"
+    cloth: "citizens need it: only brought to streets with desirability 5 or more",
+    furniture: "burghers need it in their townhouses: a carpenter makes it from planks; only brought to streets fine enough for townhouses"
   }
   const groups: ReadonlyArray<ReadonlyArray<GoodId>> = [
     ["wood", "planks", "stone", "ore", "tools"],
     ["fish", "smoked", "wheat", "flour", "bread"],
-    ["wool", "cloth"]
+    ["wool", "cloth", "furniture"]
   ]
   stock.title = "Goods in the town's storage, and which way each is going · click for what the town makes and uses"
   const goodCells = new Map<GoodId, HTMLElement>()
@@ -396,6 +398,7 @@ export const createHost = async (
   const ui: UiValue = {
     tool: "select",
     placing: null,
+    upgrading: null,
     ground: "lawn",
     prop: "lamp",
     menu: null,
@@ -416,6 +419,7 @@ export const createHost = async (
     view: "none",
     overlay: { key: "", cells: [] },
     tints: new Map(),
+    wanted: new Map(),
     legend: null,
     flash: null,
     // Long enough to read (about 15 letters a second, and a moment to look), and gone as soon as the mayor
@@ -612,7 +616,7 @@ export const createHost = async (
 
   const refreshTools = () => {
     for (const { tool, button } of buttons) {
-      const on = tool.tool === "build" ? ui.menu === "build" || ui.tool === "place" || ui.tool === "ground" || ui.tool === "prop" : tool.tool === ui.tool
+      const on = tool.tool === "build" ? ui.menu === "build" || ui.tool === "place" || ui.tool === "ground" || ui.tool === "prop" || ui.tool === "upgrade" : tool.tool === ui.tool
       button.classList.toggle("on", on)
     }
     townButton.classList.toggle("on", ui.menu === "town")
@@ -621,6 +625,7 @@ export const createHost = async (
     ui.tool = tool
     ui.dragFrom = null
     if (tool !== "place") ui.placing = null
+    if (tool !== "upgrade") ui.upgrading = null
     if (tool !== "select") ui.selected = null
     refreshTools()
   }
@@ -736,11 +741,12 @@ export const createHost = async (
     return url
   }
   const both = { right: true, left: true }
-  const picture = (what: KindId | Tier | `park:${GroundId | PropId}`, upgraded = false): HTMLImageElement => {
+  const picture = (what: KindId | Tier | `park:${GroundId | PropId}`, level: number | boolean = 0): HTMLImageElement => {
     const img = document.createElement("img")
     img.className = "thumb"
     img.alt = ""
-    const id = `${String(what)}${upgraded ? "/upgraded" : ""}`
+    const lvl = Number(level), upgraded = lvl > 0
+    const id = `${String(what)}${upgraded ? `/upgraded${lvl}` : ""}`
     let url = pictures.get(id)
     if (!url) {
       if (typeof what === "string" && what.startsWith("park:")) {
@@ -750,6 +756,8 @@ export const createHost = async (
         void url.finally(() => g.destroy())
       } else if (what === 1 || what === 2 || what === 3) url = modelPicture(() => house(what, undefined, undefined, { doors: { right: true } }))
       else if (upgraded && (what === "market" || what === "chapel")) url = modelPicture(() => serviceBuilding(what, 2, { doors: both }))
+      else if (upgraded && isDressed(what as KindId))
+        url = modelPicture(() => dressedBuilding(what as DressedKind, lvl, makeBuilding(what as KindId, { doors: both, motion: false }), buildingDimensions(what as KindId).height))
       else url = modelPicture(() => makeBuilding(what as KindId, { doors: both, motion: false }))
       pictures.set(id, url)
     }
@@ -916,7 +924,7 @@ export const createHost = async (
     const parks = section(
       "parks",
       "decor",
-      `Lay ground, then set furnishings on it. Ground that touches is one park: the more it holds the nicer the streets around it (citizens need ${home.tiers[2].appeal}, townhouses ${home.tiers[3].appeal}). One furnishing counts for every ${parkRules.cellsPerProp} cells.`
+      `Lay ground, then set furnishings on it. Ground that touches is one park: the more it holds the nicer the streets around it (citizens need ${home.tiers[2].appeal}, townhouses ${home.tiers[3].appeal}). One furnishing counts for every ${parkRules.cellsPerProp} cells; where parks meet, the finest counts in full.`
     )
     parks.style.borderTop = "3px solid #4f9a6a"
     const pieces: ReadonlyArray<{ readonly id: GroundId | PropId; readonly piece: ParkPiece; readonly pick: () => void; readonly ground: boolean }> = [
@@ -1067,15 +1075,16 @@ export const createHost = async (
     const needs = section(
       "homes supplied",
       "homes",
-      "A hungry home pays no taxes. Settlers need food (fish, smoked fish, or bread) from a market, and a cottage with bread besides pays half again; a visit feeds a home a fish or a loaf for every four residents, so a citizens' home eats twice what a cottage does and a townhouse three times; citizens and burghers need bread, cloth, and faith. Cloth is only brought to streets with desirability 5 or more. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
+      "A hungry home pays no taxes. Settlers need food (fish, smoked fish, or bread) from a market, and a cottage with bread besides pays half again; a visit feeds a home a fish or a loaf for every four residents, so a citizens' home eats twice what a cottage does and a townhouse three times; citizens and burghers need bread, cloth, and faith, and burghers furniture from a carpenter besides. Cloth is only brought to streets with desirability 5 or more, furniture to streets of 12 or more. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
     )
-    const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith", IconName>> = {
+    const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith" | "furniture", IconName>> = {
       food: "fish",
       bread: "bread",
       cloth: "cloth",
-      faith: "faith"
+      faith: "faith",
+      furniture: "furniture"
     }
-    const bars = (["food", "bread", "cloth", "faith"] as const).map((n) => {
+    const bars = (["food", "bread", "cloth", "faith", "furniture"] as const).map((n) => {
       const line = el("div", "need")
       const label = el("span", "label")
       label.innerHTML = icon(needIcons[n], 16)
@@ -1214,10 +1223,12 @@ export const createHost = async (
         ? "every workplace has its crew"
         : `${s.shortStaffed.length} short of workers: ${s.shortStaffed.slice(0, 4).map((w) => `${w.title} ${w.assigned}/${w.needed}${w.nobodyNear ? " (nobody within reach)" : ""}`).join(", ")}${s.shortStaffed.length > 4 ? ", …" : ""} · click the jobs counter to visit them`
       for (const b of bars) {
-        const share = s.homes > 0 ? s.needs[b.n] / s.homes : 0
+        // Furniture is counted against the townhouses: no other home keeps it.
+        const of = b.n === "furniture" ? Math.max(s.townhouses, s.needs.furniture) : s.homes
+        const share = of > 0 ? s.needs[b.n] / of : 0
         b.fill.style.width = `${Math.round(share * 100)}%`
-        b.fill.className = `fill ${share < 0.34 ? "none" : share < 0.67 ? "low" : ""}`
-        b.value.textContent = `${s.needs[b.n]}/${s.homes}`
+        b.fill.className = `fill ${of === 0 ? "" : share < 0.34 ? "none" : share < 0.67 ? "low" : ""}`
+        b.value.textContent = `${s.needs[b.n]}/${of}`
       }
       larderLine.textContent = `${s.larder}`
       eatenLine.textContent = `${s.eaten} · ${s.rotted}`
@@ -1278,6 +1289,20 @@ export const createHost = async (
     row.querySelector<HTMLElement>(".what")!.textContent = l.label
     if (!chips) row.querySelector<HTMLElement>(".count")!.innerHTML = iconize(escapeHtml(l.value ?? ""))
     if (l.note) row.querySelector<HTMLElement>(".note")!.innerHTML = iconize(escapeHtml(l.note))
+    // What to do about it, on a row of its own: a building to place shows its picture, and the row places one.
+    if (l.fix) {
+      const build = l.fix.build && kinds[l.fix.build].buildable ? l.fix.build : undefined
+      const fix = el(build ? "button" : "div", "fix")
+      if (build) {
+        fix.dataset.build = build
+        fix.title = `Build a ${kinds[build].title.toLowerCase()}`
+        fix.append(picture(build))
+      } else fix.append(iconEl("hint", 14))
+      const text = el("span", "do")
+      text.innerHTML = iconize(callouts(l.fix.text))
+      fix.append(text)
+      row.append(fix)
+    }
   }
   /** Keeps a box of rows in step with its lines, touching only the rows that changed. */
   const syncLines = (box: HTMLElement, rows: Array<HTMLElement>, lines: ReadonlyArray<Line>) => {
@@ -1296,6 +1321,64 @@ export const createHost = async (
     })
   }
 
+  /** What upgrading a building would give and cost, said in full before the mayor pays for it, with the button that begins it. */
+  /** An upgrade's gain as a row: what changes, on the left; from what to what, on the right. */
+  const gainLine = (change: string): Line => {
+    const at = change.search(/[+−-]?\d/)
+    const label = at > 0 ? change.slice(0, at).trim() : change, rest = at > 0 ? change.slice(at) : undefined
+    // "+6 → +8, out to 6 cells": the change on the right, what qualifies it under it.
+    const [value, note] = rest?.includes(", ") ? [rest.slice(0, rest.indexOf(", ")), rest.slice(rest.indexOf(", ") + 2)] : [rest, undefined]
+    const glyph: IconName =
+      /^holds/.test(change) ? "build" : /^carriers/.test(change) ? "trade" : /^walker|^a walker/.test(change) ? "people"
+      : /^administration/.test(change) ? "taxes" : /^desirability/.test(change) ? "appeal" : /^workers/.test(change) ? "workers"
+      : /^firefighters/.test(change) ? "fire" : /rock/.test(change) ? "stone" : /a minute/.test(change) ? "jobs" : "goal"
+    return { icon: glyph, label, value, note, tone: "ok" }
+  }
+  /**
+   * What upgrading a building would cost and give, said in full before the mayor pays: what is paid now, what
+   * carriers bring later and the upkeep after; then what it gives. The button that begins it comes last, alone.
+   */
+  const upgradeBox = (offer: NonNullable<Extract<Panel, { type: "building" }>["upgrade"]>) => {
+    const box = section(`upgrade to ${offer.title.toLowerCase()}`, "build", offer.blurb)
+    box.classList.add("lines", "upgrade")
+    // Why the town needs it now (the gold arrow over it), or that it can wait.
+    const needed = el("p", "needed", "")
+    const pays = el("div", "part"), gets = el("div", "part")
+    const payRows: Array<HTMLElement> = [], getRows: Array<HTMLElement> = []
+    const upkeep = offer.changes.find((c) => c.startsWith("upkeep"))
+    syncLines(gets, getRows, offer.changes.filter((c) => c !== upkeep).map(gainLine))
+    const begin = el("button", "frame primary", `Begin the ${offer.title.toLowerCase()}`)
+    begin.onclick = () => {
+      const now = ui.panel
+      if (now?.type === "building") ui.edits.push({ type: "upgrade", cell: now.cell })
+    }
+    const why = el("p", "sub", "")
+    live.push(() => {
+      const now = ui.panel
+      if (now?.type !== "building" || !now.upgrade) return
+      needed.textContent = now.upgrade.needed ? `needed now: ${now.upgrade.needed}` : "not needed yet: the gold arrow shows when it is"
+      needed.classList.toggle("now", now.upgrade.needed !== null)
+      const coins = ui.stats?.coins ?? 0, stock = ui.stats?.stock
+      const materials = (Object.entries(offer.cost.materials) as Array<[GoodId, number]>).filter(([, n]) => n > 0)
+      const lacking = materials.filter(([g, n]) => (stock?.[g] ?? 0) < n).map(([g, n]) => `${n - (stock?.[g] ?? 0)} ${goods[g].title}`)
+      syncLines(pays, payRows, [
+        { icon: "coins", label: "now, to begin", value: `${offer.cost.coins} coins`, tone: coins < offer.cost.coins ? "bad" : undefined,
+          note: coins < offer.cost.coins ? `${offer.cost.coins - coins} coins short` : undefined },
+        ...(materials.length > 0
+          ? [{ icon: "trade", label: "later, carried in", goods: materials.map(([good, count]) => ({ good, count })), tone: lacking.length > 0 ? "warn" : undefined,
+              note: lacking.length > 0 ? `the store lacks ${lacking.join(", ")}: the works wait for them` : "from the store: the works go on as they come" } as Line]
+          : []),
+        ...(upkeep ? [{ icon: "upkeep", label: "upkeep after", value: upkeep.replace(/^upkeep /, "") } as Line] : [])
+      ])
+      begin.disabled = now.upgrade.blocked !== null || now.upgrade.short !== null
+      why.textContent = now.upgrade.blocked ?? now.upgrade.short ?? "it goes on working while the works go on, and scaffolding rises inside its plot"
+    })
+    const footer = el("div", "begin")
+    footer.append(begin, why)
+    box.append(needed, el("p", "cap", "you pay"), pays, el("p", "cap", "you get"), gets, footer)
+    return box
+  }
+
   const buildPanel = () => {
     const p = ui.panel
     live = []
@@ -1304,14 +1387,13 @@ export const createHost = async (
     if (p.type === "build") return buildMenu()
     if (p.type === "town") return townPanel()
 
-    const upgrade = p.type === "building" && p.upgraded ? kinds[p.kind].upgrade : undefined
-    const title = p.type === "building" ? (upgrade ?? kinds[p.kind]).title.toLowerCase() : p.type === "house" ? tierHome[p.tier] : p.type === "park" ? "park" : "ruin"
+    const title = p.type === "building" ? p.title.toLowerCase() : p.type === "house" ? tierHome[p.tier] : p.type === "park" ? "park" : "ruin"
     const status = el("span", "pill")
     const about = el(
       "p",
       "sub",
       p.type === "building"
-        ? (upgrade ?? kinds[p.kind]).blurb
+        ? p.blurb
         : p.type === "ruin"
           ? "bulldoze it to clear the plot"
           : p.type === "park"
@@ -1323,8 +1405,24 @@ export const createHost = async (
               : "burghers live here, and pay the best taxes"
     )
     const below = el("div", "")
-    below.append(status, about)
-    panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier, p.type === "building" && p.upgraded), below))
+    // A building says how it is in a box of its own, under the header; a home, a park, or a ruin in a word here.
+    if (p.type === "building") below.append(about)
+    else below.append(status, about)
+    panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier, p.type === "building" ? p.level : 0), below))
+    // A building: how it is first, and what to do about it; then its upgrade, when it has one to offer.
+    if (p.type === "building") {
+      const box = section("status", p.problem !== null ? "warning" : "jobs")
+      box.classList.add("lines", "state")
+      const rows: Array<HTMLElement> = []
+      live.push(() => {
+        const now = ui.panel
+        if (now?.type !== "building") return
+        box.classList.toggle("trouble", now.problem !== null)
+        syncLines(box, rows, [now.state])
+      })
+      panel.append(box)
+    }
+    if (p.type === "building" && p.upgrade) panel.append(upgradeBox(p.upgrade))
     // A building or a home: its rows in boxes under headings, kept in step with what the town says each frame.
     // A park or a ruin: one box.
     const holder = el("div", "")
@@ -1369,7 +1467,8 @@ export const createHost = async (
         syncGroups([{ title: "what is left", icon: "condition", lines: now.lines }])
       }
     })
-    if (!(p.type === "building" && p.kind === "townhall")) {
+    if (p.type === "building" && p.kind === "townhall") return
+    {
       const actions = el("div", "actions")
       if (p.type === "building") {
         const pause = el("button", "frame", "Pause work")
@@ -1385,21 +1484,6 @@ export const createHost = async (
           pause.style.display = now.pausable ? "" : "none"
         })
         actions.append(pause)
-        // A building that can be upgraded where it stands (see `Kind.upgrade`).
-        if (p.upgrade) {
-          const up = el("button", "frame primary", `Upgrade: ${p.upgrade.title.toLowerCase()}`)
-          up.onclick = () => {
-            const now = ui.panel
-            if (now?.type === "building") ui.edits.push({ type: "upgrade", cell: now.cell })
-          }
-          live.push(() => {
-            const now = ui.panel
-            if (now?.type !== "building" || !now.upgrade) return
-            up.disabled = now.upgrade.blocked !== null
-            up.title = `${kinds[now.kind].upgrade?.blurb ?? ""} · ${now.upgrade.cost}${now.upgrade.blocked ? ` · ${now.upgrade.blocked}` : ""}`
-          })
-          actions.append(up)
-        }
       }
       if (p.type === "house") {
         const close = el("button", "frame", "Close home")
@@ -1435,7 +1519,7 @@ export const createHost = async (
         ? ""
         : p.type === "build" || p.type === "town"
           ? p.type
-          : `${p.type}|${p.id}|${p.type === "house" ? p.tier : p.type === "building" ? `${p.upgraded}|${p.upgrade !== null}` : ""}`
+          : `${p.type}|${p.id}|${p.type === "house" ? p.tier : p.type === "building" ? `${p.level}|${p.upgrade?.title ?? ""}|${p.works !== null}` : ""}`
     if (next !== shape) {
       shape = next
       // Keep the old contents while the closed panel slides away.
@@ -1541,8 +1625,8 @@ export const createHost = async (
         "pave",
         sizeIds,
         (v) => sizes[v].title,
-        (v) => `a town at ${chip("people", `${sizes[v].goal.residents} residents`)}${chip("coins", `${sizes[v].goal.coins} coins`)}`,
-        (v) => `The town rank asks ${sizes[v].goal.residents} residents and ${sizes[v].goal.coins} coins; a village less, a city more`,
+        (v) => `a town at ${chip("people", `${sizes[v].goal.residents} residents`)}${chip("coins", `+${sizes[v].goal.income}/min`)}`,
+        (v) => `The town rank asks ${sizes[v].goal.residents} residents and an income of ${sizes[v].goal.income} coins a minute; a village less, a city more`,
         () => choice.size,
         (v) => (choice.size = v)
       ),
@@ -1887,6 +1971,18 @@ export const createHost = async (
     ui.menu = null
     choose(id === "homes" ? "home" : (id as Tool))
   }
+  // A panel row's fix: place the building it names, or pick the tool or panel it names.
+  panel.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement
+    const tool = target.closest<HTMLElement>(".fix [data-tool]")
+    if (tool) return useTool(tool.dataset.tool!)
+    const build = target.closest<HTMLElement>("[data-build], .fix [data-kind]")
+    const kind = (build?.dataset.build ?? build?.dataset.kind) as KindId | undefined
+    if (kind && kinds[kind].buildable) {
+      ui.selected = null
+      place(kind)
+    }
+  })
   /** Ticker lines the mayor has put away, by what they say (and, for news, when). */
   const dismissed = new Set<string>()
   let tickerLines: { guide: Stats["guide"]["step"]; alerts: Stats["alerts"]; news: Stats["chronicle"] } = { guide: null, alerts: [], news: [] }

@@ -16,7 +16,7 @@ export const fixture = (scenario: Scenario, rules: Rules): Headless => {
     s.entities = []; s.relations = {}; s.nextEntity = Math.max(0, ...scenario.homes.map((h) => h.id), ...scenario.buildings.map((b) => b.id)) + 1
     const add = (components: Record<string, unknown>, id = s.nextEntity++) => s.entities.push({ id, components })
     for (const h of scenario.homes) add({
-      "Town/Tile": h.tile, "Town/House": { tier: h.tier, residents: h.residents, food: h.food, bread: h.bread, cloth: h.cloth, faith: h.faith, clock: h.clock },
+      "Town/Tile": h.tile, "Town/House": { tier: h.tier, residents: h.residents, food: h.food, bread: h.bread, cloth: h.cloth, faith: h.faith, furniture: h.furniture, clock: h.clock },
       ...Object.fromEntries(wearOf(rules).map(([d, v]) => [d.name, structuredClone(v)])),
       "Town/Risk": { ...h.meters, thefts: 0 }, "Town/Condition": { value: h.condition },
       ...(h.sick ? { "Town/Sick": { left: rules.risk.health.lasts } } : {})
@@ -39,7 +39,7 @@ export const fixture = (scenario: Scenario, rules: Rules): Headless => {
     const grid = scenarioGrid(scenario, rules).value()
     for (const [i, l] of scenario.land.entries()) {
       if (ownerAt(grid, l.tile.x, l.tile.y) !== -1 - i) continue
-      const component = l.type === "tree" ? { "Town/Tree": { growth: l.growth } } : l.type === "field" ? { "Town/Field": { growth: l.growth } } : l.type === "water" ? { "Town/Water": {} } : { "Town/Rock": { amount: l.amount, ore: l.type === "ore" } }
+      const component = l.type === "tree" ? { "Town/Tree": { growth: l.growth } } : l.type === "field" ? { "Town/Field": { growth: l.growth } } : l.type === "water" ? { "Town/Water": { fished: -1_000_000 } } : { "Town/Rock": { amount: l.amount, ore: l.type === "ore" } }
       add({ "Town/Tile": l.tile, ...component })
     }
     s.resources["Town/Land"] = { mask: scenario.mask ?? "1".repeat(GRID * GRID), cells: GRID * GRID }

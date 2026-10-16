@@ -133,12 +133,17 @@ const quarter: Array<[string, number, number]> = [
   ["granary", -9.5, 1],
   ["smokehouse", 10, 1],
   ["hospital", 9.5, -11],
+  ["carpenter", 14.5, -11],
   ["park-sample", 2.5, -8],
   ["park-lamp", -13.5, -8],
   ["park-statue", 9.5, -8],
   ["park-fountain", 11, -8]
 ]
 for (const [id, x, y] of quarter) place(id, x, y)
+// The new upgrade appearances have their own plots, away from working streets.
+face([[-20, 32, -0.5], [18, 32, -0.5], [18, 66, -0.5], [-20, 66, -0.5]], 0xf0f2ec, true)
+inkAssets.filter(a => a.category === "buildings" && a.reference?.type === "none")
+  .forEach((a, i) => place(a.id, -17 + (i % 5) * 7.5, 34 + Math.floor(i / 5) * 6))
 // The review annex gives seasonal/condition variants their own ground,
 // keeping them apart from the functioning town streets.
 face([[-20, 17, -0.5], [18, 17, -0.5], [18, 31, -0.5], [-20, 31, -0.5]], 0xf0f2ec, true)
@@ -168,7 +173,7 @@ const people = inkAssets.filter((a) => a.category === "people")
 people.forEach((a, i) => place(a.id, i < 11 ? -8 + i * 1.4 : -8 + (i - 11), i < 11 ? -2 : 4))
 inkAssets
   .filter((a) => a.category === "construction" && a.reference?.type !== "plot" && a.id !== "smoke" && a.id !== "problem-marker")
-  .forEach((a, i) => place(a.id, 12 + (i % 2) * 3, -11 + Math.floor(i / 2) * 2.1))
+  .forEach((a, i) => place(a.id, -17 + (i % 7) * 5, 58 + Math.floor(i / 7) * 5))
 place("smoke", -2.5, 0.5, 1, true, 56)
 place("problem-marker", 12, -8.9, 1, true, 35)
 inkAssets.filter((a) => a.reference?.type === "plot").forEach((a, i) => place(a.id, -12 + (i % 2) * 3, 9.5 + Math.floor(i / 2) * 2.6))
@@ -230,6 +235,7 @@ export const districts = {
   people: { title: "People", x: 0, y: -2, zoom: 7 },
   cargo: { title: "Cargo yard", x: 7, y: 7, zoom: 4 },
   forest: { title: "Forest & farms", x: -10, y: -11, zoom: 3.2 },
-  variants: { title: "Winter & wear", x: -2, y: 21, zoom: 2.3 }
+  variants: { title: "Winter & wear", x: -2, y: 21, zoom: 2.3 },
+  upgrades: { title: "Upgrades & works", x: -2, y: 37, zoom: 2.3 }
 } as const
 export const testMap = { asset: town, buildings, effects, trees: trees.length + 18, roads: roads.size, coverage: represented.size }

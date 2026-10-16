@@ -33,7 +33,7 @@ const service = Decode.literal(...serviceIds)
 /** A count of every good. */
 const amounts = Decode.struct({
   wood: integer, planks: integer, stone: integer, ore: integer, tools: integer, fish: integer, smoked: integer,
-  wheat: integer, flour: integer, bread: integer, wool: integer, cloth: integer
+  wheat: integer, flour: integer, bread: integer, wool: integer, cloth: integer, furniture: integer
 })
 
 export const statuses = ["building", "idle", "working", "starved", "blocked", "unstaffed", "unconnected", "paused"] as const
@@ -59,7 +59,8 @@ export const Rising = Descriptor.ConstructedComponent(Decode.struct({ ticks: int
 
 export const Tree = Descriptor.ConstructedComponent(Decode.struct({ growth: integer }))("Town/Tree")
 export const Rock = Descriptor.ConstructedComponent(Decode.struct({ ore: Decode.boolean, amount: integer }))("Town/Rock")
-export const Water = Descriptor.Tag("Town/Water")
+/** A cell of water: the step it was last fished (see `RESTOCK_TICKS`). */
+export const Water = Descriptor.ConstructedComponent(Decode.struct({ fished: integer }))("Town/Water")
 export const Field = Descriptor.ConstructedComponent(Decode.struct({ growth: integer }))("Town/Field")
 
 // ── Homes ─────────────────────────────────────────────────────────────────
@@ -72,8 +73,12 @@ export const House = Descriptor.ConstructedComponent(Decode.struct({
   bread: integer,
   cloth: integer,
   faith: integer,
+  furniture: integer,
   clock: integer
 }))("Town/House")
+
+/** The finest tier a home has been rebuilt for and paid (see `home.tiers`): rising to it again costs nothing. Absent: a cottage. */
+export const Rebuilt = Descriptor.ConstructedComponent(Decode.struct({ tier: Decode.literal(2, 3) }))("Town/Rebuilt")
 
 // ── Risks and wear (homes and buildings) ──────────────────────────────────
 
@@ -97,8 +102,16 @@ export const TownHall = Descriptor.Tag("Town/TownHall")
 export const Status = Descriptor.ConstructedComponent(Decode.literal(...statuses))("Town/Status")
 /** Stopped by the town: no workers, a quarter of its upkeep. */
 export const Paused = Descriptor.Tag("Town/Paused")
-/** Upgraded where it stands (see `Kind.upgrade`): its walker, desirability, and upkeep are the upgrade's. */
-export const Upgraded = Descriptor.Tag("Town/Upgraded")
+/** Upgraded where it stands, `level` times (see `Kind.upgrade`): it works as `asUpgraded` says. */
+export const Upgraded = Descriptor.ConstructedComponent(Decode.struct({ level: Decode.literal(1, 2) }))("Town/Upgraded")
+/**
+ * Being upgraded to `level` where it stands: its coins are paid, and these
+ * materials are still owed, out of `total`; carriers bring them while it
+ * goes on working, and builders put in `done` steps of work as they come,
+ * never ahead of what is in (see `WORKS_TICKS`). Once everything is in and
+ * worked, it stands upgraded.
+ */
+export const Works = Descriptor.ConstructedComponent(Decode.struct({ owed: amounts, total: integer, done: integer, level: Decode.literal(1, 2) }))("Town/Works")
 
 /**
  * Workers it needs, how many came (`apprentices` of them settlers standing
@@ -199,6 +212,7 @@ export const Census = Descriptor.ConstructedResource(Decode.struct({
   bread: integer,
   cloth: integer,
   faith: integer,
+  furniture: integer,
   /** Homes sick, and homes and buildings on fire, right now. */
   sick: integer,
   burning: integer
@@ -412,8 +426,8 @@ export const RuinNodes = Descriptor.Service<NodeRegistry.NodeRegistry<RuinView>>
 export const Game = Schema.bind(
   Schema.fragment({
     components: {
-      Tile, Road, Paved, Park, Ruin, Site, Rising, Tree, Rock, Water, Field, House, Risk, Condition, Burning, Sick, Building, TownHall, Status,
-      Paused, Upgraded, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Patrol, Figure, Route, Errand, Rescue, Roam
+      Tile, Road, Paved, Park, Ruin, Site, Rising, Tree, Rock, Water, Field, House, Rebuilt, Risk, Condition, Burning, Sick, Building, TownHall, Status,
+      Paused, Upgraded, Works, Staff, Inventory, Storage, Recipe, Gatherer, Planter, Carriers, Service, Patrol, Figure, Route, Errand, Rescue, Roam
     },
     resources: {
       Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Guide, Appeal, Pantry, Fires,

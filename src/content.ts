@@ -12,7 +12,7 @@ export const ticks = (seconds: number): number => Math.round(seconds / STEP_SECO
 
 // ── Goods ─────────────────────────────────────────────────────────────────
 
-export const goodIds = ["wood", "planks", "stone", "ore", "tools", "fish", "smoked", "wheat", "flour", "bread", "wool", "cloth"] as const
+export const goodIds = ["wood", "planks", "stone", "ore", "tools", "fish", "smoked", "wheat", "flour", "bread", "wool", "cloth", "furniture"] as const
 export type GoodId = (typeof goodIds)[number]
 
 /** Each good's crate label colour (the only colour a good has), and what traders pay for one. */
@@ -25,10 +25,11 @@ export const goods: Readonly<Record<GoodId, { readonly title: string; readonly c
   fish: { title: "fish", color: 0x2f8c87, price: 2 },
   smoked: { title: "smoked fish", color: 0x9a5b3a, price: 4 },
   wheat: { title: "wheat", color: 0xd6ae2e, price: 1 },
-  flour: { title: "flour", color: 0xc9b48a, price: 2 },
+  flour: { title: "flour", color: 0xc9b48a, price: 3 },
   bread: { title: "bread", color: 0xc4523f, price: 4 },
   wool: { title: "wool", color: 0xa7ada4, price: 2 },
-  cloth: { title: "cloth", color: 0x8a58a8, price: 6 }
+  cloth: { title: "cloth", color: 0x8a58a8, price: 6 },
+  furniture: { title: "furniture", color: 0x9a6b3f, price: 9 }
 }
 
 /**
@@ -42,7 +43,7 @@ export const RESERVE_MAX = 200
 export const trade = { sells: [] as ReadonlyArray<GoodId>, reserve: 25 }
 
 export type Amounts = Readonly<Record<GoodId, number>>
-export const none: Amounts = { wood: 0, planks: 0, stone: 0, ore: 0, tools: 0, fish: 0, smoked: 0, wheat: 0, flour: 0, bread: 0, wool: 0, cloth: 0 }
+export const none: Amounts = { wood: 0, planks: 0, stone: 0, ore: 0, tools: 0, fish: 0, smoked: 0, wheat: 0, flour: 0, bread: 0, wool: 0, cloth: 0, furniture: 0 }
 export const amounts = (some: Partial<Record<GoodId, number>>): Amounts => ({ ...none, ...some })
 export const total = (a: Amounts): number => goodIds.reduce((sum, g) => sum + a[g], 0)
 /** Amounts made good by good. */
@@ -53,9 +54,9 @@ export const each = (f: (good: GoodId) => number): Amounts => {
 }
 
 /** Goods a market walker hands out to homes. */
-export const provisions: ReadonlyArray<GoodId> = ["fish", "smoked", "bread", "cloth"]
+export const provisions: ReadonlyArray<GoodId> = ["fish", "smoked", "bread", "cloth", "furniture"]
 /** Goods the top bar shows, in order. */
-export const shownGoods: ReadonlyArray<GoodId> = ["wood", "planks", "stone", "tools", "fish", "smoked", "bread", "cloth"]
+export const shownGoods: ReadonlyArray<GoodId> = ["wood", "planks", "stone", "tools", "fish", "smoked", "bread", "cloth", "furniture"]
 /** Goods that are food in store (see `larder`). */
 export const foods: ReadonlyArray<GoodId> = ["fish", "smoked", "bread"]
 
@@ -94,7 +95,7 @@ export type Topper = "none" | "chimney" | "flag" | "cupola" | "sails" | "crates"
 export const kindIds = [
   "townhall", "warehouse", "lumberjack", "forester", "quarry", "mine", "fishery", "sawmill",
   "smithy", "farm", "mill", "bakery", "sheep", "weaver", "market", "chapel",
-  "granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder"
+  "granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder", "carpenter"
 ] as const
 export type KindId = (typeof kindIds)[number]
 
@@ -151,24 +152,14 @@ export interface Kind {
   readonly keeps?: number
   /**
    * What it becomes when upgraded where it stands, once the town has reached
-   * `rank` (see `ranks`): paid at once from the treasury and the store, as
-   * paving is. Its walker, desirability, and upkeep become these.
+   * `rank` (see `ranks`), and (`next`) what that becomes in turn: its coins
+   * paid when the works begin, its materials carried to it while it goes on
+   * working (see `Works`). Whatever an upgrade gives replaces the kind's own.
    */
   readonly upgrade?: Upgrade
 }
 
-/** Coins a minute a building of a kind costs, upgraded or not. */
-export const upkeepOf = (kind: Pick<Kind, "upkeep" | "upgrade">, upgraded: boolean): number => (upgraded && kind.upgrade ? kind.upgrade.upkeep : kind.upkeep)
-
-/** What a building of a kind cost all told, its upgrade included: what pulling it down gives part of back. */
-export const builtCost = (kind: Pick<Kind, "cost" | "upgrade">, upgraded: boolean): Kind["cost"] => {
-  if (!upgraded || !kind.upgrade) return kind.cost
-  const materials: Partial<Record<GoodId, number>> = { ...kind.cost.materials }
-  for (const [g, n] of Object.entries(kind.upgrade.cost.materials) as Array<[GoodId, number]>) materials[g] = (materials[g] ?? 0) + n
-  return { coins: kind.cost.coins + kind.upgrade.cost.coins, materials }
-}
-
-/** A building upgraded where it stands (see `Kind.upgrade`). */
+/** A building upgraded where it stands (see `Kind.upgrade`): every field but the first five is what changes. */
 export interface Upgrade {
   readonly title: string
   readonly blurb: string
@@ -177,6 +168,73 @@ export interface Upgrade {
   readonly upkeep: number
   readonly service?: { readonly seconds: number; readonly range: number }
   readonly appeal?: { readonly value: number; readonly reach: number; readonly full?: number }
+  /** Workers it takes, and seconds a job (a recipe's). */
+  readonly workers?: number
+  readonly seconds?: number
+  /** What its shelves hold of each good, and the carriers it sends at once. */
+  readonly cap?: number
+  readonly carriers?: number
+  /** Firefighters it sends out at once (a fire watch's). */
+  readonly crews?: number
+  /** It cuts worked faces at full pace, not a third of it (a quarry's). */
+  readonly deep?: boolean
+  /** The share of the town hall's administration it saves (the town hall's). */
+  readonly admin?: number
+  /** The upgrade after this one. */
+  readonly next?: Upgrade
+}
+
+/** Upgrades a building has had: none, one, or (a town hall) two. */
+export type Level = 0 | 1 | 2
+
+/** The upgrade a building at `level` stands as (`undefined`: none), and the one it could have next. */
+export const upgradeAt = (kind: Pick<Kind, "upgrade">, level: number): Upgrade | undefined =>
+  level <= 0 ? undefined : level === 1 ? kind.upgrade : kind.upgrade?.next
+export const nextUpgrade = (kind: Pick<Kind, "upgrade">, level: number): Upgrade | undefined => upgradeAt(kind, level + 1)
+
+/**
+ * A kind as a building of it stands once upgraded to `level`: its upkeep,
+ * crew, pace, shelves, carriers, walker, and desirability those of its
+ * upgrades. Everything that works a building reads it from here.
+ */
+export const asUpgraded = <K extends Kind>(kind: K, level: number): K => {
+  let k: Kind = kind
+  for (let l = 1; l <= level; l++) {
+    const up = upgradeAt(kind, l)
+    if (!up) break
+    k = {
+      ...k,
+      upkeep: up.upkeep,
+      workers: up.workers ?? k.workers,
+      ...(k.recipe && up.seconds ? { recipe: { ...k.recipe, seconds: up.seconds } } : {}),
+      ...(k.holds && up.cap ? { holds: { ...k.holds, cap: up.cap } } : {}),
+      ...(up.carriers ? { carriers: up.carriers } : {}),
+      ...(k.service && up.service ? { service: { ...k.service, ...up.service } } : {}),
+      ...(up.appeal ? { appeal: up.appeal } : {})
+    }
+  }
+  return k as K
+}
+
+/** Steps of building work an upgrade takes for each good it is made of: a market hall half a minute, a city hall four. */
+export const WORKS_TICKS = ticks(1.5)
+/** The steps of work an upgrade of `total` goods takes. */
+export const worksNeeded = (total: number, rules: { readonly worksTicks: number } = { worksTicks: WORKS_TICKS }) => Math.max(1, total) * rules.worksTicks
+
+/** Coins a minute a building of a kind costs at its level of upgrades. */
+export const upkeepOf = (kind: Pick<Kind, "upkeep" | "upgrade">, level: number): number => upgradeAt(kind, level)?.upkeep ?? kind.upkeep
+
+/** What a building of a kind cost all told, its upgrades included: what pulling it down gives part of back. */
+export const builtCost = (kind: Pick<Kind, "cost" | "upgrade">, level: number): Kind["cost"] => {
+  let coins = kind.cost.coins
+  const materials: Partial<Record<GoodId, number>> = { ...kind.cost.materials }
+  for (let l = 1; l <= level; l++) {
+    const up = upgradeAt(kind, l)
+    if (!up) break
+    coins += up.cost.coins
+    for (const [g, n] of Object.entries(up.cost.materials) as Array<[GoodId, number]>) materials[g] = (materials[g] ?? 0) + n
+  }
+  return { coins, materials }
 }
 
 const free = { residents: 0, citizens: 0 }
@@ -189,13 +247,27 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     category: "storage", size: 3, half: 20, stories: 2, roof: "flat", bays: 2, window: 8, topper: "flag",
     cost: { coins: 0, materials: {} }, upkeep: 0, workers: 0, crew: "settlers", unlock: free, buildable: false,
     holds: { accepts: "all", cap: 100 }, carriers: 6,
-    service: { service: "goods", seconds: 8, range: 20 }, appeal: { value: 4, reach: 4, full: 2 }
+    service: { service: "goods", seconds: 8, range: 20 }, appeal: { value: 4, reach: 4, full: 2 },
+    upgrade: {
+      title: "Guildhall", blurb: "the town hall with a clock tower: it holds twice as much, sends more carriers, its walker goes further, and it runs the town for a tenth less", rank: 1,
+      cost: { coins: 500, materials: { planks: 30, stone: 40, tools: 6 } }, upkeep: 8,
+      cap: 200, carriers: 8, service: { seconds: 6, range: 26 }, appeal: { value: 6, reach: 5, full: 2 }, admin: 0.1,
+      next: {
+        title: "City hall", blurb: "a domed seat of the city: it holds the most, sends the most carriers, walks furthest, and runs the city for a fifth less", rank: 2,
+        cost: { coins: 1200, materials: { planks: 50, stone: 80, tools: 15, cloth: 20 } }, upkeep: 16,
+        cap: 300, carriers: 10, service: { seconds: 5, range: 32 }, appeal: { value: 8, reach: 6, full: 3 }, admin: 0.2
+      }
+    }
   },
   warehouse: {
     id: "warehouse", title: "Warehouse", blurb: "stores goods nearer where they are made and used",
     category: "storage", size: 3, half: 18, stories: 1, roof: "flat", bays: 3, window: 6, topper: "crates",
     cost: { coins: 150, materials: { planks: 8, stone: 4 } }, upkeep: 6, workers: 2, crew: "settlers", unlock: free, buildable: true,
-    holds: { accepts: "all", cap: 50 }, carriers: 4, appeal: { value: -2, reach: 2 }
+    holds: { accepts: "all", cap: 50 }, carriers: 4, appeal: { value: -2, reach: 2 },
+    upgrade: {
+      title: "Depot", blurb: "a loading yard and a hoist: it holds more than twice as much, and sends two more carriers", rank: 1,
+      cost: { coins: 200, materials: { planks: 10, stone: 10 } }, upkeep: 10, cap: 120, carriers: 6
+    }
   },
   granary: {
     id: "granary", title: "Granary", blurb: "stores food, and keeps fish and bread five times as long",
@@ -221,19 +293,23 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     category: "gathering", size: 2, half: 10, stories: 1, roof: "flat", bays: 2, window: 6, topper: "none",
     cost: { coins: 80, materials: { planks: 4 } }, upkeep: 5, workers: 3, crew: "settlers", unlock: free, buildable: true,
     recipe: { input: null, inputs: 0, output: "stone", batch: 1, seconds: 8 }, gathers: { source: "stone", radius: 3 }, carriers: 2,
-    wear: 50, dusty: true, appeal: { value: -8, reach: 4 }
+    wear: 50, dusty: true, appeal: { value: -8, reach: 4 },
+    upgrade: {
+      title: "Masonry", blurb: "a derrick and a mason's shed: it goes on cutting worked-out rock at full pace, not a third of it; a dustier neighbour", rank: 2,
+      cost: { coins: 200, materials: { planks: 6, tools: 2 } }, upkeep: 8, deep: true, appeal: { value: -10, reach: 4 }
+    }
   },
   mine: {
     id: "mine", title: "Mine", blurb: "digs ore from a deposit nearby",
     category: "gathering", size: 2, half: 10, stories: 1, roof: "flat", bays: 2, window: 6, topper: "chimney",
-    cost: { coins: 200, materials: { planks: 6, stone: 4 } }, upkeep: 10, workers: 4, crew: "settlers", unlock: { residents: 0, citizens: 10 }, buildable: true,
+    cost: { coins: 200, materials: { planks: 6, stone: 4 } }, upkeep: 6, workers: 4, crew: "settlers", unlock: { residents: 0, citizens: 10 }, buildable: true,
     recipe: { input: null, inputs: 0, output: "ore", batch: 1, seconds: 10 }, gathers: { source: "ore", radius: 3 }, carriers: 2,
     wear: 50, dusty: true, appeal: { value: -8, reach: 4 }
   },
   fishery: {
-    id: "fishery", title: "Fishery", blurb: "catches fish; needs water within two cells",
+    id: "fishery", title: "Fishery", blurb: "catches fish; needs its own stretch of water within two cells",
     category: "food", size: 2, half: 10, stories: 1, roof: "gable", bays: 2, window: 4, topper: "none",
-    cost: { coins: 60, materials: { planks: 3 } }, upkeep: 3, workers: 2, crew: "settlers", unlock: free, buildable: true,
+    cost: { coins: 60, materials: { planks: 3 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: free, buildable: true,
     recipe: { input: null, inputs: 0, output: "fish", batch: 1, seconds: 4 }, gathers: { source: "water", radius: 2 }, carriers: 2,
     appeal: { value: -2, reach: 2 }
   },
@@ -261,42 +337,57 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
   farm: {
     id: "farm", title: "Farm", blurb: "sows fields around it and harvests the wheat",
     category: "food", size: 3, half: 12, stories: 1, roof: "gable", bays: 2, window: 4, topper: "none",
-    cost: { coins: 120, materials: { planks: 4 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: { residents: 30, citizens: 0 }, buildable: true,
+    cost: { coins: 120, materials: { planks: 4 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: { residents: 60, citizens: 0 }, buildable: true,
     recipe: { input: null, inputs: 0, output: "wheat", batch: 1, seconds: 4 }, gathers: { source: "field", radius: 2 },
-    plants: { what: "field", radius: 2, seconds: 3, max: 8 }, carriers: 2, appeal: { value: -2, reach: 2 }
+    plants: { what: "field", radius: 2, seconds: 3, max: 8 }, carriers: 2, appeal: { value: -2, reach: 2 },
+    upgrade: {
+      title: "Estate", blurb: "a barn and a dovecote: a third hand reaps the same fields half again as fast", rank: 2,
+      cost: { coins: 250, materials: { planks: 8, stone: 6, tools: 1 } }, upkeep: 7, workers: 3, seconds: 2.5
+    }
   },
   mill: {
     id: "mill", title: "Mill", blurb: "grinds wheat into flour",
     category: "food", size: 2, half: 8, stories: 2, roof: "flat", bays: 2, window: 4, topper: "sails",
-    cost: { coins: 150, materials: { planks: 6, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 30, citizens: 0 }, buildable: true,
+    cost: { coins: 150, materials: { planks: 6, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 60, citizens: 0 }, buildable: true,
     recipe: { input: "wheat", inputs: 1, output: "flour", batch: 1, seconds: 6 }, holds: { accepts: ["wheat", "flour"], cap: 8 }, carriers: 2,
     wear: 60, appeal: { value: -4, reach: 3 }
   },
   bakery: {
     id: "bakery", title: "Bakery", blurb: "bakes flour into bread",
     category: "food", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "chimney",
-    cost: { coins: 150, materials: { planks: 4, stone: 4, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 30, citizens: 0 }, buildable: true,
+    cost: { coins: 150, materials: { planks: 4, stone: 4, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 60, citizens: 0 }, buildable: true,
     recipe: { input: "flour", inputs: 1, output: "bread", batch: 2, seconds: 6 }, holds: { accepts: ["flour", "bread"], cap: 8 }, carriers: 2,
-    wear: 60, hot: true, appeal: { value: -4, reach: 3 }
+    wear: 60, hot: true, appeal: { value: -4, reach: 3 },
+    upgrade: {
+      title: "Ovenworks", blurb: "a second oven and a third baker: bread every four seconds instead of six", rank: 2,
+      cost: { coins: 300, materials: { planks: 6, stone: 10, tools: 2 } }, upkeep: 13, workers: 3, seconds: 4
+    }
   },
   sheep: {
     id: "sheep", title: "Sheep farm", blurb: "shears sheep for wool",
     category: "crafts", size: 3, half: 12, stories: 1, roof: "gable", bays: 2, window: 4, topper: "none",
-    cost: { coins: 100, materials: { planks: 4 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: { residents: 15, citizens: 0 }, buildable: true,
+    cost: { coins: 100, materials: { planks: 4 } }, upkeep: 5, workers: 2, crew: "settlers", unlock: { residents: 40, citizens: 0 }, buildable: true,
     recipe: { input: null, inputs: 0, output: "wool", batch: 1, seconds: 6 }, carriers: 2, appeal: { value: -2, reach: 2 }
   },
   weaver: {
     id: "weaver", title: "Weaver", blurb: "weaves wool into cloth",
     category: "crafts", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "none",
-    cost: { coins: 150, materials: { planks: 4, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 15, citizens: 0 }, buildable: true,
+    cost: { coins: 150, materials: { planks: 4, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 40, citizens: 0 }, buildable: true,
     recipe: { input: "wool", inputs: 1, output: "cloth", batch: 1, seconds: 6 }, holds: { accepts: ["wool", "cloth"], cap: 8 }, carriers: 2,
     wear: 60, appeal: { value: -2, reach: 2 }
   },
+  carpenter: {
+    id: "carpenter", title: "Carpenter", blurb: "makes furniture from planks, for the burghers' townhouses",
+    category: "crafts", size: 2, half: 12, stories: 1, roof: "gable", bays: 2, window: 4, topper: "chimney",
+    cost: { coins: 160, materials: { planks: 4, stone: 2, tools: 1 } }, upkeep: 8, workers: 2, crew: "citizens", unlock: { residents: 0, citizens: 20 }, buildable: true,
+    recipe: { input: "planks", inputs: 2, output: "furniture", batch: 1, seconds: 8 }, holds: { accepts: ["planks", "furniture"], cap: 8 }, carriers: 2,
+    wear: 60, appeal: { value: -2, reach: 2 }
+  },
   market: {
-    id: "market", title: "Market", blurb: "a walker carries fish, bread, and cloth to the homes it passes",
+    id: "market", title: "Market", blurb: "a walker carries fish, bread, cloth, and furniture to the homes it passes",
     category: "services", size: 2, half: 12, stories: 1, roof: "flat", bays: 2, window: 6, topper: "flag",
     cost: { coins: 120, materials: { planks: 6, stone: 2 } }, upkeep: 6, workers: 2, crew: "citizens", unlock: free, buildable: true,
-    holds: { accepts: ["fish", "smoked", "bread", "cloth"], cap: 12 },
+    holds: { accepts: ["fish", "smoked", "bread", "cloth", "furniture"], cap: 12 },
     service: { service: "goods", seconds: 6, range: 18 }, appeal: { value: 2, reach: 3, full: 2 },
     upgrade: {
       title: "Market hall", blurb: "a covered hall: its walker goes further, more often, and the street around it is finer", rank: 2,
@@ -307,7 +398,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
   chapel: {
     id: "chapel", title: "Chapel", blurb: "a walker brings faith to the homes it passes",
     category: "services", size: 2, half: 12, stories: 2, roof: "flat", bays: 2, window: 6, topper: "cupola",
-    cost: { coins: 200, materials: { planks: 6, stone: 6 } }, upkeep: 10, workers: 1, crew: "citizens", unlock: { residents: 15, citizens: 0 }, buildable: true,
+    cost: { coins: 200, materials: { planks: 6, stone: 6 } }, upkeep: 10, workers: 1, crew: "citizens", unlock: { residents: 40, citizens: 0 }, buildable: true,
     service: { service: "faith", seconds: 8, range: 22 }, appeal: { value: 4, reach: 4, full: 2 },
     upgrade: {
       title: "Church", blurb: "a church with a tower: its priest walks further, more often, and the streets around it are the finest", rank: 2,
@@ -319,7 +410,11 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
     id: "firewatch", title: "Fire watch", blurb: "a watchman checks homes and workshops along the way for fire; firefighters run to any blaze",
     category: "services", size: 2, half: 9, stories: 1, roof: "gable", bays: 2, window: 4, topper: "none",
     cost: { coins: 70, materials: { planks: 3 } }, upkeep: 3, workers: 2, crew: "settlers", unlock: free, buildable: true,
-    service: { service: "fire", seconds: 7, range: 30 }
+    service: { service: "fire", seconds: 7, range: 30 },
+    upgrade: {
+      title: "Fire brigade", blurb: "a bell tower and a pump: its watchman walks further, more often, and four firefighters run instead of two", rank: 2,
+      cost: { coins: 200, materials: { planks: 6, stone: 6, tools: 1 } }, upkeep: 5, service: { seconds: 5, range: 36 }, crews: 4
+    }
   },
   healer: {
     id: "healer", title: "Healer", blurb: "a physician calls on the homes along the way and cures the sick",
@@ -330,7 +425,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
   hospital: {
     id: "hospital", title: "Hospital", blurb: "physicians call more often and walk further",
     category: "services", size: 3, half: 16, stories: 2, roof: "flat", bays: 2, window: 6, topper: "cupola",
-    cost: { coins: 400, materials: { planks: 10, stone: 10, tools: 2 } }, upkeep: 16, workers: 4, crew: "citizens", unlock: { residents: 0, citizens: 40 }, buildable: true,
+    cost: { coins: 400, materials: { planks: 10, stone: 10, tools: 2 } }, upkeep: 10, workers: 4, crew: "citizens", unlock: { residents: 0, citizens: 40 }, buildable: true,
     service: { service: "health", seconds: 4, range: 40 }, appeal: { value: 2, reach: 3, full: 2 }
   },
   watchhouse: {
@@ -349,7 +444,7 @@ export const kinds: Readonly<Record<KindId, Kind>> = {
 }
 
 export const kindOrder: ReadonlyArray<KindId> = [
-  "warehouse", "granary", "lumberjack", "forester", "quarry", "mine", "sawmill", "smithy", "sheep", "weaver",
+  "warehouse", "granary", "lumberjack", "forester", "quarry", "mine", "sawmill", "smithy", "sheep", "weaver", "carpenter",
   "fishery", "smokehouse", "farm", "mill", "bakery", "market", "chapel", "firewatch", "healer", "hospital", "watchhouse", "builder"
 ]
 
@@ -402,7 +497,7 @@ export const props: Readonly<Record<PropId, ParkPiece>> = {
 export const park = {
   /** Ground counts for this much beauty at most, however big the park. */
   groundMost: 4,
-  /** One furnishing counts for every this many cells: a park crowded with benches is no nicer. */
+  /** One furnishing counts for every this many whole cells (none on a park of one): a park crowded with benches is no nicer. */
   cellsPerProp: 2,
   /** Each furnishing of a kind after the first counts this share of the one before. */
   repeat: 0.5,
@@ -411,6 +506,12 @@ export const park = {
   entrances: 2,
   /** The most a park gives the streets around it. */
   most: 15,
+  /**
+   * Where several parks reach a cell, the finest counts in full and the
+   * others this share of theirs: a street lined with scraps of park is
+   * not a park.
+   */
+  others: 0.5,
   /** How far it reaches: `reach[0]` cells, and one more for every `reach[1]` cells of park, up to `reach[2]`. */
   reach: [2, 6, 5] as const
 }
@@ -419,17 +520,17 @@ export const park = {
 
 export type Tier = 1 | 2 | 3
 export const tierIds: ReadonlyArray<Tier> = [1, 2, 3]
-/** What a home can be short of. Settlers need food (fish, smoked fish, or bread); citizens and burghers bread, cloth, and faith. */
-export type Need = "food" | "bread" | "cloth" | "faith"
+/** What a home can be short of. Settlers need food (fish, smoked fish, or bread); citizens bread, cloth, and faith; burghers furniture besides. */
+export type Need = "food" | "bread" | "cloth" | "faith" | "furniture"
 
 export const home = {
   /** Half the house's width, in units: a 1×1 cell is 8 units from centre to edge. */
   half: 5,
-  cost: { coins: 10, materials: { planks: 1 } } as Kind["cost"],
+  cost: { coins: 15, materials: { planks: 1 } } as Kind["cost"],
   tiers: {
-    1: { title: "settlers", residents: 4, tax: 2.5, height: 14, needs: ["food"], appeal: -100 },
-    2: { title: "citizens", residents: 8, tax: 5, height: 26, needs: ["bread", "cloth", "faith"], appeal: 5 },
-    3: { title: "burghers", residents: 12, tax: 6.5, height: 38, needs: ["bread", "cloth", "faith"], appeal: 12 }
+    1: { title: "settlers", residents: 4, tax: 2.5, height: 24, needs: ["food"], appeal: -100, rise: { coins: 0, materials: {} } },
+    2: { title: "citizens", residents: 8, tax: 5, height: 46, needs: ["bread", "cloth", "faith"], appeal: 5, rise: { coins: 35, materials: { planks: 4, stone: 2 } } },
+    3: { title: "burghers", residents: 12, tax: 7, height: 68, needs: ["bread", "cloth", "faith", "furniture"], appeal: 12, rise: { coins: 45, materials: { planks: 4, stone: 4, tools: 1, furniture: 2 } } }
   } as Readonly<Record<Tier, {
     readonly title: string
     readonly residents: number
@@ -438,11 +539,18 @@ export const home = {
     readonly needs: ReadonlyArray<Need>
     /** The desirability a home of this tier needs around it (see `appeal.ts`). */
     readonly appeal: number
+    /**
+     * What rebuilding a home into this tier costs, paid at once from the
+     * treasury and the store when it is ready to rise, as paving is: a home
+     * that cannot be paid for waits at its tier. A home that steps down
+     * keeps its rebuilding, and rises back into it for nothing.
+     */
+    readonly rise: Kind["cost"]
   }>>,
   /** A resident moves in (or out) this often. */
   settle: ticks(3),
   /** How long each need stays met after a walker's visit: cloth and faith last longer than a meal. */
-  lasts: { food: ticks(90), bread: ticks(120), cloth: ticks(240), faith: ticks(180) } as Readonly<Record<Need, number>>,
+  lasts: { food: ticks(90), bread: ticks(120), cloth: ticks(240), faith: ticks(180), furniture: ticks(300) } as Readonly<Record<Need, number>>,
   /** Where nobody wants to live: the desirability the map's legend calls squalid. */
   squalid: -5,
   /**
@@ -455,6 +563,12 @@ export const home = {
   street: { room: 12, roomLeast: 0.5, tax: 40, taxMost: 0.25 },
   /** A settlers' cottage with bread on the table pays this much more: bread is worth baking before anyone is a citizen. */
   breadBonus: 0.5,
+  /**
+   * The need a finer home cannot be without: a citizens' home or a
+   * townhouse out of bread goes back to settlers, however much fish it
+   * eats (cloth or faith alone may lapse a while).
+   */
+  staple: "bread" as Need,
   /**
    * A walker's visit feeds a home one fish or loaf for every `perMeal`
    * residents (rounded up): a cottage one, a citizens' home two, a
@@ -471,6 +585,9 @@ export const home = {
    */
   taxFlight: { linear: 0.3, square: 0.2, citizens: 0.6 }
 }
+
+/** A word with its article: "a guildhall", "an estate". */
+export const anA = (word: string): string => `${/^[aeiou]/i.test(word) ? "an" : "a"} ${word}`
 
 /** What a tier's homes are called, and what its residents are. */
 export const tierHome: Readonly<Record<Tier, string>> = { 1: "settlers' cottage", 2: "citizens' home", 3: "townhouse" }
@@ -601,7 +718,7 @@ export const condition = {
 /** Tax rates the town can set, in percent of the usual. */
 export const TAX_STEPS = [50, 75, 100, 125, 150, 200] as const
 
-export const needTitle: Readonly<Record<Need, string>> = { food: "food", bread: "bread", cloth: "cloth", faith: "faith" }
+export const needTitle: Readonly<Record<Need, string>> = { food: "food", bread: "bread", cloth: "cloth", faith: "faith", furniture: "furniture" }
 
 // ── The town ──────────────────────────────────────────────────────────────
 
@@ -620,6 +737,12 @@ export const ROCK_AMOUNT = 40
  * about a third of its pace instead of stopping for good.
  */
 export const FACE_TICKS = ticks(90)
+/**
+ * A cell of water fished rests this long before it gives another catch,
+ * so a fishery needs a good stretch of shore to itself to work at full
+ * pace, and fisheries crowded on one lake share its fish.
+ */
+export const RESTOCK_TICKS = ticks(40)
 
 // ── The charter: what a new town is founded on ────────────────────────────
 
@@ -633,16 +756,18 @@ export const TERMS = [45, 60, 90] as const
 /**
  * Sizes of land: its rough radius in cells (the coast wanders in and out of
  * it, with capes reaching further), and what the town must reach to be
- * a town (see `ranks`: a village needs less of both, a city more).
+ * a town (see `ranks`: a village needs less of both, a city more): its
+ * residents, and its income, coins a minute after upkeep and
+ * administration. Income, not coins held: a treasury is for spending.
  */
 export const sizes: Readonly<Record<SizeId, {
   readonly title: string
   readonly radius: number
-  readonly goal: { readonly residents: number; readonly coins: number }
+  readonly goal: { readonly residents: number; readonly income: number }
 }>> = {
-  small: { title: "small", radius: 14, goal: { residents: 180, coins: 2500 } },
-  medium: { title: "medium", radius: 19, goal: { residents: 320, coins: 4000 } },
-  large: { title: "large", radius: 25, goal: { residents: 520, coins: 5000 } }
+  small: { title: "small", radius: 14, goal: { residents: 180, income: 100 } },
+  medium: { title: "medium", radius: 19, goal: { residents: 320, income: 150 } },
+  large: { title: "large", radius: 25, goal: { residents: 520, income: 200 } }
 }
 
 /**
@@ -663,17 +788,17 @@ export const lands: Readonly<Record<LandId, {
 }>> = {
   rich: {
     title: "rich", blurb: "deep forests, plenty of stone and ore, two lakes, a full treasury",
-    forests: 7, stone: 4.5, ore: 3, rock: 40, lakes: 2, coins: 2400,
+    forests: 7, stone: 4.5, ore: 3, rock: 40, lakes: 2, coins: 1250,
     stock: amounts({ wood: 15, planks: 50, stone: 24, tools: 10, fish: 30 })
   },
   fair: {
     title: "fair", blurb: "enough of everything, if it is not wasted",
-    forests: 5.5, stone: 3, ore: 2, rock: 32, lakes: 2, coins: 1900,
+    forests: 5.5, stone: 3, ore: 2, rock: 32, lakes: 2, coins: 1100,
     stock: amounts({ wood: 10, planks: 40, stone: 16, tools: 10, fish: 20 })
   },
   harsh: {
     title: "harsh", blurb: "thin woods, little stone, one deposit of ore, one lake",
-    forests: 4, stone: 2, ore: 1, rock: 24, lakes: 1, coins: 1500,
+    forests: 4, stone: 2, ore: 1, rock: 24, lakes: 1, coins: 950,
     stock: amounts({ wood: 10, planks: 30, stone: 12, tools: 8, fish: 15 })
   }
 }
@@ -712,16 +837,16 @@ export const winters: Readonly<Record<WinterId, { readonly title: string; readon
 export const WINTER_WARNING = ticks(60)
 
 /**
- * Running a town costs more the bigger it gets: the town hall's
- * administration costs `perHome` coins a minute a home, and a further
- * (homes / `growth`) a home. Each more home costs `perHome` + 2·homes /
- * `growth`: about 6 coins a minute at 80 homes, about what a cottage
- * brings in once its food is paid for, and a full cottage's taxes by 140,
- * so past there a town grows by finer homes, not more of them. It is
- * reckoned by the home, so a townhouse of twelve costs no more than a
- * cottage of four.
+ * Running a town costs more the bigger it gets, and it is reckoned by the
+ * person, not the roof: the town hall's administration costs `perResident`
+ * coins a minute a resident, and a further (residents / `growth`) a
+ * resident. Each more resident costs `perResident` + 2·residents /
+ * `growth`: about half a settler's taxes at 320 residents (a medium
+ * town's goal), and all of them by about 580, so past there a town grows by
+ * finer homes; and a citizens' home of eight costs twice a cottage of
+ * four, so finer homes are not had for nothing either.
  */
-export const admin = { perHome: 0.5, growth: 30 }
+export const admin = { perResident: 0.125, growth: 490 }
 
 /**
  * Approval, -100 → +100: where the town's mood is heading, and how fast it
@@ -767,9 +892,9 @@ export const crown = {
   /** Nor more than this share of what the town's storage holds of one good. */
   room: 0.6,
   /** Reward as a multiple of what the goods would fetch from traders, plus a bonus; the fine is the goods' worth plus the bonus. */
-  reward: 2,
+  reward: 1.3,
   fine: 1,
-  bonus: 50,
+  bonus: 25,
   /** How long the crown remembers a missed request, in minutes. */
   memory: 4,
   /** Requests missed in a row before the crown dismisses the mayor. */
@@ -817,25 +942,27 @@ export const fate = {
 /**
  * The town's ranks, from the hamlet it is founded as. It rises to the next
  * once every goal of that rank has held for `fate.hold` minutes together:
- * `residents` and `coins` (not losing any) as shares of its land's goal
+ * `residents` and `income` (out of debt) as shares of its land's goal
  * (see `sizes`), a share of the residents `citizens` (those in townhouses
- * count), a share `burghers`, and approval. A rank is never lost, and the
- * crown sends `reward` coins on reaching it. The town rank is the old
- * "complete" town; nothing ends when a rank is reached.
+ * count), a share `burghers`, approval, and (a city) a town hall upgraded
+ * `hall` times, a guildhall. A rank is never lost, and the crown sends
+ * `reward` coins on reaching it. The town rank is the old "complete" town;
+ * nothing ends when a rank is reached.
  */
 export const ranks: ReadonlyArray<{
   readonly title: string
   readonly residents: number
-  readonly coins: number
+  readonly income: number
   readonly citizens: number
   readonly burghers: number
   readonly approval: number
+  readonly hall: number
   readonly reward: number
 }> = [
-  { title: "hamlet", residents: 0, coins: 0, citizens: 0, burghers: 0, approval: 0, reward: 0 },
-  { title: "village", residents: 0.35, coins: 0.3, citizens: 0.1, burghers: 0, approval: 0, reward: 300 },
-  { title: "town", residents: 1, coins: 1, citizens: fate.citizens, burghers: 0, approval: fate.approval, reward: 800 },
-  { title: "city", residents: 1.5, coins: 1.5, citizens: 0.5, burghers: 0.15, approval: 25, reward: 1500 }
+  { title: "hamlet", residents: 0, income: 0, citizens: 0, burghers: 0, approval: 0, hall: 0, reward: 0 },
+  { title: "village", residents: 0.35, income: 0.3, citizens: 0.1, burghers: 0, approval: 0, hall: 0, reward: 300 },
+  { title: "town", residents: 1, income: 1, citizens: fate.citizens, burghers: 0, approval: fate.approval, hall: 0, reward: 800 },
+  { title: "city", residents: 1.5, income: 1.5, citizens: 0.5, burghers: 0.15, approval: 25, hall: 1, reward: 1500 }
 ]
 /** The rank the old "complete" town is: the goals a balance run plays for. */
 export const TOWN_RANK = 2

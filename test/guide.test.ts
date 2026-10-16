@@ -84,16 +84,16 @@ test("after ten homes the course goes on to citizens, never falling silent, a bu
   // Ten homes stand, and quiet or not, the guide has the next step. Stone in store: no quarry yet.
   assert.equal(next(founded()), "cloth")
   assert.equal(next(founded({ stock: amounts({ planks: 30, stone: STONE_LOW - 2 }) })), "quarry", "a quarry once stone runs low")
-  // Cloth and faith open at 15 residents, bread at 30: with 20, cloth comes first.
-  const twenty = founded({ residents: 20 }, ["quarry"])
-  assert.equal(next(twenty), "cloth")
-  assert.equal(next(founded({ residents: 20 }, ["quarry", "sheep", "weaver"])), "chapel")
+  // Cloth and faith open at 40 residents, bread at 60: with 45, cloth comes first.
+  const some = founded({ residents: 45 }, ["quarry"])
+  assert.equal(next(some), "cloth")
+  assert.equal(next(founded({ residents: 45 }, ["quarry", "sheep", "weaver"])), "chapel")
   // Bread cannot be made yet: the step says what opens it.
-  const short = founded({ residents: 20 }, ["quarry", "sheep", "weaver", "chapel"])
+  const short = founded({ residents: 45 }, ["quarry", "sheep", "weaver", "chapel"])
   assert.equal(next(short), "wheat")
-  assert.match(lockedNote(guideSteps.find((s) => s.id === "wheat")!, short)!, /opens at 30 residents \(20 now\)/)
-  assert.equal(next(founded({ residents: 30 }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill"])), "bakery")
-  const supplied = founded({ residents: 40 }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill", "bakery"])
+  assert.match(lockedNote(guideSteps.find((s) => s.id === "wheat")!, short)!, /opens at 60 residents \(45 now\)/)
+  assert.equal(next(founded({ residents: 60 }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill"])), "bakery")
+  const supplied = founded({ residents: 70 }, ["quarry", "sheep", "weaver", "chapel", "farm", "mill", "bakery"])
   assert.equal(next(supplied), "citizens")
   assert.equal(next({ ...supplied, finerHomes: 1, sawTown: false }, { quiet: true }, founding.map((s) => s.id)), "goals")
   // The last word: the ranks, up to a city.
@@ -122,7 +122,7 @@ test("the course never asks for a building before the town needs it, and says wh
 })
 
 test("a step the treasury cannot pay for says to save up, and gives way to one it can", () => {
-  const poor = founded({ residents: 20, coins: 120 }, [])
+  const poor = founded({ residents: 45, coins: 120 }, [])
   const chapel = guideSteps.find((s) => s.id === "chapel")!
   assert.match(lockedNote(chapel, poor)!, /Save up: the chapel costs 200 coins \(120 now\)/)
   // The sheep farm (100) can be paid for, the weaver (150) not yet: the cloth step asks, the cheaper first.
@@ -249,7 +249,7 @@ test("every step can be done, and a town that has done them all is told nothing"
       homes: 200, residents: 400, citizens: 200, finerHomes: 30, crown: { open: true, met: 3 }, trading: true, taxed: true, sawTown: true, sawHome: true, sawBuilding: true,
       roadToWater: true, rank: 3, upgraded: new Set<KindId>(["market"]), unreached: 5, winter: true, worn: true, poorStreet: true, approval: 40, net: -5, most: 120, stock: amounts({ tools: 0 })
     },
-    ["fishery", "lumberjack", "sawmill", "forester", "quarry", "granary", "firewatch", "builder", "market", "sheep", "weaver", "chapel", "farm", "mill", "bakery", "healer", "watchhouse", "mine", "smithy"]
+    ["fishery", "lumberjack", "sawmill", "forester", "quarry", "granary", "firewatch", "builder", "market", "sheep", "weaver", "chapel", "farm", "mill", "bakery", "healer", "watchhouse", "mine", "smithy", "carpenter"]
   )
   assert.deepEqual(guideDone(finished, none).sort(), [...all].sort())
   assert.equal(guideStep(finished, none), null)

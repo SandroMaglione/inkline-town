@@ -1,7 +1,7 @@
 import { amounts, goodIds, type Amounts } from "../../../src/content.ts"
 import { parkUpkeep } from "../../../src/appeal.ts"
 import { ruleTicks } from "../../../src/rules/config.ts"
-import { baseCollection, capacity, mealRate, rateOf, serveGoods, taxOf, tierFor } from "../../../src/rules/households.ts"
+import { baseCollection, capacity, mealRate, rateOf, serveGoods, shortOf, taxOf, tierFor } from "../../../src/rules/households.ts"
 import { seasonAt } from "../../../src/rules/seasons.ts"
 import { spoilExpectation } from "../../../src/rules/decay.ts"
 import { tradeCollection } from "../../../src/rules/trade.ts"
@@ -19,6 +19,8 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
   for (const b of scenario.buildings) if (!b.site) for (const g of goodIds) stock[g] += b.stock[g]
   let parks = [...scenario.parks ?? []]
   let homes = scenario.homes.map((h) => ({ ...h, meters: { ...h.meters } })), buildings = [...scenario.buildings], coins = scenario.coins, approval = scenario.approval
+  /** The finest tier each home has been rebuilt for (see `Rebuilt`): a home already finer is taken as paid for. */
+  const rebuilt = new Map(homes.map((h) => [h.id, h.tier as number]))
   const events: Array<{ second: number; type: string; detail: string }> = [], rows: Array<{ second: number; coins: number; residents: number; citizens: number; approval: number; stock: Amounts }> = []
   const builds = [...options.builds ?? []].sort((a, b) => a.at - b.at), crown = [...options.crown ?? []].sort((a, b) => a.at - b.at)
   const pending: Array<{ ready: number; action: BuildingAction }> = []
@@ -85,7 +87,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
       const p = pending[i]!
       if (p.ready > second) continue
       const id = nextId++
-      if (p.action.kind === "home") homes.push({ id, tile: p.action.tile, tier: 1, residents: 0, clock: 0, food: 0, bread: 0, cloth: 0, faith: 0, condition: rules.conditionMax, meters: { fire: 0, health: 0, order: 0 } })
+      if (p.action.kind === "home") homes.push({ id, tile: p.action.tile, tier: 1, residents: 0, clock: 0, food: 0, bread: 0, cloth: 0, faith: 0, furniture: 0, condition: rules.conditionMax, meters: { fire: 0, health: 0, order: 0 } })
       else buildings.push({ id, kind: p.action.kind, tile: p.action.tile, paused: false, site: false, condition: rules.conditionMax, stock: amounts({}) })
       pending.splice(i, 1)
     }
@@ -105,7 +107,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
       const k = rules.kinds[row.kind], r = k.recipe!, transport = analysis.transport.find((t) => t.id === row.id)?.sharedGoodsPerMinuteCeiling ?? Infinity
       let jobs = Math.min(row.capacity.outputPerMinute, transport) * share / r.batch
       if (r.input) jobs = Math.min(jobs, stock[r.input] / Math.max(1, r.inputs))
-      if (k.gathers?.source === "water" && row.sourceCeiling === 0) jobs = 0
+      if (k.gathers?.source === "water") jobs = Math.min(jobs, (row.sourceCeiling ?? Infinity) * share)
       if (k.gathers?.source === "field") {
         const b = buildings.find((b) => b.id === row.id)!, state = crop(b)
         if (!season.winter) {
@@ -146,7 +148,15 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
       const settleCount = Math.floor(next.clock / rules.home.settle) - Math.floor(h.clock / rules.home.settle)
       const appeal = analysis.household.find((a) => a.id === h.id)?.desirability ?? 0
       for (let n = 0; n < settleCount; n++) {
-        next.tier = tierFor(next, appeal, next.meters, rules)
+        const tier = tierFor(next, appeal, next.meters, rules), rise = rules.home.tiers[tier].rise
+        // A rise is paid at once from the treasury and the store, once, as in the game; unpaid, the home waits.
+        if (tier <= next.tier || tier <= (rebuilt.get(h.id) ?? 1)) next.tier = tier
+        else if (shortOf(rise, coins, stock) === null) {
+          coins -= rise.coins
+          for (const [g, n] of Object.entries(rise.materials) as Array<[keyof Amounts, number]>) stock[g] -= n
+          next.tier = tier
+          rebuilt.set(h.id, tier)
+        }
         const cap = analysis.household.find((a) => a.id === h.id)?.roadConnected ? capacity(next, approval, appeal, rules, rateOf(scenario.policy, next.tier)) : 0
         next.residents = Math.min(next.residents, rules.home.tiers[next.tier].residents)
         next.residents += Math.sign(cap - next.residents)
@@ -165,7 +175,7 @@ export const project = ({ rules, scenario }: Inputs, options: ProjectionOptions)
     if (Math.floor(elapsed / (rules.ledgerTicks * rules.stepSeconds)) > Math.floor(second / (rules.ledgerTicks * rules.stepSeconds))) {
       const tax = homes.reduce((n, h) => { const a = analysis.household.find((a) => a.id === h.id); return n + (a?.taxConnected ? taxOf(h, scenario.policy, rules, a.desirability) : 0) }, 0), upkeep = buildings.reduce((n, b) => n + rules.kinds[b.kind].upkeep * (b.paused ? rules.pausedUpkeep : 1), 0)
       const parkCost = parks.reduce((n, p) => n + parkUpkeep(p, rules), 0)
-      coins += baseCollection(tax, upkeep + parkCost, homes.length, rules).delta
+      coins += baseCollection(tax, upkeep + parkCost, homes.reduce((n, h) => n + h.residents, 0), rules).delta
       if (scenario.trade) {
         const equipped = buildings.filter((b) => rules.kinds[b.kind].wear && b.stock.tools > 0).length
         const left = { ...stock, tools: Math.max(0, stock.tools - equipped) }, stores = buildings.filter((b) => rules.kinds[b.kind].holds?.accepts === "all" || rules.kinds[b.kind].keeps).map((b) => {

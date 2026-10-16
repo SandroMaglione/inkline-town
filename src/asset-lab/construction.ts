@@ -2,6 +2,7 @@ import { Drawing, palette, square, type Vertex } from "./primitives.ts"
 import { buildStages } from "../art.ts"
 import { kinds, type KindId } from "../content.ts"
 import { U } from "../iso.ts"
+import { buildingDimensions } from "./buildings.ts"
 
 export function makeSite(share: number, size = 2) {
   const d = new Drawing(
@@ -42,8 +43,8 @@ export function makeSite(share: number, size = 2) {
 }
 export function makeConstruction(kindId: KindId, progress: number) {
   const kind = kinds[kindId],
-    a = kind.half * U,
-    H = kind.roof === "gable" ? 20 : kind.stories * 32,
+    a = buildingDimensions(kindId).half,
+    H = buildingDimensions(kindId).height,
     stage = buildStages(progress)
   const d = new Drawing(
     `build-${kindId}-${progress}`,
@@ -84,6 +85,21 @@ export function makeMarker() {
   for(const out of [-0.008,0.008]){
     d.face([p(-1.2, 6,out), p(1.2, 6,out), p(1.2, 12,out), p(-1.2, 12,out)], 0xc4523f, 0)
     d.face([p(-1.2, 3,out), p(1.2, 3,out), p(1.2, 5,out), p(-1.2, 5,out)], 0xc4523f, 0)
+  }
+  return d.asset
+}
+/** Over a building the town can upgrade now: a gold arrow up, on the same thin sign as the problem marker. */
+export function makeUpgradeMarker() {
+  const d = new Drawing("upgrade-marker", "Upgrade marker", "A gold arrow on a thin world-space sign: this building can be upgraded now.")
+  d.asset.category = "construction"
+  d.asset.reference = { type: "none" }
+  d.asset.footprint = 1
+  const gold = 0xb8862f
+  const p = (x: number, z: number, out = 0): Vertex => [x / 64 + out, -x / 64 + out, z]
+  d.face([p(-7.5, 0), p(7.5, 0), p(7.5, 15), p(-7.5, 15)], 0xfbf6e8, 1, gold)
+  for (const out of [-0.008, 0.008]) {
+    d.face([p(0, 12.6, out), p(4.6, 7.6, out), p(-4.6, 7.6, out)], gold, 0)
+    d.face([p(-1.6, 2.6, out), p(1.6, 2.6, out), p(1.6, 7.8, out), p(-1.6, 7.8, out)], gold, 0)
   }
   return d.asset
 }

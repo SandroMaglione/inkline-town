@@ -4,6 +4,7 @@ import assert from "node:assert/strict"
 import { existsSync } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
 import { chromium } from "playwright"
+import { kindIds } from "../src/content.ts"
 
 const executablePath = process.env.BROWSER_EXECUTABLE_PATH ?? ["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(existsSync)
 const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
@@ -14,7 +15,7 @@ page.on("console", e => { if (e.type() === "error") errors.push(e.text()) })
 page.on("response", r => { if (r.status() >= 400) errors.push(`${r.status()} ${r.url()}`) })
 const output = "output/inkline-3d/town-review"
 await mkdir(output, { recursive: true })
-const groups = ["All buildings", "Final refinements", "Trade buildings", "Workshop batch", "Review fixes", "Buildings", "Parks", "Homes & neighbourhoods", "Winter", "Ruins", "People & cargo", "Building condition", "Upgrades & worked faces"]
+const groups = ["Civic milestones", "Reusable building works", "PR #20 · new models", "All buildings", "Final refinements", "Trade buildings", "Workshop batch", "Review fixes", "Buildings", "Parks", "Homes & neighbourhoods", "Winter", "Ruins", "People & cargo", "Building condition", "Upgrades & worked faces"]
 const captureSheet = async () => {
   const previous = await page.locator("#sheet-link").getAttribute("href")
   await page.getByRole("button", { name: "Save model sheet", exact: true }).click()
@@ -42,7 +43,7 @@ try {
     await page.screenshot({ path: `${output}/${collection}-page.png` })
     await page.getByRole("button", { name: "See the back", exact: true }).click()
     assert.equal(await page.locator("output").textContent(), "180°")
-    if (["town", "rural", "workshops", "trades"].includes(collection)) {
+    if (["milestones", "works", "handoff", "town", "rural", "workshops", "trades"].includes(collection)) {
       const rear = await captureSheet()
       await writeFile(`${output}/${collection}-rear.png`, Buffer.from(rear.split(",")[1]!, "base64"))
     }
@@ -54,7 +55,7 @@ try {
     console.log(`ok ${collection}: ${await page.locator(".model-view").count()} models, rotation, elevation, PNG export`)
   }
   await page.setViewportSize({ width: 390, height: 844 })
-  for (const [group, count, name] of [["All buildings", 25, "town"], ["Final refinements", 9, "rural"]] as const) {
+  for (const [group, count, name] of [["Civic milestones", 3, "milestones"], ["Reusable building works", 9, "works"], ["PR #20 · new models", 14, "handoff"], ["All buildings", kindIds.length + 2, "town"], ["Final refinements", 9, "rural"]] as const) {
     await page.getByRole("button", { name: group, exact: true }).click()
     assert.equal(await page.locator(".model-view").count(), count)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${group}: phone preview must fit`)

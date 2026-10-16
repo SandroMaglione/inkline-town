@@ -1,5 +1,5 @@
 import { transport } from "../rules/config.ts"
-import { wantsCitizenGoods } from "../rules/households.ts"
+import { wantsBurgherGoods, wantsCitizenGoods } from "../rules/households.ts"
 import { appealAt } from "../appeal.ts"
 import { preferDelivery } from "../rules/transport.ts"
 /**
@@ -13,7 +13,7 @@ import { preferDelivery } from "../rules/transport.ts"
 import { goodIds, provisions, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, key, type Reach } from "../grid.ts"
 import type { Point } from "../iso.ts"
-import { Building, Burning, Carriers, Errand, Figure, Game, Rules, Grid, House, Appeal, Inventory, Recipe, Rising, Route, Service, Site, Storage, Tile, Time, WalkerOf, maybe } from "../schema.ts"
+import { Building, Burning, Carriers, Errand, Figure, Game, Rules, Grid, House, Appeal, Inventory, Recipe, Rising, Route, Service, Site, Storage, Tile, Time, WalkerOf, Works, maybe } from "../schema.ts"
 import { CELL_STEPS } from "./shared.ts"
 
 /** The most a carrier takes at once. */
@@ -49,6 +49,7 @@ export const Dispatch = Game.System(
       }),
       homes: Game.Query({ selection: { tile: Game.Query.read(Tile), house: Game.Query.read(House) }, without: [Site, Rising, Burning] }),
       sites: Game.Query({ selection: { tile: Game.Query.read(Tile), site: Game.Query.read(Site) } }),
+      works: Game.Query({ selection: { tile: Game.Query.read(Tile), works: Game.Query.read(Works) }, without: [Burning] }),
       errands: Game.Query({ selection: { errand: Game.Query.read(Errand), home: Game.Query.readRelation(WalkerOf) } })
     },
     resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal), time: Game.System.readResource(Time) },
@@ -86,6 +87,12 @@ export const Dispatch = Game.System(
       const ds = doors(grid, data.tile.get())
       for (const g of goodIds) if (site.owed[g] > 0) wants.push({ id: entity.id, doors: ds, good: g, site: true, want: () => site.owed[g] - inbound(entity.id, g) })
     }
+    // An upgrade under way is building work too: its materials go before anyone's shelves.
+    for (const { entity, data } of queries.works.each()) {
+      const works = data.works.get()
+      const ds = doors(grid, data.tile.get())
+      for (const g of goodIds) if (works.owed[g] > 0) wants.push({ id: entity.id, doors: ds, good: g, site: true, want: () => works.owed[g] - inbound(entity.id, g) })
+    }
     const sitesWant = new Set(wants.filter((w) => w.want() > 0).map((w) => w.good))
     const rooms: Array<{ readonly id: Id; readonly doors: ReadonlyArray<Point>; readonly room: (g: GoodId) => number; readonly keeps: boolean }> = []
     for (const { entity, data } of queries.wanting.each()) {
@@ -108,12 +115,18 @@ export const Dispatch = Game.System(
       const service = maybe(data.service)?.service
       if (service === "goods") {
         const roads = reach(grid, [ds[0]!]), range = maybe(data.service)!.range
-        const citizenDistrict = queries.homes.each().some(({ data: h }) => {
+        let citizenDistrict = false, burgherDistrict = false
+        for (const { data: h } of queries.homes.each()) {
           const tile = h.tile.get(), found = nearest(roads, doors(grid, tile))
-          return found !== null && found.distance < range && wantsCitizenGoods(h.house.get(), appealAt(resources.appeal.get().cells, tile.x, tile.y), rules)
-        })
+          if (found === null || found.distance >= range) continue
+          const desirability = appealAt(resources.appeal.get().cells, tile.x, tile.y)
+          citizenDistrict ||= wantsCitizenGoods(h.house.get(), desirability, rules)
+          burgherDistrict ||= wantsBurgherGoods(h.house.get(), desirability, rules)
+          if (burgherDistrict) break
+        }
         for (const g of provisions) {
           if (g === "cloth" && !citizenDistrict) continue
+          if (g === "furniture" && !burgherDistrict) continue
           const cap = Math.min(inventory.cap, rules.transport.basket)
           wants.push({ id: entity.id, doors: ds, good: g, site: false,
             want: () => cap - inventory.stock[g] - inbound(entity.id, g), fill: () => (inventory.stock[g] + inbound(entity.id, g)) / cap })
@@ -202,7 +215,7 @@ export const turnAround = (route: { readonly cells: ReadonlyArray<Point>; readon
 const TargetRead = Game.Query({ selection: { tile: Game.Query.read(Tile) } })
 
 /**
- * A carrier hands its crate over: to a site, towards what it is owed; to
+ * A carrier hands its crate over: to a site or an upgrade under way, towards what it is owed; to
  * anyone else, as much as they have room for. Then it walks back, and puts
  * whatever it still carries back where it came from.
  */
@@ -212,7 +225,8 @@ export const Deliver = Game.System(
     queries: {
       carriers: Game.Query({ selection: { route: Game.Query.write(Route), errand: Game.Query.write(Errand), home: Game.Query.readRelation(WalkerOf) } }),
       inventories: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, without: [Site] }),
-      sites: Game.Query({ selection: { site: Game.Query.write(Site) } })
+      sites: Game.Query({ selection: { site: Game.Query.write(Site) } }),
+      works: Game.Query({ selection: { works: Game.Query.write(Works) } })
     },
     services: { rules: Game.System.service(Rules) }
   },
@@ -244,8 +258,13 @@ export const Deliver = Game.System(
       if (!arrived(route)) continue
       let handed = 0
       const site = queries.sites.get(target.value.entity.id)
+      const works = queries.works.get(target.value.entity.id)
       const inventory = queries.inventories.get(target.value.entity.id)
-      if (site.ok) {
+      if (works.ok && works.value.data.works.get().owed[errand.good] > 0) {
+        const w = works.value.data.works.get()
+        handed = Math.min(errand.count, w.owed[errand.good])
+        works.value.data.works.set({ ...w, owed: { ...w.owed, [errand.good]: w.owed[errand.good] - handed } })
+      } else if (site.ok) {
         const s = site.value.data.site.get()
         handed = Math.min(errand.count, s.owed[errand.good])
         site.value.data.site.set({ ...s, owed: { ...s.owed, [errand.good]: s.owed[errand.good] - handed } })

@@ -18,9 +18,9 @@ export const SAVE_FORMAT = "inkline-town/save"
  * winters). 4: parks and patrols. 5: the grudge over taxes, and where each piece of news happened.
  * 6: how much of each good may be traded at a collection. 7: the mayor's guide. 8: terms that follow one
  * another, the town's rank, and upgraded buildings.
- * Version 4 to 7 saves are carried forward (see `carry`); older ones cannot be loaded.
+ * Version 4 to 8 saves are carried forward (see `carry`); older ones cannot be loaded.
  */
-export const SAVE_VERSION = 8
+export const SAVE_VERSION = 9
 
 /**
  * Fills in what a save from an earlier version lacks, so a town in progress
@@ -29,14 +29,47 @@ export const SAVE_VERSION = 8
  * guide from its start (it puts away at once what the town has already
  * done); from 7, its first term, and its rank: a town that was complete
  * (or governed on after) is a town, any other a hamlet that rises as its
- * goals hold. A complete town waiting on its mayor carries on playing.
+ * goals hold. A complete town waiting on its mayor carries on playing;
+ * from 8, its water as never fished, its upgrades as the first, its finer
+ * homes as rebuilt already, and no furniture anywhere yet, at its first price.
  * Anything else is left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
-  if (version < 4 || version > 7 || typeof world !== "object" || world === null) return null
-  const w = world as { resources?: Record<string, unknown> }
+  if (version < 4 || version > 8 || typeof world !== "object" || world === null) return null
+  const w = world as { resources?: Record<string, unknown>; entities?: Array<{ components?: Record<string, unknown> }> }
   const r = w.resources
   if (!r || typeof r !== "object") return null
+  // From 8, water that was never fished, and an upgraded building upgraded once.
+  for (const e of Array.isArray(w.entities) ? w.entities : []) {
+    const water = e.components?.["Town/Water"]
+    if (water && typeof water === "object" && !("fished" in water)) e.components!["Town/Water"] = { fished: -1_000_000 }
+    const upgraded = e.components?.["Town/Upgraded"]
+    if (upgraded && typeof upgraded === "object" && !("level" in upgraded)) e.components!["Town/Upgraded"] = { level: 1 }
+  }
+  // From 8 too, furniture: none of it anywhere, at its first price, stores and markets that take it, homes and the census without it.
+  const furnish = (o: unknown, furniture = 0) => (o && typeof o === "object" && !("furniture" in o) ? { ...o, furniture } : o)
+  for (const e of Array.isArray(w.entities) ? w.entities : []) {
+    const c = e.components
+    if (!c) continue
+    for (const [name, field] of [["Town/Site", "owed"], ["Town/Works", "owed"], ["Town/Inventory", "stock"], ["Town/Roam", "basket"]] as const) {
+      const v = c[name] as Record<string, unknown> | undefined
+      if (v && typeof v === "object") c[name] = { ...v, [field]: furnish(v[field]) }
+    }
+    if (c["Town/House"]) c["Town/House"] = furnish(c["Town/House"])
+    // Homes rose for nothing before 9: a finer home has had its rebuilding, and rises back into it for nothing if it steps down.
+    const tier = (c["Town/House"] as { tier?: unknown } | undefined)?.tier
+    if ((tier === 2 || tier === 3) && !("Town/Rebuilt" in c)) c["Town/Rebuilt"] = { tier }
+    const inventory = c["Town/Inventory"] as { accepts?: Array<string> } | undefined, kind = (c["Town/Building"] as { kind?: string } | undefined)?.kind
+    if (inventory && Array.isArray(inventory.accepts) && !inventory.accepts.includes("furniture")
+      && (kind === "market" || goodIds.every((g) => g === "furniture" || inventory.accepts!.includes(g))))
+      inventory.accepts = [...inventory.accepts, "furniture"]
+  }
+  if (r["Town/Census"]) r["Town/Census"] = furnish(r["Town/Census"])
+  const market = r["Town/Market"] as { prices?: unknown } | undefined
+  if (market && typeof market === "object") r["Town/Market"] = { ...market, prices: furnish(market.prices, 100) }
+  const loads = (r["Town/Policy"] as { loads?: Record<string, unknown> } | undefined)?.loads
+  if (loads && typeof loads === "object" && !("furniture" in loads)) loads.furniture = TRADE_LOAD
+  if (version === 8) return w
   const fate = r["Town/Fate"] as Record<string, unknown> | undefined
   if (fate && typeof fate === "object" && !("rank" in fate)) {
     const { governing, won, ...rest } = fate

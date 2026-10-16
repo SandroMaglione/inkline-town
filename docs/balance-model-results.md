@@ -1,10 +1,10 @@
 # Balance model results
 
-Generated from PR #3 at 619268604f382a5c73b50fc7c4049b90fc63fb07. Current shipped parameters, with no report-time overrides. Rules SHA-256: f3ee5d19da245921f0f6a7ef8ad9eefe92918b02fc9f6b6b1239f9d30963a193.
+Generated from PR #3 at d85daeb0dd603bb2331ea3617587ff8311776f94. Current shipped parameters, with no report-time overrides. Rules SHA-256: ab3123a31ccaa327eff54c63532ed318fc298229127c3879e31b2dea52586d9a.
 
 ## First citizens, with the current rules
 
-An authored starting district pays for its roads and homes, then uses ordinary construction edits and the UI-supported tool reserve of 10. The real game first reaches citizens at 267 seconds; the coarse model estimates 249. At ten minutes the game has 32 citizens, 60 residents and 1310 coins. The forecast has 32 citizens, 60 residents and 1374 coins. This is a progression fixture, not a generated-map victory claim.
+An authored starting district pays for its roads and homes, then uses ordinary construction edits and the UI-supported tool reserve of 10. The real game first reaches citizens at 267 seconds; the coarse model estimates 249. At ten minutes the game has 48 citizens, 82 residents and 1728 coins. The forecast has 48 citizens, 82 residents and 1748 coins. This is a progression fixture, not a generated-map victory claim.
 
 ## Production capacity
 
@@ -23,7 +23,7 @@ Outputs per minute with full crews, sufficient inputs, output room and maintaine
 ## Useful constraints
 
 - The first citizen chain alone costs 870 coins and 3 construction tools. Its 3 wearing workshops also need working tools. Total 6, versus 10 at a fair start. Raw industry adds more tool demand.
-- The verified park uses three adjacent flower cells, one fountain and one lamp: 97 coins, 2.65/min upkeep, +8 desirability at the nearest cells, reach 2. Its effects combine with industry and chapel effects; nearby raw industry remains a liability. Place furnishings after the ground exists.
+- The verified park uses three adjacent flower cells, one fountain and one lamp: 97 coins, 2.65/min upkeep, +6 desirability at the nearest cells, reach 2. Its effects combine with industry and chapel effects; nearby raw industry remains a liability. Place furnishings after the ground exists.
 - Cloth reaches existing citizens and settlers on eligible streets. Eligible settlers request bread independently of their food meter; other settlers prefer fish and use bread as a fallback.
 - Skilled jobs receive native crews first. Surplus citizens can fill rough jobs at full speed, and settlers can fill skilled jobs at apprentice pace. The road commute still constrains both.
 - Build mills/bakeries before farms can plant on their future plots. A previous ordering failed with the real game's “No room there”; the revised verified schedule has 0 rejected-action messages.
@@ -45,7 +45,7 @@ Fully staffed, maintained fisheries; homes consume per household. Each figure ex
 
 | Check | Expected | Actual | Allowed error | Pass |
 |---|---:|---:|---:|---|
-| collection-rounding | 48 | 48 | 0 | true |
+| collection-rounding | 36 | 36 | 0 | true |
 | shared-carrier-capacity | 27.27 | 24 | 8 | true |
 | bakery/citizens/tool/new | 10 | 9 | 1 | true |
 | bakery/apprentices/tool/new | 7.5 | 7 | 1 | true |
@@ -70,7 +70,6 @@ Use static constraints and parameter/configuration search to reject weak designs
 - The construction fixture establishes first citizens on authored flat land, not victory on every generated seed.
 - The forecast's revisit gaps, shelf allocation, field placement and equipment distribution are approximations. Calibration errors are reported, not hidden.
 - Wild forest regeneration is bounded in steady-state analysis and excluded from the transient finite-tree forecast. Maintenance and disaster constraints are analyzed; stochastic disasters and repairs are verified in the real game, not reproduced as an exact joint distribution.
-
 ## Applied tuning and full victories
 
 PR #4's mathematical component is merged into PR #3. These changes apply to the shipped game; the report above supplies no additional overrides. The original victory requirements, including the continuous two-minute hold, remain unchanged.
@@ -92,24 +91,54 @@ Eligible settlers now request bread independently of their food meter; cloth goe
 
 The bot establishes desirable citizen streets earlier, sizes bread and cloth chains for eligible recipients, avoids industry beside those streets and uses bounded purchases through ordinary trade rules when a functioning chain needs help. These results measure the combined rules, numbers and bot policy, rather than isolating one parameter.
 
-Three deterministic medium/fair charters ran through ordinary player edits with shipped rules, seeded disasters and no direct state injections:
+## Ranks on generated charters, with upgrades and furniture
 
-| Seed | Outcome | End minute | Residents | Citizens | Coins | Approval | Longest goal hold |
-|---|---|---:|---:|---:|---:|---:|---:|
-| 1000 | won | 22.5 | 384 | 116 | 4948 | 58 | 120 s |
-| 8919 | term over | 60 | 271 | 32 | 16067 | 27 | 0 s |
-| 16838 | won | 23.5 | 401 | 184 | 4816 | 57 | 120 s |
+The term no longer ends in a single win: a town rises from hamlet to village, town and city as each rank's goals hold for two minutes, and the term plays on to its end. The town rank (`TOWN_RANK`) is the old "complete" town. The sensible bot plays through ordinary edits, with shipped rules and seeded disasters. It now takes a guildhall once a village (and an ovenworks, estate or masonry once a town, where bread, wheat or stone run short), lays in flour before winter, and builds a carpenter once homes are fit for townhouses.
 
-Before this tuning, the measured seed-1000 baseline ended its 60-minute term with 297 residents, 16 citizens, approval -4 and coins -1. No baseline result was measured for the other two seeds.
+Fifteen 60-minute charters, at `cd186a3` (upgrades and the income goal, with the old bot), at `e610f70` (furniture, and the bot below), and now (a market's walker no longer loses what it brings home; see Furniture, measured, below):
 
-The failed charter has enough money but lacks population and citizens. Layout and eligible housing remain limiting factors. Two of three examples winning establishes legal full victory, not a human success rate or a guarantee across maps. Investigate district placement and citizen coverage on seed 8919 before increasing taxes or reducing win goals.
+| Charter | `cd186a3` | `e610f70` | Now |
+|---|---|---|---|
+| medium fair 8919 | town at 45 min | town at 38 min | town at 44 min |
+| medium fair 16838 | town at 53 min | town at 28 min | town at 28 min |
+| medium fair 24757 | town at 53 min | town at 55 min | town at 43 min |
+| medium fair 32676 | village | town at 33 min | town at 32 min |
+| medium fair 40595 | hamlet | hamlet | village |
+| medium fair 48514 | village | village | village |
+| medium fair 56433 | village | town at 36 min | town at 43 min |
+| medium harsh 8919 | village | village | town at 53 min |
+| medium harsh 16838 | village | town at 46 min | town at 47 min |
+| medium rich 8919 | town at 46 min | village | town at 46 min |
+| small fair 8919 | town at 27 min | town at 22 min, city at 41 min | town at 22 min |
+| small fair 16838 | town at 25 min | town at 24 min | town at 28 min |
+| small harsh 24757 | town at 48 min | bankrupt at 41 min | town at 37 min |
+| large fair 8919 | hamlet | hamlet | village |
+| large fair 16838 | village | village | village |
 
-Reproduce the generated runs:
+Now 11 of 15 reach the town rank, against 8 before. The one step back is small fair 8919, which still becomes a town at 22 minutes but no longer a city: this run has no burghers, and like the bot's other turns it diverges move by move from the last. At `e610f70`, the two regressions were the bot's, not a rule hole: on small harsh 24757 its decisions match the old run move for move until minute 24, when a lamp goes down one decision earlier, and the run diverges from there. Large charters outgrow the bot's district planning before and after. No bot run reached burghers: a townhouse needs desirability 12, every service calling, and furniture, which takes deliberate zoning the bot does not do.
+
+Reproduce one:
 
 ```sh
-pnpm balance --seeds 3 --term 60 --json output/balance-rules/results.json
+pnpm balance --seeds 1 --from 1 --term 60
 ```
 
-Both winning seeds are permanent full-game regressions in `test/balance-victory.test.ts`. Local validation passes: all 37 tests, typecheck, simulation invariants, production build and the documented browser workflow covering placement, save/load, populated towns, camera angles, walkers, phone/touch and reckoning. No hosted CI checks are configured; no production deployment or physical-device validation was performed.
+Seeds 8919 and 16838 (medium fair) are permanent regressions in `test/balance-victory.test.ts`: each becomes a village and stands, and reaches the town rank.
+
+## Furniture, measured
+
+`pnpm balance:furniture` plays a street of homes beside the town hall, a market and carpenters across it, in the real simulation, headless. Everything else a townhouse asks (desirability, the three services, bread, cloth, faith, repair) is given, so the run measures furniture alone. Thirty minutes each, medium fair seed 7:
+
+| Homes | Carpenters | Every home a townhouse by | Townhouses held, second half | Made a minute |
+|---|---|---|---|---|
+| 4 | 1 | minute 5 | 4.0 of 4 | 6.5 |
+| 8 | 1 | minute 12 | 8.0 of 8 | 7.4 |
+| 16 | 1 | never | 6.1 of 16 | 7.4 |
+| 24 | 1 | never | 6.1 of 24 | 7.4 |
+| 24 | 2 | never | 15.0 of 24 | 12.2 |
+
+Before the walker fix, 8 and 16 homes made no townhouse in thirty minutes. A market refills while its walker is out, and a walker home with what it did not hand out put it back only up to the shelf's room: a walker home with ten pieces of furniture lost eight. Nearly all furniture was lost that way, none reached the store, and a home pays its rise (2 furniture) from the store. Bread, fish and cloth leaked the same way, less.
+
+One carpenter keeps about eight townhouses (some 96 burghers) furnished. A city on a small charter asks 15% of 270 residents, four townhouses; a medium one, 15% of 480, six. Every citizens' home on a street fit for townhouses takes furniture too, whether or not it is ready to rise, and the walker tops a piece up at half its life, so a home uses one about every 150 seconds: a long street of fine homes needs a second carpenter before the last of them can rise.
 
 Generate fresh model results using the CLI documented in [balance-model.md](balance-model.md). The report above records its source commit and exact rule hash.

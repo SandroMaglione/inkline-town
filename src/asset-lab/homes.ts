@@ -2,6 +2,7 @@ import { home } from "../content.ts"
 import { homeVariant } from "../art.ts"
 import { U } from "../iso.ts"
 import { Drawing, palette, sides, type Side } from "./primitives.ts"
+import { human, residentialHeight } from "./dimensions.ts"
 
 export function house(
   tier: 1 | 2 | 3,
@@ -19,7 +20,7 @@ export function house(
   )
   const variant = homeVariant(variantN)
   const a = (home.half + (tier >= 2 ? 1 : 0)) * U,
-    H = home.tiers[tier].height
+    H = residentialHeight(tier)
   d.asset.category = "homes"
   d.asset.reference = { type: "house", tier, variant: variantN }
   d.asset.footprint = 1
@@ -27,12 +28,18 @@ export function house(
   d.box(0, 0, a, a, 0, H)
   for (const side of sides) {
     const door = options.doors ? !!options.doors[side] : side === "right"
-    for (const z of tier === 3 ? [13, 25] : tier === 2 ? [13] : []) d.line([d.wall(side, a, -a, z), d.wall(side, a, a, z)], 1, palette.ink, 0.7)
-    if (door && fit > 0.15) d.door(side, a, Math.max(2, (tier===3?11:9) * fit), 2 * U, 2.5 * U, 0.8 * U, variant.roof.shade)
-    for (const floor of fit > 0.4 ? (tier === 3 ? [0, 12, 24] : tier === 2 ? [0, 12] : [0]) : []) {
+    for (let floor = 1; floor < tier; floor++) d.line([d.wall(side, a, -a, floor * human.floor + 1), d.wall(side, a, a, floor * human.floor + 1)], 1, palette.ink, 0.7)
+    if (door && fit > 0.15) {
+      const p = (s: number, z: number, out = .015) => d.wall(side, a, s, z, out)
+      d.face([p(-1.45*U,0),p(1.45*U,0),p(1.45*U,human.door*fit),p(-1.45*U,human.door*fit)],0xb59b77,.8)
+      for (const x of [-.5,.5]) d.line([p(x*U,0,.02),p(x*U,human.door*fit,.02)],.4,0x8a6a45)
+      d.line([p(.9*U,8*fit,.025),p(.9*U,10*fit,.025)],.7)
+      d.face([p(-2*U,21*fit),p(2*U,21*fit),p(2*U,20.5*fit,.8*U),p(-2*U,20.5*fit,.8*U)],variant.roof.shade,.7)
+    }
+    for (const floor of fit > 0.4 ? Array.from({length:tier},(_,i)=>i*human.floor) : []) {
       if (tier >= 2) {
-        for (const along of [-3 * U, 3 * U]) if (!(door && floor === 0)) d.window(side, a, along, floor + 5)
-      } else if (!door) d.window(side, a, 0, 5)
+        for (const along of [-3 * U, 3 * U]) if (!(door && floor === 0)) d.window(side, a, along, floor + 9, 7)
+      } else if (!door) d.window(side, a, 0, 9, 7)
     }
   }
   if (fit > 0)

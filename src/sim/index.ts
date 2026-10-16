@@ -63,7 +63,7 @@ export const blankResources = () => ({
   Rng: 0x5eed,
   Treasury: { coins: 0 },
   Ledger: { taxes: 0, trade: 0, upkeep: 0, admin: 0 },
-  Census: { homes: 0, settlers: 0, citizens: 0, burghers: 0, jobs: 0, employed: 0, food: 0, bread: 0, cloth: 0, faith: 0, sick: 0, burning: 0 },
+  Census: { homes: 0, settlers: 0, citizens: 0, burghers: 0, jobs: 0, employed: 0, food: 0, bread: 0, cloth: 0, faith: 0, furniture: 0, sick: 0, burning: 0 },
   Policy: { settlers: 100, citizens: 100, sells: [], buys: [], reserve: 25, loads: amounts(Object.fromEntries(goodIds.map((g) => [g, TRADE_LOAD]))) },
   Charter: { ...defaultCharter(0), founded: 0, winters: [] as Array<"none" | "mild" | "normal" | "hard"> },
   Land: { mask: "", cells: 0 },

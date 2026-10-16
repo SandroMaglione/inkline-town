@@ -8,12 +8,12 @@
  */
 import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft } from "../archetypes.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
-import { amounts, builtCost, goodIds, RESERVE_MAX, TAX_STEPS, ticks, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
+import { amounts, anA, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, ticks, total, upgradeAt, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
-import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Treasury, Ui, Upgraded } from "../schema.ts"
-import { salvageOf, salvageText } from "../rules/salvage.ts"
+import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Treasury, Ui, Upgraded, Works } from "../schema.ts"
+import { salvageOf, salvageText, withWorks } from "../rules/salvage.ts"
 import { elapsed, rollWinters, termTicks, TileRead, useOf, write } from "./shared.ts"
 import type { Rules as RuleInputs } from "../rules/config.ts"
 import { crownGap, foundedFate } from "./term.ts"
@@ -45,7 +45,7 @@ export const ApplyEdits = Game.System(
       halls: Game.Query({ selection: { hall: Game.Query.read(TownHall) } }),
       /** Whatever was built at a cost, standing or a site: what pulling it down gives back. */
       built: Game.Query({
-        selection: { building: Game.Query.optional(Building), house: Game.Query.optional(House), site: Game.Query.optional(Site), paused: Game.Query.optional(Paused), upgraded: Game.Query.optional(Upgraded) }
+        selection: { building: Game.Query.optional(Building), house: Game.Query.optional(House), site: Game.Query.optional(Site), paused: Game.Query.optional(Paused), upgraded: Game.Query.optional(Upgraded), works: Game.Query.optional(Works) }
       }),
       stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage] }),
       rocks: Game.Query({ selection: { rock: Game.Query.read(Rock) } }),
@@ -54,6 +54,7 @@ export const ApplyEdits = Game.System(
           building: Game.Query.read(Building),
           service: Game.Query.optional(Service),
           upgraded: Game.Query.optional(Upgraded),
+          works: Game.Query.optional(Works),
           site: Game.Query.optional(Site),
           rising: Game.Query.optional(Rising)
         }
@@ -98,6 +99,8 @@ export const ApplyEdits = Game.System(
     }
     const halls = new Set<number>(queries.halls.each().map((row) => row.entity.id))
     let coins = resources.treasury.get().coins
+    // Works begun in this step: they are in the world only once it ends, so a second click on the same building is refused here.
+    const begun = new Set<number>()
     // What is left to spend this step: placing several things at once draws on the same stock.
     const left: Record<string, number> = { ...resources.stock.get() }
 
@@ -307,7 +310,8 @@ export const ApplyEdits = Game.System(
           const built = queries.built.get(owner)
           if (built.ok && (built.value.data.building.present || built.value.data.house.present)) {
             const b = maybe(built.value.data.building)
-            const s = salvageOf(b ? builtCost(kinds[b.kind], built.value.data.upgraded.present) : home.cost, maybe(built.value.data.site)?.owed ?? null, rules)
+            const own = salvageOf(b ? builtCost(kinds[b.kind], maybe(built.value.data.upgraded)?.level ?? 0) : home.cost, maybe(built.value.data.site)?.owed ?? null, rules)
+            const s = b ? withWorks(own, kinds[b.kind], maybe(built.value.data.works), rules) : own
             if (s.fee > 0 && coins < s.fee) {
               ui.toast(`Pulling it down costs ${s.fee} coins`)
               break
@@ -397,34 +401,32 @@ export const ApplyEdits = Game.System(
           break
         }
         case "upgrade": {
+          // The coins are paid now; carriers bring the materials while it goes on working (see `Works`).
           if (!inside(edit.cell.x, edit.cell.y)) break
           const id = entities.get(ownerAt(grid.value(), edit.cell.x, edit.cell.y))
           const row = id === undefined ? undefined : queries.upgradable.get(id)
           if (!row?.ok) break
           const { data } = row.value
           const kind = kinds[data.building.get().kind]
-          const up = kind.upgrade
-          if (!up || data.upgraded.present || data.site.present || data.rising.present) break
+          const level = maybe(data.upgraded)?.level ?? 0
+          const up = nextUpgrade(kind, level)
+          if (!up || data.works.present || begun.has(row.value.entity.id) || data.site.present || data.rising.present) break
           const blocked = upgradeBlock(up, resources.fate.get().rank, rules)
           if (blocked) {
             ui.toast(`${up.title} ${blocked}`)
             break
           }
-          const short = afford(up.cost)
-          if (short) {
-            ui.toast(short)
+          if (coins < up.cost.coins) {
+            ui.toast("Not enough coins")
             break
           }
-          pay(up.cost)
-          take(up.cost.materials)
-          const service = maybe(data.service)
-          commands.insert(
-            row.value.entity.id,
-            Game.Command.entry(Upgraded, {}),
-            ...(service && up.service ? [Game.Command.entry(Service, { ...service, interval: ticks(up.service.seconds), range: up.service.range })] : [])
-          )
-          write(resources.chronicle, t, `The ${kind.title.toLowerCase()} is now a ${up.title.toLowerCase()}.`)
-          ui.toast(`${up.title} · −${up.cost.coins} coins`)
+          coins -= up.cost.coins
+          begun.add(row.value.entity.id)
+          const owed = amounts(up.cost.materials)
+          commands.insert(row.value.entity.id, Game.Command.entry(Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }))
+          const was = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
+          write(resources.chronicle, t, `Works begin on the ${was}: it is to be ${anA(up.title.toLowerCase())}.`)
+          ui.toast(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)
           break
         }
         case "reserve":

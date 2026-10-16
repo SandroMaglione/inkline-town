@@ -23,6 +23,7 @@ const paths: Record<string, string> = {
   bread: `<path d="M2 10.5c0-3.5 3-5.5 6-5.5s6 2 6 5.5c0 1.5-1 2.5-2.5 2.5h-7C3 13 2 12 2 10.5z" fill="#e89a7c"/><path d="M5.5 7.5l1 2M8 6.5l1 2M10.5 7l1 2" fill="none" stroke-width="1"/>`,
   wool: `<circle cx="8" cy="8.5" r="5.5" fill="#eceee8"/><path d="M3.5 6.5c3 1 6 1 9-1M3 9.5c3.5 1.5 7 1.5 10-1M5 13c2.5.5 5 0 7-2" fill="none" stroke-width="1"/><path d="M12 12.5l2.5 1.5" fill="none"/>`,
   cloth: `<path d="M2.5 5.5l6-2.5 5 2.5-6 2.5z" fill="#c7aed6"/><path d="M2.5 5.5v6l5 2.5V8z" fill="#a37cbe"/><path d="M7.5 8v6l6-2.5v-6z" fill="#8a58a8"/>`,
+  furniture: `<path d="M4.5 2.5h7v6h-7z" fill="#c9965f"/><path d="M6 4h4M6 6h4" fill="none" stroke-width="1"/><path d="M3.5 8.5h9v2h-9z" fill="#9a6b3f"/><path d="M4.5 10.5v4M11.5 10.5v4" fill="none" stroke-width="1.6"/>`,
   // ── The town ──
   coins: `<ellipse cx="8" cy="11.5" rx="5" ry="2" fill="#e3c25a"/><path d="M3 11.5v-2c0 1.1 2.2 2 5 2s5-.9 5-2v2" fill="#d6ae2e"/><ellipse cx="8" cy="9.5" rx="5" ry="2" fill="#f0d98a"/><path d="M3 9.5v-2c0 1.1 2.2 2 5 2s5-.9 5-2v2" fill="#d6ae2e"/><ellipse cx="8" cy="7.5" rx="5" ry="2" fill="#f5e3a6"/><ellipse cx="8" cy="7.5" rx="2" ry=".7" fill="none" stroke-width="1"/>`,
   settlers: `<circle cx="8" cy="4.5" r="2.3" fill="#f5f6f2"/><path d="M3.5 14c0-3.5 2-5.5 4.5-5.5s4.5 2 4.5 5.5z" fill="#e6c3b2"/>`,

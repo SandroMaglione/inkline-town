@@ -11,6 +11,7 @@ import type { Preview, UiValue } from "../ui.ts"
 import { ModelHandle, ModelPool } from "./pool.ts"
 import { groundAsset, landAsset, overlayAsset, previewAsset, type OverlayCell } from "./models.ts"
 import { parkAsset } from "../asset-lab/town-props.ts"
+import { FishWater } from "./fish-effects.ts"
 import type { ParkCell } from "../appeal.ts"
 
 /** Where the camera stands: the grid cell it looks at, its zoom, and its angles. */
@@ -58,6 +59,7 @@ export class GameScene {
   private roadPreview: BuiltAsset | null = null
   private ghostHandles: Array<ModelHandle> = []
   private raycaster = new THREE.Raycaster()
+  private fish = new FishWater()
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
   private width = 1
   private height = 1
@@ -77,7 +79,7 @@ export class GameScene {
     this.renderer.domElement.setAttribute("aria-label", "Inkline Town 3D map. Drag to pan, right-drag to rotate, wheel to zoom.")
     this.renderer.domElement.tabIndex = 0
     mount.append(this.renderer.domElement)
-    this.scene.add(this.objects, this.pool.root)
+    this.scene.add(this.objects, this.pool.root, this.fish.group)
     this.observer = new ResizeObserver(() => this.resize())
     this.observer.observe(mount)
     this.camera.zoom = innerWidth >= 1000 ? 1 : 0.65
@@ -225,6 +227,10 @@ export class GameScene {
     this.groundKey = id
     this.ground = this.replace(this.ground, groundAsset(roads, water, false, paved))
   }
+  /** The water that would give a catch now: ripples on it (see `FishWater`). */
+  setFish(cells: ReadonlyArray<Point>) {
+    this.fish.set(cells)
+  }
   /** The parks, redrawn whenever a cell of one (or a road beside one) changes. */
   setParks(cells: ReadonlyMap<number, ParkCell>, roads: ReadonlySet<number>) {
     const id = [...cells].map(([k, c]) => `${k}:${c.ground}:${c.prop}`).join(",") + "|" + [...roads].join(",")
@@ -264,6 +270,7 @@ export class GameScene {
     this.groundDirty = true
     this.parksKey = ""
     this.previewKey = ""
+    this.fish.set([])
     for (const node of [...this.nodes]) node.destroy()
     this.nodes.clear()
     for (const handle of this.ghostHandles) handle.dispose()
@@ -285,6 +292,7 @@ export class GameScene {
       this.camera.getWorldDirection(this.pool.viewDirection).negate()
       this.pool.time.value = now / 1000
       this.parks?.updateEffects(now/1000)
+      this.fish.update(now / 1000)
       this.parkPreview?.updateEffects(now/1000)
       this.pool.flush()
       this.renderer.render(this.scene, this.camera)

@@ -13,7 +13,7 @@ import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { appealGrid, appealAt, buildingSource, homeSource, landSource, parkSources, type AppealSource } from "../appeal.ts"
 import { ruinDraft } from "../archetypes.ts"
-import { goodIds, risk, type GoodId } from "../content.ts"
+import { goodIds, risk, upgradeAt, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../grid.ts"
 import { counted, placeName, type Landmark } from "../places.ts"
 import type { Point } from "../iso.ts"
@@ -46,7 +46,7 @@ export const Appraise = Game.System(
     if (resources.time.get().tick % appeal.every !== 0 && resources.appeal.get().cells.length > 0) return
     const sources: Array<AppealSource> = []
     for (const { data } of queries.buildings.each()) {
-      const s = buildingSource(data.building.get().kind, data.tile.get(), rules, data.upgraded.present)
+      const s = buildingSource(data.building.get().kind, data.tile.get(), rules, maybe(data.upgraded)?.level ?? 0)
       if (s) sources.push(s)
     }
     for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get(), rules))
@@ -92,7 +92,7 @@ export const Hazards = Game.System(
       blazes: Game.Query({ selection: { burning: Game.Query.write(Burning) } }),
       landmarks: Game.Query({ selection: { tile: Game.Query.read(Tile), building: Game.Query.read(Building) }, without: [Site, Rising] }),
       watches: Game.Query({
-        selection: { tile: Game.Query.read(Tile), service: Game.Query.read(Service), staff: Game.Query.read(Staff) },
+        selection: { tile: Game.Query.read(Tile), service: Game.Query.read(Service), staff: Game.Query.read(Staff), upgraded: Game.Query.optional(Upgraded) },
         without: [Site, Rising, Burning]
       }),
       crews: Game.Query({ selection: { rescue: Game.Query.read(Rescue), home: Game.Query.readRelation(WalkerOf) } }),
@@ -286,7 +286,9 @@ export const Hazards = Game.System(
       const goal = doors(grid, target.data.tile.get())
       let best: { readonly watch: (typeof watches)[number]; readonly roads: ReturnType<typeof reach>; readonly cell: Point; readonly distance: number } | null = null
       for (const watch of watches) {
-        if ((out.get(watch.entity.id) ?? 0) >= risk.fire.crews) continue
+        // A fire brigade sends more (see `Upgrade.crews`).
+        const crews = upgradeAt(kinds.firewatch, maybe(watch.data.upgraded)?.level ?? 0)?.crews ?? risk.fire.crews
+        if ((out.get(watch.entity.id) ?? 0) >= crews) continue
         const starts = doors(grid, watch.data.tile.get())
         if (starts.length === 0) continue
         const roads = reach(grid, starts)

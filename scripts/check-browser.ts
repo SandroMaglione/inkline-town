@@ -53,8 +53,8 @@ try {
   assert.equal((await page.evaluate(()=>window.town.ui.panel))?.type,"building")
   facts.rotatedSelection=true
   await tool("road")
-  await dragGrid([tile.x+5.5,tile.y+1.5],[tile.x+8.5,tile.y+1.5])
-  await page.waitForFunction(([x,y])=>[6,7,8].every(dx=>window.town.runtime.snapshot().entities.some(e=>e.components["Town/Road"]&&e.components["Town/Tile"].x===x!+dx&&e.components["Town/Tile"].y===y!+1)),[tile.x,tile.y])
+  await dragGrid([tile.x+4.5,tile.y+1.5],[tile.x+8.5,tile.y+1.5])
+  await page.waitForFunction(([x,y])=>[4,5,6,7,8].every(dx=>window.town.runtime.snapshot().entities.some(e=>e.components["Town/Road"]&&e.components["Town/Tile"].x===x!+dx&&e.components["Town/Tile"].y===y!+1)),[tile.x,tile.y])
   facts.rotatedRoadDrag=true
   await tool("homes")
   await dragGrid([tile.x+5.5,tile.y+2.5],[tile.x+8.5,tile.y+2.5])

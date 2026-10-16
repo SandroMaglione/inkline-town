@@ -5,6 +5,8 @@ import { finishTownBuilding, townBuildingNotes, institutionDoor, makeQuarry } fr
 import { isWorkshop, makeWorkshop, workshopSmokeOrigin, townHallEntrance } from "./workshops.ts"
 import { isTradeYard, makeTradeYard, tradeSmokeOrigin, tradeEntrance, millHoist } from "./trades.ts"
 import { chapelPorch, hayBands, isRuralDoor, lumberRack, nursery, ruralEntrance, ruralNotes, sheepTrough } from "./rural.ts"
+import { makeCarpenter } from "./carpenter.ts"
+import { human, shellDimensions } from "./dimensions.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
   townhall: { accent: 0x8a58a8, glass: 0xf3dca6 },
@@ -30,7 +32,8 @@ const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }>
   healer: { accent: 0x4f9a8a },
   hospital: { accent: 0x4f9a8a, glass: 0xc9d6ee },
   watchhouse: { accent: 0x3d4f6e },
-  builder: { accent: 0x8a6a45, roof: 0xb08a5a }
+  builder: { accent: 0x8a6a45, roof: 0xb08a5a },
+  carpenter: { accent: 0x9a6b3f, roof: 0x9a6b3f }
 }
 
 export interface BuildingOptions {
@@ -41,13 +44,14 @@ export interface BuildingOptions {
   motion?: boolean
 }
 export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
+  if (id === "carpenter") return makeCarpenter(options)
   if (isWorkshop(id)) return makeWorkshop(id, options)
   if (isTradeYard(id)) return makeTradeYard(id, options)
   if (id === "quarry") return makeQuarry(options)
   const fit = options.fit ?? 1
   const kind = kinds[id],
-    a = kind.half * U,
-    H = kind.roof === "gable" ? 20 : kind.stories * 32,
+    a = (shellDimensions(id).half ?? kind.half) * U,
+    H = shellDimensions(id).height,
     p = (kind.size * 8 - 1) * U
   const accent = dresses[id].accent
   const glass = dresses[id].glass ?? palette.glass
@@ -70,7 +74,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
   for (const side of sides) {
     const door = options.doors ? !!options.doors[side] : side === "right" || side === "left"
     const pt = (s: number, z: number) => d.wall(side, a, s, z, 0.007)
-    if (kind.stories === 2) d.line([pt(-a, 32), pt(a, 32)], 1, palette.ink, 0.7)
+    if (kind.stories === 2 && id !== "chapel") d.line([pt(-a, H/2), pt(a, H/2)], 1, palette.ink, 0.7)
     if (kind.roof === "flat" && fit > 0.3) {
       d.face([pt(-a, H - 3), pt(a, H - 3), pt(a, H), pt(-a, H)], pale(accent, 0.35), 0)
       d.line([pt(-a, H - 3), pt(a, H - 3)], 1, palette.ink, 0.6)
@@ -81,12 +85,13 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
         for (const s of positions) {
           if (id === "granary" && floor === 1) continue
           if (id === "chapel") {
-            const z = floor * 32 + 9,
+            if (floor > 0) continue
+            const z = 10,
               w = 1 / 16,
               p = (along: number, height: number) => d.wall(side, a, along, height)
-            d.face([p(s - w, z), p(s + w, z), p(s + w, z + 11), p(s, z + 14), p(s - w, z + 11)], glass, 1)
+            d.face([p(s - w, z), p(s + w, z), p(s + w, z + 17), p(s, z + 21), p(s - w, z + 17)], glass, 1)
             d.line([p(s - w - 0.5 / 16, z), p(s + w + 0.5 / 16, z)])
-          } else d.window(side, a, s, floor * 32 + 12, 8, glass, true)
+          } else d.window(side, a, s, floor * H / kind.stories + 10, 8, glass, true)
         }
     if (door && fit > 0.15) {
       if (id === "townhall") townHallEntrance(d, side, a, fit, options.open ?? 0)
@@ -96,10 +101,10 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
         institutionDoor(d,side,a,id,fit)
         if (id === "chapel") chapelPorch(d, side, a, fit)
       }
-      else d.door(side, a, Math.max(2, Math.round(Math.min(16, H - 8) * fit)), 5 * U, 6 * U, 2.5 * U, accent, true, options.open ?? 0)
+      else d.door(side, a, Math.max(2, human.door * fit), 2.8 * U, 3.5 * U, 1.5 * U, accent, true, options.open ?? 0)
     }
-    if (kind.roof === "gable" && !door && fit > 0.4) d.window(side, a, 0, 6)
-    if (id === "townhall" && fit > 0.8) d.circle(side, a, 50, 5)
+    if (kind.roof === "gable" && !door && fit > 0.4) d.window(side, a, 0, 9, 7)
+    if (id === "townhall" && fit > 0.8) d.circle(side, a, 40, 4)
   }
   if (id === "mill") {
     if (fit > 0) d.pyramid(a, H, 16 * fit, pale(0x8a6a45, 0.7), pale(0x8a6a45, 0.52))
@@ -113,7 +118,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
       d.barrel(u!, v!, 1.1 * U, 0, 8, 0xf1e9d5)
   } else if (kind.roof === "gable") {
     const roof = dresses[id].roof ?? 0x8a6a45
-    if(fit>0)d.gable(a, H, 14 * fit, "x", pale(roof, 0.7), pale(roof, 0.52), false)
+    if(fit>0)d.gable(a, H, 10 * fit, "x", pale(roof, 0.7), pale(roof, 0.52), false)
     for (const side of ["right", "left"] as const) {
       for (const seam of (options.doors?.[side] ?? true) ? [-(a - 4 * U), a - 4 * U] : [0])
         d.line([d.wall(side, a, seam, 0), d.wall(side, a, seam, H)], 1, palette.ink, 0.5)
@@ -176,20 +181,20 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
       d.line(
         [
           [u!, v!, 0],
-          [u!, v!, 11]
+          [u!, v!, 20]
         ],
         1.5
       )
-    d.box(c, (v0 + v1) / 2, 1.2 * U, (v1 - v0) / 2, 0, 4, 0xe9c48a, 0xd5a86c, 0xc79a5b)
+    d.box(c, (v0 + v1) / 2, 1.2 * U, (v1 - v0) / 2, 0, human.worktop, 0xe9c48a, 0xd5a86c, 0xc79a5b)
     for (let i = 0; i < 5; i++) {
       const s = v0 + ((v1 - v0) * i) / 5,
         e = v0 + ((v1 - v0) * (i + 1)) / 5
       d.face(
         [
-          [u0, s, 12],
-          [u0, e, 12],
-            [u1, e, 9],
-            [u1, s, 9]
+          [u0, s, 22],
+          [u0, e, 22],
+            [u1, e, 20],
+            [u1, s, 20]
         ],
         i % 2 === 0 ? 0xc4523f : 0xf7f3ea
       )
@@ -204,27 +209,29 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
 
 /** Shared by catalogue geometry and working-building emitters. Open yards have no flue. */
 export function buildingSmokeOrigin(id: KindId, doors?: BuildingOptions["doors"]): Vertex | null {
+  if (id === "carpenter") return null
   if (isWorkshop(id)) return workshopSmokeOrigin(id, doors)
   if (isTradeYard(id)) return tradeSmokeOrigin(id, doors)
   const kind = kinds[id]
   if (kind.topper !== "chimney") return null
-  const a = kind.half * U, pitch = 2 * a / kind.bays
-  return [-a + pitch * 0.5, -a + pitch * 0.5, (kind.roof === "gable" ? 20 : kind.stories * 32) + 24.3]
+  const a = (shellDimensions(id).half ?? kind.half) * U, pitch = 2 * a / kind.bays
+  return [-a + pitch * 0.5, -a + pitch * 0.5, shellDimensions(id).height + 16.3]
 }
 
 /** Presentation dimensions stay separate from simulation footprints and content costs. */
 export function buildingDimensions(id: KindId) {
+  if (id === "carpenter") return { half: 13.5 * U, height: 28, top: 38 }
   if (isTradeYard(id)) return {
     half: (id === "warehouse" ? 21 : 13.5) * U,
-    height: id === "fishery" ? 20 : id === "bakery" ? 28 : id === "weaver" ? 30 : 32,
-    top: id === "warehouse" ? 45 : id === "fishery" ? 30 : id === "bakery" ? 48.3 : 38
+    height: id === "fishery" ? 24 : id === "warehouse" ? 28 : 26,
+    top: id === "warehouse" ? 41 : id === "fishery" ? 34 : id === "bakery" ? 43.3 : 34
   }
-  const kind = kinds[id], height = kind.roof === "gable" ? 20 : kind.stories * 32
-  const topper = kind.topper === "chimney" || kind.topper === "flag" ? 24 : kind.topper === "cupola" ? 25 : kind.topper === "sails" ? 16 : 0
+  const kind = kinds[id], height = shellDimensions(id).height
+  const topper = kind.topper === "chimney" ? 16 : kind.topper === "flag" ? 24 : kind.topper === "cupola" ? 25 : kind.topper === "sails" ? 22 : 10
   return {
-    half: isWorkshop(id) ? 13.5 * U : kind.half * U,
+    half: isWorkshop(id) ? 13.5 * U : (shellDimensions(id).half ?? kind.half) * U,
     height,
-    top: id === "firewatch" ? 55 : id === "sawmill" ? 36.7 : id === "mine" || id === "smithy" ? 56 : height + topper
+    top: id === "quarry" ? 43 : id === "farm" ? 37 : id === "firewatch" ? 64 : id === "sawmill" ? 30.7 : id === "mine" ? 56 : id === "smithy" ? 49.3 : height + topper
   }
 }
 
@@ -235,8 +242,8 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
     u = -a + pitch * 0.5,
     v = -a + pitch * 0.5
   if (kind.topper === "chimney" && fit > 0) {
-    d.box(u, v, 2 * U, 2 * U, H, 24 * fit)
-    d.face(square(u, v, 1.5 * U, H + 24 * fit + 0.035), 0x8b938c, 0)
+    d.box(u, v, 1.6 * U, 1.6 * U, H, 16 * fit)
+    d.face(square(u, v, 1.2 * U, H + 16 * fit + 0.035), 0x8b938c, 0)
   } else if (kind.topper === "cupola" && id !== "hospital" && fit > 0) {
     const half = 3 * U,
       top = H + 10 * fit,
@@ -288,16 +295,16 @@ function finishBuilding(d: Drawing, id: KindId, a: number, p: number, H: number,
       ])
         d.log("v", c + du! * U, a + 0.5 * U, p - 0.5 * U, z! + 1.5, 1.6, 0xb08a5e, 0xe9d2a8)
       const y = -a - 1.5 * U
-      d.cylinder(c, y, 1.3 * U, 0, 3, 0xb08a5e, 0xe9d2a8, 1.5)
+      d.cylinder(c, y, 1.3 * U, 0, 5, 0xb08a5e, 0xe9d2a8, 1)
       d.line(
         [
-          [c, y, 3],
+          [c, y, 5],
           [c + 0.05, y, 10]
         ],
         1.5,
         0x7d6140
       )
-      d.box(c + 0.075, y, U, U, 8, 3, 0xb3b9b0, 0x8f9891, 0x7b847d, 1)
+      d.box(c + 0.075, y, .65*U, .4*U, 8.5, 2, 0xb3b9b0, 0x8f9891, 0x7b847d, .7)
       break
     }
     case "forester":

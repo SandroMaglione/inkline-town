@@ -36,7 +36,8 @@ makes a different island, with a wandering coast and capes reaching out.
 
 Lumberjacks fell trees and sawmills cut planks. Quarries and mines dig stone
 and ore for the smithy's tools. Farms grow wheat for the mill and the
-bakery, sheep give wool for the weaver, and fisheries feed the first
+bakery, sheep give wool for the weaver, a carpenter turns planks into
+furniture for the townhouses, and fisheries feed the first
 settlers. You never move a crate yourself: carriers push their carts along
 the roads, each loaded with what it carries, and markets send walkers
 through the streets with baskets of fish, bread, and cloth.
@@ -54,7 +55,8 @@ Every street has a desirability. A smithy or a quarry drags it down for
 several cells around; parks you lay out yourself (lawns, flower beds,
 walks in from the street, lamps, a fountain, a statue), a chapel, and paved streets
 lift it. Citizens will only live on a decent street, and the
-finest streets, with every service calling, grow three-storey townhouses.
+finest streets, with every service calling and furniture in the parlour,
+grow three-storey townhouses.
 Settlers do the rough work and citizens the skilled, and nobody walks more
 than fifteen road cells to a job, so the far-off mine needs its own
 workers' cottages. Zone the town well and it sorts itself into a fine
@@ -98,9 +100,11 @@ A town is founded as a hamlet. Hold every goal of the next rank for two
 minutes (enough people and coins, a share of them citizens, a town that
 approves of you) and it rises to a **village**, then a **town**, then a
 **city**, whose finest streets must hold burghers in townhouses. Each rank
-brings a reward from the crown, and a town can upgrade its market to a
-market hall and its chapel to a church. Nothing ends when a rank is
-reached.
+brings a reward from the crown and opens upgrades made where buildings
+stand: the town hall becomes a guildhall and then a city hall, the market
+a market hall, the bakery an ovenworks, the quarry a masonry, and more,
+with scaffolding rising while carriers bring their materials. Nothing ends
+when a rank is reached.
 
 Three minutes in debt, two minutes of uproar, a town that empties out, or
 three of the crown's requests ignored, and the term is **lost**. Otherwise
@@ -123,7 +127,34 @@ colour of what it makes and keeps its work in its yard: a log pile, a silo,
 a pen of sheep, a striped market stall. Trees, rocks, water, and roads are
 different on every cell.
 
-![Every building: town hall, warehouse, lumberjack, forester, quarry, mine, fishery, sawmill, smithy, farm, mill, bakery, sheep farm, weaver, market, chapel](docs/screenshots/sheet-buildings.webp)
+![All 24 building kinds, including the carpenter, plus the market hall and church](docs/screenshots/sheet-buildings.webp)
+
+The carpenter and building upgrades can be inspected in the model review.
+The complete proportion comparison is at `/proportion-review.html`: 36 building
+appearances and nine shared-prop examples, with the approved originals beside
+the revised geometry. Both sides share a camera and an unchanged walker.
+Turn, zoom, choose one scale across the catalogue, or save a comparison PNG.
+The park comparison is at `/proportion-review.html?collection=parks`: twelve
+before/after views cover furnishings, planting, paths, paving and the assembled
+park. The same walker and camera appear on both sides. `/park-lab.html` shows
+the revised park with running water.
+Run `pnpm dev`, then open `/model-review.html?collection=handoff` to turn the models, compare
+scaffolding as materials arrive, and download their GLBs.
+
+The civic milestones have their own comparison at
+`/model-review.html?collection=milestones`. The guildhall's clock tower,
+steep roof and guild banners give way to the city hall's domed centre,
+lower wings and columned entrance.
+
+![Town hall, guildhall and city hall at one camera scale](docs/screenshots/sheet-civic.webp)
+
+`/model-review.html?collection=works` shows one reusable construction
+scaffold on six building forms. Plot size, building height and delivered
+share determine its bays, platforms, ladders and supplies.
+
+![Reusable scaffolding on civic buildings, a carpenter, warehouse, quarry and farm](docs/screenshots/sheet-works.webp)
+
+![Carpenter, civic and workplace upgrades, scaffolding progress and furniture cargo](docs/screenshots/sheet-upgrades.webp)
 
 ![Carriers pushing handcarts and barrows, each loaded with its good: logs, planks, stone, ore, tools, fish, wheat, flour, bread, wool, cloth](docs/screenshots/sheet-walkers.webp)
 

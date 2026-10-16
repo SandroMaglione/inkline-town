@@ -330,7 +330,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     chapter: "Growing citizens",
     course: true,
     action: "Pick [select] and {tap|click} a home to see what it still lacks to hold citizens.",
-    why: "A home becomes a citizens' home with bread, cloth, and faith, on a street of desirability 5 or more. Its panel lists what is missing.",
+    why: "With bread, cloth, faith, and a street of desirability 5, a home rises once the store pays its planks and stone. Its panel lists what is missing.",
     goal: "the first home holds citizens",
     focus: "hall",
     when: () => true,
@@ -447,7 +447,7 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
   {
     id: "markethall",
     chapter: "Keeping it standing",
-    action: "Select a market and upgrade it to a market hall, from its panel.",
+    action: "{Tap|Click} the market (the gold arrow over it) and begin its market hall from its panel.",
     why: "Some homes are beyond every food walker. A market hall's walker goes further and more often, without a second market's upkeep.",
     goal: "a market hall stands",
     focus: { kind: "market" },
@@ -464,6 +464,18 @@ export const guideSteps: ReadonlyArray<GuideStep> = [
     focus: "poorStreet",
     when: (f) => f.poorStreet,
     done: (f) => f.finerHomes > 0
+  },
+  {
+    id: "carpenter",
+    chapter: "Growing citizens",
+    action: "Build a carpenter: it makes furniture from planks.",
+    why: "Burghers live in townhouses, and a townhouse wants furniture: two pieces to rise to one, and a fresh piece from the market now and then to stay one. Townhouses pay the most and hold the most people.",
+    goal: "a carpenter stands",
+    asks: ["carpenter"],
+    focus: "hall",
+    when: (f) => f.citizens >= 60 && f.finerHomes >= 8,
+    done: (f) => has(f, "carpenter"),
+    waiting: rising("carpenter")
   },
   {
     id: "healer",

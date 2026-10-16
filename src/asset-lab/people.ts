@@ -2,6 +2,7 @@ import { carrierDress, cartLook, residentDress, serviceDress, homeVariant, type 
 import { goods, type GoodId } from "../content.ts"
 import { Drawing, palette, type Vertex } from "./primitives.ts"
 import { U } from "../iso.ts"
+import { chair, chest } from "./furniture.ts"
 
 const R = 45.2548
 export type ServiceRole = "watchman" | "firefighter" | "physician" | "constable" | "builder"
@@ -240,6 +241,11 @@ export function drawCargo(d: Drawing, good: GoodId, count: number, u: number, v:
       )
       d.box(u + 0.03, v, 0.035, 0.018, z + 8, 1.6, 0x8f9891, 0x8f9891, 0x7c857d, 0.75)
       break
+    case "furniture": {
+      chest(d, u, v, z)
+      if (n >= 2) chair(d, u, v, z + 4.65)
+      break
+    }
   }
 }
 
@@ -371,6 +377,6 @@ export function makeCrate(good: GoodId) {
   d.asset.category = "cargo"
   d.asset.reference = { type: "crate", good }
   d.asset.footprint = 1
-  d.crate(0, 0, 0, goods[good].color, 3 * U, 12)
+  d.crate(0, 0, 0, goods[good].color, 1.8 * U, 6)
   return d.asset
 }

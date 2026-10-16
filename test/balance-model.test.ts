@@ -131,17 +131,17 @@ test("the mathematical plan reaches citizens through ordinary game construction"
   const rules = resolveRules(), { scenario, builds } = buildScenario(rules)
   const r = verifyBuilds({ rules, scenario }, builds)
   assert.deepEqual(r.messages, [])
-  // 32 in citizens' homes, and 12 more once fine homes lift one of them past the townhouse threshold.
-  assert.equal(r.actual.at(-1)!.citizens, 44)
+  // Six of its sixteen homes become citizens' homes: 48 citizens.
+  assert.equal(r.actual.at(-1)!.citizens, 48)
   assert(r.firstCitizenSecond !== null && r.firstCitizenSecond <= 300)
-  assert.equal(r.prediction.rows.at(-1)!.citizens, 44)
+  assert.equal(r.prediction.rows.at(-1)!.citizens, 48)
   assert(r.prediction.assumptions.length > 0)
   assert.equal(r.errors.length, r.actual.length)
 })
 
 
 test("promotion-aware goods preserve cloth and feed an eligible settler bread before food expires", () => {
-  const rules = resolveRules(), house = { tier: 1 as const, residents: 4, food: rules.home.lasts.food, bread: 0, cloth: 0, faith: 0 }
+  const rules = resolveRules(), house = { tier: 1 as const, residents: 4, food: rules.home.lasts.food, bread: 0, cloth: 0, faith: 0, furniture: 0 }
   const eligible = serveGoods(house, amounts({ bread: 2, cloth: 2, fish: 2 }), rules, rules.home.tiers[2].appeal)
   assert(eligible.house.bread > 0 && eligible.house.cloth > 0)
   const worker = serveGoods({ ...house, food: 0 }, amounts({ bread: 2, cloth: 2, fish: 2 }), rules, 0)
@@ -154,7 +154,7 @@ test("promotion-aware goods preserve cloth and feed an eligible settler bread be
 })
 
 test("a visit feeds a home by its residents: a cottage one meal, a citizens' home two, a townhouse three", () => {
-  const rules = resolveRules(), hungry = { food: 0, bread: 0, cloth: 0, faith: 0 }
+  const rules = resolveRules(), hungry = { food: 0, bread: 0, cloth: 0, faith: 0, furniture: 0 }
   const cottage = serveGoods({ ...hungry, tier: 1 as const, residents: 4 }, amounts({ fish: 10 }), rules, 0)
   assert.equal(cottage.eaten, 1)
   assert.equal(cottage.basket.fish, 9)
@@ -171,7 +171,7 @@ test("a visit feeds a home by its residents: a cottage one meal, a citizens' hom
 })
 
 test("taxes above 100% empty homes directly, settlers sooner, so the most a rate brings in comes before the top", () => {
-  const rules = resolveRules(), fed = { tier: 1 as const, residents: 4, food: 1, bread: 0, cloth: 0, faith: 0 }
+  const rules = resolveRules(), fed = { tier: 1 as const, residents: 4, food: 1, bread: 0, cloth: 0, faith: 0, furniture: 0 }
   assert.equal(taxRoom(100, 1, rules), 1)
   assert.equal(taxRoom(50, 1, rules), 1)
   assert(Math.abs(taxRoom(150, 1, rules) - 0.8) < 1e-9)
@@ -187,12 +187,13 @@ test("taxes above 100% empty homes directly, settlers sooner, so the most a rate
   assert(income.at(-1)! < income[best]!)
 })
 
-test("administration: each more home costs more, and about what a fed cottage pays near the medium goal", () => {
+test("administration: each more resident costs more, and about what a fed settler pays near the medium goal", () => {
   const rules = resolveRules()
-  assert(moreAdmin(80, 1, rules) > moreAdmin(20, 1, rules) * 2)
-  const cottage = taxOf({ tier: 1, residents: 4, food: 1, bread: 0, cloth: 0, faith: 0 }, { settlers: 100, citizens: 100 }, rules)
-  assert(moreAdmin(80, 1, rules) > cottage * 0.5 && moreAdmin(80, 1, rules) < cottage, `${moreAdmin(80, 1, rules)} vs ${cottage}`)
-  assert(moreAdmin(150, 1, rules) > cottage)
+  // 80 cottages and 150 cottages, by their residents.
+  assert(moreAdmin(320, 4, rules) > moreAdmin(80, 4, rules) * 2)
+  const cottage = taxOf({ tier: 1, residents: 4, food: 1, bread: 0, cloth: 0, faith: 0, furniture: 0 }, { settlers: 100, citizens: 100 }, rules)
+  assert(moreAdmin(320, 4, rules) > cottage * 0.5 && moreAdmin(320, 4, rules) < cottage, `${moreAdmin(320, 4, rules)} vs ${cottage}`)
+  assert(moreAdmin(600, 4, rules) > cottage)
 })
 
 test("buying drives a price up faster than selling drives it down, and a dear price calms slowly", () => {
