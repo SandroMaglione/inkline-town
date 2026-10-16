@@ -20,6 +20,7 @@
     "check:revisions": "node scripts/check-model-revisions.ts",
     "check:park": "node scripts/check-park.ts",
     "look:upgrades": "node scripts/look-upgrades.ts",
+    "look:ui": "node scripts/look-ui.ts",
     "test": "node --test \"test/*.test.ts\"",
     "release": "pnpm --dir deploy release"
   },
