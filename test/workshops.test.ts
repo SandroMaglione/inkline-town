@@ -28,7 +28,7 @@ test("the working smithy emitter follows its flue and the other open yards do no
     const doors = { ...noDoors, [side]: true }, asset = makeBuilding("smithy", { doors })
     const origin = buildingSmokeOrigin("smithy", doors)!
     assert.deepEqual(asset.smokeEffect?.origin, origin)
-    const mouth = asset.faces.find(face => face.color === 0x68726c && face.points.every(p => Math.abs(p[2] - 56.02) < 0.0001))!
+    const mouth = asset.faces.find(face => face.color === 0x68726c && face.points.every(p => p[2] > origin[2] - .5 && p[2] < origin[2]))!
     assert.ok(mouth, `flue mouth missing for ${side}`)
     const center = mouth.points.reduce((sum, p) => [sum[0]! + p[0], sum[1]! + p[1], sum[2]! + p[2]], [0, 0, 0]).map(n => n / mouth.points.length)
     assert.ok(Math.abs(center[0]! - origin[0]) < 0.0001 && Math.abs(center[1]! - origin[1]) < 0.0001)
@@ -36,5 +36,6 @@ test("the working smithy emitter follows its flue and the other open yards do no
     assert.equal(buildingAsset("smithy", 1, null, doors, 1).smokeEffect, undefined, "live view owns the working smoke, without a duplicate catalogue plume")
   }
   for (const id of ["mine", "sawmill"] as const) assert.equal(buildingSmokeOrigin(id), null)
-  assert.equal(buildingDimensions("sawmill").top, 36.7)
+  const saw=makeBuilding("sawmill")
+  assert.ok(buildingDimensions("sawmill").top >= Math.max(...saw.faces.flatMap(f=>f.points.map(p=>p[2]))))
 })

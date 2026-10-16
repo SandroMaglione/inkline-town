@@ -27,8 +27,8 @@ export function serviceBuilding(kind: ServiceKind, tier: 1 | 2, options: Upgrade
 
 /** Each upgrade's height to its eaves and to its highest point, for markers and surface effects. */
 export const upgradeHeights: Readonly<Record<ServiceKind, { readonly eave: number; readonly top: number }>> = {
-  market: { eave: 44, top: 62 },
-  chapel: { eave: 52, top: 125 }
+  market: { eave: 49, top: 63 },
+  chapel: { eave: 44, top: 125 }
 }
 
 /** The sides each upgrade is drawn with its street fronts on: the market hall's arcades, the church's tower door. */
@@ -136,8 +136,8 @@ function arch(d: Drawing, p: Wall, s: number, z: number, half: number, height: n
 }
 
 function churchDoor(d: Drawing, p: Wall) {
-  const half = 2.25 * U, bottom = 4, spring = 19
-  arch(d, p, 0, bottom, half, 18, 0xc6b18e, true, 3)
+  const half = 2.25 * U, bottom = 4, spring = 21
+  arch(d, p, 0, bottom, half, 20, 0xc6b18e, true, 3)
   for (const sign of [-1, 1]) {
     const inner = sign * half, outer = sign * (half + U)
     d.face([p(inner, bottom, 0.014), p(outer, bottom, 0.014), p(outer, spring, 0.014), p(inner, spring, 0.014)], stone.top, 0.65)
@@ -145,27 +145,27 @@ function churchDoor(d: Drawing, p: Wall) {
     // Small vertical handles make the two leaves readable without extra ornament.
     d.line([p(sign * 0.6 * U, 10.5, 0.03), p(sign * 0.6 * U, 12, 0.03)], 0.8, 0x7d6140)
   }
-  d.line([p(0, bottom, 0.025), p(0, 22, 0.025)], 0.7, 0x7d6140)
+  d.line([p(0, bottom, 0.025), p(0, 24, 0.025)], 0.7, 0x7d6140)
 }
 
 export function marketHall(options: UpgradeOptions = {}) {
   const d = base("market", "market-hall", "Market hall", "Tier 2 market. A pitched hall above a covered arcade, with the market's striped awnings, blue trim and goods crates. Same 2×2 plot.", options)
   const a = 9 * U
   d.box(0, 0, 10 * U, 10 * U, 0, 3, stone.top, stone.left, stone.right)
-  d.box(0, 0, a, a, 3, 40)
-  d.box(0, 0, 9.4 * U, 9.4 * U, 28, 2, stone.top, stone.left, stone.right, 1)
+  d.box(0, 0, a, a, 3, 45)
+  d.box(0, 0, 9.4 * U, 9.4 * U, 27, 2, stone.top, stone.left, stone.right, 1)
   for (const side of sides) {
     const p = wall(side, a)
-    arch(d, p, 0, 3, 2.5 * U, 19, 0xc6b18e, true)
+    arch(d, p, 0, 3, 2.5 * U, 20, 0xc6b18e, true)
     d.line([p(0, 3, 0.02), p(0, 18, 0.02)], 0.8, 0x7d6140)
     for (const s of [-5.5 * U, 0, 5.5 * U]) {
-      arch(d, p, s, 33, 1.15 * U, 7, palette.glass)
-      d.line([p(s, 33, 0.02), p(s, 38, 0.02)], 0.65)
+      arch(d, p, s, 33, 1.15 * U, 10, palette.glass)
+      d.line([p(s, 33, 0.02), p(s, 41, 0.02)], 0.65)
       d.line([p(s - 1.5 * U, 32), p(s + 1.5 * U, 32)], 1)
     }
     d.line([p(-a, 30), p(a, 30)], 1, pale(blue, 0.3))
   }
-  roof(d, 0, 0, 11 * U, 11 * U, 44, 18, 0x8a6a45)
+  roof(d, 0, 0, 11 * U, 11 * U, 49, 14, 0x8a6a45)
   // A complete arcade on the two street faces. Narrow posts retain open space below the canopy.
   for (const side of ["right", "left"] as const) {
     const p = wall(side, 13 * U)
@@ -207,8 +207,8 @@ export function marketHall(options: UpgradeOptions = {}) {
   // Blue gable plaques carry the service colour above the striped street fronts.
   for (const side of ["left", "backLeft"] as const) {
     const p = wall(side, 11 * U)
-    d.face([p(-2 * U, 47), p(2 * U, 47), p(2 * U, 51), p(-2 * U, 51)], pale(blue, 0.28), 1)
-    for (const s of [-U, 0, U]) d.line([p(s, 48, 0.02), p(s, 50, 0.02)], 0.7, 0xf7f3ea)
+    d.face([p(-2 * U, 51), p(2 * U, 51), p(2 * U, 55), p(-2 * U, 55)], pale(blue, 0.28), 1)
+    for (const s of [-U, 0, U]) d.line([p(s, 52, 0.02), p(s, 54, 0.02)], 0.7, 0xf7f3ea)
   }
   return turned(d.asset, quartersFor("market", options.doors))
 }
@@ -217,25 +217,25 @@ export function church(options: UpgradeOptions = {}) {
   const d = base("chapel", "church", "Church", "Tier 2 chapel. A slate-blue nave, stone buttresses, arched glass and an open belfry with a bronze bell. Same 2×2 plot.", options)
   const a = 7 * U, b = 11 * U
   d.box(0, 0, 8 * U, 12 * U, 0, 3, stone.top, stone.left, stone.right)
-  d.box(0, 0, a, b, 3, 48)
-  roof(d, 0, 0, 8.5 * U, 12 * U, 52, 24, blue)
+  d.box(0, 0, a, b, 3, 40)
+  roof(d, 0, 0, 8.5 * U, 12 * U, 44, 20, blue)
   for (const side of ["right", "backRight"] as const) {
     const p = wall(side, a)
     for (const s of [-7 * U, 0, 7 * U]) {
-      arch(d, p, s, 20, 1.4 * U, 21, 0xc9d6ee, true)
-      d.line([p(s, 20, 0.025), p(s, 38, 0.025)], 0.75)
-      d.line([p(s - 1.4 * U, 29, 0.025), p(s + 1.4 * U, 29, 0.025)], 0.75)
-      d.line([p(s - 2 * U, 19), p(s + 2 * U, 19)], 1)
+      arch(d, p, s, 14, 1.4 * U, 22, 0xc9d6ee, true)
+      d.line([p(s, 14, 0.025), p(s, 33, 0.025)], 0.75)
+      d.line([p(s - 1.4 * U, 24, 0.025), p(s + 1.4 * U, 24, 0.025)], 0.75)
+      d.line([p(s - 2 * U, 13), p(s + 2 * U, 13)], 1)
     }
     for (const s of [-10 * U, -3.5 * U, 3.5 * U, 10 * U]) {
       const [x, y] = p(s, 0, 1.2 * U)
-      d.box(x, y, 1.2 * U, 0.65 * U, 3, 28, stone.top, stone.left, stone.right, 1)
-      d.box(x, y, 0.65 * U, 0.65 * U, 31, 14, stone.top, stone.left, stone.right, 1)
+      d.box(x, y, 1.2 * U, 0.65 * U, 3, 22, stone.top, stone.left, stone.right, 1)
+      d.box(x, y, 0.65 * U, 0.65 * U, 25, 14, stone.top, stone.left, stone.right, 1)
     }
   }
   const rear = wall("backLeft", b)
-  arch(d, rear, 0, 24, 2.4 * U, 23, 0xc9d6ee, true)
-  d.line([rear(0, 24, 0.025), rear(0, 44, 0.025)], 0.8)
+  arch(d, rear, 0, 17, 2.4 * U, 23, 0xc9d6ee, true)
+  d.line([rear(0, 17, 0.025), rear(0, 37, 0.025)], 0.8)
   // Front tower grows from the nave's entrance, with a genuinely open four-sided bell chamber.
   const tv = 9 * U, ta = 3.4 * U
   d.box(0, tv, ta + 0.8 * U, ta + 0.8 * U, 0, 4, stone.top, stone.left, stone.right)

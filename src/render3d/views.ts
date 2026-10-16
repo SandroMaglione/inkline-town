@@ -175,7 +175,7 @@ export class BuildingView extends WorldView {
     if (kind.topper === "flag") {
       this.wave += dt * (look.working ? 6 : 3)
       this.motion.use("flag/" + this.kindId, () => makeFlag(this.kindId))
-      const a = kind.half * U,
+      const a = buildingDimensions(this.kindId).half,
         pitch = (2 * a) / kind.bays
       this.motion.root.position.copy(vertex3([-a + pitch * (kind.bays - 0.5), -a + pitch * 0.5, H + 24]))
       this.motion.root.rotation.y = Math.sin(this.wave) * 0.15

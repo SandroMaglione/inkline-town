@@ -2,6 +2,7 @@ import { type KindId } from "../content.ts"
 import { U } from "../iso.ts"
 import { Drawing, palette, pale, type Side, type Vertex } from "./primitives.ts"
 import { beam, block, iron, post, stone, wood } from "./workshops.ts"
+import { human } from "./dimensions.ts"
 
 export const ruralIds = ["firewatch", "lumberjack", "forester", "farm", "sheep", "smokehouse", "builder", "chapel", "granary"] as const
 export const ruralDoorIds = ["lumberjack", "forester", "farm", "sheep", "smokehouse", "builder", "granary"] as const
@@ -28,7 +29,7 @@ function wallBlock(d: Drawing, side: Side, a: number, along: number, out: number
 /** Timber leaves open at their hinges; all planks and braces follow the leaf. */
 export function ruralEntrance(d: Drawing, id: RuralDoorId, side: Side, a: number, fit: number, open: number) {
   const half = (id === "farm" || id === "sheep" ? 4.5 : id === "granary" ? 4 : id === "forester" ? 2.5 : 3.2) * U
-  const bottom = id === "granary" ? 3 : 0.5, height = id === "granary" ? 24 : 18
+  const bottom = id === "granary" ? 3 : 0.5, height = id === "granary" ? 22 : human.door
   const p = (s: number, z: number, out = 0.02) => d.wall(side, a, s, z * fit, out)
   d.face([p(-half, bottom), p(half, bottom), p(half, bottom + height), p(-half, bottom + height)], 0x68726c, 0.7)
   const single = id === "forester", angle = Math.max(0, Math.min(1, open)) * Math.PI / 9
@@ -67,10 +68,10 @@ export function chapelPorch(d: Drawing, side: Side, a: number, fit: number) {
 export function granaryVents(d: Drawing, side: Side, a: number) {
   const p = (s: number, z: number, out = 0.025) => d.wall(side, a, s, z, out)
   for (const center of [-5 * U, 5 * U]) {
-    d.face([p(center - 2.2 * U, 44), p(center + 2.2 * U, 44), p(center + 2.2 * U, 56), p(center - 2.2 * U, 56)], 0x6f796d, 0.7)
-    for (const x of [-2.4 * U, 2.4 * U]) beam(d, p(center + x, 43.5, 0.04), p(center + x, 56.5, 0.04), 0.75)
-    for (const z of [44, 56]) beam(d, p(center - 2.4 * U, z, 0.04), p(center + 2.4 * U, z, 0.04), 0.75)
-    for (const z of [46, 48.5, 51, 53.5]) beam(d, p(center - 2.1 * U, z, 0.055), p(center + 2.1 * U, z, 0.055), 1.1)
+    d.face([p(center - 2.2 * U, 33), p(center + 2.2 * U, 33), p(center + 2.2 * U, 43), p(center - 2.2 * U, 43)], 0x6f796d, 0.7)
+    for (const x of [-2.4 * U, 2.4 * U]) beam(d, p(center + x, 32.5, 0.04), p(center + x, 43.5, 0.04), 0.75)
+    for (const z of [33, 43]) beam(d, p(center - 2.4 * U, z, 0.04), p(center + 2.4 * U, z, 0.04), 0.75)
+    for (const z of [35, 37.5, 40]) beam(d, p(center - 2.1 * U, z, 0.055), p(center + 2.1 * U, z, 0.055), 1.1)
   }
 }
 
@@ -128,10 +129,10 @@ export function firewatchAccess(d: Drawing, a: number, p: number, H: number) {
   const point = (t: number, side: number, height: number): Vertex => [(11 - 7 * t) * U, (-4.5 + 2.7 * t + side * 1.2) * U, top + 6 * t + height]
   for (const side of [-1, 1]) {
     beam(d, point(0, side, -0.5), point(1, side, -0.5), 1.2)
-    beam(d, point(0, side, 5), point(1, side, 5), 0.8)
-    for (const t of [0, 0.5, 1]) beam(d, point(t, side, 0), point(t, side, 5), 0.8)
-    beam(d, [10 * U, v + side * 1.6 * U, top + 5], [12.5 * U, v + side * 1.6 * U, top + 5], 0.8)
-    for (const u of [10 * U, 12.5 * U]) beam(d, [u, v + side * 1.6 * U, top], [u, v + side * 1.6 * U, top + 5], 0.8)
+    beam(d, point(0, side, 8), point(1, side, 8), 0.8)
+    for (const t of [0, 0.5, 1]) beam(d, point(t, side, 0), point(t, side, 8), 0.8)
+    beam(d, [10 * U, v + side * 1.6 * U, top + 8], [12.5 * U, v + side * 1.6 * U, top + 8], 0.8)
+    for (const u of [10 * U, 12.5 * U]) beam(d, [u, v + side * 1.6 * U, top], [u, v + side * 1.6 * U, top + 8], 0.8)
   }
   for (let i = 0; i < 7; i++) {
     const t = (i + 0.5) / 7

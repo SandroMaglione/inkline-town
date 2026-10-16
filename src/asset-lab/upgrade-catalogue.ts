@@ -1,6 +1,7 @@
 import { buildingDimensions, makeBuilding } from "./buildings.ts"
 import { dressedBuilding, scaffoldAsset } from "./upgrade-dress.ts"
 import type { InkAsset } from "./primitives.ts"
+import { civicEave } from "./civic.ts"
 
 export function upgradeCatalogue(): InkAsset[] {
   const upgrades = ([
@@ -26,7 +27,7 @@ export function upgradeCatalogue(): InkAsset[] {
     ["farm",0,.75], ["townhall",1,.5], ["townhall",2,.9]
   ] as const).map(([kind,level,share]) => {
     const base=level?upgrades.find(a=>a.id===(level===1?"guildhall":"cityhall"))!:makeBuilding(kind)
-    const height=kind==="townhall"&&level===2?80:buildingDimensions(kind).height
+    const height=kind==="townhall"&&level>0?civicEave(level):buildingDimensions(kind).height
     const frame=scaffoldAsset(base.footprint!,height,share)
     return {...base,id:`works-${kind}-${level}`,title:`${base.title} · works`,
       note:"The same construction generator, using only plot size, height and delivered share.",reference:{type:"none"} as const,

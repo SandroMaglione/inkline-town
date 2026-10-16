@@ -377,6 +377,6 @@ export function makeCrate(good: GoodId) {
   d.asset.category = "cargo"
   d.asset.reference = { type: "crate", good }
   d.asset.footprint = 1
-  d.crate(0, 0, 0, goods[good].color, 3 * U, 12)
+  d.crate(0, 0, 0, goods[good].color, 1.8 * U, 6)
   return d.asset
 }

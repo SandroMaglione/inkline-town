@@ -15,7 +15,7 @@ export function builtPark(): InkAsset {
   const shift=([u,v,z]:Vertex):Vertex=>[u-30.5,v-30.5,z]
   return {
     id:"park-built",title:"A park built cell by cell",category:"land",footprint:7,
-    note:"Twenty-five cells of lawn, flower beds, gravel walks and paved squares, with two street entrances, three lamps, a fountain and a stone bust.",
+    note:"Twenty-five cells of planted lawn, flower beds, edged gravel walks and flagstone squares, with two street entrances, three lanterns, seating, a tiered fountain and a simple stone bust.",
     faces:[...park.faces,...roads.faces].map(f=>({...f,points:f.points.map(shift)})),
     strokes:[...park.strokes,...roads.strokes].map(s=>({...s,points:s.points.map(shift)})),
     fountains:(park.fountains??[]).map(f=>({...f,origin:shift(f.origin)}))

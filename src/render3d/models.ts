@@ -101,7 +101,7 @@ export function buildingAsset(id: KindId, build: number, share: number | null, d
     ? workshopConstruction(id, build, share, doors)
     : isTradeYard(id) ? tradeConstruction(id, build, share, doors)
     : id === "carpenter" ? carpenterConstruction(build, share, doors)
-    : constructionAsset(kind.size, kind.half, buildingDimensions(id).height, build, share)
+    : constructionAsset(kind.size, buildingDimensions(id).half / U, buildingDimensions(id).height, build, share)
   // Completed upgrades use their final model; works are drawn separately.
   if (upgraded && isUpgradable(id)) return withAppearance(serviceBuilding(id, 2, { plate: false, doors }), kind.half * U, buildingHeight(id, level), appearance)
   const dimensions = buildingDimensions(id)

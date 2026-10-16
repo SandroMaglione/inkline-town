@@ -40,7 +40,7 @@ function loadingDoors(d: Drawing, p: Wall, half: number, bottom: number, height:
 
 export function tradeEntrance(d: Drawing, id: "mill" | "watchhouse", side: Side, a: number, fit: number, open: number) {
   const p: Wall = (s, z, out = 0.02) => d.wall(side, a, s, z * fit, out)
-  const half = (id === "mill" ? 3.5 : 3) * U, height = id === "mill" ? 26 : 22
+  const half = (id === "mill" ? 3.5 : 3) * U, height = id === "mill" ? 23 : 20
   loadingDoors(d, p, half, 1, height, open * (id === "mill" ? 1 : 0.25), id === "watchhouse")
   for (const sign of [-1, 1]) beam(d, p(sign * (half + 0.6 * U), 0, 0.5 * U), p(sign * (half + 0.6 * U), height + 2, 0.5 * U), 1.6, id === "mill" ? wood : stone)
   beam(d, p(-half - 1.3 * U, height + 2, 0.5 * U), p(half + 1.3 * U, height + 2, 0.5 * U), 1.8, id === "mill" ? wood : stone)
@@ -59,7 +59,7 @@ export function millHoist(d: Drawing, a: number) {
 }
 
 export function tradeSmokeOrigin(id: TradeYardId, doors?: BuildingOptions["doors"]): Vertex | null {
-  return id === "bakery" ? workshopPoint([-8 * U, -2 * U, 48.3], doors) : null
+  return id === "bakery" ? workshopPoint([-8 * U, -2 * U, 43.3], doors) : null
 }
 
 export function makeTradeYard(id: TradeYardId, options: BuildingOptions = {}) {
@@ -78,16 +78,16 @@ export function makeTradeYard(id: TradeYardId, options: BuildingOptions = {}) {
 }
 
 function warehouse(d: Drawing, fit: number, open: number) {
-  block(d, 0, -19 * U, 19 * U, 0.65 * U, 1, 31, stone)
-  for (const u of [-19 * U, 19 * U]) block(d, u, -7 * U, 0.65 * U, 12 * U, 1, 31, stone)
-  for (const u of [-13 * U, 13 * U]) block(d, u, 5 * U, 6 * U, 0.65 * U, 1, 31, stone)
-  block(d, 0, 5 * U, 6 * U, 0.65 * U, 28, 4, stone)
-  if (fit > 0) roof(d, 20.5 * U, 13.5 * U, -7 * U, 32, 9 * fit, 0x8a58a8)
+  block(d, 0, -19 * U, 19 * U, 0.65 * U, 1, 27, stone)
+  for (const u of [-19 * U, 19 * U]) block(d, u, -7 * U, 0.65 * U, 12 * U, 1, 27, stone)
+  for (const u of [-13 * U, 13 * U]) block(d, u, 5 * U, 6 * U, 0.65 * U, 1, 27, stone)
+  block(d, 0, 5 * U, 6 * U, 0.65 * U, 26, 2, stone)
+  if (fit > 0) roof(d, 20.5 * U, 13.5 * U, -7 * U, 28, 9 * fit, 0x8a58a8)
   if (fit <= 0.4) return
   const p: Wall = (s, z, out = 0.02) => [s, 5.7 * U + out, z]
-  loadingDoors(d, p, 6 * U, 4, 24, open)
-  for (const u of [-6.7 * U, 6.7 * U]) beam(d, [u, 5.9 * U, 3], [u, 5.9 * U, 29], 1.7)
-  beam(d, [-11 * U, 5.9 * U, 29], [11 * U, 5.9 * U, 29], 1.4, iron)
+  loadingDoors(d, p, 6 * U, 4, 22, open)
+  for (const u of [-6.7 * U, 6.7 * U]) beam(d, [u, 5.9 * U, 3], [u, 5.9 * U, 27], 1.4)
+  beam(d, [-11 * U, 5.9 * U, 27], [11 * U, 5.9 * U, 27], 1.2, iron)
   block(d, 0, 10.5 * U, 18 * U, 5 * U, 1, 3, stone)
   block(d, 0, 17 * U, 5 * U, 1.5 * U, 1, 1.5, stone)
   // A clear central approach, with cargo kept on the loading platform beside it.
@@ -96,11 +96,11 @@ function warehouse(d: Drawing, fit: number, open: number) {
   d.crate(15 * U, 12 * U, 4, 0xd27a34, 1.5 * U, 6)
   d.barrel(-10 * U, 9 * U, 1.8 * U, 4, 8)
   d.crate(-10 * U, -9 * U, 1, 0x2f8c87, 2 * U, 7)
-  post(d, -15 * U, 9 * U, 44)
-  beam(d, [-15 * U, 9 * U, 43], [-15 * U, 17 * U, 43], 1.8)
-  beam(d, [-15 * U, 9 * U, 30], [-15 * U, 15 * U, 42], 1.5)
-  wheel(d, -15 * U, 15 * U, 41.5, 1.4)
-  d.line([[-15 * U, 16 * U, 41.5], [-15 * U, 16 * U, 13]], 0.75, 0x8a6a45)
+  post(d, -15 * U, 9 * U, 40)
+  beam(d, [-15 * U, 9 * U, 39], [-15 * U, 17 * U, 39], 1.4)
+  beam(d, [-15 * U, 9 * U, 28], [-15 * U, 15 * U, 38], 1.2)
+  wheel(d, -15 * U, 15 * U, 37.5, 1.4)
+  d.line([[-15 * U, 16 * U, 37.5], [-15 * U, 16 * U, 13]], 0.75, 0x8a6a45)
   d.crate(-15 * U, 16 * U, 5, 0x2f8c87, 1.7 * U, 6)
   d.line([[-16.7 * U, 16 * U, 11], [-15 * U, 16 * U, 13], [-13.3 * U, 16 * U, 11]], 0.75, 0x8a6a45)
 }
@@ -111,10 +111,10 @@ function bench(d: Drawing, u: number, v: number, a: number, b: number, z = 7) {
 }
 
 function fishery(d: Drawing, fit: number) {
-  block(d, -5 * U, -6 * U, 7 * U, 6 * U, 1, 19, stone)
-  if (fit > 0) roof(d, 8 * U, 7 * U, -6 * U, 20, 10 * fit, 0x2f8c87, -5 * U)
+  block(d, -5 * U, -6 * U, 7 * U, 6 * U, 1, 23, stone)
+  if (fit > 0) roof(d, 8 * U, 7 * U, -6 * U, 24, 10 * fit, 0x2f8c87, -5 * U)
   if (fit <= 0.4) return
-  loadingDoors(d, (s, z, out = 0.02) => [s - 5 * U, out, z], 2.5 * U, 1, 16, 0)
+  loadingDoors(d, (s, z, out = 0.02) => [s - 5 * U, out, z], 2.5 * U, 1, 20, 0)
   d.face([[2.03 * U, -10 * U, 8], [2.03 * U, -5 * U, 8], [2.03 * U, -5 * U, 14], [2.03 * U, -10 * U, 14]], palette.glass, 0.8)
   for (const v of [-11 * U, U]) post(d, 10 * U, v, 21)
   beam(d, [10 * U, -11 * U, 20], [10 * U, U, 20], 1.5)
@@ -152,42 +152,42 @@ function oven(d: Drawing, u: number, v: number, warm: boolean) {
 }
 
 function bakery(d: Drawing, fit: number, open: number) {
-  block(d, 0, -7 * U, 12 * U, 6 * U, 1, 27, stone)
-  if (fit > 0) roof(d, 13 * U, 7 * U, -7 * U, 28, 9 * fit, 0xc4523f)
+  block(d, 0, -7 * U, 12 * U, 6 * U, 1, 25, stone)
+  if (fit > 0) roof(d, 13 * U, 7 * U, -7 * U, 26, 9 * fit, 0xc4523f)
   if (fit <= 0.4) return
-  loadingDoors(d, (s, z, out = 0.02) => [s + 7 * U, -U + out, z], 2.5 * U, 1, 19, open * 0.5)
+  loadingDoors(d, (s, z, out = 0.02) => [s + 7 * U, -U + out, z], 2.5 * U, 1, 20, open * 0.5)
   oven(d, -6 * U, 2 * U, open > 0.25)
-  const flueTop = 18 + 30 * fit
-  block(d, -8 * U, -2 * U, 1.6 * U, 1.6 * U, 18, 30 * fit, stone)
+  const flueTop = 18 + 25 * fit
+  block(d, -8 * U, -2 * U, 1.6 * U, 1.6 * U, 18, 25 * fit, stone)
   block(d, -8 * U, -2 * U, 2 * U, 2 * U, flueTop - 2, 2, stone)
   d.face([[-9.2 * U, -3.2 * U, flueTop + 0.02], [-6.8 * U, -3.2 * U, flueTop + 0.02], [-6.8 * U, -0.8 * U, flueTop + 0.02], [-9.2 * U, -0.8 * U, flueTop + 0.02]], 0x68726c, 0)
   if (fit <= 0.75) return
   bench(d, 6 * U, 8 * U, 5.2 * U, 2.3 * U)
-  for (const u of [1 * U, 11 * U]) post(d, u, 10.8 * U, 18)
-  const top: Vertex[] = [[0, -0.8 * U, 22], [12 * U, -0.8 * U, 22], [12 * U, 11 * U, 18], [0, 11 * U, 18]]
+  for (const u of [1 * U, 11 * U]) post(d, u, 10.8 * U, 21)
+  const top: Vertex[] = [[0, -0.8 * U, 24], [12 * U, -0.8 * U, 24], [12 * U, 11 * U, 21], [0, 11 * U, 21]]
   d.face(top, pale(0xc4523f, 0.68), 0.8)
-  beam(d, [0, 11 * U, 18], [12 * U, 11 * U, 18], 1)
+  beam(d, [0, 11 * U, 21], [12 * U, 11 * U, 21], 1)
   for (const u of [3, 6, 9]) for (const v of [7, 9]) {
     d.ellipsoid(u * U, v * U, 8.8, U, 0.65 * U, 0.9, 0xd0a369, 0.45, 0xebce96, 12)
     d.line([[(u - 0.3) * U, (v - 0.4) * U, 9.4], [(u + 0.3) * U, (v + 0.4) * U, 9.4]], 0.4, 0xa5804f)
   }
   d.barrel(-11 * U, 10 * U, U, 1, 7, 0xf1e9d5)
   d.barrel(-8 * U, 11 * U, U, 1, 6)
-  beam(d, [9 * U, -U, 26], [9 * U, 3 * U, 26], 0.9, iron)
-  d.line([[9 * U, 2.5 * U, 26], [9 * U, 2.5 * U, 24]], 0.55)
-  d.ellipsoid(9 * U, 2.5 * U, 23, 2 * U, 0.55 * U, 1.3, 0xc5985f, 0.65, 0xebce96, 16)
-  for (const u of [8, 9, 10]) d.line([[u * U, 2.95 * U, 23], [(u + 0.3) * U, 2.95 * U, 24]], 0.45, 0x9c7546)
+  beam(d, [9 * U, -U, 29], [9 * U, 3 * U, 29], 0.9, iron)
+  d.line([[9 * U, 2.5 * U, 29], [9 * U, 2.5 * U, 27]], 0.55)
+  d.ellipsoid(9 * U, 2.5 * U, 26, 2 * U, 0.55 * U, 1.3, 0xc5985f, 0.65, 0xebce96, 16)
+  for (const u of [8, 9, 10]) d.line([[u * U, 2.95 * U, 26], [(u + 0.3) * U, 2.95 * U, 27]], 0.45, 0x9c7546)
 }
 
 function weaver(d: Drawing, fit: number) {
-  block(d, 0, -12 * U, 12 * U, 0.65 * U, 1, 29, stone)
-  block(d, -12 * U, -6 * U, 0.65 * U, 6 * U, 1, 29, stone)
-  block(d, 6 * U, -9 * U, 6 * U, 3 * U, 1, 29, stone)
-  for (const u of [-12 * U, 12 * U]) post(d, u, U, 30)
-  beam(d, [-12 * U, U, 30], [12 * U, U, 30], 1.6)
-  if (fit > 0) roof(d, 13.5 * U, 7.5 * U, -6 * U, 30, 8 * fit, 0x8a58a8)
+  block(d, 0, -12 * U, 12 * U, 0.65 * U, 1, 25, stone)
+  block(d, -12 * U, -6 * U, 0.65 * U, 6 * U, 1, 25, stone)
+  block(d, 6 * U, -9 * U, 6 * U, 3 * U, 1, 25, stone)
+  for (const u of [-12 * U, 12 * U]) post(d, u, U, 26)
+  beam(d, [-12 * U, U, 26], [12 * U, U, 26], 1.4)
+  if (fit > 0) roof(d, 13.5 * U, 7.5 * U, -6 * U, 26, 8 * fit, 0x8a58a8)
   if (fit <= 0.4) return
-  loadingDoors(d, (s, z, out = 0.02) => [s + 6 * U, -6 * U + out, z], 2.5 * U, 1, 18, 0)
+  loadingDoors(d, (s, z, out = 0.02) => [s + 6 * U, -6 * U + out, z], 2.5 * U, 1, 20, 0)
   for (const u of [-4 * U, 4 * U]) {
     post(d, u, 4 * U, 22)
     post(d, u, -U, 19)
@@ -219,7 +219,7 @@ function weaver(d: Drawing, fit: number) {
 /** Early construction keeps the work apron open instead of filling the plot with a cube. */
 export function tradeConstruction(id: TradeYardId, build: number, share: number | null, doors: BuildingOptions["doors"]) {
   const d = new Drawing(id, `${kinds[id].title} · construction`, "Store walls and an open work apron."), stage = buildStages(build)
-  const half = (id === "warehouse" ? 21 : 13.5) * U, height = id === "fishery" ? 20 : id === "bakery" ? 28 : id === "weaver" ? 30 : 32
+  const half = (id === "warehouse" ? 21 : 13.5) * U, height = id === "fishery" ? 24 : id === "warehouse" ? 28 : 26
   d.asset.footprint = kinds[id].size
   if (share !== null) for (let i = 0; i < Math.ceil(share * 3); i++) d.crate(half - 2 * U - i * 3 * U, half - 2 * U, 0, 0x8f9891)
   if (stage.walls > 0) {
