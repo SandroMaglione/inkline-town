@@ -5,7 +5,6 @@
  */
 import { Application, Graphics } from "pixi.js"
 
-import { drawParkPiece } from "./art.ts"
 import {
   categoryColor,
   categoryOrder,
@@ -61,10 +60,7 @@ import { handheld, offerLink, offerPicture, upload } from "./share/client.ts"
 import { PICTURE_HEIGHT, PICTURE_QUALITY, PICTURE_WIDTH } from "./share/format.ts"
 import { MapInput } from "./render3d/input.ts"
 import { portrait } from "./render3d/portrait.ts"
-import { serviceBuilding } from "./asset-lab/service-upgrades.ts"
-import { buildingDimensions, makeBuilding } from "./asset-lab/buildings.ts"
-import { dressedBuilding, isDressed, type DressedKind } from "./asset-lab/upgrade-dress.ts"
-import { house } from "./asset-lab/homes.ts"
+import { pictureAsset } from "./render3d/models.ts"
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
   const node = document.createElement(tag)
@@ -749,16 +745,8 @@ export const createHost = async (
     const id = `${String(what)}${upgraded ? `/upgraded${lvl}` : ""}`
     let url = pictures.get(id)
     if (!url) {
-      if (typeof what === "string" && what.startsWith("park:")) {
-        const g = new Graphics()
-        drawParkPiece(g, what.slice(5) as GroundId | PropId)
-        url = app.renderer.extract.base64({ target: g, resolution: 2 })
-        void url.finally(() => g.destroy())
-      } else if (what === 1 || what === 2 || what === 3) url = modelPicture(() => house(what, undefined, undefined, { doors: { right: true } }))
-      else if (upgraded && (what === "market" || what === "chapel")) url = modelPicture(() => serviceBuilding(what, 2, { doors: both }))
-      else if (upgraded && isDressed(what as KindId))
-        url = modelPicture(() => dressedBuilding(what as DressedKind, lvl, makeBuilding(what as KindId, { doors: both, motion: false }), buildingDimensions(what as KindId).height))
-      else url = modelPicture(() => makeBuilding(what as KindId, { doors: both, motion: false }))
+      // The model the map draws, as it stands: one source for the map and every picture of it.
+      url = modelPicture(() => pictureAsset(what, lvl))
       pictures.set(id, url)
     }
     void url.then((src) => (img.src = src))
