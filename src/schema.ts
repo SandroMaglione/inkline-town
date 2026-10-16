@@ -17,7 +17,7 @@ import type { NodeRegistry } from "@typeonce/bevy-ts-render"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
 import type { GameScene } from "./render3d/scene.ts"
-import { goodIds, groundIds, kindIds, landIds, propIds, serviceIds, sizeIds, type Amounts } from "./content.ts"
+import { goodIds, groundIds, kindIds, landIds, propIds, serviceIds, sizeIds, type Amounts, type GoodId } from "./content.ts"
 import type { Rules as RuleInputs } from "./rules/config.ts"
 import type { UiValue } from "./ui.ts"
 
@@ -407,6 +407,15 @@ export interface FlowValue {
   } | null
 }
 export const Flow = Descriptor.TransientResource<FlowValue>()("Town/Flow")
+/**
+ * What provisions walkers handed to homes over the last minute (not saved: it starts over on a load): a line for
+ * each home a walker gave something, from which building, and what. A market's panel reads it, as its shelf alone
+ * says little: food leaves in the walker's basket as soon as it comes, and furniture mostly comes back.
+ */
+export interface HandedValue {
+  readonly log: ReadonlyArray<{ readonly at: number; readonly from: number; readonly to: number; readonly goods: Partial<Record<GoodId, number>> }>
+}
+export const Handed = Descriptor.TransientResource<HandedValue>()("Town/Handed")
 
 // ── Host services ─────────────────────────────────────────────────────────
 
@@ -431,7 +440,7 @@ export const Game = Schema.bind(
     },
     resources: {
       Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Guide, Appeal, Pantry, Fires,
-      Grid, Stock, Flow
+      Grid, Stock, Flow, Handed
     },
     relations: { WalkerOf, FieldOf }
   }),

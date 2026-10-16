@@ -79,6 +79,7 @@ export const blankResources = () => ({
   Fires: { fires: [], next: 1 },
   Grid: { owner: [], use: [] },
   Stock: amounts({}),
+  Handed: { log: [] },
   Flow: { town: "", since: 0, start: null, made: amounts({}), traded: amounts({}), held: amounts({}), coins: { start: 0, made: 0, traded: 0, seen: 0, booked: 0 }, slices: [], last: null }
 })
 

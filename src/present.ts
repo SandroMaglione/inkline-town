@@ -12,7 +12,7 @@ import { homeHeight, topOf, type Alert, type Load, type Emphasis } from "./art.t
 import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView, RuinView } from "./render3d/views.ts"
 import type { DoorSet, OverlayCell } from "./render3d/models.ts"
 import {
-  amounts, BUILD_TICKS, builtCost, COMMUTE, RESTOCK_TICKS, STEP_SECONDS, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
+  amounts, BUILD_TICKS, builtCost, COMMUTE, provisions, RESTOCK_TICKS, STEP_SECONDS, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
   kindOrder, nextUpgrade, worksNeeded, PAVE_COST, propIds, props, ranks, risk, RISK_MAX, ROAD_COST, tierHome, total, upgradeAt, upkeepOf, winters, type Amounts, type GoodId, type Kind, type KindId, type Need, type Tier
 } from "./content.ts"
 import { around, canPlace, cellOf, doors, entrances, isRoad, key, lPath, nearest, reach, useAt, type TileLike } from "./grid.ts"
@@ -70,6 +70,7 @@ import {
   Status,
   Stock,
   Flow,
+  Handed,
   Tile,
   Time,
   TownHall,
@@ -385,6 +386,7 @@ export const Interact = Game.System(
       ledger: Game.System.readResource(Ledger),
       stock: Game.System.readResource(Stock),
       flow: Game.System.readResource(Flow),
+      handed: Game.System.readResource(Handed),
       policy: Game.System.readResource(Policy),
       time: Game.System.readResource(Time),
       charter: Game.System.readResource(Charter),
@@ -888,10 +890,26 @@ export const Interact = Game.System(
           label: "walkers out",
           value: `${maybe(row.data.walkers)?.length ?? 0}`
         })
+      // A provisions walker's building: what its walkers handed to homes over the last minute, which its shelf
+      // alone cannot say (food leaves in the basket as soon as it comes; furniture mostly comes back).
+      if (service?.service === "goods") {
+        const log = resources.handed.get().log.filter((l) => l.from === row.entity.id)
+        const given: Record<GoodId, number> = { ...amounts({}) }
+        for (const l of log) for (const [g, n] of Object.entries(l.goods) as Array<[GoodId, number]>) given[g] += n
+        const homesFed = new Set(log.map((l) => l.to)).size
+        work.push(
+          homesFed > 0
+            ? { icon: "people", label: "handed out, last minute", goods: provisions.filter((g) => given[g] > 0).map((g) => ({ good: g, count: given[g] })),
+                note: `to ${homesFed} home${homesFed === 1 ? "" : "s"} on its walks` }
+            : { icon: "people", label: "handed out, last minute", value: "nothing", tone: "dim", note: "no home on its walks needed what it had" }
+        )
+      }
       const inventory = maybe(row.data.inventory)
       if (inventory) {
         const held = inventory.accepts.filter((g) => inventory.stock[g] > 0).map((g) => ({ good: g, count: inventory.stock[g] }))
-        work.push(held.length > 0 ? { icon: "jobs", label: "holds", goods: held } : { icon: "jobs", label: "holds", value: "nothing yet", tone: "dim" })
+        // A market's shelf is only what waits for the next walker.
+        const label = kind.id === "market" ? "on the shelf now" : "holds"
+        work.push(held.length > 0 ? { icon: "jobs", label, goods: held } : { icon: "jobs", label, value: "nothing", tone: "dim" })
       }
       if (kind.wear && inventory)
         work.push(
