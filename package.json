@@ -21,6 +21,7 @@
     "check:effects": "node scripts/check-house-effects.ts",
     "check:revisions": "node scripts/check-model-revisions.ts",
     "check:park": "node scripts/check-park.ts",
+    "check:park-models": "node scripts/check-park-models.ts",
     "look:upgrades": "node scripts/look-upgrades.ts",
     "look:ui": "node scripts/look-ui.ts",
     "test": "node --test \"test/*.test.ts\"",

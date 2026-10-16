@@ -263,9 +263,18 @@ The original 2D menu drawings remain in `art.ts` for comparison. The live
 3D town uses the new geometry, including equipped service workers and cured
 fish cargo. The game has no audio, so winter music is outside this model work.
 
+Open `/proportion-review.html?collection=parks` for twelve park before/after
+comparisons. The original geometry and walker are frozen in
+`public/model-review/parks-before.json.gz` at `f4df9d5`; do not regenerate it
+from the revised models. `pnpm check:park-models` checks the paired viewer and
+captures front, rear and phone views in `output/inkline-3d/parks/`.
+Shared furnishings live in `park-furnishings.ts`, and park ground treatments
+in `park-ground.ts`. The bench and planted border also serve civic gardens;
+road setts and the park simulation rules are unchanged.
+
 Open `/park-lab.html` for a park assembled from 25 cells using the current
 park layout system, with two street entrances. The three retained furnishings
-are lamps, fountains and statues. The statue is a simple bust and pedestal;
+are framed lanterns, tiered fountains and simple stone busts;
 `render3d/fountain-effects.ts` supplies moving droplets and impact ripples in
 the actual basin. Park rendering in the game, catalogue, map and preview shares
 the same emitter metadata and water renderer. `pnpm check:park` verifies the

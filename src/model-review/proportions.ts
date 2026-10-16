@@ -2,9 +2,11 @@ import * as THREE from "three"
 import { buildAsset, vertex3 } from "../asset-lab/renderer.ts"
 import type { InkAsset } from "../asset-lab/primitives.ts"
 import { proportionModels, architectureIds } from "./proportion-models.ts"
+import { parkReviewModels } from "./park-models.ts"
 import "./proportions.css"
 
 type Baseline = { revision: string; models: InkAsset[]; walker: InkAsset }
+const parksMode=new URLSearchParams(location.search).get("collection")==="parks"
 const notes: Record<string,string> = {
   cottage:"A person-sized timber door and taller walls; the one-cell footprint stays the same.",
   citizen:"Two floors share the same human clearance as the cottage, with windows above the new floor lines.",
@@ -48,27 +50,49 @@ const notes: Record<string,string> = {
   "cart-furniture-4":"The delivery cart keeps its walker-compatible handles; the load uses the revised shared furniture.",
   "barrow-furniture-4":"The barrow retains its own chassis; the load uses the revised shared furniture.",
   "crate-wood":"A smaller generic goods crate; the same change applies to every goods label. Large warehouse loads remain separate.",
+  "park-lamp":"A taller cast-iron standard, stepped base and framed glass lantern, with a weather cap and small finial.",
+  "park-statue":"A simple stone bust with broad carved shoulders, a plain head and a restrained stepped pedestal.",
+  "park-fountain":"A larger moulded stone basin, individual coping stones and a raised bowl around the working nozzle.",
+  "park-bench":"Four seat slats, a sloping three-slat back, iron frames and armrests. Seat height remains 4.5 units.",
+  "park-border":"Stone edging, inset soil, stems, leaves and individual blossoms, shared with the town's planted borders.",
+  "park-lawn":"Short turf and quieter grass tufts; suitable lawn cells beside walks gain occasional benches.",
+  "park-flowers":"Raised planting edges and irregular groups of leafy flowers replace the flat square and regular dots.",
+  "park-path":"A bordered gravel walk with small stones and clear connections to neighbouring walks and roads.",
+  "park-square":"Larger staggered flagstones with thin mortar joints and a low, carefully finished edge.",
+  "park-junction":"The gravel and edging join four street approaches without fencing off the entrances.",
+  "park-sample":"The same 25-cell layout, with revised furnishings, planting, paving and seating. Park rules and costs are unchanged.",
+  "park-built":"The same connected park between two streets, with running water and the revised furnishings at the walker scale.",
 }
 
 const root=document.querySelector<HTMLElement>("#proportions")!
 root.innerHTML=`<header><div><div class="eyebrow">INKLINE TOWN / PROPORTION STUDY</div><h1>One town. One human scale.</h1><p>Every building and upgrade, plus shared furnishings and construction. The walker is unchanged. Both sides always use the same camera, ground position and zoom.</p></div><div><a href="/model-review.html?collection=handoff">Model catalogue ↗</a><p class="status" id="status">Loading the approved originals…</p></div></header><div class="layout"><aside><input aria-label="Find a model" type="search" placeholder="Find a model…"><select aria-label="Model group"><option value="all">All models</option><option value="architecture">Buildings & homes</option><option value="props">Props & construction</option></select><select aria-label="Choose model"></select><nav aria-label="All comparison models"></nav></aside><section><div class="row"><button id="previous" aria-label="Previous model">←</button><h2></h2><button id="next" aria-label="Next model">→</button></div><p class="meta" id="note"></p><div class="controls"><label>Turn <input aria-label="Model rotation" type="range" min="-180" max="180" value="0"><output>0°</output></label><label>Elevation <select aria-label="View elevation"><option value="30">Game angle</option><option value="0">Eye level</option><option value="50">From above</option></select></label><label>Zoom <input aria-label="Zoom" type="range" min=".7" max="2" step=".1" value="1"></label><label><input type="checkbox" id="town-scale"> One scale across all models</label><button id="reset">Reset view</button><button id="save">Save comparison</button></div><div class="view"><div class="captions"><span>Before · approved</span><span>After · revised</span></div><div class="divider"></div></div><div class="footer"><span id="dimensions"></span><br>Drag to turn both views together. Arrow buttons move through every model. Switch on one town scale to compare building sizes across the catalogue.<br>Before geometry is frozen at <code>a2845b4</code>. Changes are model geometry, not camera scaling.</div></section></div>`
 const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true})
+if(parksMode){
+  document.title="Inkline Town · Park before / after"
+  root.querySelector(".eyebrow")!.textContent="INKLINE TOWN / PARK STUDY"
+  root.querySelector("h1")!.textContent="A park worth visiting."
+  root.querySelector("header p")!.textContent="Every park furnishing, planting and ground treatment, beside the approved originals. The walker and camera are unchanged."
+  const groups=root.querySelectorAll("select[aria-label='Model group'] option")
+  groups[1]!.textContent="Furnishings & planting";groups[2]!.textContent="Ground & assembled parks"
+  root.querySelector(".footer code")!.textContent="f4df9d5"
+  root.querySelector(".footer")!.lastChild!.textContent=". Changes are native model geometry."
+}
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setClearColor(0xf0f2ec);renderer.setScissorTest(true)
 const view=root.querySelector<HTMLElement>(".view")!;view.append(renderer.domElement)
 const camera=new THREE.OrthographicCamera(-100,100,100,-100,.1,4000)
 const search=root.querySelector<HTMLInputElement>("input[type=search]")!,group=root.querySelector<HTMLSelectElement>("select[aria-label='Model group']")!,picker=root.querySelector<HTMLSelectElement>("select[aria-label='Choose model']")!,nav=root.querySelector<HTMLElement>("nav")!
 const rotation=root.querySelector<HTMLInputElement>("input[aria-label='Model rotation']")!,elevation=root.querySelector<HTMLSelectElement>("select[aria-label='View elevation']")!,zoom=root.querySelector<HTMLInputElement>("input[aria-label='Zoom']")!,townScale=root.querySelector<HTMLInputElement>("#town-scale")!
 const geometryBounds=(a:InkAsset)=>new THREE.Box3().setFromPoints([...a.faces,...a.strokes].flatMap(f=>f.points.map(vertex3)))
-let before:Baseline,after=proportionModels(),filtered=after,selected=0,yaw=0,pitch=30,drag:number|null=null
+let before:Baseline,after=parksMode?parkReviewModels():proportionModels(),filtered=after,selected=0,yaw=0,pitch=30,drag:number|null=null
 let pair:Array<{scene:THREE.Scene;built:ReturnType<typeof buildAsset>;person:ReturnType<typeof buildAsset>}>=[],bounds=new THREE.Box3()
-const clean=(a:InkAsset):InkAsset=>{const {smokeEffect,fountains,effects,...geometry}=a;return geometry}
+const clean=(a:InkAsset):InkAsset=>{const {smokeEffect,effects,...geometry}=a;if(!parksMode)delete geometry.fountains;return geometry}
 
 function render(){
   if(!pair.length)return
   const {width,height}=view.getBoundingClientRect(),w=width/2
   renderer.setSize(width,height,false)
   const heading=(45+yaw)*Math.PI/180,angle=pitch*Math.PI/180
-  const box=townScale.checked?new THREE.Box3(new THREE.Vector3(-85,-1,-75),new THREE.Vector3(85,170,85)):bounds
+  const box=townScale.checked?(parksMode?new THREE.Box3(new THREE.Vector3(-180,-1,-180),new THREE.Vector3(180,70,180)):new THREE.Box3(new THREE.Vector3(-85,-1,-75),new THREE.Vector3(85,170,85))):bounds
   const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3())
   const horizontal=Math.abs(Math.cos(heading))*size.x+Math.abs(Math.sin(heading))*size.z
   const vertical=Math.cos(angle)*size.y+Math.abs(Math.sin(angle))*(Math.abs(Math.sin(heading))*size.x+Math.abs(Math.cos(heading))*size.z)
@@ -78,7 +102,7 @@ function render(){
   camera.lookAt(center);camera.updateProjectionMatrix();camera.updateMatrixWorld()
   pair.forEach(({scene,built,person},i)=>{
     renderer.setViewport(i*w,0,w,height);renderer.setScissor(i*w,0,w,height)
-    for(const b of [built,person])b.updateContours(camera)
+    for(const b of [built,person]){b.updateContours(camera);b.updateEffects(1.2)}
     renderer.render(scene,camera)
   })
   root.querySelector("output")!.textContent=`${yaw}°`
@@ -94,6 +118,7 @@ function select(id:string){
     const built=buildAsset(clean(asset),{batchFaces:true}),person=buildAsset(before.walker,{batchFaces:true}),scene=new THREE.Scene()
     person.group.position.copy(personPosition);scene.add(built.group,person.group)
     bounds.union(geometryBounds(asset));bounds.union(geometryBounds(before.walker).translate(personPosition))
+    for(const f of parksMode?asset.fountains??[]:[])bounds.expandByPoint(vertex3([f.origin[0],f.origin[1],f.origin[2]+f.nozzle+7]))
     pair.push({scene,built,person})
   }
   root.querySelector("h2")!.textContent=a.title
@@ -102,11 +127,11 @@ function select(id:string){
   const changed=JSON.stringify([a.faces,a.strokes])!==JSON.stringify([b.faces,b.strokes])
   root.querySelector("#dimensions")!.textContent=`${changed?"Updated":"Reviewed · retained"} · Geometry height ${top(b).toFixed(1)} → ${top(a).toFixed(1)} · Plot ${a.footprint??1} × ${a.footprint??1} cells · Walker 17.1, unchanged`
   picker.value=id;nav.querySelectorAll("button").forEach(el=>el.setAttribute("aria-current",String(el.dataset.id===id)))
-  history.replaceState(null,"",`?model=${id}`);render()
+  history.replaceState(null,"",`?${parksMode?"collection=parks&":""}model=${id}`);render()
 }
 function filter(){
   const q=search.value.toLowerCase()
-  filtered=after.filter(a=>(group.value==="all"||(group.value==="architecture")===architectureIds.includes(a.id))&&`${a.title} ${a.id}`.toLowerCase().includes(q))
+  filtered=after.filter(a=>(group.value==="all"||(group.value==="architecture")===(parksMode?["park-lamp","park-statue","park-fountain","park-bench","park-border"].includes(a.id):architectureIds.includes(a.id)))&&`${a.title} ${a.id}`.toLowerCase().includes(q))
   picker.replaceChildren();nav.replaceChildren()
   for(const asset of filtered){
     const option=document.createElement("option");option.value=asset.id;option.textContent=asset.title;picker.append(option)
@@ -135,7 +160,7 @@ renderer.domElement.onpointerup=()=>drag=null
 new ResizeObserver(render).observe(view)
 async function start(){
   const requested=new URLSearchParams(location.search).get("model")
-  const response=await fetch("/model-review/proportions-before.json.gz")
+  const response=await fetch(`/model-review/${parksMode?"parks":"proportions"}-before.json.gz`)
   if(!response.ok)throw new Error(`Baseline ${response.status}`)
   const bytes=await response.arrayBuffer()
   // Dev servers serve .gz verbatim. Some hosts decompress it automatically.
@@ -143,7 +168,7 @@ async function start(){
   before=JSON.parse(raw[0]===31&&raw[1]===139?await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text():new TextDecoder().decode(raw))
   if(before.models.length!==after.length||after.some(a=>!before.models.some(b=>b.id===a.id)))throw new Error("Comparison catalogue does not match the frozen baseline")
   filter();if(requested&&after.some(a=>a.id===requested))select(requested)
-  root.querySelector("#status")!.textContent=`${architectureIds.length} building appearances · ${after.length-architectureIds.length} shared examples`
+  root.querySelector("#status")!.textContent=parksMode?"12 park comparisons · unchanged walker":`${architectureIds.length} building appearances · ${after.length-architectureIds.length} shared examples`
   Object.assign(window,{proportionReview:{ids:after.map(a=>a.id),select,render,capture:()=>renderer.domElement.toDataURL(),stats:()=>({id:picker.value,before:before.revision,yaw,pitch,pairs:pair.length})}})
 }
 start().catch(error=>{root.querySelector("#status")!.textContent=String(error);root.querySelector("#status")!.classList.add("error");console.error(error)})
