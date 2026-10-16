@@ -156,6 +156,7 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel ul.changes { margin: 6px 0 8px; padding-left: 18px; font-size: 12px; line-height: 1.5; color: #3d4943; }
 .panel ul.changes li::marker { color: #b39a61; }
 .panel .option .gives { display: flex; flex-direction: column; gap: 1px; font-size: 11.5px; line-height: 1.35; color: #3d4943; }
+.panel .option .gives .change { padding-left: 2ch; text-indent: -2ch; }
 .panel .option .gives .change::before { content: "· "; color: #b39a61; }
 .panel .pill { display: inline-flex; align-items: center; gap: 6px; margin-top: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11px; background: #e2e5de; color: #5d6861; }
 .panel .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -399,6 +400,15 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .legend .key i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; opacity: 0.8; }
 .legend small { color: #77817a; line-height: 1.35; margin-top: 3px; }
 .panel-open .legend { right: 376px; }
+/* Beside a side panel the goods bar reaches as far as the views would sit: they, and the legend under them, drop below it. */
+@media (min-width: 1001px) {
+  .panel-open .views { top: 116px; }
+  .panel-open .legend { top: 352px; }
+}
+@media (min-width: 1001px) and (max-width: 1200px) {
+  .views { top: 116px; }
+  .legend { top: 352px; }
+}
 @media (max-width: 1000px) {
   .views { top: auto; bottom: calc(130px + env(safe-area-inset-bottom)); flex-direction: row; flex-wrap: wrap; max-width: calc(100vw - 32px); }
   .views button { font-size: 0; gap: 0; }
