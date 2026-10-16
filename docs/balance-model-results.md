@@ -95,27 +95,27 @@ The bot establishes desirable citizen streets earlier, sizes bread and cloth cha
 
 The term no longer ends in a single win: a town rises from hamlet to village, town and city as each rank's goals hold for two minutes, and the term plays on to its end. The town rank (`TOWN_RANK`) is the old "complete" town. The sensible bot plays through ordinary edits, with shipped rules and seeded disasters. It now takes a guildhall once a village (and an ovenworks, estate or masonry once a town, where bread, wheat or stone run short), lays in flour before winter, and builds a carpenter once homes are fit for townhouses.
 
-Fifteen 60-minute charters, at `cd186a3` (upgrades and the income goal, with the old bot) and now (furniture, and the bot below):
+Fifteen 60-minute charters, at `cd186a3` (upgrades and the income goal, with the old bot), at `e610f70` (furniture, and the bot below), and now (a market's walker no longer loses what it brings home; see Furniture, measured, below):
 
-| Charter | Before | After |
-|---|---|---|
-| medium fair 8919 | town at 45 min | town at 38 min |
-| medium fair 16838 | town at 53 min | town at 28 min |
-| medium fair 24757 | town at 53 min | town at 55 min |
-| medium fair 32676 | village | town at 33 min |
-| medium fair 40595 | hamlet | hamlet |
-| medium fair 48514 | village | village |
-| medium fair 56433 | village | town at 36 min |
-| medium harsh 8919 | village | village |
-| medium harsh 16838 | village | town at 46 min |
-| medium rich 8919 | town at 46 min | village |
-| small fair 8919 | town at 27 min | town at 22 min, city at 41 min |
-| small fair 16838 | town at 25 min | town at 24 min |
-| small harsh 24757 | town at 48 min | bankrupt at 41 min |
-| large fair 8919 | hamlet | hamlet |
-| large fair 16838 | village | village |
+| Charter | `cd186a3` | `e610f70` | Now |
+|---|---|---|---|
+| medium fair 8919 | town at 45 min | town at 38 min | town at 44 min |
+| medium fair 16838 | town at 53 min | town at 28 min | town at 28 min |
+| medium fair 24757 | town at 53 min | town at 55 min | town at 43 min |
+| medium fair 32676 | village | town at 33 min | town at 32 min |
+| medium fair 40595 | hamlet | hamlet | village |
+| medium fair 48514 | village | village | village |
+| medium fair 56433 | village | town at 36 min | town at 43 min |
+| medium harsh 8919 | village | village | town at 53 min |
+| medium harsh 16838 | village | town at 46 min | town at 47 min |
+| medium rich 8919 | town at 46 min | village | town at 46 min |
+| small fair 8919 | town at 27 min | town at 22 min, city at 41 min | town at 22 min |
+| small fair 16838 | town at 25 min | town at 24 min | town at 28 min |
+| small harsh 24757 | town at 48 min | bankrupt at 41 min | town at 37 min |
+| large fair 8919 | hamlet | hamlet | village |
+| large fair 16838 | village | village | village |
 
-The two regressions are the bot's, not a rule hole: on small harsh 24757 its decisions match the old run move for move until minute 24, when a lamp goes down one decision earlier, and the run diverges from there. Large charters outgrow the bot's district planning before and after. No bot run reached burghers: a townhouse needs desirability 12, every service calling, and furniture, which takes deliberate zoning the bot does not do.
+Now 11 of 15 reach the town rank, against 8 before. The one step back is small fair 8919, which still becomes a town at 22 minutes but no longer a city: this run has no burghers, and like the bot's other turns it diverges move by move from the last. At `e610f70`, the two regressions were the bot's, not a rule hole: on small harsh 24757 its decisions match the old run move for move until minute 24, when a lamp goes down one decision earlier, and the run diverges from there. Large charters outgrow the bot's district planning before and after. No bot run reached burghers: a townhouse needs desirability 12, every service calling, and furniture, which takes deliberate zoning the bot does not do.
 
 Reproduce one:
 
@@ -124,5 +124,21 @@ pnpm balance --seeds 1 --from 1 --term 60
 ```
 
 Seeds 8919 and 16838 (medium fair) are permanent regressions in `test/balance-victory.test.ts`: each becomes a village and stands, and reaches the town rank.
+
+## Furniture, measured
+
+`pnpm balance:furniture` plays a street of homes beside the town hall, a market and carpenters across it, in the real simulation, headless. Everything else a townhouse asks (desirability, the three services, bread, cloth, faith, repair) is given, so the run measures furniture alone. Thirty minutes each, medium fair seed 7:
+
+| Homes | Carpenters | Every home a townhouse by | Townhouses held, second half | Made a minute |
+|---|---|---|---|---|
+| 4 | 1 | minute 5 | 4.0 of 4 | 6.5 |
+| 8 | 1 | minute 12 | 8.0 of 8 | 7.4 |
+| 16 | 1 | never | 6.1 of 16 | 7.4 |
+| 24 | 1 | never | 6.1 of 24 | 7.4 |
+| 24 | 2 | never | 15.0 of 24 | 12.2 |
+
+Before the walker fix, 8 and 16 homes made no townhouse in thirty minutes. A market refills while its walker is out, and a walker home with what it did not hand out put it back only up to the shelf's room: a walker home with ten pieces of furniture lost eight. Nearly all furniture was lost that way, none reached the store, and a home pays its rise (2 furniture) from the store. Bread, fish and cloth leaked the same way, less.
+
+One carpenter keeps about eight townhouses (some 96 burghers) furnished. A city on a small charter asks 15% of 270 residents, four townhouses; a medium one, 15% of 480, six. Every citizens' home on a street fit for townhouses takes furniture too, whether or not it is ready to rise, and the walker tops a piece up at half its life, so a home uses one about every 150 seconds: a long street of fine homes needs a second carpenter before the last of them can rise.
 
 Generate fresh model results using the CLI documented in [balance-model.md](balance-model.md). The report above records its source commit and exact rule hash.
