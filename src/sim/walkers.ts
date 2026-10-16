@@ -215,7 +215,9 @@ export const Wander = Game.System(
         const inv = queries.inventories.get(from)
         if (inv.ok && total(roam.basket) > 0) {
           const i = inv.value.data.inventory.get()
-          inv.value.data.inventory.set({ ...i, stock: each((g) => Math.min(i.cap, i.stock[g] + roam.basket[g])) })
+          // What it did not hand out goes back on the shelf, even past its room (the shelf filled again meanwhile):
+          // the building asks for no more until it is down again, and nothing is lost.
+          inv.value.data.inventory.set({ ...i, stock: each((g) => i.stock[g] + roam.basket[g]) })
         }
         commands.despawn(entity.id)
         continue

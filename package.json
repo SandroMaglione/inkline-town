@@ -11,6 +11,7 @@
     "balance": "node scripts/balance.ts",
     "balance:model": "node tools/balance/cli.ts",
     "balance:worth": "node scripts/worth.ts",
+    "balance:furniture": "node scripts/furniture.ts",
     "balance:model:check": "node --test test/balance-model.test.ts",
     "check": "node scripts/check.ts",
     "check:browser": "node scripts/check-browser.ts",
