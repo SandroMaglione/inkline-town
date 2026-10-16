@@ -175,3 +175,43 @@ test("a town saved mid-term, before ranks, loads as a hamlet", () => {
   assert.equal(loaded.state, "playing")
   assert.equal(loaded.rank, 0)
 })
+
+/** A save as version 8 wrote it: no furniture anywhere, and no trade load for it. */
+const beforeFurniture = (world: Record<string, any>) => {
+  const strip = (v: unknown): unknown =>
+    Array.isArray(v) ? v.filter((x) => x !== "furniture").map(strip)
+    : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== "furniture").map(([k, x]) => [k, strip(x)]))
+    : v
+  return strip(world)
+}
+
+test("a town saved before furniture loads with none of it, and stores and markets that take it", () => {
+  const { town, storage, run } = setup()
+  const hall = town.snapshot().entities.find((e) => e.components["Town/TownHall"])!.components["Town/Tile"]
+  // A street off the hall's ring road, homes along it, and a market and sawmill on its far side.
+  town.edit(
+    { type: "roads", cells: [4, 5, 6, 7, 8, 9, 10, 11].map((dx) => ({ x: hall.x + dx, y: hall.y + 1 })) },
+    { type: "homes", cells: [5, 6, 7, 8].map((dx) => ({ x: hall.x + dx, y: hall.y + 2 })) },
+    { type: "building", kind: "market", cell: { x: hall.x + 4, y: hall.y - 1 }, open: false },
+    { type: "building", kind: "sawmill", cell: { x: hall.x + 6, y: hall.y - 1 }, open: false }
+  )
+  town.run(120)
+  const before = town.snapshot()
+  const kinds = new Set(before.entities.map((e) => e.components["Town/Building"]?.kind))
+  for (const k of ["market", "sawmill"]) assert(kinds.has(k), `no ${k} was built`)
+  assert(before.entities.some((e) => e.components["Town/House"] && !e.components["Town/Site"]), "no home stands")
+  run(save("manual"))
+  const file = JSON.parse(storage.get("inkline-town/save/manual")!)
+  const old = beforeFurniture(file.world) as typeof file.world
+  assert.equal(JSON.stringify(old).includes("furniture"), false)
+  storage.set("inkline-town/save/manual", JSON.stringify({ ...file, version: 8, world: old }))
+  town.run(30)
+  assert.equal(run(load("manual"))._tag, "Success")
+  // With no furniture yet made, the carried town is the town as it was saved: furniture at its first price, too.
+  const { nextEntity: _, ...world } = before
+  assert.deepEqual(JSON.parse(playing(town)), world)
+  const accepts = (kind: string) => town.snapshot().entities.find((e) => e.components["Town/Building"]?.kind === kind)!.components["Town/Inventory"].accepts
+  assert(accepts("market").includes("furniture"))
+  assert(accepts("townhall").includes("furniture"))
+  assert.equal(accepts("sawmill").includes("furniture"), false)
+})

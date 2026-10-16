@@ -31,7 +31,7 @@ export const SAVE_VERSION = 9
  * (or governed on after) is a town, any other a hamlet that rises as its
  * goals hold. A complete town waiting on its mayor carries on playing;
  * from 8, its water as never fished, its upgrades as the first, and no
- * furniture anywhere yet.
+ * furniture anywhere yet, at its first price.
  * Anything else is left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
@@ -46,8 +46,8 @@ const carry = (version: number, world: unknown): unknown | null => {
     const upgraded = e.components?.["Town/Upgraded"]
     if (upgraded && typeof upgraded === "object" && !("level" in upgraded)) e.components!["Town/Upgraded"] = { level: 1 }
   }
-  // From 8 too, furniture: none of it anywhere, stores and markets that take it, homes and the census without it.
-  const furnish = (o: unknown) => (o && typeof o === "object" && !("furniture" in o) ? { ...o, furniture: 0 } : o)
+  // From 8 too, furniture: none of it anywhere, at its first price, stores and markets that take it, homes and the census without it.
+  const furnish = (o: unknown, furniture = 0) => (o && typeof o === "object" && !("furniture" in o) ? { ...o, furniture } : o)
   for (const e of Array.isArray(w.entities) ? w.entities : []) {
     const c = e.components
     if (!c) continue
@@ -63,7 +63,7 @@ const carry = (version: number, world: unknown): unknown | null => {
   }
   if (r["Town/Census"]) r["Town/Census"] = furnish(r["Town/Census"])
   const market = r["Town/Market"] as { prices?: unknown } | undefined
-  if (market && typeof market === "object") r["Town/Market"] = { ...market, prices: furnish(market.prices) }
+  if (market && typeof market === "object") r["Town/Market"] = { ...market, prices: furnish(market.prices, 100) }
   const loads = (r["Town/Policy"] as { loads?: Record<string, unknown> } | undefined)?.loads
   if (loads && typeof loads === "object" && !("furniture" in loads)) loads.furniture = TRADE_LOAD
   if (version === 8) return w
