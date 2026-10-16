@@ -451,6 +451,8 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel section.state.trouble { border-top: 3px solid #b04a39; }
 .panel section.state.trouble .line .what { color: #b04a39; }
 .panel section.upgrade { border-top: 3px solid #b39a61; }
+.panel section.upgrade .needed { margin: 0 0 6px; font-size: 11.5px; color: #8a938c; }
+.panel section.upgrade .needed.now { color: #8a6418; font-weight: 700; }
 .panel section.upgrade .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 2px 0 6px; }
 .panel section.upgrade .cap { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #9aa29b; margin-right: 4px; }
 .panel .lines .line.dim .count, .panel .lines .line.dim .what { color: #8a938c; font-weight: 400; }

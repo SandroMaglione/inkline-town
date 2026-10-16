@@ -11,7 +11,8 @@ void main(){
   phase=seed;
   gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.0);
 }`
-// Two thin ink rings spreading from a point off the middle, now and then, and a fish's back turning in them.
+// Now and then (each cell in its own time), one thin ink ring spreads slowly from a point off the middle and
+// fades; most of the time the water is still. Calm enough to sit beside the town, plain enough to read.
 const fragment = `
 uniform float time;
 varying vec2 point;
@@ -19,22 +20,20 @@ varying float phase;
 void main(){
   vec2 at=point-vec2(fract(phase*7.13)-0.5,fract(phase*3.71)-0.5)*0.5;
   float d=length(at);
-  float age=fract(time*0.32+phase);
-  float ring=0.0;
-  for(int i=0;i<2;i++){
-    float r=age*0.75-float(i)*0.16;
-    ring+=(1.0-smoothstep(0.0,0.035,abs(d-r)))*step(0.0,r)*(1.0-age);
-  }
-  float back=(1.0-smoothstep(0.05,0.075,length(at*vec2(1.0,2.4))))*(1.0-smoothstep(0.0,0.18,age))*step(0.02,age);
+  float age=fract(time*0.058+phase)/0.3;
+  if(age>1.0)discard;
+  float r=0.08+age*0.5;
+  float ring=1.0-smoothstep(0.0,0.03,abs(d-r));
+  float fade=smoothstep(0.0,0.15,age)*(1.0-age);
   float edge=1.0-smoothstep(0.85,1.0,max(abs(point.x),abs(point.y)));
-  float alpha=clamp(ring*0.55+back*0.7,0.0,1.0)*edge;
+  float alpha=ring*fade*edge*0.38;
   if(alpha<0.01)discard;
   gl_FragColor=vec4(pow(vec3(0.32,0.45,0.52),vec3(2.2)),alpha);
   #include <colorspace_fragment>
 }`
 
 /**
- * Fish in the water: ripples spreading now and then on every cell of water
+ * Fish in the water: a slow ripple now and then on every cell of water
  * that would give a catch, none on a cell resting after one. A fishery's
  * shore reads at a glance as stocked or fished out.
  */

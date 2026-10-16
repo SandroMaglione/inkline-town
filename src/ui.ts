@@ -159,6 +159,8 @@ export type Panel =
         readonly title: string
         readonly blurb: string
         readonly price: string
+        /** Why the town needs it now, when it does (the gold arrow over it); `null`: it can wait. */
+        readonly needed: string | null
         /** Coins now, and the materials carriers bring. */
         readonly cost: { readonly coins: number; readonly materials: Partial<Record<GoodId, number>> }
         readonly changes: ReadonlyArray<string>
@@ -423,6 +425,8 @@ export interface UiValue {
   overlay: { readonly key: string; readonly cells: ReadonlyArray<OverlayCell> }
   /** The view's colour for each building and home, washed over the model itself so it reads from above. */
   tints: ReadonlyMap<number, number>
+  /** The buildings whose upgrade the town needs now, with why (the gold arrow over each). */
+  wanted: ReadonlyMap<number, string>
   legend: Legend | null
   /** A place the page points at (from the ticker): outlined until `until`, in the clock's seconds. */
   flash: { readonly cell: Point; readonly size: number; readonly until: number } | null

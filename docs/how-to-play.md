@@ -96,9 +96,13 @@ six months.
   rises: the crown sends a reward, and play goes on. A rank is never lost.
   The town panel shows the next rank's goals.
 - **Upgrades** are made where a building stands, so they need no more
-  land. A gold arrow floats over every building the town can upgrade now
-  (the rank reached, the coins in hand). Select the building: its panel
-  says what the upgrade gives and costs, and its button begins it. The
+  land. A gold arrow floats over a building when the town needs its
+  upgrade, and can make it: a town hall the next rank asks for, a store
+  whose shelves are full, a quarry worked out, a farm whose mills wait on
+  wheat, a bakery flat out while homes lack bread, a market or chapel whose
+  walkers leave homes out, a fire watch with homes at high fire risk (one
+  arrow a kind). Select any upgradable building: its panel says whether it
+  is needed now, what the upgrade gives and costs, and its button begins it. The
   coins are paid when the works begin; carriers then
   bring the planks, stone, and tools, builders work them in as they come,
   and scaffolding rises inside its plot. It goes on working meanwhile.

@@ -72,9 +72,25 @@ export function constructionAsset(size: number, half: number, height: number, bu
 /** The height a building of a kind is drawn to its eaves at its level of upgrades (see `upgradeHeights`). */
 export const buildingHeight = (id: KindId, level = 0) =>
   level > 0 && id === "townhall" ? civicEave(level) : level > 0 && isUpgradable(id) ? upgradeHeights[id].eave : buildingDimensions(id).height
-/** Its highest point, for the marker over it. */
+/** The highest point of a kind's finished model at a level, measured from what is drawn (once each). */
+const drawnTops = new Map<string, number>()
+const drawnTop = (id: KindId, level: number): number => {
+  const k = `${id}/${level}`
+  let top = drawnTops.get(k)
+  if (top === undefined) {
+    const asset = buildingAsset(id, 1, null, { right: true, left: true, backRight: true, backLeft: true }, 0, {}, level)
+    top = 0
+    for (const shape of [...asset.faces, ...asset.strokes]) for (const p of shape.points) top = Math.max(top, p[2])
+    drawnTops.set(k, top)
+  }
+  return top
+}
+/** Its highest point, for the marker over it: never below what is drawn, chimney and all. */
 export const buildingTop = (id: KindId, level = 0) =>
-  level > 0 && isUpgradable(id) ? upgradeHeights[id].top : level > 0 && isDressed(id) ? Math.max(buildingDimensions(id).top, dressedTop(id, level, buildingDimensions(id).height)) : buildingDimensions(id).top
+  Math.max(
+    drawnTop(id, level),
+    level > 0 && isUpgradable(id) ? upgradeHeights[id].top : level > 0 && isDressed(id) ? Math.max(buildingDimensions(id).top, dressedTop(id, level, buildingDimensions(id).height)) : buildingDimensions(id).top
+  )
 const isUpgradable = (id: KindId): id is ServiceKind => id === "market" || id === "chapel"
 
 export function buildingAsset(id: KindId, build: number, share: number | null, doors: DoorSet, open: number, appearance: Appearance = {}, level = 0) {

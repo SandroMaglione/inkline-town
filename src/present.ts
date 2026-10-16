@@ -355,6 +355,8 @@ const ALERT_PATIENCE = ticks(30)
 let emptySince: number | null = null
 /** Once said, it stays said a while, so a handful of fish arriving does not flick it off and on. */
 let hungryUntil = 0
+/** Why each building's upgrade is needed now, by its id, reckoned once a second (see `upgradesWanted`). */
+let wanted: { at: number; why: Map<number, string> } = { at: -1, why: new Map() }
 const HUNGER_PATIENCE = ticks(20)
 /** A view's colour over a model: pale, so the ink still reads. */
 const TINT = { good: 0xbcd2ee, fair: 0xf3e3a8, bad: 0xf2b9a0, cool: 0xdccbe8, mark: 0xd5dad3, settlers: 0xead7bd, fine: 0xa9c4e8, plain: 0xffffff }
@@ -783,6 +785,62 @@ export const Interact = Game.System(
     // What stands, for a fix that builds something: it offers the first link of the chain the town lacks, else the last.
     const standing = new Set<KindId>(buildings.filter((r) => !r.data.site.present).map((r) => r.data.building.get().kind))
     const fixOf = (f: Fix | undefined): Line["fix"] => f && { text: f.text, build: f.build?.find((k) => !standing.has(k)) ?? f.build?.at(-1) }
+    const finished = (row: { readonly data: { readonly site: { readonly present: boolean }; readonly rising: { readonly present: boolean } } }) => !row.data.site.present && !row.data.rising.present
+    /** Built homes no food walker reaches: reckoned only until a market stands, as it is a walk from each walker's door. */
+    const unreachedHomes = () => {
+      const walks = buildings
+        .filter((row) => maybe(row.data.service)?.service === "goods" && finished(row))
+        .map((row) => ({ way: reach(grid, doors(grid, row.data.tile.get())), range: maybe(row.data.service)!.range }))
+      return houses.filter((row) => {
+        if (!finished(row)) return false
+        const ds = doors(grid, row.data.tile.get())
+        return ds.length > 0 && !walks.some((w) => (nearest(w.way, ds)?.distance ?? Infinity) < w.range)
+      }).length
+    }
+    /**
+     * The upgrades the town needs now, by the building, each with why: not every one it could make, but those
+     * where the building is what holds the town back. A town hall the next rank asks for, or whose shelves are
+     * full; a warehouse full; a quarry worked out; a farm whose mills wait on wheat; a bakery working flat out
+     * while homes go without bread; a market whose walkers leave homes unreached; a chapel whose priests leave
+     * homes without faith; a fire watch with homes on its streets at high fire risk.
+     */
+    const upgradesWanted = (): ReadonlyMap<number, string> => {
+      const tick = resources.time.get().tick
+      if (Math.floor(tick / 60) === wanted.at) return wanted.why
+      const why = new Map<number, string>()
+      const standingRows = buildings.filter((r) => !r.data.site.present && !r.data.rising.present && !maybe(r.data.works))
+      const homes = houses.filter((r) => !r.data.site.present && !r.data.rising.present && !r.data.closed.present)
+      const full = (r: (typeof buildings)[number]) => {
+        const inv = maybe(r.data.inventory)
+        return !!inv && goodIds.some((g) => inv.accepts.includes(g) && inv.stock[g] >= inv.cap * 0.9)
+      }
+      const near = (r: (typeof buildings)[number], tile: TileLike, range: number) => {
+        const t = r.data.tile.get()
+        return Math.abs(tile.x - (t.x + t.size / 2)) + Math.abs(tile.y - (t.y + t.size / 2)) <= range
+      }
+      const fishy = (r: (typeof houses)[number], need: "bread" | "faith") => r.data.house.get().tier >= 2 && !met(r.data.house.get(), need)
+      const nextHall = ranks[Math.min(resources.fate.get().rank + 1, ranks.length - 1)]!.hall
+      const millsWait = standingRows.some((r) => r.data.building.get().kind === "mill" && r.data.status.get() === "starved")
+      const breadShort = resources.stock.get().bread < 5 && homes.some((r) => fishy(r, "bread"))
+      for (const r of standingRows) {
+        const kind = kinds[r.data.building.get().kind], level = maybe(r.data.upgraded)?.level ?? 0, status = r.data.status.get()
+        if (!nextUpgrade(kind, level)) continue
+        const reach = maybe(r.data.service)?.range ?? 0
+        const reason =
+          kind.id === "townhall" ? (nextHall > level ? "the next rank asks for it" : full(r) ? "its shelves are full" : null)
+          : kind.id === "warehouse" ? (full(r) ? "its shelves are full" : null)
+          : kind.id === "quarry" ? (status === "starved" && growingNear(grid, r.data.tile.get(), kind, rockAt) ? "it has worked its rock down" : null)
+          : kind.id === "farm" ? (millsWait ? "the mills wait on wheat" : null)
+          : kind.id === "bakery" ? (status === "working" && breadShort ? "homes go without bread while it works flat out" : null)
+          : kind.id === "market" ? (unreachedHomes() > 0 ? "homes lie beyond every food walker" : null)
+          : kind.id === "chapel" ? (homes.some((h) => fishy(h, "faith") && !near(r, h.data.tile.get(), reach)) ? "homes lie beyond its priest" : null)
+          : kind.id === "firewatch" ? (homes.some((h) => (maybe(h.data.risk)?.fire ?? 0) >= risk.warn && near(r, h.data.tile.get(), reach + 6)) ? "homes on its streets are at high fire risk" : null)
+          : null
+        if (reason) why.set(r.entity.id, reason)
+      }
+      wanted = { at: Math.floor(tick / 60), why }
+      return why
+    }
     /** A cause as a row's note and fix. */
     const told = (c: Cause | null) => (c ? { note: c.why, fix: fixOf(c.fix) } : {})
     /**
@@ -1117,7 +1175,7 @@ export const Interact = Game.System(
       const works = maybe(pickedBuilding.data.works)
       const up = works ? undefined : nextUpgrade(kind, level)
       const upgradeOffer = up && standing
-        ? { title: up.title, blurb: up.blurb, price: upgradePrice(up), cost: up.cost, changes: upgradeChanges(kind, level),
+        ? { title: up.title, blurb: up.blurb, price: upgradePrice(up), cost: up.cost, changes: upgradeChanges(kind, level), needed: upgradesWanted().get(pickedBuilding.entity.id) ?? null,
             blocked: upgradeBlock(up, resources.fate.get().rank, { ranks }),
             short: resources.treasury.get().coins < up.cost.coins ? `${up.cost.coins - resources.treasury.get().coins} coins short` : null }
         : null
@@ -1368,10 +1426,27 @@ export const Interact = Game.System(
         blocked: upgradeBlock(up, rank, { ranks }), ready: r.ready, underway: r.underway, first: r.first
       }
     })
-    // A word when an upgrade is open and nothing is being upgraded: where they are found.
-    const open = upgrades.find((u) => u.blocked === null && u.ready > 0 && u.first)
-    if (open && !upgrades.some((u) => u.underway > 0) && resources.treasury.get().coins >= open.coins)
-      alerts.push({ tone: "hint", text: `the ${open.from} can become ${anA(open.to)}: {tap|click} it (the gold arrow over it) to see what it gives and costs`, at: open.first!.data.tile.get(), size: open.first!.data.tile.get().size, id: open.first!.entity.id })
+    // The upgrades the town needs now, where it can make them (the rank reached, the coins in hand): a gold arrow over each,
+    // and a word for the first while nothing is being upgraded.
+    const coinsNow = resources.treasury.get().coins
+    // One arrow a kind: the first building of it that needs it (one farm made an estate is the answer, not all of them).
+    const arrowed = new Set<KindId>()
+    const due = new Map([...upgradesWanted()].filter(([id]) => {
+      const row = buildings.find((b) => b.entity.id === id)
+      const kind = row && kinds[row.data.building.get().kind]
+      const up = row && kind && nextUpgrade(kind, maybe(row.data.upgraded)?.level ?? 0)
+      if (!up || !kind || arrowed.has(kind.id) || upgradeBlock(up, rank, { ranks }) !== null || coinsNow < up.cost.coins) return false
+      arrowed.add(kind.id)
+      return true
+    }))
+    ui.wanted = due
+    const [firstId, firstWhy] = [...due][0] ?? []
+    const dueFirst = firstId === undefined ? undefined : buildings.find((b) => b.entity.id === firstId)
+    if (dueFirst && !upgrades.some((u) => u.underway > 0)) {
+      const kind = kinds[dueFirst.data.building.get().kind], level = maybe(dueFirst.data.upgraded)?.level ?? 0
+      const from = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase(), to = nextUpgrade(kind, level)!.title.toLowerCase()
+      alerts.push({ tone: "hint", text: `${firstWhy}: the ${from} can become ${anA(to)}. {Tap|Click} it, under its gold arrow, to begin`, at: dueFirst.data.tile.get(), size: dueFirst.data.tile.get().size, id: dueFirst.entity.id })
+    }
     const ledger = resources.ledger.get()
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
@@ -1414,7 +1489,6 @@ export const Interact = Game.System(
     }
     const placedKinds = new Set(buildings.map(({ data }) => data.building.get().kind))
     const standingKinds = new Set(buildings.filter(({ data }) => !data.site.present && !data.rising.present).map(({ data }) => data.building.get().kind))
-    const finished = (row: { readonly data: { readonly site: { readonly present: boolean }; readonly rising: { readonly present: boolean } } }) => !row.data.site.present && !row.data.rising.present
     const wornRow = buildings.find((row) => finished(row) && !row.data.hall.present && (maybe(row.data.condition)?.value ?? CONDITION_MAX) < wear.mend)
     // A settlers' home with bread, cloth, and faith, kept from citizens only by its street.
     const poorRow = houses.find((row) => {
@@ -1434,17 +1508,6 @@ export const Interact = Game.System(
         }
       }
       return false
-    }
-    /** Built homes no food walker reaches: reckoned only until a market stands, as it is a walk from each walker's door. */
-    const unreachedHomes = () => {
-      const walks = buildings
-        .filter((row) => maybe(row.data.service)?.service === "goods" && finished(row))
-        .map((row) => ({ way: reach(grid, doors(grid, row.data.tile.get())), range: maybe(row.data.service)!.range }))
-      return houses.filter((row) => {
-        if (!finished(row)) return false
-        const ds = doors(grid, row.data.tile.get())
-        return ds.length > 0 && !walks.some((w) => (nearest(w.way, ds)?.distance ?? Infinity) < w.range)
-      }).length
     }
     const facts: GuideFacts = {
       homes: houses.length,
@@ -1805,7 +1868,7 @@ export const Animate = Game.System(
       fields: Game.Query({ selection: { field: Game.Query.read(Field) } }),
       water: Game.Query({ selection: { tile: Game.Query.read(Tile), water: Game.Query.read(Water) } })
     },
-    resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal), fate: Game.System.readResource(Fate), treasury: Game.System.readResource(Treasury), time: Game.System.readResource(Time) },
+    resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal), time: Game.System.readResource(Time) },
     services: {
       stage: Game.System.service(StageService),
       ui: Game.System.service(Ui),
@@ -1825,7 +1888,6 @@ export const Animate = Game.System(
     const { hover, danger } = services.ui.preview
     const emphasis = (id: number): Emphasis => (danger && hover === id ? "danger" : "normal")
     const dt = services.clock.deltaSeconds
-    const rank = resources.fate.get().rank, coins = resources.treasury.get().coins
     // Fish where the water would give a catch now; none where it rests after one.
     const tick = resources.time.get().tick
     services.stage.setFish(queries.water.each().filter(({ data }) => tick - data.water.get().fished >= RESTOCK_TICKS).map(({ data }) => data.tile.get()))
@@ -1833,9 +1895,8 @@ export const Animate = Game.System(
     for (const { entity, data } of queries.buildings.each()) {
       const kind = kinds[data.building.get().kind]
       const status = data.status.get()
-      // An upgrade it could begin now: its rank reached, its coins in hand, nothing under way.
-      const up = data.works.present || data.site.present || data.rising.present ? undefined : nextUpgrade(kind, maybe(data.upgraded)?.level ?? 0)
-      const upgradable = !!up && upgradeBlock(up, rank, { ranks }) === null && coins >= up.cost.coins
+      // An upgrade the town needs now, and can make (see `upgradesWanted`).
+      const upgradable = services.ui.wanted.has(entity.id)
       const recipe = maybe(data.recipe)
       const walkers = maybe(data.walkers)?.length ?? 0
       const worn = (maybe(data.condition)?.value ?? CONDITION_MAX) < wear.worn

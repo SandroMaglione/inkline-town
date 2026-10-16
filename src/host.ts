@@ -419,6 +419,7 @@ export const createHost = async (
     view: "none",
     overlay: { key: "", cells: [] },
     tints: new Map(),
+    wanted: new Map(),
     legend: null,
     flash: null,
     // Long enough to read (about 15 letters a second, and a moment to look), and gone as soon as the mayor
@@ -1334,14 +1335,18 @@ export const createHost = async (
       if (now?.type === "building") ui.edits.push({ type: "upgrade", cell: now.cell })
     }
     const why = el("p", "sub", "")
+    // Why the town needs it now (the gold arrow over it), or that it can wait.
+    const needed = el("p", "needed", "")
     live.push(() => {
       const now = ui.panel
       if (now?.type !== "building" || !now.upgrade) return
+      needed.textContent = now.upgrade.needed ? `needed now: ${now.upgrade.needed}` : "not needed yet: the gold arrow shows when it is"
+      needed.classList.toggle("now", now.upgrade.needed !== null)
       cost.refresh()
       begin.disabled = now.upgrade.blocked !== null || now.upgrade.short !== null
       why.textContent = now.upgrade.blocked ?? now.upgrade.short ?? "the coins are paid now; carriers bring the rest, scaffolding rises, and it goes on working"
     })
-    box.append(cost.box, list, begin, why)
+    box.append(needed, cost.box, list, begin, why)
     return box
   }
 

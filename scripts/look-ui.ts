@@ -53,6 +53,18 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
   await page.locator(".toolbar .pause").click()
   await page.evaluate(() => (window as any).town.ui.guide.push({ type: "off" }))
 
+  // 0. The problem marker over a lumberjack (paused), clear of its roof.
+  const lumber = await find(page, (e) => e.components["Town/Building"]?.kind === "lumberjack" && !e.components["Town/Site"])
+  if (lumber) {
+    const l: Tile = lumber.components["Town/Tile"]
+    await page.evaluate((l) => (window as any).town.ui.edits.push({ type: "pause", cell: { x: l.x, y: l.y }, on: true }), l)
+    await page.evaluate(() => (window as any).town.advance(1))
+    await look(l.x + 1, l.y + 1, phone ? 2.4 : 3.2)
+    await shot("0-marker")
+    await page.evaluate((l) => (window as any).town.ui.edits.push({ type: "pause", cell: { x: l.x, y: l.y }, on: false }), l)
+    await page.evaluate(() => (window as any).town.advance(1))
+  }
+
   // 1. A fishery, its water fished out: its status says so, and what to do; the water beyond it still shows fish.
   const fishery = await find(page, (e) => e.components["Town/Building"]?.kind === "fishery" && !e.components["Town/Site"])
   if (fishery) {
