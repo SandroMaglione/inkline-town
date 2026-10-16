@@ -215,3 +215,19 @@ test("a town saved before furniture loads with none of it, and stores and market
   assert(accepts("townhall").includes("furniture"))
   assert.equal(accepts("sawmill").includes("furniture"), false)
 })
+
+test("a finer home saved before homes paid to rise keeps its rebuilding", () => {
+  const { town, storage, run } = setup()
+  const hall = town.snapshot().entities.find((e) => e.components["Town/TownHall"])!.components["Town/Tile"]
+  town.edit({ type: "homes", cells: [{ x: hall.x + 4, y: hall.y }, { x: hall.x + 4, y: hall.y + 1 }] })
+  town.run(60)
+  town.change((s) => {
+    for (const [i, e] of s.entities.filter((e) => e.components["Town/House"] && !e.components["Town/Site"]).entries()) e.components["Town/House"].tier = i === 0 ? 2 : 3
+  })
+  run(save("manual"))
+  const file = JSON.parse(storage.get("inkline-town/save/manual")!)
+  storage.set("inkline-town/save/manual", JSON.stringify({ ...file, version: 8, world: beforeFurniture(file.world) }))
+  assert.equal(run(load("manual"))._tag, "Success")
+  const rebuilt = town.snapshot().entities.filter((e) => e.components["Town/House"]).map((e) => [e.components["Town/House"].tier, e.components["Town/Rebuilt"]?.tier])
+  assert.deepEqual(rebuilt.sort(), [[2, 2], [3, 3]])
+})

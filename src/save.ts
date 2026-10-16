@@ -30,8 +30,8 @@ export const SAVE_VERSION = 9
  * done); from 7, its first term, and its rank: a town that was complete
  * (or governed on after) is a town, any other a hamlet that rises as its
  * goals hold. A complete town waiting on its mayor carries on playing;
- * from 8, its water as never fished, its upgrades as the first, and no
- * furniture anywhere yet, at its first price.
+ * from 8, its water as never fished, its upgrades as the first, its finer
+ * homes as rebuilt already, and no furniture anywhere yet, at its first price.
  * Anything else is left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
@@ -56,6 +56,9 @@ const carry = (version: number, world: unknown): unknown | null => {
       if (v && typeof v === "object") c[name] = { ...v, [field]: furnish(v[field]) }
     }
     if (c["Town/House"]) c["Town/House"] = furnish(c["Town/House"])
+    // Homes rose for nothing before 9: a finer home has had its rebuilding, and rises back into it for nothing if it steps down.
+    const tier = (c["Town/House"] as { tier?: unknown } | undefined)?.tier
+    if ((tier === 2 || tier === 3) && !("Town/Rebuilt" in c)) c["Town/Rebuilt"] = { tier }
     const inventory = c["Town/Inventory"] as { accepts?: Array<string> } | undefined, kind = (c["Town/Building"] as { kind?: string } | undefined)?.kind
     if (inventory && Array.isArray(inventory.accepts) && !inventory.accepts.includes("furniture")
       && (kind === "market" || goodIds.every((g) => g === "furniture" || inventory.accepts!.includes(g))))
