@@ -11,10 +11,10 @@ import { appealAt } from "../appeal.ts"
  * planks and stone to mend — and walks home when its range is walked.
  */
 
-import { amounts, categoryColor, each, provisions, total, type Amounts } from "../content.ts"
+import { amounts, categoryColor, each, provisions, ticks, total, type Amounts } from "../content.ts"
 import { DIRS, doors, isRoad, key, nearest, ownerAt, pathTo, reach, useAt } from "../grid.ts"
 import { inside, type Point } from "../iso.ts"
-import { Building, Burning, Condition, Figure, Game, Rules, Grid, Appeal, Patrol, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Roam, Route, Service, Sick, Site, Staff, Status, Tile, Time, WalkerOf, maybe, type Status as StatusValue } from "../schema.ts"
+import { Building, Burning, Condition, Figure, Game, Rules, Grid, Appeal, Handed, Patrol, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Roam, Route, Service, Sick, Site, Staff, Status, Tile, Time, WalkerOf, maybe, type HandedValue, type Status as StatusValue } from "../schema.ts"
 import { CELL_STEPS } from "./shared.ts"
 import { paced } from "./work.ts"
 
@@ -189,7 +189,7 @@ export const Wander = Game.System(
       buildings: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Service] }),
       inventories: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Service] })
     },
-    resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal), pantry: Game.System.writeResource(Pantry) },
+    resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal), pantry: Game.System.writeResource(Pantry), handed: Game.System.writeResource(Handed), time: Game.System.readResource(Time) },
     services: { rules: Game.System.service(Rules) }
   },
   ({ queries, resources, commands, services }) => {
@@ -203,6 +203,9 @@ export const Wander = Game.System(
     const cared = new Map<number, ReturnType<typeof queries.cared.each>[number]>()
     for (const row of queries.cared.each()) cared.set(row.entity.id, row)
     let eaten = 0
+    // What each walker hands each home, for its building's last minute (see `Handed`).
+    const tick = resources.time.get().tick
+    const handed: Array<HandedValue["log"][number]> = []
 
     for (const { entity, data } of walkers) {
       const route = data.route.get()
@@ -243,6 +246,8 @@ export const Wander = Game.System(
           if (roam.service === "faith") h.faith = home.lasts.faith
           else if (roam.service === "goods") {
             const served = serveGoods(h, amounts(basket), rules, appealAt(resources.appeal.get().cells, x, y))
+            const given = Object.fromEntries(Object.entries(served.basket).filter(([g, n]) => (basket[g] ?? 0) > n).map(([g, n]) => [g, (basket[g] ?? 0) - n]))
+            if (Object.keys(given).length > 0) handed.push({ at: tick, from: data.home.get(), to: id, goods: given })
             Object.assign(h, served.house)
             Object.assign(basket, served.basket)
             eaten += served.eaten
@@ -287,5 +292,8 @@ export const Wander = Game.System(
       data.roam.set({ ...roam, left: 0, basket: carrying, back: true })
     }
     if (eaten > 0) resources.pantry.update((p) => ({ ...p, eaten: p.eaten + eaten }))
+    // The last minute only; a log from another town (its clock behind this one's) is dropped.
+    const kept = resources.handed.get().log.filter((l) => l.at <= tick && tick - l.at < ticks(60))
+    if (handed.length > 0 || kept.length !== resources.handed.get().log.length) resources.handed.set({ log: [...kept, ...handed] })
   }
 )
