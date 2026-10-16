@@ -91,7 +91,7 @@ import { blockers as blockersOf, streetAdvice, streetShort, whyUnmet, type InTow
 import { upgradeChanges, upgradePrice } from "./rules/upgrades.ts"
 import { breadBonus, moreAdmin, shortOf, streetTax, suppliedTaxOf, taxOutlook, type TaxedHome } from "./rules/households.ts"
 import { approvalTarget } from "./rules/approval.ts"
-import { salvageOf, salvageText } from "./rules/salvage.ts"
+import { salvageOf, salvageText, withWorks } from "./rules/salvage.ts"
 import { rockBlocks, type RockPart } from "./render3d/rock-blocks.ts"
 import { courseCount, GUIDE_QUIET, guideDone, guideStep, guideSteps, lockedNote, upcoming, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
 import { TAX_STEPS, ticks } from "./content.ts"
@@ -1028,8 +1028,8 @@ export const Interact = Game.System(
     }
 
     /** What pulling a building or home down would cost and give back, for the bulldozer and the panel. */
-    const salvageFor = (cost: Kind["cost"], site: { readonly owed: Amounts } | undefined) => {
-      const s = salvageOf(cost, site?.owed ?? null)
+    const salvageFor = (cost: Kind["cost"], site: { readonly owed: Amounts } | undefined, works?: { readonly kind: Kind; readonly owed: Amounts; readonly level: number }) => {
+      const s = withWorks(salvageOf(cost, site?.owed ?? null), works?.kind ?? {}, works)
       const said = salvageText(s)
       return `${site ? "cancel" : "pull down"}${said ? `: ${said}` : ""}`
     }
@@ -1044,7 +1044,7 @@ export const Interact = Game.System(
       const level = maybe(hoveredBuilding.data.upgraded)?.level ?? 0, works = maybe(hoveredBuilding.data.works)
       const title = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
       preview.tooltip = ui.tool === "bulldoze"
-        ? `${title} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(builtCost(kind, level), maybe(hoveredBuilding.data.site))}`
+        ? `${title} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(builtCost(kind, level), maybe(hoveredBuilding.data.site), works && { kind, ...works })}`
         : `${title} · ${problem ?? status}${works ? ` · becoming a ${upgradeAt(kind, works.level)!.title.toLowerCase()}, ${Math.round(worksShare(works)! * 100)}% built` : ""}`
     } else if (hoveredHouse) {
       const h = hoveredHouse.data.house.get()
@@ -1115,7 +1115,7 @@ export const Interact = Game.System(
         groups,
         pausable,
         paused: pickedBuilding.data.paused.present,
-        salvage: salvageFor(builtCost(kind, level), maybe(pickedBuilding.data.site)),
+        salvage: salvageFor(builtCost(kind, level), maybe(pickedBuilding.data.site), works && { kind, ...works }),
         level,
         upgraded: level > 0,
         upgrade: upgradeOffer,

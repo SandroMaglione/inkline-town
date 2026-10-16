@@ -255,3 +255,43 @@ test("pulling down a market hall gives back part of the upgrade too", () => {
   assert(back > Math.floor(base / 2), `${back} stone back, more than the market's own share`)
   assert(back <= base + up)
 })
+
+test("pulling down a building with works under way gives back the works' coins and what was brought, as a cancelled site does", () => {
+  const t = headless(charter)
+  t.run(1)
+  let cell = { x: 0, y: 0 }
+  t.change((s) => {
+    cell = market(s)
+    s.resources["Town/Fate"].rank = 2
+  })
+  t.edit({ type: "upgrade", cell })
+  t.run(1)
+  const begun = t.snapshot(), works = begun.entities.find((e) => e.components["Town/Building"]?.kind === "market")!.components["Town/Works"]
+  assert(works, "the works began")
+  const coins = begun.resources["Town/Treasury"].coins, stone = stockOf(begun, "stone")
+  const up = kinds.market.upgrade!
+  const brought = up.cost.materials.stone! - works.owed.stone
+  t.edit({ type: "remove", cell })
+  t.run(1)
+  const after = t.snapshot()
+  assert.equal(after.entities.some((e) => e.components["Town/Building"]?.kind === "market"), false)
+  // The market's own fee is a small share of its coins: the works' coins come back whole on top.
+  assert(after.resources["Town/Treasury"].coins >= coins + up.cost.coins - kinds.market.cost.coins, `${after.resources["Town/Treasury"].coins} from ${coins}`)
+  assert(stockOf(after, "stone") >= stone + brought)
+})
+
+test("two clicks to upgrade the same building in one step begin one works, and pay once", () => {
+  const t = headless(charter)
+  t.run(1)
+  let cell = { x: 0, y: 0 }
+  t.change((s) => {
+    cell = market(s)
+    s.resources["Town/Fate"].rank = 2
+    s.resources["Town/Treasury"].coins = 2000
+  })
+  t.edit({ type: "upgrade", cell }, { type: "upgrade", cell })
+  t.run(1)
+  const s = t.snapshot()
+  assert("Town/Works" in s.entities.find((e) => e.components["Town/Building"]?.kind === "market")!.components)
+  assert(s.resources["Town/Treasury"].coins > 2000 - 2 * kinds.market.upgrade!.cost.coins, String(s.resources["Town/Treasury"].coins))
+})
