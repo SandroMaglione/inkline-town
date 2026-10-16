@@ -453,8 +453,11 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel section.upgrade { border-top: 3px solid #b39a61; }
 .panel section.upgrade .needed { margin: 0 0 6px; font-size: 11.5px; color: #8a938c; }
 .panel section.upgrade .needed.now { color: #8a6418; font-weight: 700; }
-.panel section.upgrade .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 2px 0 6px; }
-.panel section.upgrade .cap { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #9aa29b; margin-right: 4px; }
+.panel section.upgrade > .cap { margin: 10px 0 4px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #9aa29b; }
+/* What carriers bring: the goods on a line of their own, under what they are. */
+.panel section.upgrade .line .chips { grid-column: 2 / -1; justify-self: start; justify-content: flex-start; max-width: none; }
+.panel section.upgrade .begin { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e3e6df; }
+.panel section.upgrade .begin .sub { margin: 6px 0 0; }
 .panel .lines .line.dim .count, .panel .lines .line.dim .what { color: #8a938c; font-weight: 400; }
 .panel .lines .line .chip { background: #eef0ea; border-radius: 4px; padding: 1px 6px 1px 4px; }
 /* An amount as its icon and number: a coin and 3/min, a plank and 2. */

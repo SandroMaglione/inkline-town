@@ -113,6 +113,47 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
   await shot("5-town-hall")
   await close()
 
+  // 3b. Works in progress: one building of each kind that has an upgrade, begun together, seen early, midway and done
+  // (desktop only), with the panel of the first while its works go on.
+  if (!phone) {
+    await page.evaluate(() => {
+      const { runtime } = (window as any).town
+      const s = runtime.snapshot()
+      s.resources["Town/Treasury"].coins = 20000
+      for (const e of s.entities) {
+        const inv = e.components["Town/Inventory"]
+        if (e.components["Town/Storage"] && inv) inv.stock = { ...inv.stock, planks: Math.min(inv.cap, 120), stone: Math.min(inv.cap, 120), tools: Math.min(inv.cap, 40), cloth: Math.min(inv.cap, 40) }
+      }
+      runtime.restore(s)
+    })
+    const kinds = ["townhall", "warehouse", "farm", "bakery", "market", "chapel", "quarry", "firewatch"]
+    const picked: Array<{ kind: string; tile: Tile }> = []
+    for (const kind of kinds) {
+      const b = await find(page, (e) => (e.components["Town/Building"]?.kind === kind || (kind === "townhall" && e.components["Town/TownHall"])) && !e.components["Town/Site"] && !e.components["Town/Works"])
+      if (!b) continue
+      const tile: Tile = b.components["Town/Tile"]
+      picked.push({ kind, tile })
+      await page.evaluate((t) => (window as any).town.ui.edits.push({ type: "upgrade", cell: { x: t.x, y: t.y } }), tile)
+    }
+    await page.evaluate(() => (window as any).town.advance(1))
+    const progress = async () => (await town(page)).entities.filter((e: any) => e.components["Town/Works"]).length
+    for (const [stage, seconds] of [["early", 12], ["midway", 40], ["done", 400]] as const) {
+      await page.evaluate((n) => (window as any).town.advance(n), seconds)
+      for (const { kind, tile } of picked) {
+        await look(tile.x + tile.size / 2, tile.y + tile.size / 2, kind === "townhall" ? 2.2 : 2.8)
+        await settle()
+        await page.screenshot({ path: `${out}/${name}-works-${kind}-${stage}.png`, clip: { x: width / 2 - 360, y: height / 2 - 300, width: 720, height: 520 } })
+      }
+      if (stage === "early" && picked[0]) {
+        await look(picked[0].tile.x + 1.5, picked[0].tile.y + 1.5, 2)
+        await pick(picked[0].tile, 20)
+        await shot("works-panel")
+        await close()
+      }
+    }
+    console.log(JSON.stringify({ upgraded: picked.map((p) => p.kind), underway: await progress() }))
+  }
+
   // 4. The build menu: no upgrades in it now.
   await page.locator(".toolbar button").filter({ hasText: /^build/i }).first().click()
   await settle()
