@@ -6,7 +6,16 @@ stands. Lay the roads, house the settlers, build the chains that feed and
 clothe them, and raise a hamlet to a village, a town, and a city of
 burghers. Or watch it go bankrupt, revolt, or empty out.
 
-![A complete town at the end of its fifth year: hundreds of homes, farms, mills, and workshops on a pale island](docs/screenshots/town-complete.webp)
+<p align="center"><a href="https://inkline.typeonce.dev"><b>▶ Play Inkline Town in your browser</b></a> · free, nothing to install, saves stay on your device</p>
+
+<a href="docs/media/inkline-town.mp4">
+  <picture>
+    <source srcset="docs/media/inkline-town.avif" type="image/avif">
+    <img src="docs/screenshots/town-complete.webp" alt="Thirty seconds over a town in its sixth year: the camera turns over the whole island, dives to the clock-towered town hall, and follows carts and walkers down streets of townhouses">
+  </picture>
+</a>
+
+<p align="center"><sub>Thirty seconds in a town 80 minutes old, as it plays at double speed. <a href="docs/media/inkline-town.mp4">Watch it in full quality</a>.</sub></p>
 
 Inkline Town plays like a small Anno in a small box. Every building, cart, and
 person is drawn live in thin 3D line art. Pan, zoom and rotate the island;
@@ -23,12 +32,12 @@ makes a different island, with a wandering coast and capes reaching out.
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/map-small-rich.webp" alt="A small, rich town 25 minutes in: farms, a windmill, and homes around the town hall"></td>
-    <td><img src="docs/screenshots/map-large-harsh.webp" alt="A large, harsh island 50 minutes into a 90-minute term, the town clustered in the middle while the crown asks for tools"></td>
+    <td><img src="docs/screenshots/map-small-rich.webp" alt="A small, rich town 25 minutes in: rows of townhouses and a fountain around the town hall, raised in scaffolding as it becomes a guildhall"></td>
+    <td><img src="docs/screenshots/map-large-rich.webp" alt="A large, rich island 80 minutes into a 90-minute term: workshops, farms and mills spread around the clock-towered town hall"></td>
   </tr>
   <tr>
-    <td align="center"><sub>small land, rich: farms and mills by year three</sub></td>
-    <td align="center"><sub>large land, harsh: thin woods, little stone, and the crown wants tools</sub></td>
+    <td align="center"><sub>small land, 25 minutes in: townhouses round a fountain, the town hall in scaffolding</sub></td>
+    <td align="center"><sub>large land, 80 minutes in: a village of 350 spread across the island</sub></td>
   </tr>
 </table>
 
@@ -42,7 +51,7 @@ settlers. You never move a crate yourself: carriers push their carts along
 the roads, each loaded with what it carries, and markets send walkers
 through the streets with baskets of fish, bread, and cloth.
 
-![A close look at a busy street: carts of planks and logs, a market walker, residents out walking, the town hall and the chapel](docs/screenshots/street.webp)
+![A close look at the town hall: its clock tower and banners, carts of goods on the paved streets, residents out walking, a fire watch and a market behind](docs/screenshots/street.webp)
 
 Settlers need food. Give them bread, cloth, and a chapel's faith, and their
 cottages grow into two-story citizens' homes that hold and pay twice as
@@ -83,8 +92,8 @@ how much to keep, which buildings to pause, and when to answer the crown.
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/ui-town-panel.webp" alt="The town panel: goals, approval and what drives it, the treasury, and tax rates"></td>
-    <td><img src="docs/screenshots/ui-build-menu.webp" alt="The build menu: each building pictured with its cost, workers, and upkeep"></td>
+    <td><img src="docs/screenshots/ui-town-panel.webp" alt="The town panel: the goals of the next rank, approval and what drives it, the treasury and what is left on the table, and tax rates"></td>
+    <td><img src="docs/screenshots/ui-build-menu.webp" alt="The build menu: each building pictured by its own model, with its cost, workers, desirability, and upkeep"></td>
   </tr>
   <tr>
     <td align="center"><sub>the town panel: goals, approval, treasury, taxes, trade</sub></td>
@@ -92,7 +101,7 @@ how much to keep, which buildings to pause, and when to answer the crown.
   </tr>
 </table>
 
-![A mill selected: working, two workers, 261 batches of flour made](docs/screenshots/ui-building.webp)
+![A mill selected: working with two of two workers, grinding wheat into flour, run down to 5% so it works at half pace until a builder mends it](docs/screenshots/ui-building.webp)
 
 ## Every term ends, the town goes on
 
@@ -117,7 +126,7 @@ The reckoning shows how the term went: residents, coins, and approval
 across it, with the winters shaded, and the chronicle of everything that
 happened.
 
-<p align="center"><img src="docs/screenshots/reckoning.webp" width="640" alt="The reckoning of a complete town: 581 residents, 352 citizens, 9000 coins, a chart of the term, and its chronicle"></p>
+<p align="center"><img src="docs/screenshots/reckoning.webp" width="640" alt="The reckoning of a 90-minute term: a village of 227 residents and 19096 coins, declining at the end, with a chart of the term and its chronicle"></p>
 
 ## Drawn in ink
 
@@ -129,54 +138,32 @@ different on every cell.
 
 ![All 24 building kinds, including the carpenter, plus the market hall and church](docs/screenshots/sheet-buildings.webp)
 
-The carpenter and building upgrades can be inspected in the model review.
-The complete proportion comparison is at `/proportion-review.html`: 36 building
-appearances and nine shared-prop examples, with the approved originals beside
-the revised geometry. Both sides share a camera and an unchanged walker.
-Turn, zoom, choose one scale across the catalogue, or save a comparison PNG.
-The park comparison is at `/proportion-review.html?collection=parks`: twelve
-before/after views cover furnishings, planting, paths, paving and the assembled
-park. The same walker and camera appear on both sides. `/park-lab.html` shows
-the revised park with running water.
-Run `pnpm dev`, then open `/model-review.html?collection=handoff` to turn the models, compare
-scaffolding as materials arrive, and download their GLBs.
-
-The civic milestones have their own comparison at
-`/model-review.html?collection=milestones`. The guildhall's clock tower,
-steep roof and guild banners give way to the city hall's domed centre,
-lower wings and columned entrance.
+As the town rises, its buildings rise with it. The town hall becomes a
+guildhall with a clock tower and banners, then a city hall with a dome and
+columns. Scaffolding goes up around every upgrade, with its bays and ladders
+filling as the carts bring the materials.
 
 ![Town hall, guildhall and city hall at one camera scale](docs/screenshots/sheet-civic.webp)
-
-`/model-review.html?collection=works` shows one reusable construction
-scaffold on six building forms. Plot size, building height and delivered
-share determine its bays, platforms, ladders and supplies.
 
 ![Reusable scaffolding on civic buildings, a carpenter, warehouse, quarry and farm](docs/screenshots/sheet-works.webp)
 
 ![Carpenter, civic and workplace upgrades, scaffolding progress and furniture cargo](docs/screenshots/sheet-upgrades.webp)
 
-![Carriers pushing handcarts and barrows, each loaded with its good: logs, planks, stone, ore, tools, fish, wheat, flour, bread, wool, cloth](docs/screenshots/sheet-walkers.webp)
-
-![A market walker with a basket, a chapel walker with a bell, settlers, and citizens in top hats](docs/screenshots/sheet-people.webp)
-
-![Homes for settlers and citizens](docs/screenshots/sheet-homes.webp)
-
-![Trees, rocks and ore, and fields as they ripen](docs/screenshots/sheet-land.webp)
-
 ## Play
 
-Inkline Town runs in the browser. Saves stay in your browser, and the town
-autosaves every two minutes of play. Share a picture of your town, or a link
-that opens it running for anyone, who can then play on from where you left it.
+**[Play Inkline Town at inkline.typeonce.dev](https://inkline.typeonce.dev).**
+It runs in the browser, on a computer or a phone. Saves stay in your browser,
+and the town autosaves every two minutes of play. Share a picture of your
+town, or a link that opens it running for anyone, who can then play on from
+where you left it.
+
+New to the game? [How to play](docs/how-to-play.md) covers the controls, the
+rules of a term, and how the town works underneath. To run it yourself:
 
 ```sh
 pnpm install
 pnpm dev
 ```
-
-Then open the address it prints. New to the game? [How to play](docs/how-to-play.md)
-covers the controls, the rules of a term, and how the town works underneath.
 
 ---
 
