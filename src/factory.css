@@ -225,7 +225,7 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel .effect.up { color: #4f8a3e; }
 .panel .effect.down { color: #b04a39; }
 .panel .effect.outlook { text-align: left; }
-.panel .need { display: grid; grid-template-columns: 7.5ch 1fr 7ch; align-items: center; gap: 10px; padding: 4px 0; }
+.panel .need { display: grid; grid-template-columns: 16px 1fr 7ch; align-items: center; gap: 10px; padding: 4px 0; }
 .panel .need .track { height: 8px; background: #e6e9e2; border-radius: 4px; overflow: hidden; }
 .panel .need .fill { display: block; height: 100%; background: #6e8f36; border-radius: 4px; }
 .panel .need .fill.low { background: #c98a3a; }

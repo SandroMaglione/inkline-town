@@ -1086,9 +1086,11 @@ export const createHost = async (
     }
     const bars = (["food", "bread", "cloth", "faith", "furniture"] as const).map((n) => {
       const line = el("div", "need")
+      // The icon alone says which need: the name is its tooltip, so no word runs under the bar.
       const label = el("span", "label")
       label.innerHTML = icon(needIcons[n], 16)
-      label.append(document.createTextNode(needTitle[n]))
+      label.title = needTitle[n]
+      label.setAttribute("aria-label", needTitle[n])
       const track = el("span", "track")
       const fill = el("span", "fill")
       track.append(fill)
