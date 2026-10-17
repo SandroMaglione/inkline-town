@@ -96,9 +96,14 @@ for (let i = 0; i < args.length; i++) {
   if (args[i] !== "--set") continue
   const [path, value] = args[i + 1]!.split("=")
   const parts = path!.split(".")
-  let target = content as unknown as Record<string, unknown>
-  for (const part of parts.slice(0, -1)) target = target[part] as Record<string, unknown>
-  target[parts.at(-1)!] = value === "" || Number.isNaN(Number(value)) ? value : Number(value)
+  // Content is patched by path, so it is walked reflectively here, and only here.
+  let target: object = content
+  for (const part of parts.slice(0, -1)) {
+    const next: unknown = Reflect.get(target, part)
+    if (typeof next !== "object" || next === null) throw new Error(`Unknown content path: ${path}`)
+    target = next
+  }
+  Reflect.set(target, parts.at(-1)!, value === "" || Number.isNaN(Number(value)) ? value : Number(value))
 }
 
 const rules = resolveRules()

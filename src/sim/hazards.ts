@@ -275,7 +275,7 @@ export const Hazards = Game.System(
     const crewed = new Set<number>()
     for (const { data } of queries.crews.each()) {
       out.set(data.home.get(), (out.get(data.home.get()) ?? 0) + 1)
-      if (!data.rescue.get().back) crewed.add(data.rescue.get().target as unknown as number)
+      if (!data.rescue.get().back) crewed.add(data.rescue.get().target)
     }
     const watches = queries.watches.each().filter(({ data }) => data.service.get().service === "fire" && data.staff.get().assigned > 0)
     const burningNow = [...queries.blazes.each().map(({ entity }) => entity.id as number), ...ignited.keys()].filter((id) => !lost.has(id))

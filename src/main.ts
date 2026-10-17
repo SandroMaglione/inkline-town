@@ -94,7 +94,7 @@ const start = async () => {
   const world: World["Service"] = {
     snapshot: () => runtime.snapshot(),
     restore: (data) => {
-      const restored = runtime.restore(data as never)
+      const restored = runtime.restore(data)
       if (restored.ok) resetPresentation()
       return restored.ok ? null : restored.error._tag
     },

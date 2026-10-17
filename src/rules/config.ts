@@ -34,18 +34,20 @@ const freeze = <T>(value: T): T => {
 
 /** Fresh copies also preserve the existing bot's --set-before-start workflow. */
 export const resolveRules = (patches: ReadonlyArray<RulePatch> = []): Rules => {
-  const copy = structuredClone(inputs()) as unknown as Record<string, unknown>
+  const rules: Rules = structuredClone(inputs())
   for (const { path, value } of patches) {
     if (!Number.isFinite(value) || value < 0) throw new Error(`Invalid numeric rule: ${path}`)
     const parts = path.split(".")
     if (parts.some((p) => ["__proto__", "prototype", "constructor"].includes(p))) throw new Error(`Invalid rule path: ${path}`)
-    let target = copy
+    // Rules are walked by path, so they are read and written reflectively here, and only here.
+    let target: object = rules
     for (const part of parts.slice(0, -1)) {
-      if (!Object.hasOwn(target, part) || typeof target[part] !== "object" || target[part] === null) throw new Error(`Unknown rule: ${path}`)
-      target = target[part] as Record<string, unknown>
+      const next: unknown = Reflect.get(target, part)
+      if (!Object.hasOwn(target, part) || typeof next !== "object" || next === null) throw new Error(`Unknown rule: ${path}`)
+      target = next
     }
     const key = parts.at(-1)!
-    if (!Object.hasOwn(target, key) || typeof target[key] !== "number") throw new Error(`Unknown numeric rule: ${path}`)
+    if (!Object.hasOwn(target, key) || typeof Reflect.get(target, key) !== "number") throw new Error(`Unknown numeric rule: ${path}`)
     // Structural timing and identifier changes are outside numeric economy experiments.
     if (parts[0] === "transport" || ["size", "stories", "bays"].includes(key)) throw new Error(`Structural rule cannot be patched: ${path}`)
     if (["stepSeconds", "ledgerTicks", "spoilTicks", "yearsPerTerm", "staffTicks", "riskTicks", "spreadTicks", "growTicks"].includes(parts[0]!)) throw new Error(`Structural rule cannot be patched: ${path}`)
@@ -53,9 +55,9 @@ export const resolveRules = (patches: ReadonlyArray<RulePatch> = []): Rules => {
     if ((path.startsWith("home.lasts.") || path.startsWith("spoils.")) && value === 0) throw new Error(`Rule must be positive: ${path}`)
     if ((["workers", "batch", "inputs", "cap", "carriers", "range", "residents", "settle", "perMeal"].includes(key) || path.includes(".cost.")) && !Number.isInteger(value)) throw new Error(`Rule must be an integer: ${path}`)
     if (path === "apprentice" && value > 1) throw new Error("Apprentice pace must be at most one")
-    target[key] = value
+    Reflect.set(target, key, value)
   }
-  return freeze(copy as unknown as Rules)
+  return freeze(rules)
 }
 
 export const shippedRules = resolveRules()

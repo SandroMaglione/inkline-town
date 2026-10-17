@@ -50,8 +50,8 @@ export const headless = (charter: CharterValue, options: { readonly toast?: (mes
     /** The world as plain data (a copy: changing it changes nothing until it is restored). */
     snapshot: (): Snapshot => JSON.parse(JSON.stringify(runtime.snapshot())),
     /** Loads a world, validating everything in it. */
-    restore: (snapshot: Snapshot) => {
-      const restored = runtime.restore(snapshot as never)
+    restore: (snapshot: unknown) => {
+      const restored = runtime.restore(snapshot)
       if (!restored.ok) throw new Error(`The town could not be loaded: ${JSON.stringify(restored.error)}`)
     },
     /** Changes the world through a snapshot, as a load would. */
