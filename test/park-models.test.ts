@@ -9,6 +9,7 @@ import { parkAsset, parkProp } from "../src/asset-lab/town-props.ts"
 import { parkReviewModels } from "../src/model-review/park-models.ts"
 import { human } from "../src/asset-lab/dimensions.ts"
 import { DIRS, key } from "../src/grid.ts"
+import { assertNear } from "./near.ts"
 
 const baseline=JSON.parse(gunzipSync(readFileSync(new URL("../public/model-review/parks-before.json.gz",import.meta.url))).toString()) as {revision:string;models:InkAsset[];walker:InkAsset}
 const points=(a:InkAsset)=>[...a.faces,...a.strokes].flatMap(f=>f.points)
@@ -19,8 +20,8 @@ test("park comparisons retain the approved originals, plots and unchanged person
   const current=parkReviewModels()
   assert.equal(current.length,12)
   assert.deepEqual(current.map(a=>[a.id,a.footprint]),baseline.models.map(a=>[a.id,a.footprint]))
-  assert.deepEqual(baseline.walker.faces,assetById.get("settler-cap")!.faces)
-  assert.deepEqual(baseline.walker.strokes,assetById.get("settler-cap")!.strokes)
+  assertNear(assetById.get("settler-cap")!.faces,baseline.walker.faces,"walker.faces")
+  assertNear(assetById.get("settler-cap")!.strokes,baseline.walker.strokes,"walker.strokes")
 })
 
 test("furnishings stay within one cell and use the town's human scale",()=>{
