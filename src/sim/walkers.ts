@@ -37,7 +37,8 @@ export const Walk = Game.System(
   {
     queries: { walkers: Game.Query({ selection: { route: Game.Query.write(Route), rescue: Game.Query.optional(Rescue) } }) },
     resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.despawns(Route))
   },
   ({ queries, resources, commands, services }) => {
     const grid = resources.grid.get()
@@ -49,7 +50,7 @@ export const Walk = Game.System(
       if (route.index >= last) continue
       const next = route.cells[route.index + 1]!
       if (!isRoad(grid, next.x, next.y)) {
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         continue
       }
       const running = data.rescue.present && !data.rescue.get().back
@@ -92,7 +93,8 @@ export const SendWalkers = Game.System(
       walkers: Game.Query({ selection: { roam: Game.Query.read(Roam), home: Game.Query.readRelation(WalkerOf) } })
     },
     resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.spawns(Figure, Route, Roam), Game.System.inserts(Patrol))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
@@ -190,7 +192,8 @@ export const Wander = Game.System(
       inventories: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Service] })
     },
     resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal), pantry: Game.System.writeResource(Pantry), handed: Game.System.writeResource(Handed), time: Game.System.readResource(Time) },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.despawns(Roam), Game.System.removes(Sick))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
@@ -222,7 +225,7 @@ export const Wander = Game.System(
           // the building asks for no more until it is down again, and nothing is lost.
           inv.value.data.inventory.set({ ...i, stock: each((g) => i.stock[g] + roam.basket[g]) })
         }
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         continue
       }
 
@@ -285,7 +288,7 @@ export const Wander = Game.System(
       const way = reach(grid, [cell])
       const door = building.ok ? nearest(way, doors(grid, building.value.data.tile.get())) : null
       if (!door) {
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         continue
       }
       data.route.set({ cells: pathTo(way, door.cell), index: 0, step: 0 })

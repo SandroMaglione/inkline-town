@@ -12,7 +12,7 @@ import { near, riskIncrements } from "../rules/risks.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
 import { appealGrid, appealAt, buildingSource, homeSource, landSource, parkSources, type AppealSource } from "../appeal.ts"
-import { ruinDraft } from "../archetypes.ts"
+import { RuinParts, ruinDraft } from "../archetypes.ts"
 import { goodIds, risk, upgradeAt, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../grid.ts"
 import { counted, placeName, type Landmark } from "../places.ts"
@@ -109,7 +109,13 @@ export const Hazards = Game.System(
       fires: Game.System.writeResource(Fires),
       chronicle: Game.System.writeResource(Chronicle)
     },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(
+      Game.System.spawns(...RuinParts, Figure, Route, Rescue),
+      Game.System.inserts(Burning, Sick),
+      Game.System.removes(Sick),
+      Game.System.despawns(Tile)
+    )
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
@@ -144,7 +150,7 @@ export const Hazards = Game.System(
 
     /** Turns a home or building into a ruin. */
     const ruin = (row: (typeof rows)[number], cause: "burnt" | "collapsed" | "derelict") => {
-      commands.despawn(row.entity.id)
+      commands.despawn(row.entity)
       commands.spawn(ruinDraft(row.data.tile.get(), cause))
     }
     const lost = new Set<number>()
@@ -329,7 +335,8 @@ export const Douse = Game.System(
   "Town/Douse",
   {
     queries: { crews: Game.Query({ selection: { route: Game.Query.write(Route), rescue: Game.Query.write(Rescue) } }), burning: BurningRead },
-    resources: { fires: Game.System.writeResource(Fires) }
+    resources: { fires: Game.System.writeResource(Fires) },
+    commands: Game.System.commands(Game.System.spawns(...RuinParts), Game.System.despawns(Rescue, Burning))
   },
   ({ queries, resources, commands }) => {
     for (const { entity, data } of queries.crews.each()) {
@@ -338,13 +345,13 @@ export const Douse = Game.System(
       const arrived = route.index >= route.cells.length - 1
       if (!arrived) continue
       if (rescue.back) {
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         continue
       }
       const target = queries.burning.getHandle(rescue.target)
       if (target.ok) {
         const b = target.value.data.burning.get()
-        commands.despawn(target.value.entity.id)
+        commands.despawn(target.value.entity)
         commands.spawn(ruinDraft(target.value.data.tile.get(), "burnt"))
         const house = target.value.data.house.present
         resources.fires.update((f) => ({

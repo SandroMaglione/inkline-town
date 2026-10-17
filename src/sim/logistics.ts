@@ -53,7 +53,8 @@ export const Dispatch = Game.System(
       errands: Game.Query({ selection: { errand: Game.Query.read(Errand), home: Game.Query.readRelation(WalkerOf) } })
     },
     resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal), time: Game.System.readResource(Time) },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.spawns(Figure, Route, Errand))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
@@ -229,7 +230,8 @@ export const Deliver = Game.System(
       sites: Game.Query({ selection: { site: Game.Query.write(Site) } }),
       works: Game.Query({ selection: { works: Game.Query.write(Works) } })
     },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.despawns(Errand))
   },
   ({ queries, commands, services }) => {
     const rules = services.rules
@@ -246,7 +248,7 @@ export const Deliver = Game.System(
           const room = inv.cap - inv.stock[errand.good]
           home.value.data.inventory.set({ ...inv, stock: { ...inv.stock, [errand.good]: inv.stock[errand.good] + Math.min(room, errand.count) } })
         }
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         continue
       }
       const target = queries.targets.getHandle(errand.target)

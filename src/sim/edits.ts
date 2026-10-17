@@ -6,13 +6,13 @@
  * carried to the site afterwards. Upgrading a building is paid at once.
  * Once the term has ended, only a new town, or another term, is taken.
  */
-import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, rolesOf, startOf, treeDraft, waterDraft } from "../archetypes.ts"
+import { BuildingParts, buildingDraft, houseDraft, HouseParts, houseStart, ParkParts, parkDraft, RoadParts, roadDraft, RockParts, rockDraft, RoleParts, rolesOf, StartParts, startOf, TreeParts, treeDraft, WaterParts, waterDraft } from "../archetypes.ts"
 import * as Random from "@typeonce/bevy-ts-math/Random"
 import { amounts, anA, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, ticks, total, upgradeAt, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
-import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Toast, Treasury, Upgraded, Works, Edits, Selection } from "../schema.ts"
+import { Appeal, Building, Tile, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Toast, Treasury, Upgraded, Works, Edits, Selection } from "../schema.ts"
 import { salvageOf, salvageText, withWorks } from "../rules/salvage.ts"
 import { elapsed, rollWinters, termTicks, TileRead, useOf, write } from "./shared.ts"
 import type { Rules as RuleInputs } from "../rules/config.ts"
@@ -82,7 +82,13 @@ export const ApplyEdits = Game.System(
       fires: Game.System.writeResource(Fires)
     },
     events: { toast: Game.System.writeEvent(Toast), selection: Game.System.writeEvent(Selection) },
-    services: { edits: Game.System.service(Edits), rules: Game.System.service(Rules) }
+    services: { edits: Game.System.service(Edits), rules: Game.System.service(Rules) },
+    commands: Game.System.commands(
+      Game.System.spawns(...BuildingParts, ...HouseParts, ...RoadParts, ...ParkParts, ...WaterParts, ...TreeParts, ...RockParts),
+      Game.System.inserts(...StartParts, ...RoleParts, Paved, Paused, Works, TownHall, Status, Inventory),
+      Game.System.removes(Paused),
+      Game.System.despawns(Tile)
+    )
   },
   ({ queries, resources, events, services, commands }) => {
     const rules = services.rules
@@ -149,12 +155,20 @@ export const ApplyEdits = Game.System(
       for (const c of cellsOf(tile)) {
         if (useAt(grid.value(), c.x, c.y) !== "tree") continue
         const tree = entities.get(ownerAt(grid.value(), c.x, c.y))
-        if (tree !== undefined) commands.despawn(tree)
+        const row = tree === undefined ? undefined : queries.tiles.get(tree)
+        if (row?.ok) commands.despawn(row.value.entity)
       }
     }
-    const spawn = (draft: Parameters<typeof commands.spawn>[0], tile: { x: number; y: number; size: number }, use: "building" | "house" | "road" | "park") => {
+    /**
+     * What this run queued, by id, with how to take it back: no query matches it
+     * before the next `applyDeferred()`, so pulling it down (or a new town) in
+     * the same step despawns it through the id `spawn` returned.
+     */
+    const queuedHere = new Map<number, () => void>()
+    /** Fells what stands on `tile`, spawns what `make` queues there, and claims the tile for it. */
+    const place = <Spawned extends Id>(tile: { x: number; y: number; size: number }, use: "building" | "house" | "road" | "park", make: () => Spawned): Spawned => {
       fell(tile)
-      const id = commands.spawn(draft)
+      const id = make()
       grid.claim(tile, id, use)
       entities.set(id, id)
       return id
@@ -184,7 +198,8 @@ export const ApplyEdits = Game.System(
             break
           }
           pay(kind.cost)
-          const id = spawn(buildingDraft(kind, edit.cell), tile, "building")
+          const id = place(tile, "building", () => commands.spawn(buildingDraft(kind, edit.cell)))
+          queuedHere.set(id, () => commands.despawn(id))
           commands.insert(id, startOf(kind), ...rolesOf(kind, rules))
           if (edit.open) events.selection.emit({ select: id })
           break
@@ -197,7 +212,8 @@ export const ApplyEdits = Game.System(
             short = afford(home.cost)
             if (short) break
             pay(home.cost)
-            const id = spawn(houseDraft(cell), tile, "house")
+            const id = place(tile, "house", () => commands.spawn(houseDraft(cell)))
+            queuedHere.set(id, () => commands.despawn(id))
             commands.insert(id, ...houseStart(rules))
           }
           if (short) events.toast.emit(short)
@@ -213,7 +229,8 @@ export const ApplyEdits = Game.System(
               break
             }
             coins -= ROAD_COST
-            spawn(roadDraft(cell), tile, "road")
+            const id = place(tile, "road", () => commands.spawn(roadDraft(cell)))
+            queuedHere.set(id, () => commands.despawn(id))
           }
           if (short) events.toast.emit("Not enough coins")
           break
@@ -254,7 +271,10 @@ export const ApplyEdits = Game.System(
             pay(piece.cost)
             for (const [g, n] of Object.entries(piece.cost.materials)) spent[g] = (spent[g] ?? 0) + (n ?? 0)
             if (relay) relay.data.park.set({ ...relay.data.park.get(), ground: edit.ground })
-            else spawn(parkDraft(cell, edit.ground), tile, "park")
+            else {
+              const id = place(tile, "park", () => commands.spawn(parkDraft(cell, edit.ground)))
+              queuedHere.set(id, () => commands.despawn(id))
+            }
           }
           take(spent)
           if (short) events.toast.emit(short)
@@ -323,7 +343,10 @@ export const ApplyEdits = Game.System(
             if (said !== "") events.toast.emit(`${built.value.data.site.present ? "Cancelled" : "Pulled down"} · ${said}${lost > 0 ? ` (${lost} found no room in storage)` : ""}`)
           }
           // A building's walkers and a farm's fields are its children, and go with it.
-          commands.despawn(owner)
+          const gone = queries.tiles.get(owner)
+          if (gone.ok) commands.despawn(gone.value.entity)
+          else queuedHere.get(owner)?.()
+          queuedHere.delete(owner)
           entities.delete(owner)
           for (let k = 0; k < grid.owner.length; k++) {
             if (grid.owner[k] === owner) {
@@ -434,7 +457,9 @@ export const ApplyEdits = Game.System(
           resources.policy.update((p) => ({ ...p, reserve: Math.max(0, Math.min(RESERVE_MAX, Math.round(edit.amount))) }))
           break
         case "newTown": {
-          for (const id of entities.values()) commands.despawn(id)
+          for (const { entity } of rows) commands.despawn(entity)
+          for (const drop of queuedHere.values()) drop()
+          queuedHere.clear()
           entities.clear()
           const charter = edit.charter
           const richness = lands[charter.land]

@@ -49,7 +49,8 @@ export const Households = Game.System(
       policy: Game.System.readResource(Policy),
       treasury: Game.System.writeResource(Treasury)
     },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.inserts(Rebuilt))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules

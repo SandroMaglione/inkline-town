@@ -7,7 +7,7 @@ import { wildTreeSpots, canSeedTree } from "../rules/land.ts"
  */
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
-import { fieldDraft, treeDraft } from "../archetypes.ts"
+import { FieldParts, fieldDraft, TreeParts, treeDraft } from "../archetypes.ts"
 import { amounts, anA, asUpgraded, crewOf, goodIds, ticks, total, upgradeAt, worksNeeded, type Amounts, type Crew } from "../content.ts"
 
 /** The flow of goods is counted in slices this many seconds long, and the last `FLOW_SLICES` of them (a minute) are kept. */
@@ -174,7 +174,8 @@ export const Raise = Game.System(
       charter: Game.System.readResource(Charter),
       chronicle: Game.System.writeResource(Chronicle)
     },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.removes(Works, Site, Rising), Game.System.inserts(Upgraded, Recipe, Carriers, Service, Rising, Status))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
@@ -366,7 +367,8 @@ export const Work = Game.System(
       flow: Game.System.writeResource(Flow),
       chronicle: Game.System.writeResource(Chronicle)
     },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.despawns(Tree))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
@@ -412,7 +414,7 @@ export const Work = Game.System(
         if (source === "tree" && use === "tree") {
           const tree = trees().get(id)
           if (!tree || tree.data.tree.get().growth < GROWN.tree) continue
-          commands.despawn(tree.entity.id)
+          commands.despawn(tree.entity)
           used.add(id)
           return true
         }
@@ -527,7 +529,8 @@ export const Plant = Game.System(
       })
     },
     resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.spawns(...TreeParts, ...FieldParts))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
@@ -581,7 +584,8 @@ export const Spread = Game.System(
   {
     queries: { trees: Game.Query({ selection: { tile: Game.Query.read(Tile), tree: Game.Query.read(Tree) } }) },
     resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.spawns(...TreeParts))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules

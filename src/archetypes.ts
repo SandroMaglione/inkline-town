@@ -16,6 +16,8 @@ const site = (cost: Kind["cost"]) => {
   return total(owed) > 0 ? Game.Command.entry(Site, { owed, total: total(owed) }) : Game.Command.entry(Rising, { ticks: 0 })
 }
 
+/** The components of `buildingDraft`. */
+export const BuildingParts = [Tile, Building, Status, Staff] as const
 /** A building of `kind` on `cell`: a site waiting for materials, or (`standing`) already up. */
 export const buildingDraft = (kind: Kind, cell: Point) =>
   Game.Command.spawn(
@@ -25,15 +27,21 @@ export const buildingDraft = (kind: Kind, cell: Point) =>
     [Staff, { needed: kind.workers, assigned: 0, apprentices: 0, nearby: 0 }]
   )
 
+/** The components `wearOf` inserts. */
+export const WearParts = [Risk, Condition] as const
 /** What every home and every working building carries: its risks, and how well kept it is. */
 export const wearOf = (rules: Rules = shippedRules) => [
   Game.Command.entry(Risk, { fire: 0, health: 0, order: 0, thefts: 0 }),
   Game.Command.entry(Condition, { value: rules.conditionMax })
 ]
 
+/** The components `startOf` (and `houseStart`) may insert: owed materials, or rising. */
+export const StartParts = [Site, Rising] as const
 /** How a new building starts: owed its materials, or rising straight away. */
 export const startOf = (kind: Kind) => site(kind.cost)
 
+/** Every component `rolesOf` may insert. */
+export const RoleParts = [Recipe, Gatherer, Planter, Inventory, Storage, Carriers, Service, ...WearParts] as const
 /** The role components a kind's buildings carry, inserted after the building is spawned. */
 export const rolesOf = (kind: Kind, rules: Rules = shippedRules) => {
   const roles = []
@@ -68,20 +76,29 @@ export const rolesOf = (kind: Kind, rules: Rules = shippedRules) => {
   return roles
 }
 
+/** The components of `houseDraft`. */
+export const HouseParts = [Tile, House] as const
 export const houseDraft = (cell: Point) =>
   Game.Command.spawn(
     [Tile, { x: cell.x, y: cell.y, size: 1 }],
     [House, { tier: 1, residents: 0, food: 0, bread: 0, cloth: 0, faith: 0, furniture: 0, clock: 0 }]
   )
 export const houseStart = (rules: Rules = shippedRules) => [site(rules.home.cost), ...wearOf(rules)]
+export const RuinParts = [Tile, Ruin] as const
 export const ruinDraft = (tile: { readonly x: number; readonly y: number; readonly size: number }, cause: "burnt" | "collapsed" | "derelict") =>
   Game.Command.spawn([Tile, { x: tile.x, y: tile.y, size: tile.size }], [Ruin, { cause }])
 
+export const ParkParts = [Tile, Park] as const
 export const parkDraft = (cell: Point, ground: GroundId) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Park, { ground, prop: "none" }])
+export const RoadParts = [Tile, Road] as const
 export const roadDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Road, {}])
+export const TreeParts = [Tile, Tree] as const
 export const treeDraft = (cell: Point, growth: number) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Tree, { growth }])
+export const RockParts = [Tile, Rock] as const
 export const rockDraft = (cell: Point, ore: boolean, amount: number) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Rock, { ore, amount }])
 /** A cell of water never fished: long rested. */
 export const UNFISHED = -1_000_000
+export const WaterParts = [Tile, Water] as const
 export const waterDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Water, { fished: UNFISHED }])
+export const FieldParts = [Tile, Field] as const
 export const fieldDraft = (cell: Point) => Game.Command.spawn([Tile, { x: cell.x, y: cell.y, size: 1 }], [Field, { growth: 0 }])

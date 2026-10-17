@@ -7,7 +7,7 @@ import { spoilExpectation } from "../rules/decay.ts"
  */
 import * as Random from "@typeonce/bevy-ts-math/Random"
 
-import { ruinDraft } from "../archetypes.ts"
+import { RuinParts, ruinDraft } from "../archetypes.ts"
 import { foods, goodIds, ticks } from "../content.ts"
 import { counted, placeName } from "../places.ts"
 import { Building, Burning, Charter, Chronicle, Condition, Game, Rules, House, Inventory, Pantry, Recipe, Rising, Rng, Site, Staff, Tile, Time, maybe } from "../schema.ts"
@@ -36,7 +36,8 @@ export const Decay = Game.System(
       pantry: Game.System.writeResource(Pantry),
       chronicle: Game.System.writeResource(Chronicle)
     },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.spawns(...RuinParts), Game.System.despawns(Condition))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
@@ -56,7 +57,7 @@ export const Decay = Game.System(
         }
         const tile = data.tile.get()
         const b = maybe(data.building)
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         commands.spawn(ruinDraft(tile, "collapsed"))
         write(
           resources.chronicle,
