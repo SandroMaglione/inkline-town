@@ -328,10 +328,10 @@ const BurningRead = Game.Query({ selection: { tile: Game.Query.read(Tile), burni
 export const Douse = Game.System(
   "Town/Douse",
   {
-    queries: { crews: Game.Query({ selection: { route: Game.Query.write(Route), rescue: Game.Query.write(Rescue) } }) },
+    queries: { crews: Game.Query({ selection: { route: Game.Query.write(Route), rescue: Game.Query.write(Rescue) } }), burning: BurningRead },
     resources: { fires: Game.System.writeResource(Fires) }
   },
-  ({ queries, resources, commands, lookup }) => {
+  ({ queries, resources, commands }) => {
     for (const { entity, data } of queries.crews.each()) {
       const route = data.route.get()
       const rescue = data.rescue.get()
@@ -341,7 +341,7 @@ export const Douse = Game.System(
         commands.despawn(entity.id)
         continue
       }
-      const target = lookup.getHandle(rescue.target, BurningRead)
+      const target = queries.burning.getHandle(rescue.target)
       if (target.ok) {
         const b = target.value.data.burning.get()
         commands.despawn(target.value.entity.id)

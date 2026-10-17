@@ -224,13 +224,14 @@ export const Deliver = Game.System(
   {
     queries: {
       carriers: Game.Query({ selection: { route: Game.Query.write(Route), errand: Game.Query.write(Errand), home: Game.Query.readRelation(WalkerOf) } }),
+      targets: TargetRead,
       inventories: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, without: [Site] }),
       sites: Game.Query({ selection: { site: Game.Query.write(Site) } }),
       works: Game.Query({ selection: { works: Game.Query.write(Works) } })
     },
     services: { rules: Game.System.service(Rules) }
   },
-  ({ queries, commands, lookup, services }) => {
+  ({ queries, commands, services }) => {
     const rules = services.rules
     const {  } = rules
 
@@ -248,7 +249,7 @@ export const Deliver = Game.System(
         commands.despawn(entity.id)
         continue
       }
-      const target = lookup.getHandle(errand.target, TargetRead)
+      const target = queries.targets.getHandle(errand.target)
       if (!target.ok) {
         // Nowhere to take it: carry it home.
         data.route.set(turnAround(route))
