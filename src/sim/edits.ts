@@ -6,12 +6,13 @@
  * carried to the site afterwards. Upgrading a building is paid at once.
  * Once the term has ended, only a new town, or another term, is taken.
  */
-import { BuildingParts, buildingDraft, houseDraft, HouseParts, houseStart, ParkParts, parkDraft, RoadParts, roadDraft, RockParts, rockDraft, RoleParts, rolesOf, StartParts, startOf, TreeParts, treeDraft, WaterParts, waterDraft } from "../archetypes.ts"
+import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, RoleParts, rolesOf, StartParts, startOf, treeDraft, waterDraft } from "../archetypes.ts"
 import * as Random from "@typeonce/ritmo-math/Random"
 import { amounts, anA, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, stepsOf, total, upgradeAt, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
+import { Road, Water, Tree } from "../schema.ts"
 import { Appeal, Building, Tile, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Toast, Treasury, Upgraded, Works, Edits, Selection } from "../schema.ts"
 import { salvageOf, salvageText, withWorks } from "../rules/salvage.ts"
 import { elapsed, rollWinters, termTicks, TileRead, useOf, write } from "./shared.ts"
@@ -84,7 +85,7 @@ export const ApplyEdits = Game.System(
     events: { toast: Game.System.writeEvent(Toast), selection: Game.System.writeEvent(Selection) },
     services: { edits: Game.System.service(Edits), rules: Game.System.service(Rules) },
     commands: Game.System.commands(
-      Game.System.spawns(...BuildingParts, ...HouseParts, ...RoadParts, ...ParkParts, ...WaterParts, ...TreeParts, ...RockParts),
+      Game.System.spawns(Building, House, Road, Park, Water, Tree, Rock),
       Game.System.inserts(...StartParts, ...RoleParts, Paved, Paused, Works, TownHall, Status, Inventory),
       Game.System.removes(Paused),
       Game.System.despawns(Tile)

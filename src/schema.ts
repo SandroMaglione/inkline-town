@@ -457,7 +457,23 @@ export const Game = Schema.bind(
       Grid, Stock, Flow, Handed
     },
     events: { Toast, Selection },
-    relations: { WalkerOf, FieldOf }
+    relations: { WalkerOf, FieldOf },
+    // What always comes together: a draft or insert missing one of these does not compile.
+    requires: [
+      Schema.requires(Building, Tile, Status, Staff),
+      Schema.requires(House, Tile),
+      Schema.requires(Ruin, Tile),
+      Schema.requires(Park, Tile),
+      Schema.requires(Road, Tile),
+      Schema.requires(Tree, Tile),
+      Schema.requires(Rock, Tile),
+      Schema.requires(Water, Tile),
+      Schema.requires(Field, Tile),
+      Schema.requires(Figure, Route),
+      Schema.requires(Errand, Figure),
+      Schema.requires(Roam, Figure),
+      Schema.requires(Rescue, Figure)
+    ]
   }),
   Root
 )

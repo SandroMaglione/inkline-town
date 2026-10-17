@@ -13,7 +13,7 @@ import { near, riskIncrements } from "../rules/risks.ts"
 import * as Random from "@typeonce/ritmo-math/Random"
 
 import { appealGrid, appealAt, buildingSource, homeSource, landSource, parkSources, type AppealSource } from "../appeal.ts"
-import { RuinParts, ruinDraft } from "../archetypes.ts"
+import { ruinDraft } from "../archetypes.ts"
 import { goodIds, risk, upgradeAt, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../grid.ts"
 import { counted, placeName, type Landmark } from "../places.ts"
@@ -112,7 +112,7 @@ export const Hazards = Game.System(
     },
     services: { rules: Game.System.service(Rules) },
     commands: Game.System.commands(
-      Game.System.spawns(...RuinParts, Figure, Route, Rescue),
+      Game.System.spawns(Ruin, Rescue),
       Game.System.inserts(Burning, Sick),
       Game.System.removes(Sick),
       Game.System.despawns(Tile)
@@ -337,7 +337,7 @@ export const Douse = Game.System(
   {
     queries: { crews: Game.Query({ selection: { route: Game.Query.write(Route), rescue: Game.Query.write(Rescue) } }), burning: BurningRead },
     resources: { fires: Game.System.writeResource(Fires) },
-    commands: Game.System.commands(Game.System.spawns(...RuinParts), Game.System.despawns(Rescue, Burning))
+    commands: Game.System.commands(Game.System.spawns(Ruin), Game.System.despawns(Rescue, Burning))
   },
   ({ queries, resources, commands }) => {
     for (const { entity, data } of queries.crews.each()) {
