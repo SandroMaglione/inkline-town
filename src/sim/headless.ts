@@ -4,6 +4,7 @@
  * this, pushing the same edits the page does and reading the world through
  * the same snapshots it saves.
  */
+import { HostClock } from "@typeonce/bevy-ts"
 import type * as Replay from "@typeonce/bevy-ts-devtools/Replay"
 
 import { STEP_SECONDS, type CharterValue } from "../content.ts"
@@ -44,13 +45,15 @@ const Toasts = Game.Inspector("Town/Toasts", { events: { toast: Game.System.read
  * `pnpm replay`): the recorded edits instead of a page's.
  */
 export const replayTarget = (playback: Replay.Playback) => {
+  // A test clock: every timing reads 0, so a replay's text output is the same on every run.
+  const hostClock = HostClock.test()
   const made = Game.Runtime.make({
     services: Game.Runtime.services(Game.Runtime.service(Edits, playback.source(Edits)), Game.Runtime.service(Rules, resolveRules())),
     resources: blankResources(),
-    debug: true
+    debug: { hostClock }
   })
   if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
-  return { runtime: made.value, schedules: { simulate } }
+  return { runtime: made.value, schedules: { simulate }, hostClock }
 }
 
 /**
@@ -64,7 +67,7 @@ export const lintTarget = async () => {
   const made = Game.Runtime.make({
     services: Game.Runtime.services(Game.Runtime.service(Edits, editsOf(blankUi(lintCharter, () => {}))), Game.Runtime.service(Rules, resolveRules())),
     resources: blankResources(),
-    debug: true
+    debug: { hostClock: HostClock.test() }
   })
   if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
   return { runtime: made.value, schedules: { simulate }, describe: { present } }

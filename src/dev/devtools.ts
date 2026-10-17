@@ -5,6 +5,7 @@
  * `vite.config.ts`) when a step fails, when an invariant breaks, or when the
  * monitor's "Save replay" button is pressed. See PLAYTEST.md.
  */
+import type { HostClock } from "@typeonce/bevy-ts"
 import { Invariant, Monitor, Replay } from "@typeonce/bevy-ts-devtools"
 import * as ReplayViteSink from "@typeonce/bevy-ts-devtools/ReplayViteSink"
 
@@ -37,7 +38,14 @@ export interface DevtoolsHost {
   /** Where the monitor's panel goes. */
   readonly mount: HTMLElement
   readonly fetch: ReplayViteSink.Options["fetch"]
-  readonly now: () => number
+  /**
+   * A wall clock for the recorder: a replay's `savedAt` names its file in
+   * `.replays/` (`new Date(savedAt)`), so it must be real time, not the
+   * page-relative `performance.now` the runtime's debug timings read.
+   */
+  readonly wallClock: HostClock.HostClock
+  /** The page the monitor listens to. */
+  readonly host: Window
   /** Breaks `FewerThanTenBuildings` on purpose, to try a replay out. */
   readonly demo: boolean
 }
@@ -49,9 +57,9 @@ export const attachDevtools = (host: DevtoolsHost) => {
     keep: 60,
     stepSeconds: STEP_SECONDS,
     sink: ReplayViteSink.make({ fetch: host.fetch, onError: (error) => console.warn("The replay could not reach the dev server", error) }),
-    now: host.now,
+    hostClock: host.wallClock,
     saveOn: { failure: true, invariants: host.demo ? [CoinsAreWhole, FewerThanTenBuildings] : [CoinsAreWhole] }
   })
-  const monitor = Monitor.attach(host.runtime, { schedules: { simulate, present }, mount: host.mount, replay: recorder })
+  const monitor = Monitor.attach(host.runtime, { schedules: { simulate, present }, mount: host.mount, host: host.host, replay: recorder })
   return { recorder, monitor }
 }

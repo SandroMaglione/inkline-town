@@ -4,9 +4,9 @@ import { resolveRules } from "./rules/config.ts"
  * bevy-ts ECS with a 3D view. The simulation runs on a fixed step;
  * the views follow once a frame.
  */
-import { Result } from "@typeonce/bevy-ts"
+import { HostClock, Result } from "@typeonce/bevy-ts"
 import { Effect } from "effect"
-import { FixedLoop } from "@typeonce/bevy-ts-browser"
+import { BrowserHostClock, FixedLoop } from "@typeonce/bevy-ts-browser"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
 import { lands, sizes, STEP_SECONDS } from "./content.ts"
@@ -59,6 +59,8 @@ const start = async () => {
     stage.resetPresentation()
     resetPage()
   }
+  // The page's clock: the debug handle times systems with it.
+  const hostClock = BrowserHostClock.make(window)
   const made = Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(Ui, ui),
@@ -76,7 +78,7 @@ const start = async () => {
     ),
     resources: blankResources(),
     // Dev builds carry the debug handle, for the monitor and the replay recorder.
-    debug: import.meta.env.DEV
+    debug: import.meta.env.DEV ? { hostClock } : undefined
   })
   if (!made.ok) {
     mount.textContent = `The town could not start: ${JSON.stringify(made.error)}`
@@ -94,7 +96,7 @@ const start = async () => {
     if (runtime.debug !== undefined) {
       // Loaded in dev only: the production bundle never includes devtools.
       const { attachDevtools } = await import("./dev/devtools.ts")
-      attachDevtools({ runtime: { ...runtime, debug: runtime.debug }, mount: document.body, fetch: (url, init) => fetch(url, init), now: () => Date.now(), demo: new URLSearchParams(location.search).has("replay-demo") })
+      attachDevtools({ runtime: { ...runtime, debug: runtime.debug }, mount: document.body, fetch: (url, init) => fetch(url, init), wallClock: HostClock.standard, host: window, demo: new URLSearchParams(location.search).has("replay-demo") })
     }
   }
 
