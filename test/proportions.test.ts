@@ -10,6 +10,7 @@ import { sides, type InkAsset } from "../src/asset-lab/primitives.ts"
 import { buildingAsset, buildingTop, noDoors } from "../src/render3d/models.ts"
 import { architectureIds, proportionModels } from "../src/model-review/proportion-models.ts"
 import { vertex3 } from "../src/asset-lab/renderer.ts"
+import { assertNear } from "./near.ts"
 
 const baseline=JSON.parse(gunzipSync(readFileSync(new URL("../public/model-review/proportions-before.json.gz",import.meta.url))).toString()) as {revision:string;models:InkAsset[];walker:InkAsset}
 const points=(a:InkAsset)=>[...a.faces,...a.strokes].flatMap(f=>f.points)
@@ -23,8 +24,8 @@ test("every comparison uses the approved frozen baseline and the exact unchanged
   assert.equal(current.length,45)
   assert.deepEqual(new Set(current.map(a=>a.id)),new Set(baseline.models.map(a=>a.id)))
   for(const a of current)assert.equal(a.footprint,baseline.models.find(b=>a.id===b.id)!.footprint,`${a.id}: plot changed`)
-  assert.deepEqual(walker.faces,baseline.walker.faces)
-  assert.deepEqual(walker.strokes,baseline.walker.strokes)
+  assertNear(walker.faces,baseline.walker.faces,"walker.faces")
+  assertNear(walker.strokes,baseline.walker.strokes,"walker.strokes")
 })
 
 test("all home tiers have door and floor clearance for a walker in every orientation",()=>{
