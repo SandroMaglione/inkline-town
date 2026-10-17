@@ -41,7 +41,7 @@ export const Households = Game.System(
       stores: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Storage], without: [Site, Rising] })
     },
     resources: {
-      grid: Game.System.readResource(Grid),
+      grid: Game.System.thisTick(Game.System.readResource(Grid)),
       mood: Game.System.readResource(Mood),
       appeal: Game.System.readResource(Appeal),
       time: Game.System.readResource(Time),

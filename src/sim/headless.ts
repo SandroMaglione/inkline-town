@@ -37,6 +37,8 @@ export const headless = (charter: CharterValue, options: { readonly toast?: (mes
   }
   const town = {
     ui,
+    /** The runtime itself, for tools (devtools sessions, lints, replays) and type-level checks. */
+    runtime,
     /** Runs the town on for `seconds` of game time. */
     run: (seconds: number) => {
       for (let i = 0; i < Math.round(seconds / STEP_SECONDS); i++) step()
