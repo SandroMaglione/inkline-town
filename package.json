@@ -13,7 +13,8 @@
     "balance:worth": "node scripts/worth.ts",
     "balance:furniture": "node scripts/furniture.ts",
     "balance:model:check": "node --test test/balance-model.test.ts",
-    "check": "pnpm lint && node scripts/check.ts",
+    "lint:game": "bevy-ts-devtools lint src/sim/headless.ts",
+    "check": "pnpm lint && pnpm lint:game && node scripts/check.ts",
     "check:browser": "node scripts/check-browser.ts",
     "check:phone": "node scripts/check-phone.ts",
     "check:models": "node scripts/check-town-models.ts",
@@ -39,6 +40,7 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@typeonce/bevy-ts-devtools": "^0.5.0",
     "@types/node": "25.5.0",
     "@types/three": "^0.186.0",
     "oxlint": "1.87.0",

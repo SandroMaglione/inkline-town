@@ -20,14 +20,36 @@ export interface Snapshot {
   machines: Record<string, string>
 }
 
+/** The page's UI state before anything is clicked, with one edit founding the town. */
+const blankUi = (charter: CharterValue, toast: (message: string) => void): UiValue => ({
+  tool: "select", placing: null, upgrading: null, ground: "lawn", prop: "lamp", menu: null, pointer: null, dragFrom: null, selected: null, gestures: [], guide: [],
+  edits: [{ type: "newTown", charter }],
+  preview: emptyPreview(), hits: [], panel: null, centres: new Map(), stats: null, speed: 1, founding: false,
+  view: "none", overlay: { key: "", cells: [] }, tints: new Map(), wanted: new Map(), legend: null, flash: null,
+  toast
+})
+
+const lintCharter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }
+
+/**
+ * What `bevy-ts-devtools lint src/sim/headless.ts` checks (`pnpm lint:game`,
+ * part of `pnpm check`): the simulation on a debug runtime, and the page's
+ * `present` schedule described without running (it needs the renderer).
+ */
+export const lintTarget = async () => {
+  // Loaded here only: tests and bots that use `headless` never load the renderer.
+  const { present } = await import("../present.ts")
+  const made = Game.Runtime.make({
+    services: Game.Runtime.services(Game.Runtime.service(Ui, blankUi(lintCharter, () => {})), Game.Runtime.service(Rules, resolveRules())),
+    resources: blankResources(),
+    debug: true
+  })
+  if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
+  return { runtime: made.value, schedules: { simulate }, describe: { present } }
+}
+
 export const headless = (charter: CharterValue, options: { readonly toast?: (message: string) => void; readonly rules?: RuleInputs } = {}) => {
-  const ui: UiValue = {
-    tool: "select", placing: null, upgrading: null, ground: "lawn", prop: "lamp", menu: null, pointer: null, dragFrom: null, selected: null, gestures: [], guide: [],
-    edits: [{ type: "newTown", charter }],
-    preview: emptyPreview(), hits: [], panel: null, centres: new Map(), stats: null, speed: 1, founding: false,
-    view: "none", overlay: { key: "", cells: [] }, tints: new Map(), wanted: new Map(), legend: null, flash: null,
-    toast: options.toast ?? (() => {})
-  }
+  const ui = blankUi(charter, options.toast ?? (() => {}))
   const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Ui, ui), Game.Runtime.service(Rules, options.rules ?? resolveRules())), resources: blankResources() })
   if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
   const runtime = made.value
