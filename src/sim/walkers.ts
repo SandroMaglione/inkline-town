@@ -142,7 +142,7 @@ export const SendWalkers = Game.System(
         const cursor = patrol.ok ? patrol.value.data.patrol.get().next : 0
         const tour = plan.tours[cursor % plan.tours.length]!
         if (patrol.ok) patrol.value.data.patrol.set({ next: (cursor + 1) % plan.tours.length })
-        else commands.insert(entity.id, Game.Command.entry(Patrol, { next: 1 % plan.tours.length }))
+        else commands.insert(entity, Game.Command.entry(Patrol, { next: 1 % plan.tours.length }))
         const color = categoryColor[kinds[data.building.get().kind].category]
         const draft = Game.Command.spawn(
           [Figure, { role: "walker", color }],
@@ -262,7 +262,7 @@ export const Wander = Game.System(
         if (roam.service === "fire" && r.fire > 0) care.data.risk.set({ ...r, fire: 0 })
         if (row && roam.service === "health") {
           if (r.health > 0) care.data.risk.set({ ...r, health: 0 })
-          if (care.data.sick.present) commands.remove(care.entity.id, Sick)
+          if (care.data.sick.present) commands.remove(care.entity, Sick)
         }
         if (row && roam.service === "order" && (r.order > 0 || r.thefts > 0)) care.data.risk.set({ ...r, order: 0, thefts: 0 })
         if (roam.service === "repair") {

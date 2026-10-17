@@ -375,8 +375,8 @@ export const ApplyEdits = Game.System(
           const row = id === undefined ? undefined : queries.built.get(id)
           if (!row?.ok || halls.has(owner) || row.value.data.site.present || row.value.data.paused.present === edit.on) break
           if (!row.value.data.building.present && !row.value.data.house.present) break
-          if (edit.on) commands.insert(row.value.entity.id, Game.Command.entry(Paused, {}))
-          else commands.remove(row.value.entity.id, Paused)
+          if (edit.on) commands.insert(row.value.entity, Game.Command.entry(Paused, {}))
+          else commands.remove(row.value.entity, Paused)
           break
         }
         case "deliver": {
@@ -447,7 +447,7 @@ export const ApplyEdits = Game.System(
           coins -= up.cost.coins
           begun.add(row.value.entity.id)
           const owed = amounts(up.cost.materials)
-          commands.insert(row.value.entity.id, Game.Command.entry(Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }))
+          commands.insert(row.value.entity, Game.Command.entry(Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }))
           const was = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
           write(resources.chronicle, t, `Works begin on the ${was}: it is to be ${anA(up.title.toLowerCase())}.`)
           events.toast.emit(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)
