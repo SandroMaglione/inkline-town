@@ -25,7 +25,7 @@
  * - citizens will not take settlers' work, and settlers stand in for citizens as apprentices;
  * - and homes with every need met become citizens on a street with a park behind it, not packed beside industry.
  */
-import { amounts, CONDITION_MAX, goodIds, kinds, RISK_MAX, ticks, type CharterValue, type GroundId, type KindId, type PropId } from "../src/content.ts"
+import { amounts, CONDITION_MAX, goodIds, kinds, RISK_MAX, stepsOf, type CharterValue, type GroundId, type KindId, type PropId } from "../src/content.ts"
 import { canPlace, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/grid.ts"
 import { inside } from "../src/iso.ts"
 import { parkValue, ringOf, type ParkCell } from "../src/appeal.ts"
@@ -272,7 +272,7 @@ const standing = (s: Snapshot, kind: KindId, x: number, y: number, stock: Partia
   }
   if (k.recipe) {
     const r = k.recipe
-    c["Town/Recipe"] = { input: r.input, inputs: r.inputs, output: r.output, batch: r.batch, period: ticks(r.seconds), progress: 0, made: 0 }
+    c["Town/Recipe"] = { input: r.input, inputs: r.inputs, output: r.output, batch: r.batch, period: stepsOf(r.seconds), progress: 0, made: 0 }
   }
   if (k.gathers) c["Town/Gatherer"] = { ...k.gathers }
   const tools = k.wear ? ["tools"] : []
@@ -282,7 +282,7 @@ const standing = (s: Snapshot, kind: KindId, x: number, y: number, stock: Partia
     if (all || k.keeps) c["Town/Storage"] = {}
   } else if (k.recipe) c["Town/Inventory"] = { stock: amounts(stock), accepts: [k.recipe.output, ...tools], cap: 8 }
   if (k.carriers) c["Town/Carriers"] = { count: k.carriers }
-  if (k.service) c["Town/Service"] = { service: k.service.service, interval: ticks(k.service.seconds), cooldown: 0, range: k.service.range }
+  if (k.service) c["Town/Service"] = { service: k.service.service, interval: stepsOf(k.service.seconds), cooldown: 0, range: k.service.range }
   c["Town/Risk"] = { fire: 0, health: 0, order: 0, thefts: 0 }
   c["Town/Condition"] = { value: CONDITION_MAX }
   const id = s.nextEntity++

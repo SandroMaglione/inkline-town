@@ -71,7 +71,7 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
     const f: Tile = fishery.components["Town/Tile"]
     await page.evaluate((f) => {
       const { runtime } = (window as any).town
-      const s = runtime.snapshot(), tick = s.resources["Town/Time"].tick
+      const s = runtime.snapshot(), tick = s.resources["Town/Time"].step
       for (const e of s.entities) {
         const t = e.components["Town/Tile"], w = e.components["Town/Water"]
         if (w && Math.abs(t.x - f.x) <= 3 && Math.abs(t.y - f.y) <= 3) e.components["Town/Water"] = { fished: tick }

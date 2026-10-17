@@ -61,7 +61,7 @@ export const fromSnapshot = (snapshot: Snapshot, name = "saved-town", rules: Rul
     if (type) land.push({ tile, type, amount: c["Town/Rock"]?.amount ?? 1, growth: c["Town/Tree"]?.growth ?? c["Town/Field"]?.growth ?? 0 })
   }
   const charter = r["Town/Charter"]
-  return { name, charter, tick: r["Town/Time"].tick - charter.founded, coins: r["Town/Treasury"].coins, approval: r["Town/Mood"].approval,
+  return { name, charter, tick: r["Town/Time"].step - charter.founded, coins: r["Town/Treasury"].coins, approval: r["Town/Mood"].approval,
     policy: r["Town/Policy"], trade: { ...r["Town/Policy"], prices: r["Town/Market"].prices }, homes, buildings, roads, land, ruins, parks, mask: r["Town/Land"].mask }
 }
 

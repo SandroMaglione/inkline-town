@@ -2,7 +2,8 @@
  * The simulation, one fixed step at a time. Nothing here touches the
  * renderer, so it runs headless too.
  */
-import { amounts, defaultCharter, goodIds, TRADE_LOAD } from "../content.ts"
+import { Clock } from "@typeonce/ritmo"
+import { amounts, defaultCharter, goodIds, step, TRADE_LOAD } from "../content.ts"
 import { Game, Time } from "../schema.ts"
 import { ApplyEdits } from "./edits.ts"
 import { Deliver, Dispatch } from "./logistics.ts"
@@ -13,13 +14,7 @@ import { Collect, Households, TakeCensus } from "./town.ts"
 import { SendWalkers, Walk, Wander } from "./walkers.ts"
 import { AssignStaff, CountStock, Grow, IndexGrid, Plant, Raise, Spread, Work } from "./work.ts"
 
-export const AdvanceTime = Game.System(
-  "Town/AdvanceTime",
-  { resources: { time: Game.System.writeResource(Time) } },
-  ({ resources }) => {
-    resources.time.update((t) => ({ tick: t.tick + 1 }))
-  }
-)
+export const AdvanceTime = Clock.system(Game, { name: "Town/AdvanceTime", resource: Time })
 
 export const simulate = Game.Schedule(
   AdvanceTime,
@@ -59,7 +54,7 @@ export const simulate = Game.Schedule(
 
 /** The world's resources before any town is founded (a `newTown` edit fills them in). */
 export const blankResources = () => ({
-  Time: { tick: 0 },
+  Time: Clock.start(step),
   Rng: 0x5eed,
   Treasury: { coins: 0 },
   Ledger: { taxes: 0, trade: 0, upkeep: 0, admin: 0 },

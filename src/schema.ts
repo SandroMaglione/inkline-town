@@ -11,15 +11,16 @@
  * Saved components and resources are constructed with a validator, so the
  * whole world snapshots to plain data and loads back checked.
  */
-import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
-import type { OptionalReadCell } from "@typeonce/bevy-ts/Query"
-import type { NodeRegistry } from "@typeonce/bevy-ts-render"
+import { Clock as SimulationClock, Decode, Descriptor, Schema } from "@typeonce/ritmo"
+import type { OptionalReadCell } from "@typeonce/ritmo/Query"
+import type { NodeRegistry } from "@typeonce/ritmo-render"
+import { step } from "./content.ts"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
 import type { GameScene } from "./render3d/scene.ts"
 import { goodIds, groundIds, kindIds, landIds, propIds, serviceIds, sizeIds, type Amounts, type GoodId } from "./content.ts"
 import type { Rules as RuleInputs } from "./rules/config.ts"
-import type { UiValue } from "./ui.ts"
+import type { Edit, UiValue } from "./ui.ts"
 
 export const Root = Schema.defineRoot("Town")
 
@@ -192,8 +193,8 @@ export const { relation: FieldOf } = Descriptor.Hierarchy("Town/FieldOf", "Town/
 
 // ── Resources ─────────────────────────────────────────────────────────────
 
-export const Time = Descriptor.ConstructedResource(Decode.struct({ tick: integer }))("Town/Time")
-/** The deterministic random state (see `@typeonce/bevy-ts-math/Random`). */
+export const Time = SimulationClock.resource("Town/Time", step)
+/** The deterministic random state (see `@typeonce/ritmo-math/Random`). */
 export const Rng = Descriptor.ConstructedResource(integer)("Town/Rng")
 export const Treasury = Descriptor.ConstructedResource(Decode.struct({ coins: integer }))("Town/Treasury")
 /** The last collection's taxes, trade (sold less bought), upkeep, and administration, per minute. */
@@ -420,7 +421,20 @@ export const Handed = Descriptor.TransientResource<HandedValue>()("Town/Handed")
 // ── Host services ─────────────────────────────────────────────────────────
 
 export const Rules = Descriptor.Service<RuleInputs>()("Town/Rules")
+/**
+ * The page's input to the simulation: each step takes the edits queued since
+ * the last one (plain data, so a replay can record and play it back).
+ */
+export const Edits = Descriptor.Service<{ readonly snapshot: () => ReadonlyArray<Edit> }>()("Town/Edits")
+/** The page itself, for the views only: the simulation never reads it (it talks to the page through `Toast` and `Selection`). */
 export const Ui = Descriptor.Service<UiValue>()("Town/Ui")
+
+// ── What the simulation tells the page ────────────────────────────────────
+
+/** A message for the player (an edit refused: "No room there"). */
+export const Toast = Descriptor.Event<string>()("Town/Toast")
+/** The panel's selection, changed by an edit: open a new building, or let go of one that is gone. */
+export const Selection = Descriptor.Event<{ readonly select: number } | { readonly clear: true } | { readonly clearIf: number }>()("Town/Selection")
 /** The frame's length, for animation only: the simulation runs on `Time`. */
 export const Clock = Descriptor.Service<{ deltaSeconds: number; elapsed: number }>()("Town/Clock")
 export const StageService = Descriptor.Service<GameScene>()("Town/Stage")
@@ -442,6 +456,7 @@ export const Game = Schema.bind(
       Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Guide, Appeal, Pantry, Fires,
       Grid, Stock, Flow, Handed
     },
+    events: { Toast, Selection },
     relations: { WalkerOf, FieldOf }
   }),
   Root

@@ -299,9 +299,8 @@ export class Drawing {
               : [point(j, i), point(j, i + 1), point(j + 1, i + 1), point(j + 1, i)]
         let fill = color
         if (light !== undefined) {
-          const center = points
-            .reduce((sum, p) => [sum[0] + p[0], sum[1] + p[1], sum[2] + p[2]] as Vertex, [0, 0, 0] as Vertex)
-            .map((n) => n / points.length) as unknown as Vertex
+          const sum = points.reduce((total, p): Vertex => [total[0] + p[0], total[1] + p[1], total[2] + p[2]], [0, 0, 0])
+          const center: Vertex = [sum[0] / points.length, sum[1] / points.length, sum[2] / points.length]
           const sx = (center[0] - u - center[1] + v) * 32,
             sy = (center[0] - u + center[1] - v) * 16 - (center[2] - z),
             rx = Math.hypot(ru, rv) * 32,

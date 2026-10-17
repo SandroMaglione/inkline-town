@@ -2,13 +2,38 @@
  * What the town is made of, as plain data: goods, the buildings that
  * gather, make, store, and hand them out, and the tiers of homes. Costs,
  * upkeep, and taxes are in coins; durations in seconds, turned into whole
- * simulation steps by `ticks`. `archetypes.ts` turns each entry into the
- * components an entity is spawned with; nothing here knows about the ECS.
+ * simulation steps by `Clock.duration` (literals) and `stepsOf` (data).
+ * `archetypes.ts` turns each entry into the components an entity is spawned
+ * with; nothing here knows about the ECS beyond its clock's step.
  */
+import { Clock } from "@typeonce/ritmo"
 
-/** The simulation's fixed step. */
-export const STEP_SECONDS = 1 / 60
-export const ticks = (seconds: number): number => Math.round(seconds / STEP_SECONDS)
+/** The simulation's fixed step: 60 a second, shared by the page's loop, the replay recorder, and the `Time` clock. */
+export const step = Clock.hz(60)
+
+/**
+ * Seconds read from data (a kind's, a rule's) as whole steps. A span
+ * shorter than one step, which `Clock.durationRaw` refuses, is no wait at
+ * all: 0 steps (`resolveRules` refuses a kind's `seconds` that short, so a
+ * period is always at least one step).
+ */
+export const stepsOf = (seconds: number): number => {
+  const span = Clock.durationRaw(step, seconds)
+  return span.ok ? Clock.steps(span.value) : 0
+}
+
+/**
+ * A period the rules give in whole steps (patchable, so data) as a clock
+ * duration for `Clock.every`; refused when under one step (a period of 0
+ * never comes round, as `tick % 0` never did).
+ */
+export const periodOf = (steps: number) => Clock.durationRaw(step, steps / step.hz)
+
+/** A cadence supplied as whole steps by the game's rules; invalid periods never fire. */
+export const every = (time: Clock.Time<60>, steps: number): boolean => {
+  const period = periodOf(steps)
+  return period.ok && Clock.every(time, period.value)
+}
 
 // ── Goods ─────────────────────────────────────────────────────────────────
 
@@ -66,7 +91,7 @@ export const foods: ReadonlyArray<GoodId> = ["fish", "smoked", "bread"]
  * Every `SPOIL_TICKS`, each shelf loses its share of what it holds.
  */
 export const spoils: Partial<Record<GoodId, number>> = { fish: 180, bread: 300 }
-export const SPOIL_TICKS = 600
+export const SPOIL_TICKS = Clock.steps(Clock.duration(step, 10))
 
 // ── Buildings ─────────────────────────────────────────────────────────────
 
@@ -217,7 +242,7 @@ export const asUpgraded = <K extends Kind>(kind: K, level: number): K => {
 }
 
 /** Steps of building work an upgrade takes for each good it is made of: a market hall half a minute, a city hall four. */
-export const WORKS_TICKS = ticks(1.5)
+export const WORKS_TICKS = Clock.steps(Clock.duration(step, 1.5))
 /** The steps of work an upgrade of `total` goods takes. */
 export const worksNeeded = (total: number, rules: { readonly worksTicks: number } = { worksTicks: WORKS_TICKS }) => Math.max(1, total) * rules.worksTicks
 
@@ -548,9 +573,9 @@ export const home = {
     readonly rise: Kind["cost"]
   }>>,
   /** A resident moves in (or out) this often. */
-  settle: ticks(3),
+  settle: Clock.steps(Clock.duration(step, 3)),
   /** How long each need stays met after a walker's visit: cloth and faith last longer than a meal. */
-  lasts: { food: ticks(90), bread: ticks(120), cloth: ticks(240), faith: ticks(180), furniture: ticks(300) } as Readonly<Record<Need, number>>,
+  lasts: { food: Clock.steps(Clock.duration(step, 90)), bread: Clock.steps(Clock.duration(step, 120)), cloth: Clock.steps(Clock.duration(step, 240)), faith: Clock.steps(Clock.duration(step, 180)), furniture: Clock.steps(Clock.duration(step, 300)) } as Readonly<Record<Need, number>>,
   /** Where nobody wants to live: the desirability the map's legend calls squalid. */
   squalid: -5,
   /**
@@ -661,7 +686,7 @@ export const risk = {
     /** Heating through a hard winter. */
     winter: 6,
     /** How long a blaze burns before the house is lost. */
-    burns: ticks(20),
+    burns: Clock.steps(Clock.duration(step, 20)),
     /** A burning house sets a neighbour alight, each second: this chance, and up to `spread` more for a neighbour at the top of its own meter. */
     catches: 0.03,
     spread: 0.12,
@@ -679,7 +704,7 @@ export const risk = {
     /** Still water within two cells. */
     water: 3,
     /** How long a sickness lasts if no physician comes; meanwhile the home holds `sickly` as many. */
-    lasts: ticks(60),
+    lasts: Clock.steps(Clock.duration(step, 60)),
     sickly: 0.5,
     /** Each second, the chance it reaches a home within two cells: raising its risk by `contagion` (a home a physician calls on shrugs it off). */
     spreads: 0.04,
@@ -708,7 +733,7 @@ export const risk = {
 export const CONDITION_MAX = 1000
 export const condition = {
   /** A point lost every `every` steps: from new to run down in about 33 minutes, and fallen down in 67, unmended. */
-  every: ticks(4),
+  every: Clock.steps(Clock.duration(step, 4)),
   /** Below this, a builder mends it as they pass (after about 23 minutes without repair). */
   mend: 650,
   /** Below this, it works at half pace, and its fire risk rises. */
@@ -723,12 +748,12 @@ export const needTitle: Readonly<Record<Need, string>> = { food: "food", bread: 
 // ── The town ──────────────────────────────────────────────────────────────
 
 /** How long anything takes to go up once its materials are in. */
-export const BUILD_TICKS = ticks(2.4)
+export const BUILD_TICKS = Clock.steps(Clock.duration(step, 2.4))
 /** Taxes are collected and upkeep paid this often. */
-export const LEDGER_TICKS = ticks(10)
+export const LEDGER_TICKS = Clock.steps(Clock.duration(step, 10))
 export const ROAD_COST = 2
 /** Trees and fields are ready to harvest once this grown. */
-export const GROWN = { tree: ticks(40), field: ticks(20) }
+export const GROWN = { tree: Clock.steps(Clock.duration(step, 40)), field: Clock.steps(Clock.duration(step, 20)) }
 /** The most a rock holds (see `lands` for how much each starts with). */
 export const ROCK_AMOUNT = 40
 /**
@@ -736,13 +761,13 @@ export const ROCK_AMOUNT = 40
  * stone (or ore) this often, so a quarry or mine beside it keeps going at
  * about a third of its pace instead of stopping for good.
  */
-export const FACE_TICKS = ticks(90)
+export const FACE_TICKS = Clock.steps(Clock.duration(step, 90))
 /**
  * A cell of water fished rests this long before it gives another catch,
  * so a fishery needs a good stretch of shore to itself to work at full
  * pace, and fisheries crowded on one lake share its fish.
  */
-export const RESTOCK_TICKS = ticks(40)
+export const RESTOCK_TICKS = Clock.steps(Clock.duration(step, 40))
 
 // ── The charter: what a new town is founded on ────────────────────────────
 
@@ -834,7 +859,7 @@ export const winters: Readonly<Record<WinterId, { readonly title: string; readon
   hard: { title: "hard", share: WINTER_SHARE * 1.5, fishing: 0.4, heating: true, chance: 0.25 }
 }
 /** The almanac warns of winter this many steps before it comes. */
-export const WINTER_WARNING = ticks(60)
+export const WINTER_WARNING = Clock.steps(Clock.duration(step, 60))
 
 /**
  * Running a town costs more the bigger it gets, and it is reckoned by the
@@ -968,4 +993,4 @@ export const ranks: ReadonlyArray<{
 export const TOWN_RANK = 2
 
 /** The town's history: a sample this often. */
-export const HISTORY_TICKS = ticks(15)
+export const HISTORY_TICKS = Clock.steps(Clock.duration(step, 15))

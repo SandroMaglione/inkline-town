@@ -149,11 +149,11 @@ try {
   await page.getByRole("button",{name:"4×",exact:true}).click()
   const before=await snapshot()
   const positions=await page.evaluate(()=>[...window.town.view.nodes].filter(n=>n.constructor.name==="WalkerView").map(n=>n.group.position.toArray()))
-  await page.waitForFunction(t=>window.town.runtime.snapshot().resources["Town/Time"].tick>t+30,before.resources["Town/Time"].tick)
+  await page.waitForFunction(t=>window.town.runtime.snapshot().resources["Town/Time"].step>t+30,before.resources["Town/Time"].step)
   await page.locator(".toolbar .pause").click()
   const paused=await snapshot(),pf=await page.evaluate(()=>window.town.view.stats().frames)
   await page.waitForFunction(f=>window.town.view.stats().frames>f+10,pf)
-  assert.equal((await snapshot()).resources["Town/Time"].tick,paused.resources["Town/Time"].tick)
+  assert.equal((await snapshot()).resources["Town/Time"].step,paused.resources["Town/Time"].step)
   assert.notDeepEqual(await page.evaluate(()=>[...window.town.view.nodes].filter(n=>n.constructor.name==="WalkerView").map(n=>n.group.position.toArray())),positions)
   facts.speedAndPause=true
   facts.liveWalkerMovement=true
@@ -185,7 +185,7 @@ try {
   await page.setViewportSize({width:1440,height:1000})
   // A saved term that has ended still opens the existing reckoning UI.
   const ended=structuredClone(grown)
-  ended.world.resources["Town/Fate"]={...ended.world.resources["Town/Fate"],state:"over",reason:"The term has ended.",at:ended.world.resources["Town/Time"].tick}
+  ended.world.resources["Town/Fate"]={...ended.world.resources["Town/Fate"],state:"over",reason:"The term has ended.",at:ended.world.resources["Town/Time"].step}
   await page.evaluate(save=>localStorage.setItem("inkline-town/save/manual",JSON.stringify({...save,savedAt:Date.now()})),ended)
   await page.getByRole("button",{name:"load",exact:true}).click()
   await page.getByRole("button",{name:"Load without saving",exact:true}).click()

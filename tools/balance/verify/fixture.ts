@@ -43,7 +43,7 @@ export const fixture = (scenario: Scenario, rules: Rules): Headless => {
       add({ "Town/Tile": l.tile, ...component })
     }
     s.resources["Town/Land"] = { mask: scenario.mask ?? "1".repeat(GRID * GRID), cells: GRID * GRID }
-    s.resources["Town/Time"] = { tick: scenario.tick + 1 }
+    s.resources["Town/Time"] = { step: scenario.tick + 1, hz: 60, dt: 1 / 60 }
     s.resources["Town/Charter"] = { ...scenario.charter, founded: 1, winters: scenario.charter.winters ?? s.resources["Town/Charter"].winters }
     s.resources["Town/Treasury"] = { coins: scenario.coins }
     s.resources["Town/Mood"] = { ...s.resources["Town/Mood"], approval: scenario.approval }

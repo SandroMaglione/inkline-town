@@ -1,3 +1,4 @@
+import { every } from "../content.ts"
 import { near, riskIncrements } from "../rules/risks.ts"
 /**
  * The neighbourhood and its dangers. Every so often the town's desirability
@@ -9,10 +10,10 @@ import { near, riskIncrements } from "../rules/risks.ts"
  * home left derelict. A fire watch sends firefighters running to any blaze
  * (`Douse`): when they arrive, that house is lost but the fire is out.
  */
-import * as Random from "@typeonce/bevy-ts-math/Random"
+import * as Random from "@typeonce/ritmo-math/Random"
 
 import { appealGrid, appealAt, buildingSource, homeSource, landSource, parkSources, type AppealSource } from "../appeal.ts"
-import { ruinDraft } from "../archetypes.ts"
+import { RuinParts, ruinDraft } from "../archetypes.ts"
 import { goodIds, risk, upgradeAt, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../grid.ts"
 import { counted, placeName, type Landmark } from "../places.ts"
@@ -43,7 +44,7 @@ export const Appraise = Game.System(
     const rules = services.rules
     const { appeal, condition: wear } = rules
 
-    if (resources.time.get().tick % appeal.every !== 0 && resources.appeal.get().cells.length > 0) return
+    if (!every(resources.time.get(), appeal.every) && resources.appeal.get().cells.length > 0) return
     const sources: Array<AppealSource> = []
     for (const { data } of queries.buildings.each()) {
       const s = buildingSource(data.building.get().kind, data.tile.get(), rules, maybe(data.upgraded)?.level ?? 0)
@@ -109,13 +110,19 @@ export const Hazards = Game.System(
       fires: Game.System.writeResource(Fires),
       chronicle: Game.System.writeResource(Chronicle)
     },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(
+      Game.System.spawns(...RuinParts, Figure, Route, Rescue),
+      Game.System.inserts(Burning, Sick),
+      Game.System.removes(Sick),
+      Game.System.despawns(Tile)
+    )
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
     const { kinds, goods, risk, winters, riskMax: RISK_MAX, riskTicks: RISK_TICKS } = rules
 
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     if (tick % RISK_TICKS !== 0) return
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
@@ -144,7 +151,7 @@ export const Hazards = Game.System(
 
     /** Turns a home or building into a ruin. */
     const ruin = (row: (typeof rows)[number], cause: "burnt" | "collapsed" | "derelict") => {
-      commands.despawn(row.entity.id)
+      commands.despawn(row.entity)
       commands.spawn(ruinDraft(row.data.tile.get(), cause))
     }
     const lost = new Set<number>()
@@ -275,7 +282,7 @@ export const Hazards = Game.System(
     const crewed = new Set<number>()
     for (const { data } of queries.crews.each()) {
       out.set(data.home.get(), (out.get(data.home.get()) ?? 0) + 1)
-      if (!data.rescue.get().back) crewed.add(data.rescue.get().target as unknown as number)
+      if (!data.rescue.get().back) crewed.add(data.rescue.get().target)
     }
     const watches = queries.watches.each().filter(({ data }) => data.service.get().service === "fire" && data.staff.get().assigned > 0)
     const burningNow = [...queries.blazes.each().map(({ entity }) => entity.id as number), ...ignited.keys()].filter((id) => !lost.has(id))
@@ -328,23 +335,24 @@ const BurningRead = Game.Query({ selection: { tile: Game.Query.read(Tile), burni
 export const Douse = Game.System(
   "Town/Douse",
   {
-    queries: { crews: Game.Query({ selection: { route: Game.Query.write(Route), rescue: Game.Query.write(Rescue) } }) },
-    resources: { fires: Game.System.writeResource(Fires) }
+    queries: { crews: Game.Query({ selection: { route: Game.Query.write(Route), rescue: Game.Query.write(Rescue) } }), burning: BurningRead },
+    resources: { fires: Game.System.writeResource(Fires) },
+    commands: Game.System.commands(Game.System.spawns(...RuinParts), Game.System.despawns(Rescue, Burning))
   },
-  ({ queries, resources, commands, lookup }) => {
+  ({ queries, resources, commands }) => {
     for (const { entity, data } of queries.crews.each()) {
       const route = data.route.get()
       const rescue = data.rescue.get()
       const arrived = route.index >= route.cells.length - 1
       if (!arrived) continue
       if (rescue.back) {
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         continue
       }
-      const target = lookup.getHandle(rescue.target, BurningRead)
+      const target = queries.burning.getHandle(rescue.target)
       if (target.ok) {
         const b = target.value.data.burning.get()
-        commands.despawn(target.value.entity.id)
+        commands.despawn(target.value.entity)
         commands.spawn(ruinDraft(target.value.data.tile.get(), "burnt"))
         const house = target.value.data.house.present
         resources.fires.update((f) => ({

@@ -140,7 +140,7 @@ const worldOf = (town: Headless): World["Service"] => ({
   snapshot: () => town.snapshot(),
   restore: (data) => {
     try {
-      town.restore(data as never)
+      town.restore(data)
       return null
     } catch (cause) {
       return cause instanceof Error ? cause.message : String(cause)

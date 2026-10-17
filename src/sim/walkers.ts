@@ -11,7 +11,7 @@ import { appealAt } from "../appeal.ts"
  * planks and stone to mend — and walks home when its range is walked.
  */
 
-import { amounts, categoryColor, each, provisions, ticks, total, type Amounts } from "../content.ts"
+import { amounts, categoryColor, each, provisions, stepsOf, total, type Amounts } from "../content.ts"
 import { DIRS, doors, isRoad, key, nearest, ownerAt, pathTo, reach, useAt } from "../grid.ts"
 import { inside, type Point } from "../iso.ts"
 import { Building, Burning, Condition, Figure, Game, Rules, Grid, Appeal, Handed, Patrol, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Roam, Route, Service, Sick, Site, Staff, Status, Tile, Time, WalkerOf, maybe, type HandedValue, type Status as StatusValue } from "../schema.ts"
@@ -37,11 +37,12 @@ export const Walk = Game.System(
   {
     queries: { walkers: Game.Query({ selection: { route: Game.Query.write(Route), rescue: Game.Query.optional(Rescue) } }) },
     resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.despawns(Route))
   },
   ({ queries, resources, commands, services }) => {
     const grid = resources.grid.get()
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     const quicker = services.rules.pavedPace - 1
     for (const { entity, data } of queries.walkers.each()) {
       const route = data.route.get()
@@ -49,7 +50,7 @@ export const Walk = Game.System(
       if (route.index >= last) continue
       const next = route.cells[route.index + 1]!
       if (!isRoad(grid, next.x, next.y)) {
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         continue
       }
       const running = data.rescue.present && !data.rescue.get().back
@@ -92,14 +93,15 @@ export const SendWalkers = Game.System(
       walkers: Game.Query({ selection: { roam: Game.Query.read(Roam), home: Game.Query.readRelation(WalkerOf) } })
     },
     resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.spawns(Figure, Route, Roam), Game.System.inserts(Patrol))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
     const { kinds, apprentice: APPRENTICE } = rules
 
     const grid = resources.grid.get()
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     const out = new Map<number, number>()
     for (const { data } of queries.walkers.each()) out.set(data.home.get(), (out.get(data.home.get()) ?? 0) + 1)
 
@@ -190,7 +192,8 @@ export const Wander = Game.System(
       inventories: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, with: [Service] })
     },
     resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal), pantry: Game.System.writeResource(Pantry), handed: Game.System.writeResource(Handed), time: Game.System.readResource(Time) },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.despawns(Roam), Game.System.removes(Sick))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
@@ -204,7 +207,7 @@ export const Wander = Game.System(
     for (const row of queries.cared.each()) cared.set(row.entity.id, row)
     let eaten = 0
     // What each walker hands each home, for its building's last minute (see `Handed`).
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     const handed: Array<HandedValue["log"][number]> = []
 
     for (const { entity, data } of walkers) {
@@ -222,7 +225,7 @@ export const Wander = Game.System(
           // the building asks for no more until it is down again, and nothing is lost.
           inv.value.data.inventory.set({ ...i, stock: each((g) => i.stock[g] + roam.basket[g]) })
         }
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         continue
       }
 
@@ -285,7 +288,7 @@ export const Wander = Game.System(
       const way = reach(grid, [cell])
       const door = building.ok ? nearest(way, doors(grid, building.value.data.tile.get())) : null
       if (!door) {
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         continue
       }
       data.route.set({ cells: pathTo(way, door.cell), index: 0, step: 0 })
@@ -293,7 +296,7 @@ export const Wander = Game.System(
     }
     if (eaten > 0) resources.pantry.update((p) => ({ ...p, eaten: p.eaten + eaten }))
     // The last minute only; a log from another town (its clock behind this one's) is dropped.
-    const kept = resources.handed.get().log.filter((l) => l.at <= tick && tick - l.at < ticks(60))
+    const kept = resources.handed.get().log.filter((l) => l.at <= tick && tick - l.at < stepsOf(60))
     if (handed.length > 0 || kept.length !== resources.handed.get().log.length) resources.handed.set({ log: [...kept, ...handed] })
   }
 )

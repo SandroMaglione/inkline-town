@@ -13,7 +13,9 @@
     "balance:worth": "node scripts/worth.ts",
     "balance:furniture": "node scripts/furniture.ts",
     "balance:model:check": "node --test test/balance-model.test.ts",
-    "check": "node scripts/check.ts",
+    "lint:game": "ritmo-devtools lint src/sim/headless.ts",
+    "replay": "node scripts/replay.ts",
+    "check": "pnpm lint && pnpm lint:game && node scripts/check.ts",
     "check:browser": "node scripts/check-browser.ts",
     "check:phone": "node scripts/check-phone.ts",
     "check:models": "node scripts/check-town-models.ts",
@@ -25,23 +27,29 @@
     "look:upgrades": "node scripts/look-upgrades.ts",
     "look:ui": "node scripts/look-ui.ts",
     "test": "node --test \"test/*.test.ts\"",
-    "release": "pnpm --dir deploy release"
+    "lint": "oxlint --ignore-pattern 'tools/lint/fixtures/**' src test scripts tools",
+    "release": "pnpm --dir deploy release",
+    "engine:prepare": "node scripts/use-ritmo.ts"
   },
   "dependencies": {
-    "@typeonce/bevy-ts": "^0.5.0",
-    "@typeonce/bevy-ts-browser": "^0.5.0",
-    "@typeonce/bevy-ts-math": "^0.5.0",
-    "@typeonce/bevy-ts-pixi": "^0.5.0",
-    "@typeonce/bevy-ts-render": "^0.5.0",
+    "@typeonce/ritmo": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/core",
+    "@typeonce/ritmo-browser": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/browser",
+    "@typeonce/ritmo-math": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/math",
+    "@typeonce/ritmo-pixi": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/pixi",
+    "@typeonce/ritmo-render": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/render",
     "effect": "4.0.3",
     "pixi.js": "^8.22.0",
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@typeonce/ritmo-devtools": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/devtools",
     "@types/node": "25.5.0",
     "@types/three": "^0.186.0",
+    "oxlint": "1.87.0",
     "playwright": "^1.64.0",
     "typescript": "7.0.2",
     "vite": "8.3.1"
-  }
+  },
+  "ritmoRelease": "0.7.0",
+  "ritmoSource": "1ec469fd865ae82d2f53a07f5f1662dd1363fe84"
 }

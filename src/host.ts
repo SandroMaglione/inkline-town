@@ -30,7 +30,7 @@ import {
   needTitle,
   LEDGER_TICKS,
   RESERVE_MAX,
-  STEP_SECONDS,
+  step,
   TRADE_LOAD,
   ROAD_COST,
   sizeIds,
@@ -1114,7 +1114,7 @@ export const createHost = async (
     reserve.input.title = "How much of each good the town keeps: it sells only beyond this, and buys only up to it"
     store.append(reserveLine, reserve.input, el("p", "effect", "of each good: sold only above this, bought only up to it"))
     /** Collections a minute: the traders come at every ledger. */
-    const perMinute = 60 / (LEDGER_TICKS * STEP_SECONDS)
+    const perMinute = 60 / (LEDGER_TICKS * step.dt)
     const goodRows = goodIds.map((g) => {
       const line = el("div", "trade-row")
       const name = el("span", "label")

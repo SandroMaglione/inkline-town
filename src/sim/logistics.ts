@@ -1,3 +1,4 @@
+import { every } from "../content.ts"
 import { transport } from "../rules/config.ts"
 import { wantsBurgherGoods, wantsCitizenGoods } from "../rules/households.ts"
 import { appealAt } from "../appeal.ts"
@@ -53,13 +54,14 @@ export const Dispatch = Game.System(
       errands: Game.Query({ selection: { errand: Game.Query.read(Errand), home: Game.Query.readRelation(WalkerOf) } })
     },
     resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal), time: Game.System.readResource(Time) },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.spawns(Figure, Route, Errand))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
     const { kinds, goods, spoils, toolStock: TOOL_STOCK } = rules
 
-    if (resources.time.get().tick % DISPATCH_TICKS !== 0) return
+    if (!every(resources.time.get(), DISPATCH_TICKS)) return
     const grid = resources.grid.get()
     const out = new Map<number, number>()
     const incoming = new Map<string, number>()
@@ -224,13 +226,15 @@ export const Deliver = Game.System(
   {
     queries: {
       carriers: Game.Query({ selection: { route: Game.Query.write(Route), errand: Game.Query.write(Errand), home: Game.Query.readRelation(WalkerOf) } }),
+      targets: TargetRead,
       inventories: Game.Query({ selection: { inventory: Game.Query.write(Inventory) }, without: [Site] }),
       sites: Game.Query({ selection: { site: Game.Query.write(Site) } }),
       works: Game.Query({ selection: { works: Game.Query.write(Works) } })
     },
-    services: { rules: Game.System.service(Rules) }
+    services: { rules: Game.System.service(Rules) },
+    commands: Game.System.commands(Game.System.despawns(Errand))
   },
-  ({ queries, commands, lookup, services }) => {
+  ({ queries, commands, services }) => {
     const rules = services.rules
     const {  } = rules
 
@@ -245,10 +249,10 @@ export const Deliver = Game.System(
           const room = inv.cap - inv.stock[errand.good]
           home.value.data.inventory.set({ ...inv, stock: { ...inv.stock, [errand.good]: inv.stock[errand.good] + Math.min(room, errand.count) } })
         }
-        commands.despawn(entity.id)
+        commands.despawn(entity)
         continue
       }
-      const target = lookup.getHandle(errand.target, TargetRead)
+      const target = queries.targets.getHandle(errand.target)
       if (!target.ok) {
         // Nowhere to take it: carry it home.
         data.route.set(turnAround(route))

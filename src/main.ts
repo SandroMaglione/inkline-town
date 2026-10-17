@@ -4,18 +4,19 @@ import { resolveRules } from "./rules/config.ts"
  * bevy-ts ECS with a 3D view. The simulation runs on a fixed step;
  * the views follow once a frame.
  */
-import { Result } from "@typeonce/bevy-ts"
+import { HostClock, Result } from "@typeonce/ritmo"
 import { Effect } from "effect"
-import { FixedLoop } from "@typeonce/bevy-ts-browser"
+import { BrowserHostClock, FixedLoop } from "@typeonce/ritmo-browser"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
-import { lands, sizes, STEP_SECONDS } from "./content.ts"
+import { lands, sizes, step } from "./content.ts"
 import { createHost, type Persistence } from "./host.ts"
 import { present } from "./present.ts"
 import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World } from "./save.ts"
 import type { CameraView } from "./render3d/scene.ts"
 import { download, sharedId } from "./share/client.ts"
-import { BuildingNodes, Clock, FieldNodes, Game, Rules, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
+import { BuildingNodes, Clock, Edits, FieldNodes, Game, Rules, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
+import { editsOf } from "./sim/headless.ts"
 import { blankResources, simulate } from "./sim/index.ts"
 
 /** Minutes of game time between autosaves. */
@@ -44,7 +45,7 @@ const start = async () => {
       (text) => (arriving = text),
       (error: unknown) => visitFailed(error instanceof Error ? error.message : "Could not open that town")
     )
-  const clock = { deltaSeconds: STEP_SECONDS, elapsed: 0 }
+  const clock = { deltaSeconds: step.dt, elapsed: 0 }
 
   const buildingNodes = stage.registry<BuildingView>(),
     houseNodes = stage.registry<HouseView>(),
@@ -58,9 +59,12 @@ const start = async () => {
     stage.resetPresentation()
     resetPage()
   }
+  // The page's clock: the debug handle times systems with it.
+  const hostClock = BrowserHostClock.make(window)
   const made = Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(Ui, ui),
+      Game.Runtime.service(Edits, editsOf(ui)),
       Game.Runtime.service(Rules, resolveRules()),
       Game.Runtime.service(Clock, clock),
       Game.Runtime.service(StageService, stage),
@@ -72,7 +76,9 @@ const start = async () => {
       Game.Runtime.service(FieldNodes, fieldNodes),
       Game.Runtime.service(RuinNodes, ruinNodes)
     ),
-    resources: blankResources()
+    resources: blankResources(),
+    // Dev builds carry the debug handle, for the monitor and the replay recorder.
+    debug: import.meta.env.DEV ? { hostClock } : undefined
   })
   if (!made.ok) {
     mount.textContent = `The town could not start: ${JSON.stringify(made.error)}`
@@ -84,9 +90,14 @@ const start = async () => {
   // `town.runtime.snapshot()`, and `town.advance(seconds)` to fast-forward the simulation.
   if (import.meta.env.DEV) {
     const advance = (seconds: number) => {
-      for (let i = 0; i < Math.round(seconds / STEP_SECONDS); i++) runtime.tick(simulate)
+      for (let i = 0; i < Math.round(seconds / step.dt); i++) runtime.tick(simulate)
     }
     Object.assign(window, { town: { ui, runtime, advance, view: stage } })
+    if (runtime.debug !== undefined) {
+      // Loaded in dev only: the production bundle never includes devtools.
+      const { attachDevtools } = await import("./dev/devtools.ts")
+      attachDevtools({ runtime: { ...runtime, debug: runtime.debug }, mount: document.body, fetch: (url, init) => fetch(url, init), wallClock: HostClock.standard, host: window, demo: new URLSearchParams(location.search).has("replay-demo") })
+    }
   }
 
   // Saves are Effect programs over the browser's storage and this town (see `save.ts`);
@@ -94,7 +105,7 @@ const start = async () => {
   const world: World["Service"] = {
     snapshot: () => runtime.snapshot(),
     restore: (data) => {
-      const restored = runtime.restore(data as never)
+      const restored = runtime.restore(data)
       if (restored.ok) resetPresentation()
       return restored.ok ? null : restored.error._tag
     },
@@ -150,7 +161,7 @@ const start = async () => {
   let settling = false
   const loop = FixedLoop.start({
     source: FixedLoop.source((onTick) => stage.subscribe(onTick)),
-    stepSeconds: STEP_SECONDS,
+    step,
     maxFrameSeconds: 0.25,
     maxStepsPerFrame: 4,
     // The town runs at the chosen speed; it waits while paused, while the
