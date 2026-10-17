@@ -11,7 +11,7 @@ import { Decay } from "./decay.ts"
 import { Appraise, Douse, Hazards } from "./hazards.ts"
 import { Approve, foundedFate, Judge, Record, Requests, Seasons } from "./term.ts"
 import { Collect, Households, TakeCensus } from "./town.ts"
-import { SendWalkers, Walk, Wander } from "./walkers.ts"
+import { DropOrphans, SendWalkers, Walk, Wander } from "./walkers.ts"
 import { AssignStaff, CountStock, Grow, IndexGrid, Plant, Raise, Spread, Work } from "./work.ts"
 
 export const AdvanceTime = Clock.system(Game, { name: "Town/AdvanceTime", resource: Time })
@@ -41,6 +41,8 @@ export const simulate = Game.Schedule(
   Households,
   Hazards,
   Game.Schedule.applyDeferred(),
+  // After every flush that relates walkers and fields to their buildings.
+  DropOrphans,
   Decay,
   Game.Schedule.applyDeferred(),
   Collect,

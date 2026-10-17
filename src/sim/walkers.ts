@@ -14,7 +14,7 @@ import { appealAt } from "../appeal.ts"
 import { amounts, categoryColor, each, provisions, stepsOf, total, type Amounts } from "../content.ts"
 import { DIRS, doors, isRoad, key, nearest, ownerAt, pathTo, reach, useAt } from "../grid.ts"
 import { inside, type Point } from "../iso.ts"
-import { Building, Burning, Condition, Figure, Game, Rules, Grid, Appeal, Handed, Patrol, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Roam, Route, Service, Sick, Site, Staff, Status, Tile, Time, WalkerOf, maybe, type HandedValue, type Status as StatusValue } from "../schema.ts"
+import { Building, Burning, Condition, Field, FieldOf, Figure, Game, Rules, Grid, Appeal, Handed, Patrol, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Roam, Route, Service, Sick, Site, Staff, Status, Tile, Time, WalkerOf, maybe, type HandedValue, type Status as StatusValue } from "../schema.ts"
 import { CELL_STEPS } from "./shared.ts"
 import { paced } from "./work.ts"
 
@@ -298,5 +298,36 @@ export const Wander = Game.System(
     // The last minute only; a log from another town (its clock behind this one's) is dropped.
     const kept = resources.handed.get().log.filter((l) => l.at <= tick && tick - l.at < stepsOf(60))
     if (handed.length > 0 || kept.length !== resources.handed.get().log.length) resources.handed.set({ log: [...kept, ...handed] })
+  }
+)
+
+/**
+ * A walker, a carrier, or a farm's field whose building went away in the same
+ * step it was sent out or planted: its `WalkerOf` / `FieldOf` relate failed,
+ * so nothing would despawn it with its building. It goes instead of
+ * wandering on without one.
+ */
+export const DropOrphans = Game.System(
+  "Town/DropOrphans",
+  {
+    relationFailures: {
+      walkers: Game.System.readRelationFailures(WalkerOf),
+      fields: Game.System.readRelationFailures(FieldOf)
+    },
+    queries: {
+      figures: Game.Query({ selection: {}, with: [Figure] }),
+      fields: Game.Query({ selection: {}, with: [Field] })
+    },
+    commands: Game.System.commands(Game.System.despawns(Figure, Field))
+  },
+  ({ relationFailures, queries, commands }) => {
+    for (const failure of relationFailures.walkers.all()) {
+      const orphan = queries.figures.get(failure.source)
+      if (orphan.ok) commands.despawn(orphan.value.entity)
+    }
+    for (const failure of relationFailures.fields.all()) {
+      const orphan = queries.fields.get(failure.source)
+      if (orphan.ok) commands.despawn(orphan.value.entity)
+    }
   }
 )
