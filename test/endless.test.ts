@@ -7,7 +7,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { amounts, FACE_TICKS, goodIds, kinds, ranks, ticks, YEARS_PER_TERM } from "../src/content.ts"
+import { amounts, FACE_TICKS, goodIds, kinds, ranks, stepsOf, YEARS_PER_TERM } from "../src/content.ts"
 import { canPlace, GridBuilder } from "../src/grid.ts"
 import { goalsOf, nextRank, scoreOf } from "../src/rules/goals.ts"
 import { headless, type Snapshot } from "../src/sim/headless.ts"
@@ -32,7 +32,7 @@ const market = (s: Snapshot) => {
       "Town/Building": { kind: "market" },
       "Town/Status": "idle",
       "Town/Staff": { needed: 0, assigned: 0, apprentices: 0, nearby: 0 },
-      "Town/Service": { service: "goods", interval: ticks(m.service!.seconds), cooldown: 0, range: m.service!.range },
+      "Town/Service": { service: "goods", interval: stepsOf(m.service!.seconds), cooldown: 0, range: m.service!.range },
       "Town/Inventory": { stock: amounts({}), accepts: ["fish", "smoked", "bread", "cloth"], cap: m.holds!.cap }
     }
   })
@@ -118,7 +118,7 @@ test("a market is upgraded to a market hall once the town is a town, and not bef
   assert.equal("Town/Works" in hall.components, false, JSON.stringify(hall.components["Town/Works"]))
   assert.deepEqual(hall.components["Town/Upgraded"], { level: 1 })
   assert.equal(hall.components["Town/Service"].range, up.service!.range)
-  assert.equal(hall.components["Town/Service"].interval, ticks(up.service!.seconds))
+  assert.equal(hall.components["Town/Service"].interval, stepsOf(up.service!.seconds))
   assert(stockOf(s, "stone") <= stone - up.cost.materials.stone!)
   assert(s.resources["Town/Chronicle"].lines.some((l: { text: string }) => l.text === "The market is now a market hall."))
 })
@@ -190,7 +190,7 @@ test("a long reign: five terms follow one another, each judged on its own, and t
       const samples = s.resources["Town/History"].samples
       for (let i = 1; i <= 400; i++) samples.push({ ...sample, tick: f.began + Math.round((i * term) / 401) })
       s.resources["Town/Crown"] = { ...s.resources["Town/Crown"], met: 3, missed: 2, streak: 2 }
-      s.resources["Town/Time"].tick = s.resources["Town/Charter"].founded + f.began + term - 120
+      s.resources["Town/Time"].step = s.resources["Town/Charter"].founded + f.began + term - 120
       s.resources["Town/Treasury"].coins = 5000
     })
     t.run(3)

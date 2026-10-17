@@ -1,3 +1,4 @@
+import { every } from "../content.ts"
 import { tradeCollection } from "../rules/trade.ts"
 /**
  * The town: homes grow, level up, or empty depending on what reaches them;
@@ -145,7 +146,7 @@ export const Collect = Game.System(
     const rules = services.rules
     const { kinds, ledgerTicks: LEDGER_TICKS, pausedUpkeep: PAUSED_UPKEEP } = rules
 
-    if (resources.time.get().tick % LEDGER_TICKS !== 0) return
+    if (!every(resources.time.get(), LEDGER_TICKS)) return
     const grid = resources.grid.get()
     const policy = resources.policy.get()
     const hall = queries.halls.each()[0]

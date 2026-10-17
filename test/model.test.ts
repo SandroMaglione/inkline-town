@@ -150,7 +150,7 @@ const apply = (town: Headless, command: Command): string | null => {
       const s = town.snapshot()
       const charter = s.resources["Town/Charter"]
       const began = s.resources["Town/Fate"].began
-      town.run(Math.max(0, charter.founded + began + charter.term * 3600 - s.resources["Town/Time"].tick) / 60 + 2)
+      town.run(Math.max(0, charter.founded + began + charter.term * 3600 - s.resources["Town/Time"].step) / 60 + 2)
       return null
     }
     case "Road": {
@@ -260,7 +260,7 @@ interface Memory {
 }
 
 const remember = (s: Snapshot): Memory => ({
-  tick: s.resources["Town/Time"].tick,
+  tick: s.resources["Town/Time"].step,
   state: s.resources["Town/Fate"].state,
   met: s.resources["Town/Crown"].met,
   missed: s.resources["Town/Crown"].missed,

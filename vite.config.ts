@@ -1,6 +1,6 @@
 import { defineConfig } from "vite"
 
-import * as ReplayVitePlugin from "@typeonce/bevy-ts-devtools/ReplayVitePlugin"
+import * as ReplayVitePlugin from "@typeonce/ritmo-devtools/ReplayVitePlugin"
 
 import { sharesInDev } from "./src/server/dev.ts"
 

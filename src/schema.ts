@@ -11,9 +11,10 @@
  * Saved components and resources are constructed with a validator, so the
  * whole world snapshots to plain data and loads back checked.
  */
-import { Decode, Descriptor, Schema } from "@typeonce/bevy-ts"
-import type { OptionalReadCell } from "@typeonce/bevy-ts/Query"
-import type { NodeRegistry } from "@typeonce/bevy-ts-render"
+import { Clock as SimulationClock, Decode, Descriptor, Schema } from "@typeonce/ritmo"
+import type { OptionalReadCell } from "@typeonce/ritmo/Query"
+import type { NodeRegistry } from "@typeonce/ritmo-render"
+import { step } from "./content.ts"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
 import type { GameScene } from "./render3d/scene.ts"
@@ -192,8 +193,8 @@ export const { relation: FieldOf } = Descriptor.Hierarchy("Town/FieldOf", "Town/
 
 // ── Resources ─────────────────────────────────────────────────────────────
 
-export const Time = Descriptor.ConstructedResource(Decode.struct({ tick: integer }))("Town/Time")
-/** The deterministic random state (see `@typeonce/bevy-ts-math/Random`). */
+export const Time = SimulationClock.resource("Town/Time", step)
+/** The deterministic random state (see `@typeonce/ritmo-math/Random`). */
 export const Rng = Descriptor.ConstructedResource(integer)("Town/Rng")
 export const Treasury = Descriptor.ConstructedResource(Decode.struct({ coins: integer }))("Town/Treasury")
 /** The last collection's taxes, trade (sold less bought), upkeep, and administration, per minute. */

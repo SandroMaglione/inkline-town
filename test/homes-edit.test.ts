@@ -7,7 +7,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { STEP_SECONDS } from "../src/content.ts"
+import { step } from "../src/content.ts"
 import { headless } from "../src/sim/headless.ts"
 
 test("a homes edit along a fresh road raises every cottage in one step, empty", () => {
@@ -17,7 +17,7 @@ test("a homes edit along a fresh road raises every cottage in one step, empty", 
     { type: "roads", cells: Array.from({ length: 9 }, (_, i) => ({ x: 34 + i, y: 31 })) },
     { type: "homes", cells: homes }
   )
-  town.run(STEP_SECONDS)
+  town.run(step.dt)
   const houses = town.snapshot().entities.filter((entity) => entity.components["Town/House"] !== undefined)
   assert.deepEqual(
     houses.map((entity) => ({ tile: entity.components["Town/Tile"], residents: entity.components["Town/House"].residents })),

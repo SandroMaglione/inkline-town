@@ -11,7 +11,7 @@ import { appealAt } from "../appeal.ts"
  * planks and stone to mend — and walks home when its range is walked.
  */
 
-import { amounts, categoryColor, each, provisions, ticks, total, type Amounts } from "../content.ts"
+import { amounts, categoryColor, each, provisions, stepsOf, total, type Amounts } from "../content.ts"
 import { DIRS, doors, isRoad, key, nearest, ownerAt, pathTo, reach, useAt } from "../grid.ts"
 import { inside, type Point } from "../iso.ts"
 import { Building, Burning, Condition, Figure, Game, Rules, Grid, Appeal, Handed, Patrol, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Roam, Route, Service, Sick, Site, Staff, Status, Tile, Time, WalkerOf, maybe, type HandedValue, type Status as StatusValue } from "../schema.ts"
@@ -42,7 +42,7 @@ export const Walk = Game.System(
   },
   ({ queries, resources, commands, services }) => {
     const grid = resources.grid.get()
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     const quicker = services.rules.pavedPace - 1
     for (const { entity, data } of queries.walkers.each()) {
       const route = data.route.get()
@@ -101,7 +101,7 @@ export const SendWalkers = Game.System(
     const { kinds, apprentice: APPRENTICE } = rules
 
     const grid = resources.grid.get()
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     const out = new Map<number, number>()
     for (const { data } of queries.walkers.each()) out.set(data.home.get(), (out.get(data.home.get()) ?? 0) + 1)
 
@@ -207,7 +207,7 @@ export const Wander = Game.System(
     for (const row of queries.cared.each()) cared.set(row.entity.id, row)
     let eaten = 0
     // What each walker hands each home, for its building's last minute (see `Handed`).
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     const handed: Array<HandedValue["log"][number]> = []
 
     for (const { entity, data } of walkers) {
@@ -296,7 +296,7 @@ export const Wander = Game.System(
     }
     if (eaten > 0) resources.pantry.update((p) => ({ ...p, eaten: p.eaten + eaten }))
     // The last minute only; a log from another town (its clock behind this one's) is dropped.
-    const kept = resources.handed.get().log.filter((l) => l.at <= tick && tick - l.at < ticks(60))
+    const kept = resources.handed.get().log.filter((l) => l.at <= tick && tick - l.at < stepsOf(60))
     if (handed.length > 0 || kept.length !== resources.handed.get().log.length) resources.handed.set({ log: [...kept, ...handed] })
   }
 )

@@ -4,10 +4,10 @@
  * this, pushing the same edits the page does and reading the world through
  * the same snapshots it saves.
  */
-import { HostClock } from "@typeonce/bevy-ts"
-import type * as Replay from "@typeonce/bevy-ts-devtools/Replay"
+import { HostClock } from "@typeonce/ritmo"
+import type * as Replay from "@typeonce/ritmo-devtools/Replay"
 
-import { STEP_SECONDS, type CharterValue } from "../content.ts"
+import { step as simulationStep, type CharterValue } from "../content.ts"
 import { resolveRules, type Rules as RuleInputs } from "../rules/config.ts"
 import { Edits, Game, Rules, Toast } from "../schema.ts"
 import { emptyPreview, type Edit, type UiValue } from "../ui.ts"
@@ -57,7 +57,7 @@ export const replayTarget = (playback: Replay.Playback) => {
 }
 
 /**
- * What `bevy-ts-devtools lint src/sim/headless.ts` checks (`pnpm lint:game`,
+ * What `ritmo-devtools lint src/sim/headless.ts` checks (`pnpm lint:game`,
  * part of `pnpm check`): the simulation on a debug runtime, and the page's
  * `present` schedule described without running (it needs the renderer).
  */
@@ -73,10 +73,10 @@ export const lintTarget = async () => {
   return { runtime: made.value, schedules: { simulate }, describe: { present } }
 }
 
-export const headless = (charter: CharterValue, options: { readonly toast?: (message: string) => void; readonly rules?: RuleInputs } = {}) => {
+export const headless = (charter: CharterValue, options: { readonly toast?: (message: string) => void; readonly rules?: RuleInputs; readonly hostClock?: HostClock.HostClock } = {}) => {
   const toast = options.toast ?? (() => {})
   const ui = blankUi(charter, toast)
-  const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Edits, editsOf(ui)), Game.Runtime.service(Rules, options.rules ?? resolveRules())), resources: blankResources() })
+  const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Edits, editsOf(ui)), Game.Runtime.service(Rules, options.rules ?? resolveRules())), resources: blankResources(), debug: { hostClock: options.hostClock ?? HostClock.test() } })
   if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
   const runtime = made.value
   const step = () => {
@@ -90,7 +90,7 @@ export const headless = (charter: CharterValue, options: { readonly toast?: (mes
     runtime,
     /** Runs the town on for `seconds` of game time. */
     run: (seconds: number) => {
-      for (let i = 0; i < Math.round(seconds / STEP_SECONDS); i++) step()
+      for (let i = 0; i < Math.round(seconds / simulationStep.dt); i++) step()
     },
     /** Pushes edits, applied on the next step. */
     edit: (...edits: ReadonlyArray<Edit>) => {

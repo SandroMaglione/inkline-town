@@ -9,7 +9,7 @@ import { shippedRules, type Rules } from "./rules/config.ts"
 import { amounts, goodIds, total, type GroundId, type Kind } from "./content.ts"
 import type { Point } from "./iso.ts"
 import { Building, Carriers, Condition, Field, Game, Gatherer, House, Inventory, Park, Planter, Recipe, Rising, Risk, Road, Rock, Ruin, Service, Site, Staff, Status, Storage, Tile, Tree, Water } from "./schema.ts"
-import { ticks } from "./content.ts"
+import { stepsOf } from "./content.ts"
 
 const site = (cost: Kind["cost"]) => {
   const owed = amounts(cost.materials)
@@ -47,12 +47,12 @@ export const rolesOf = (kind: Kind, rules: Rules = shippedRules) => {
   const roles = []
   if (kind.recipe) {
     const r = kind.recipe
-    roles.push(Game.Command.entry(Recipe, { input: r.input, inputs: r.inputs, output: r.output, batch: r.batch, period: ticks(r.seconds), progress: 0, made: 0 }))
+    roles.push(Game.Command.entry(Recipe, { input: r.input, inputs: r.inputs, output: r.output, batch: r.batch, period: stepsOf(r.seconds), progress: 0, made: 0 }))
   }
   if (kind.gathers) roles.push(Game.Command.entry(Gatherer, { source: kind.gathers.source, radius: kind.gathers.radius }))
   if (kind.plants) {
     const p = kind.plants
-    roles.push(Game.Command.entry(Planter, { what: p.what, radius: p.radius, interval: ticks(p.seconds), cooldown: 0, max: p.max }))
+    roles.push(Game.Command.entry(Planter, { what: p.what, radius: p.radius, interval: stepsOf(p.seconds), cooldown: 0, max: p.max }))
   }
   // A workshop that wears out tools keeps a few on its shelf too.
   const tools = kind.wear ? ["tools" as const] : []
@@ -69,7 +69,7 @@ export const rolesOf = (kind: Kind, rules: Rules = shippedRules) => {
   if (kind.carriers) roles.push(Game.Command.entry(Carriers, { count: kind.carriers }))
   if (kind.service) {
     const s = kind.service
-    roles.push(Game.Command.entry(Service, { service: s.service, interval: ticks(s.seconds), cooldown: 0, range: s.range }))
+    roles.push(Game.Command.entry(Service, { service: s.service, interval: stepsOf(s.seconds), cooldown: 0, range: s.range }))
   }
   // The town hall neither burns nor wears.
   if (kind.id !== "townhall") roles.push(...wearOf(rules))

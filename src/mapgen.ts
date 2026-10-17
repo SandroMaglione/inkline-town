@@ -8,7 +8,7 @@ import { shippedRules, type Rules } from "./rules/config.ts"
  * the rest).
  * Pure: the same charter always makes the same land.
  */
-import * as Random from "@typeonce/bevy-ts-math/Random"
+import * as Random from "@typeonce/ritmo-math/Random"
 
 import { GROWN, type CharterValue } from "./content.ts"
 import { DIRS, key } from "./grid.ts"

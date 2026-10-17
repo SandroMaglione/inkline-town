@@ -12,12 +12,12 @@ const inputs = () => ({
   risk: content.risk, condition: content.condition, winters: content.winters,
   admin: content.admin, mood: content.mood, crown: content.crown, market: content.market, fate: content.fate, ranks: content.ranks,
   spoils: content.spoils, trade: content.trade, tradeLoad: content.TRADE_LOAD, transport,
-  stepSeconds: content.STEP_SECONDS, ledgerTicks: content.LEDGER_TICKS, spoilTicks: content.SPOIL_TICKS,
+  stepSeconds: content.step.dt, ledgerTicks: content.LEDGER_TICKS, spoilTicks: content.SPOIL_TICKS,
   commute: content.COMMUTE, apprentice: content.APPRENTICE, toolStock: content.TOOL_STOCK,
   conditionMax: content.CONDITION_MAX, riskMax: content.RISK_MAX, pausedUpkeep: content.PAUSED_UPKEEP, salvage: content.salvage,
   buildTicks: content.BUILD_TICKS, roadCost: content.ROAD_COST, paveCost: content.PAVE_COST, pavedPace: content.PAVED_PACE,
-  grown: content.GROWN, faceTicks: content.FACE_TICKS, restockTicks: content.RESTOCK_TICKS, worksTicks: content.WORKS_TICKS, yearsPerTerm: content.YEARS_PER_TERM, staffTicks: content.ticks(0.5), riskTicks: 60,
-  spreadTicks: content.ticks(1.5), growTicks: 10
+  grown: content.GROWN, faceTicks: content.FACE_TICKS, restockTicks: content.RESTOCK_TICKS, worksTicks: content.WORKS_TICKS, yearsPerTerm: content.YEARS_PER_TERM, staffTicks: content.stepsOf(0.5), riskTicks: 60,
+  spreadTicks: content.stepsOf(1.5), growTicks: 10
 })
 
 type NumericData<T> = T extends number ? number : T extends object ? { readonly [K in keyof T]: NumericData<T[K]> } : T

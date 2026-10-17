@@ -1,3 +1,4 @@
+import { every } from "../content.ts"
 import { near, riskIncrements } from "../rules/risks.ts"
 /**
  * The neighbourhood and its dangers. Every so often the town's desirability
@@ -9,7 +10,7 @@ import { near, riskIncrements } from "../rules/risks.ts"
  * home left derelict. A fire watch sends firefighters running to any blaze
  * (`Douse`): when they arrive, that house is lost but the fire is out.
  */
-import * as Random from "@typeonce/bevy-ts-math/Random"
+import * as Random from "@typeonce/ritmo-math/Random"
 
 import { appealGrid, appealAt, buildingSource, homeSource, landSource, parkSources, type AppealSource } from "../appeal.ts"
 import { RuinParts, ruinDraft } from "../archetypes.ts"
@@ -43,7 +44,7 @@ export const Appraise = Game.System(
     const rules = services.rules
     const { appeal, condition: wear } = rules
 
-    if (resources.time.get().tick % appeal.every !== 0 && resources.appeal.get().cells.length > 0) return
+    if (!every(resources.time.get(), appeal.every) && resources.appeal.get().cells.length > 0) return
     const sources: Array<AppealSource> = []
     for (const { data } of queries.buildings.each()) {
       const s = buildingSource(data.building.get().kind, data.tile.get(), rules, maybe(data.upgraded)?.level ?? 0)
@@ -121,7 +122,7 @@ export const Hazards = Game.System(
     const rules = services.rules
     const { kinds, goods, risk, winters, riskMax: RISK_MAX, riskTicks: RISK_TICKS } = rules
 
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     if (tick % RISK_TICKS !== 0) return
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)

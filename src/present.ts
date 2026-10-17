@@ -4,7 +4,7 @@
  * panel, tooltip, top bar, map views, and the town's alerts are filled in;
  * and the views follow the world.
  */
-import { RenderSync } from "@typeonce/bevy-ts-render"
+import { RenderSync } from "@typeonce/ritmo-render"
 import { hazardStrength } from "./render3d/surface-state.ts"
 
 import { appealAt, appealParts, buildingSource, homeSource, landSource, parkSources, parksOf, type AppealSource, type ParkCell, type ParkValue } from "./appeal.ts"
@@ -12,7 +12,7 @@ import { homeHeight, topOf, type Alert, type Load, type Emphasis } from "./art.t
 import { BuildingView, HouseView, WalkerView, TreeView, RockView, FieldView, RuinView } from "./render3d/views.ts"
 import type { DoorSet, OverlayCell } from "./render3d/models.ts"
 import {
-  amounts, BUILD_TICKS, builtCost, COMMUTE, provisions, RESTOCK_TICKS, STEP_SECONDS, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
+  amounts, BUILD_TICKS, builtCost, COMMUTE, provisions, RESTOCK_TICKS, step, condition as wear, CONDITION_MAX, costText, crewOf, crown as crownRules, fate, goodIds, goods, grounds, home, kinds, needTitle,
   kindOrder, nextUpgrade, worksNeeded, PAVE_COST, propIds, props, ranks, risk, RISK_MAX, ROAD_COST, tierHome, total, upgradeAt, upkeepOf, winters, type Amounts, type GoodId, type Kind, type KindId, type Need, type Tier
 } from "./content.ts"
 import { around, canPlace, cellOf, doors, entrances, isRoad, key, lPath, nearest, reach, useAt, type TileLike } from "./grid.ts"
@@ -97,7 +97,7 @@ import { approvalTarget } from "./rules/approval.ts"
 import { salvageOf, salvageText, withWorks } from "./rules/salvage.ts"
 import { rockBlocks, type RockPart } from "./render3d/rock-blocks.ts"
 import { courseCount, GUIDE_QUIET, guideDone, guideStep, guideSteps, lockedNote, upcoming, type GuideFacts, type GuideFocus } from "./rules/guide.ts"
-import { anA, TAX_STEPS, ticks } from "./content.ts"
+import { anA, TAX_STEPS, stepsOf } from "./content.ts"
 
 const cellAt = (at: Point): Point => {
   return { x: Math.floor(at.x), y: Math.floor(at.y) }
@@ -162,7 +162,7 @@ const problemOf = (kind: Kind, status: StatusValue, growing = false, crewing?: C
     case "starved":
       if (kind.gathers?.source === "water")
         return growing
-          ? { label: "no fish", why: `the water in reach is fished out: each stretch rests ${Math.round(RESTOCK_TICKS * STEP_SECONDS)} s after a catch`, fix: { text: "give it a longer shore of its own, or fewer fisheries on this water" } }
+          ? { label: "no fish", why: `the water in reach is fished out: each stretch rests ${Math.round(RESTOCK_TICKS * step.dt)} s after a catch`, fix: { text: "give it a longer shore of its own, or fewer fisheries on this water" } }
           : { label: "no water", why: `no water within ${kind.gathers.radius} cells`, fix: { text: "rebuild it by the shore" } }
       if (kind.gathers && growing && (kind.gathers.source === "stone" || kind.gathers.source === "ore"))
         return { label: "worked out", why: `the worked faces in reach give a little ${kind.gathers.source} now and then`, fix: { text: `build it by fresh rock, or buy ${kind.gathers.source} in the [town] panel` } }
@@ -353,14 +353,14 @@ const legends: Readonly<Record<Exclude<View, "none">, Legend>> = {
 
 /** When each workshop began waiting for its input: a shelf runs empty for a moment all the time, so the ticker only says so after `ALERT_PATIENCE`. */
 const starvedSince = new Map<number, number>()
-const ALERT_PATIENCE = ticks(30)
+const ALERT_PATIENCE = stepsOf(30)
 /** Since when the store has held no food (`null`: it has some). Fish comes in and goes out in handfuls, so the ticker waits `HUNGER_PATIENCE` before saying so. */
 let emptySince: number | null = null
 /** Once said, it stays said a while, so a handful of fish arriving does not flick it off and on. */
 let hungryUntil = 0
 /** Why each building's upgrade is needed now, by its id, reckoned once a second (see `upgradesWanted`). */
 let wanted: { at: number; why: Map<number, string> } = { at: -1, why: new Map() }
-const HUNGER_PATIENCE = ticks(20)
+const HUNGER_PATIENCE = stepsOf(20)
 /** A view's colour over a model: pale, so the ink still reads. */
 const TINT = { good: 0xbcd2ee, fair: 0xf3e3a8, bad: 0xf2b9a0, cool: 0xdccbe8, mark: 0xd5dad3, settlers: 0xead7bd, fine: 0xa9c4e8, plain: 0xffffff }
 const needIcons = { food: "food", bread: "bread", cloth: "cloth", faith: "faith", furniture: "furniture" } as const
@@ -430,7 +430,7 @@ export const Interact = Game.System(
     const cells = resources.appeal.get().cells
     // The rocks by cell: which are ore, and which are worked down to their faces.
     const rockAt = new Map(queries.rocks.each().map(({ data }) => [key(data.tile.get().x, data.tile.get().y), data.rock.get()]))
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     const buildings = queries.buildings.each()
     const houses = queries.houses.each()
     const ruins = queries.ruins.each()
@@ -827,7 +827,7 @@ export const Interact = Game.System(
      * homes without faith; a fire watch with homes on its streets at high fire risk.
      */
     const upgradesWanted = (): ReadonlyMap<number, string> => {
-      const tick = resources.time.get().tick
+      const tick = resources.time.get().step
       if (Math.floor(tick / 60) === wanted.at) return wanted.why
       const why = new Map<number, string>()
       const standingRows = buildings.filter((r) => !r.data.site.present && !r.data.rising.present && !maybe(r.data.works))
@@ -1927,7 +1927,7 @@ export const Animate = Game.System(
     const emphasis = (id: number): Emphasis => (danger && hover === id ? "danger" : "normal")
     const dt = services.clock.deltaSeconds
     // Fish where the water would give a catch now; none where it rests after one.
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     services.stage.setFish(queries.water.each().filter(({ data }) => tick - data.water.get().fished >= RESTOCK_TICKS).map(({ data }) => data.tile.get()))
 
     for (const { entity, data } of queries.buildings.each()) {

@@ -1,3 +1,4 @@
+import { every } from "../content.ts"
 import { transport } from "../rules/config.ts"
 import { wantsBurgherGoods, wantsCitizenGoods } from "../rules/households.ts"
 import { appealAt } from "../appeal.ts"
@@ -60,7 +61,7 @@ export const Dispatch = Game.System(
     const rules = services.rules
     const { kinds, goods, spoils, toolStock: TOOL_STOCK } = rules
 
-    if (resources.time.get().tick % DISPATCH_TICKS !== 0) return
+    if (!every(resources.time.get(), DISPATCH_TICKS)) return
     const grid = resources.grid.get()
     const out = new Map<number, number>()
     const incoming = new Map<string, number>()

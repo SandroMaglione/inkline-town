@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { NodeRegistry } from "@typeonce/bevy-ts-render"
+import { NodeRegistry } from "@typeonce/ritmo-render"
 import { buildAsset, floorScale, vertex3, type BuiltAsset } from "../asset-lab/renderer.ts"
 import { house } from "../asset-lab/homes.ts"
 import { makeBuilding } from "../asset-lab/buildings.ts"

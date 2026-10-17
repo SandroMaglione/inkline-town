@@ -7,8 +7,8 @@
  * Once the term has ended, only a new town, or another term, is taken.
  */
 import { BuildingParts, buildingDraft, houseDraft, HouseParts, houseStart, ParkParts, parkDraft, RoadParts, roadDraft, RockParts, rockDraft, RoleParts, rolesOf, StartParts, startOf, TreeParts, treeDraft, WaterParts, waterDraft } from "../archetypes.ts"
-import * as Random from "@typeonce/bevy-ts-math/Random"
-import { amounts, anA, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, ticks, total, upgradeAt, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
+import * as Random from "@typeonce/ritmo-math/Random"
+import { amounts, anA, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, stepsOf, total, upgradeAt, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
@@ -474,7 +474,7 @@ export const ApplyEdits = Game.System(
           const stock: Amounts = amounts(richness.stock)
           commands.insert(id, Game.Command.entry(TownHall, {}), Game.Command.entry(Status, "idle"), Game.Command.entry(Inventory, { stock, accepts: goodIds, cap: hall.holds?.cap ?? 60 }))
           coins = richness.coins
-          const founded = resources.time.get().tick
+          const founded = resources.time.get().step
           // The almanac: each year's winter, from the seed (on its own stream, so the land's randomness is untouched).
           const almanac = Random.make((charter.seed ^ 0x5a17c3) >>> 0)
           resources.charter.set({ ...charter, founded, winters: rollWinters(() => almanac.next(), rules) })

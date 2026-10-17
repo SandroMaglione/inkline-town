@@ -18,9 +18,10 @@ export const SAVE_FORMAT = "inkline-town/save"
  * winters). 4: parks and patrols. 5: the grudge over taxes, and where each piece of news happened.
  * 6: how much of each good may be traded at a collection. 7: the mayor's guide. 8: terms that follow one
  * another, the town's rank, and upgraded buildings.
- * Version 4 to 8 saves are carried forward (see `carry`); older ones cannot be loaded.
+ * 10: fixed-step Clock values and runtime snapshot format 2.
+ * Version 4 to 9 saves are carried forward (see `carry`); older ones cannot be loaded.
  */
-export const SAVE_VERSION = 9
+export const SAVE_VERSION = 10
 
 /**
  * Fills in what a save from an earlier version lacks, so a town in progress
@@ -35,10 +36,18 @@ export const SAVE_VERSION = 9
  * Anything else is left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
-  if (version < 4 || version > 8 || typeof world !== "object" || world === null) return null
-  const w = world as { resources?: Record<string, unknown>; entities?: Array<{ components?: Record<string, unknown> }> }
+  if (version < 4 || version > 9 || typeof world !== "object" || world === null) return null
+  const w = world as { version?: number; scopes?: Record<string, unknown>; resources?: Record<string, unknown>; entities?: Array<{ components?: Record<string, unknown> }> }
   const r = w.resources
   if (!r || typeof r !== "object") return null
+  // Town never used entity scopes before this format. Its old clock counted
+  // the same 60 Hz steps under `tick`; preserve that count exactly.
+  if (w.version === 1) { w.version = 2; w.scopes = {} }
+  const time = r["Town/Time"]
+  if (typeof time === "object" && time !== null && "tick" in time && typeof time.tick === "number") {
+    r["Town/Time"] = { step: time.tick, hz: 60, dt: time.tick > 0 ? 1 / 60 : 0 }
+  }
+  if (version === 9) return w
   // From 8, water that was never fished, and an upgraded building upgraded once.
   for (const e of Array.isArray(w.entities) ? w.entities : []) {
     const water = e.components?.["Town/Water"]
@@ -218,7 +227,7 @@ export const read = (slot: Slot) =>
     const parsed = yield* decodeFile(raw).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
     // The first charter saves were the world alone.
     if (typeof parsed === "object" && parsed !== null && "entities" in parsed && !("format" in parsed)) {
-      return { format: SAVE_FORMAT, version: SAVE_VERSION, slot, savedAt: 0, title: "an earlier save", world: parsed } satisfies SaveFile
+      return { format: SAVE_FORMAT, version: SAVE_VERSION, slot, savedAt: 0, title: "an earlier save", world: carry(9, parsed) ?? parsed } satisfies SaveFile
     }
     const version = (parsed as { version?: unknown } | null)?.version
     if (typeof version === "number" && version !== SAVE_VERSION) {

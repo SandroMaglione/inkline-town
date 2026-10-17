@@ -4,12 +4,12 @@ import { resolveRules } from "./rules/config.ts"
  * bevy-ts ECS with a 3D view. The simulation runs on a fixed step;
  * the views follow once a frame.
  */
-import { HostClock, Result } from "@typeonce/bevy-ts"
+import { HostClock, Result } from "@typeonce/ritmo"
 import { Effect } from "effect"
-import { BrowserHostClock, FixedLoop } from "@typeonce/bevy-ts-browser"
+import { BrowserHostClock, FixedLoop } from "@typeonce/ritmo-browser"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
-import { lands, sizes, STEP_SECONDS } from "./content.ts"
+import { lands, sizes, step } from "./content.ts"
 import { createHost, type Persistence } from "./host.ts"
 import { present } from "./present.ts"
 import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World } from "./save.ts"
@@ -45,7 +45,7 @@ const start = async () => {
       (text) => (arriving = text),
       (error: unknown) => visitFailed(error instanceof Error ? error.message : "Could not open that town")
     )
-  const clock = { deltaSeconds: STEP_SECONDS, elapsed: 0 }
+  const clock = { deltaSeconds: step.dt, elapsed: 0 }
 
   const buildingNodes = stage.registry<BuildingView>(),
     houseNodes = stage.registry<HouseView>(),
@@ -90,7 +90,7 @@ const start = async () => {
   // `town.runtime.snapshot()`, and `town.advance(seconds)` to fast-forward the simulation.
   if (import.meta.env.DEV) {
     const advance = (seconds: number) => {
-      for (let i = 0; i < Math.round(seconds / STEP_SECONDS); i++) runtime.tick(simulate)
+      for (let i = 0; i < Math.round(seconds / step.dt); i++) runtime.tick(simulate)
     }
     Object.assign(window, { town: { ui, runtime, advance, view: stage } })
     if (runtime.debug !== undefined) {
@@ -161,7 +161,7 @@ const start = async () => {
   let settling = false
   const loop = FixedLoop.start({
     source: FixedLoop.source((onTick) => stage.subscribe(onTick)),
-    stepSeconds: STEP_SECONDS,
+    step,
     maxFrameSeconds: 0.25,
     maxStepsPerFrame: 4,
     // The town runs at the chosen speed; it waits while paused, while the

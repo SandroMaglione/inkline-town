@@ -5,16 +5,16 @@ import { spoilExpectation } from "../rules/decay.ts"
  * shelf, slower in a granary. The pantry keeps count of what the town ate
  * and what rotted, a minute at a time.
  */
-import * as Random from "@typeonce/bevy-ts-math/Random"
+import * as Random from "@typeonce/ritmo-math/Random"
 
 import { RuinParts, ruinDraft } from "../archetypes.ts"
-import { foods, goodIds, ticks } from "../content.ts"
+import { foods, goodIds, stepsOf } from "../content.ts"
 import { counted, placeName } from "../places.ts"
 import { Building, Burning, Charter, Chronicle, Condition, Game, Rules, House, Inventory, Pantry, Recipe, Rising, Rng, Site, Staff, Tile, Time, maybe } from "../schema.ts"
 import { elapsed, write } from "./shared.ts"
 
 /** The pantry warns of rotting food at most this often. */
-const ROT_WARNING = ticks(5 * 60)
+const ROT_WARNING = stepsOf(5 * 60)
 
 export const Decay = Game.System(
   "Town/Decay",
@@ -43,7 +43,7 @@ export const Decay = Game.System(
     const rules = services.rules
     const { kinds, condition: wear, spoils, spoilTicks: SPOIL_TICKS } = rules
 
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     const t = elapsed(resources.time.get(), resources.charter.get())
 
     // Wear: a point every `wear.every` steps; at nothing it falls down.

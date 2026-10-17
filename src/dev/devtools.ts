@@ -5,11 +5,11 @@
  * `vite.config.ts`) when a step fails, when an invariant breaks, or when the
  * monitor's "Save replay" button is pressed. See PLAYTEST.md.
  */
-import type { HostClock } from "@typeonce/bevy-ts"
-import { Invariant, Monitor, Replay } from "@typeonce/bevy-ts-devtools"
-import * as ReplayViteSink from "@typeonce/bevy-ts-devtools/ReplayViteSink"
+import type { HostClock } from "@typeonce/ritmo"
+import { Invariant, Monitor, Replay } from "@typeonce/ritmo-devtools"
+import * as ReplayViteSink from "@typeonce/ritmo-devtools/ReplayViteSink"
 
-import { STEP_SECONDS } from "../content.ts"
+import { step } from "../content.ts"
 import { present } from "../present.ts"
 import { Building, Game, Root, Treasury } from "../schema.ts"
 import { simulate } from "../sim/index.ts"
@@ -55,7 +55,7 @@ export const attachDevtools = (host: DevtoolsHost) => {
     schedule: simulate,
     name: "simulate",
     keep: 60,
-    stepSeconds: STEP_SECONDS,
+    step,
     sink: ReplayViteSink.make({ fetch: host.fetch, onError: (error) => console.warn("The replay could not reach the dev server", error) }),
     hostClock: host.wallClock,
     saveOn: { failure: true, invariants: host.demo ? [CoinsAreWhole, FewerThanTenBuildings] : [CoinsAreWhole] }

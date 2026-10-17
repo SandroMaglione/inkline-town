@@ -4,7 +4,7 @@ import { ruleTicks, shippedRules, type Rules } from "./config.ts"
 // ── Time ──────────────────────────────────────────────────────────────────
 
 /** Steps since the town was founded. */
-export const elapsed = (time: { readonly tick: number }, charter: { readonly founded: number }) => time.tick - charter.founded
+export const elapsed = (time: { readonly step: number }, charter: { readonly founded: number }) => time.step - charter.founded
 export const termTicks = (charter: { readonly term: number }, rules: Rules = shippedRules) => ruleTicks(charter.term * 60, rules)
 export const yearTicks = (charter: { readonly term: number }, rules: Rules = shippedRules) => Math.round(termTicks(charter, rules) / rules.yearsPerTerm)
 

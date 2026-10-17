@@ -6,8 +6,12 @@ without a browser to see exactly what happened, step by step.
 
 ## 1. Start the dev build
 
+This branch pins the Ritmo source commit while the new package names await
+publication. Prepare it before installing the game:
+
 ```sh
-pnpm install
+pnpm engine:prepare
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
@@ -19,7 +23,7 @@ Open the address it prints (usually http://localhost:5173). Replays work in
 Any of these saves the last minute of play:
 
 - **The button.** Press `\` (backslash) or the "◉ monitor" button in the
-  corner to open the bevy-ts monitor, then **Save replay**. Do it right after
+  corner to open the Ritmo monitor, then **Save replay**. Do it right after
   you see the problem: the replay holds the last 60 seconds before the press.
 - **By itself, when a step fails.** If the simulation fails, a replay is
   saved without you doing anything.

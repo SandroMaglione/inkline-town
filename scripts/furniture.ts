@@ -64,7 +64,7 @@ const run = (homes: number, carpenters: number) => {
   // Across the street: a market, then the carpenters.
   t.edit({ type: "building", kind: "market", cell: { x: hall.x + 4, y: hall.y - 1 }, open: false })
   for (let i = 0; i < carpenters; i++) t.edit({ type: "building", kind: "carpenter", cell: { x: hall.x + 6 + 2 * i, y: hall.y - 1 }, open: false })
-  const started = t.snapshot().resources["Town/Time"].tick
+  const started = t.snapshot().resources["Town/Time"].step
   const samples: Array<Record<string, number | string> & { townhouses: number; made: number }> = []
   let firstAll = -1
   for (let m = 1; m <= minutes; m++) {
@@ -92,7 +92,7 @@ const run = (homes: number, carpenters: number) => {
     samples.push(sample)
     if (firstAll < 0 && townhouses === homes) firstAll = m
   }
-  const ticks = t.snapshot().resources["Town/Time"].tick - started
+  const ticks = t.snapshot().resources["Town/Time"].step - started
   const last = samples.at(-1)!
   const tail = samples.slice(Math.floor(samples.length / 2))
   const held = tail.reduce((n, x) => n + x.townhouses, 0) / tail.length

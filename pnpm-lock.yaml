@@ -8,21 +8,21 @@ importers:
 
   .:
     dependencies:
-      '@typeonce/bevy-ts':
-        specifier: ^0.5.0
-        version: 0.5.0(typescript@7.0.2)
-      '@typeonce/bevy-ts-browser':
-        specifier: ^0.5.0
-        version: 0.5.0(typescript@7.0.2)
-      '@typeonce/bevy-ts-math':
-        specifier: ^0.5.0
-        version: 0.5.0(typescript@7.0.2)
-      '@typeonce/bevy-ts-pixi':
-        specifier: ^0.5.0
-        version: 0.5.0(typescript@7.0.2)
-      '@typeonce/bevy-ts-render':
-        specifier: ^0.5.0
-        version: 0.5.0(typescript@7.0.2)
+      '@typeonce/ritmo':
+        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/core
+        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/core
+      '@typeonce/ritmo-browser':
+        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/browser
+        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/browser
+      '@typeonce/ritmo-math':
+        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/math
+        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/math
+      '@typeonce/ritmo-pixi':
+        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/pixi
+        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/pixi
+      '@typeonce/ritmo-render':
+        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/render
+        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/render
       effect:
         specifier: 4.0.3
         version: 4.0.3
@@ -33,9 +33,9 @@ importers:
         specifier: ^0.186.1
         version: 0.186.1
     devDependencies:
-      '@typeonce/bevy-ts-devtools':
-        specifier: ^0.5.0
-        version: 0.5.0(typescript@7.0.2)
+      '@typeonce/ritmo-devtools':
+        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/devtools
+        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/devtools
       '@types/node':
         specifier: 25.5.0
         version: 25.5.0
@@ -275,35 +275,6 @@ packages:
 
   '@tweenjs/tween.js@23.1.3':
     resolution: {integrity: sha512-vJmvvwFxYuGnF2axRtPYocag6Clbb5YS7kLL+SO/TeVFzHqDIWrNKYtcsPMibjDx9O+bu+psAy9NKfWklassUA==}
-
-  '@typeonce/bevy-ts-browser@0.5.0':
-    resolution: {integrity: sha512-69IcRugcpq0bfd809RtmuZbJ/11zrcTTJyJ0o5kDDTQWY7RtqNUm1layTTbBqnJYl8rkMXP0Qzzu2Pcypz/2pA==}
-    engines: {node: '>=20'}
-
-  '@typeonce/bevy-ts-devtools@0.5.0':
-    resolution: {integrity: sha512-9N9pTjitHmkQnWy7yYcyr2WD48+yjJ994ZA3ZQK44TtZJ6lRQ5SH+7Dfe/sb5EurSBzktGYOQAh7coJAx6mh7A==}
-    engines: {node: '>=20'}
-
-  '@typeonce/bevy-ts-math@0.5.0':
-    resolution: {integrity: sha512-uxeRQ8Yhhrl98KdcUYBNeVTzppOnyVlzXinOlEogkHvV3Gal4ctBYVpP36LY/+3oENK3FMQXr5ESJN+cMKj2fQ==}
-    engines: {node: '>=20'}
-
-  '@typeonce/bevy-ts-pixi@0.5.0':
-    resolution: {integrity: sha512-UVHTm+C0efKLMt0JbMI0MN5lSfLLvnmbAX/3tUxqWmPRQp1rK9cz2PHGi35OL7Lunug3gnX46+WmkLHPxYo57w==}
-    engines: {node: '>=20'}
-
-  '@typeonce/bevy-ts-render@0.5.0':
-    resolution: {integrity: sha512-N83MLOluj6DhWPS6ochmrkFk0KODqngYE1VS3UqFnQ+6KnjPxHlwQCGqvQAm5M4m8rgFabLLFalqW5MpywmGtA==}
-    engines: {node: '>=20'}
-
-  '@typeonce/bevy-ts@0.5.0':
-    resolution: {integrity: sha512-YUY0KPYWGLJI5p/dQyTtKQ9HxxmSyFzH2Id5ke4gPZ53+ii3Jv2Ua0C4Y+62YzS2RBQvOmN46woZgF6VSvmUfQ==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      typescript: '>=5.9'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
 
   '@types/earcut@3.0.0':
     resolution: {integrity: sha512-k/9fOUGO39yd2sCjrbAJvGDEQvRwRnQIZlBz43roGwUZo5SHAmyVvSFyaVVZkicRVCaDXPKlbxrUcBuJoSWunQ==}
@@ -788,40 +759,6 @@ snapshots:
   '@rolldown/pluginutils@1.0.1': {}
 
   '@tweenjs/tween.js@23.1.3': {}
-
-  '@typeonce/bevy-ts-browser@0.5.0(typescript@7.0.2)':
-    dependencies:
-      '@typeonce/bevy-ts': 0.5.0(typescript@7.0.2)
-    transitivePeerDependencies:
-      - typescript
-
-  '@typeonce/bevy-ts-devtools@0.5.0(typescript@7.0.2)':
-    dependencies:
-      '@typeonce/bevy-ts': 0.5.0(typescript@7.0.2)
-    transitivePeerDependencies:
-      - typescript
-
-  '@typeonce/bevy-ts-math@0.5.0(typescript@7.0.2)':
-    dependencies:
-      '@typeonce/bevy-ts': 0.5.0(typescript@7.0.2)
-    transitivePeerDependencies:
-      - typescript
-
-  '@typeonce/bevy-ts-pixi@0.5.0(typescript@7.0.2)':
-    dependencies:
-      '@typeonce/bevy-ts-render': 0.5.0(typescript@7.0.2)
-    transitivePeerDependencies:
-      - typescript
-
-  '@typeonce/bevy-ts-render@0.5.0(typescript@7.0.2)':
-    dependencies:
-      '@typeonce/bevy-ts': 0.5.0(typescript@7.0.2)
-    transitivePeerDependencies:
-      - typescript
-
-  '@typeonce/bevy-ts@0.5.0(typescript@7.0.2)':
-    optionalDependencies:
-      typescript: 7.0.2
 
   '@types/earcut@3.0.0': {}
 

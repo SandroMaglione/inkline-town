@@ -11,7 +11,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs"
 
-import { Replay } from "@typeonce/bevy-ts-devtools"
+import { Replay } from "@typeonce/ritmo-devtools"
 
 import { replayTarget } from "../src/sim/headless.ts"
 

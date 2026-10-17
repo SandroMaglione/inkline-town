@@ -5,8 +5,8 @@ import { shippedRules } from "../rules/config.ts"
  * town's approval follows how it is treated, the town's history is kept,
  * the town rises through its ranks, and the term ends: lost, or run out.
  */
-import { crown, HISTORY_TICKS, ticks, WINTER_WARNING, type GoodId } from "../content.ts"
-import * as Random from "@typeonce/bevy-ts-math/Random"
+import { crown, HISTORY_TICKS, stepsOf, WINTER_WARNING, type GoodId } from "../content.ts"
+import * as Random from "@typeonce/ritmo-math/Random"
 import { Building, Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, House, Inventory, Ledger, Mood, Pantry, Paused, Policy, Recipe, Rising, Rng, Site, Stock, Storage, Time, Treasury, TownHall, Upgraded, maybe } from "../schema.ts"
 import { elapsed, seasonAt, termTicks, write } from "./shared.ts"
 
@@ -98,7 +98,7 @@ export const Requests = Game.System(
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)
     const c = resources.crown.get()
-    const remembered = c.snubs.filter((at) => t - at < ticks(crown.memory * 60))
+    const remembered = c.snubs.filter((at) => t - at < stepsOf(crown.memory * 60))
     if (remembered.length !== c.snubs.length) resources.crown.set({ ...c, snubs: remembered })
 
     if (c.open && t >= c.due) {
@@ -163,7 +163,7 @@ export const Approve = Game.System(
     const rules = services.rules
 
     const t = elapsed(resources.time.get(), resources.charter.get())
-    if (t % ticks(10) !== 0) return
+    if (t % stepsOf(10) !== 0) return
     const policy = resources.policy.get()
     const m = resources.mood.get()
     const parts = approvalTarget(queries.homes.each().map(({ data }) => data.house.get()), policy,
@@ -240,7 +240,7 @@ export const Judge = Game.System(
     const residents = census.settlers + census.citizens
     const net = steadyNet(resources.history.get().samples, ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin)
     const note = (text: string, alarm = false) => write(resources.chronicle, t, text, alarm)
-    const minutes = (n: number) => ticks(n * 60)
+    const minutes = (n: number) => stepsOf(n * 60)
 
     const next = { ...f, peak: Math.max(f.peak, residents) }
     for (const mark of [50, 100, 250, 500, 1000]) if (f.peak < mark && residents >= mark) note(`${mark} residents.`)

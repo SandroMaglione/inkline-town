@@ -1,3 +1,4 @@
+import { every } from "../content.ts"
 import { wildTreeSpots, canSeedTree } from "../rules/land.ts"
 /**
  * Building and working: the grid and the town's stock are indexed, sites
@@ -5,10 +6,10 @@ import { wildTreeSpots, canSeedTree } from "../rules/land.ts"
  * turn inputs (or the land) into goods, planters sow trees and fields, and
  * what is sown grows.
  */
-import * as Random from "@typeonce/bevy-ts-math/Random"
+import * as Random from "@typeonce/ritmo-math/Random"
 
 import { FieldParts, fieldDraft, TreeParts, treeDraft } from "../archetypes.ts"
-import { amounts, anA, asUpgraded, crewOf, goodIds, ticks, total, upgradeAt, worksNeeded, type Amounts, type Crew } from "../content.ts"
+import { amounts, anA, asUpgraded, crewOf, goodIds, stepsOf, total, upgradeAt, worksNeeded, type Amounts, type Crew } from "../content.ts"
 
 /** The flow of goods is counted in slices this many seconds long, and the last `FLOW_SLICES` of them (a minute) are kept. */
 const FLOW_SLICE = 10
@@ -100,7 +101,7 @@ export const CountStock = Game.System(
       const e = data.errand.get()
       held[e.good] = held[e.good]! + e.count
     }
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     const charter = resources.charter.get()
     const town = `${charter.seed}:${charter.founded}`
     const f = resources.flow.get()
@@ -115,7 +116,7 @@ export const CountStock = Game.System(
     // Coins that came in other than by the collection (a reward, a refund) were made; any that went out are left over as used.
     const other = treasury - f.coins.seen - f.coins.booked
     const coins = { ...f.coins, made: f.coins.made + Math.max(0, other), seen: treasury, booked: 0 }
-    if (tick - f.since < ticks(FLOW_SLICE)) {
+    if (tick - f.since < stepsOf(FLOW_SLICE)) {
       resources.flow.set({ ...f, held: now, coins })
       return
     }
@@ -145,7 +146,7 @@ export const CountStock = Game.System(
 // ── Going up ──────────────────────────────────────────────────────────────
 
 /** How often a storage under works takes a crate for it from its own shelves. */
-const SELF_SUPPLY_TICKS = ticks(1)
+const SELF_SUPPLY_TICKS = stepsOf(1)
 
 /** Where a site's walls are once its materials are in: it goes on rising from here. */
 export const SITE_SHARE = 0.35
@@ -183,7 +184,7 @@ export const Raise = Game.System(
 
     // An upgrade whose materials are all in stands upgraded: it works from here on as `asUpgraded` says,
     // keeping what it holds and what it was in the middle of.
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     for (const { entity, data } of queries.works.each()) {
       let works = data.works.get()
       // A storage under works (the town hall) builds with what it holds itself, a crate at a time.
@@ -210,10 +211,10 @@ export const Raise = Game.System(
       commands.insert(entity.id, Game.Command.entry(Upgraded, { level: works.level }))
       data.staff.set({ ...data.staff.get(), needed: kind.workers })
       const recipe = maybe(data.recipe), carriers = maybe(data.carriers), service = maybe(data.service)
-      if (recipe && kind.recipe) commands.insert(entity.id, Game.Command.entry(Recipe, { ...recipe, period: ticks(kind.recipe.seconds) }))
+      if (recipe && kind.recipe) commands.insert(entity.id, Game.Command.entry(Recipe, { ...recipe, period: stepsOf(kind.recipe.seconds) }))
       if (shelves.ok && kind.holds) shelves.value.data.inventory.set({ ...shelves.value.data.inventory.get(), cap: kind.holds.cap })
       if (carriers && kind.carriers) commands.insert(entity.id, Game.Command.entry(Carriers, { count: kind.carriers }))
-      if (service && kind.service) commands.insert(entity.id, Game.Command.entry(Service, { ...service, interval: ticks(kind.service.seconds), range: kind.service.range }))
+      if (service && kind.service) commands.insert(entity.id, Game.Command.entry(Service, { ...service, interval: stepsOf(kind.service.seconds), range: kind.service.range }))
       const was = (upgradeAt(base, works.level - 1)?.title ?? base.title).toLowerCase()
       write(resources.chronicle, elapsed(resources.time.get(), resources.charter.get()), `The ${was} is now ${anA(upgradeAt(base, works.level)!.title.toLowerCase())}.`, true)
     }
@@ -237,7 +238,7 @@ export const Raise = Game.System(
 // ── Workers ───────────────────────────────────────────────────────────────
 
 /** Workers are reassigned this often: residents move in and out every few seconds, no faster. */
-export const STAFF_TICKS = ticks(0.5)
+export const STAFF_TICKS = stepsOf(0.5)
 
 /**
  * Residents go to work at the workplaces within a commute of their home
@@ -272,7 +273,7 @@ export const AssignStaff = Game.System(
     const rules = services.rules
     const { kinds, commute: COMMUTE, staffTicks: STAFF_TICKS } = rules
 
-    if (resources.time.get().tick % STAFF_TICKS !== 0) return
+    if (!every(resources.time.get(), STAFF_TICKS)) return
     const grid = resources.grid.get()
     const homes: Array<{ readonly id: number; readonly crew: Crew; left: number; readonly doors: ReadonlyArray<{ readonly x: number; readonly y: number }> }> = []
     for (const { entity, data } of queries.homes.each()) {
@@ -376,7 +377,7 @@ export const Work = Game.System(
     const made: Record<string, number> = {}
 
     const grid = resources.grid.get()
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     const t = elapsed(resources.time.get(), resources.charter.get())
     const season = seasonAt(t, resources.charter.get(), rules)
     const fishing = season.severity ? winters[season.severity].fishing : 1
@@ -539,7 +540,7 @@ export const Plant = Game.System(
     const grid = resources.grid.get()
     const random = Random.make(resources.rng.get())
     const sown = new Set<number>()
-    const tick = resources.time.get().tick
+    const tick = resources.time.get().step
     for (const { entity, data } of queries.planters.each()) {
       const tile = data.tile.get()
       const staff = data.staff.get()
@@ -591,7 +592,7 @@ export const Spread = Game.System(
     const rules = services.rules
     const { grown: GROWN, spreadTicks: SPREAD_TICKS } = rules
 
-    if (resources.time.get().tick % SPREAD_TICKS !== 0) return
+    if (!every(resources.time.get(), SPREAD_TICKS)) return
     const grid = resources.grid.get()
     const random = Random.make(resources.rng.get())
     const grown = queries.trees.each().filter(({ data }) => data.tree.get().growth >= GROWN.tree)
@@ -620,7 +621,7 @@ export const Grow = Game.System(
     const rules = services.rules
     const { grown: GROWN, growTicks: GROW_TICKS } = rules
 
-    if (resources.time.get().tick % GROW_TICKS !== 0) return
+    if (!every(resources.time.get(), GROW_TICKS)) return
     for (const { data } of queries.trees.each()) {
       const growth = data.tree.get().growth
       if (growth < GROWN.tree) data.tree.set({ growth: Math.min(GROWN.tree, growth + GROW_TICKS) })

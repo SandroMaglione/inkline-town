@@ -206,7 +206,7 @@ const read = (snapshot: Snapshot): World => {
     crown: r["Town/Crown"],
     fate: r["Town/Fate"],
     charter: r["Town/Charter"],
-    tick: r["Town/Time"].tick
+    tick: r["Town/Time"].step
   }
 }
 
@@ -545,7 +545,7 @@ const decide = (w: World): ReadonlyArray<Edit> => {
     const civicShort = w.coins > 600 && count(w, "mill") > 0 && count(w, "weaver") > 0 && count(w, "chapel") > 0 && w.census.citizens! < Math.max(content.sizes[w.charter.size].goal.residents, residents(w)) * content.fate.citizens
     // Winter: the fields lie fallow, so flour (which keeps) is laid in for the bakeries before it, and fish bought while it lasts.
     const season = seasonAt(w.tick - w.charter.founded, w.charter, rules)
-    const bracing = w.coins > 800 && count(w, "bakery") > 0 && (season.winter || (season.coming !== null && season.left < content.ticks(180)))
+    const bracing = w.coins > 800 && count(w, "bakery") > 0 && (season.winter || (season.coming !== null && season.left < content.stepsOf(180)))
     const wintry = season.winter && w.coins > 800 && fed < 0.8 && w.stock.fish < 20
     const shortages: ReadonlyArray<readonly [GoodId, number, number]> = [["flour", bracing ? 15 : -1, 40], ["bread", civicShort ? 8 : -1, 20], ["cloth", civicShort ? 4 : -1, 12], ["planks", Math.max(6, wanted(w, "planks")), Math.max(14, wanted(w, "planks") + 8)], ["stone", Math.max(4, wanted(w, "stone")), Math.max(12, wanted(w, "stone") + 6)], ["tools", 3, 6], ["fish", (fed < 0.5 && w.stock.fish < 10) || (closing && fed < 0.7 && w.stock.fish < 20) || wintry ? 1000 : -1, 24]]
     for (const [g, low, enough] of shortages) {
