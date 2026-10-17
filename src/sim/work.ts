@@ -34,16 +34,15 @@ export const IndexGrid = Game.System(
   {
     queries: {
       tiles: TileRead,
-      laid: Game.Query({ selection: { tile: Game.Query.read(Tile) }, filters: [Game.Query.added(Tile)] }),
-      /** A road just paved: the grid's paved cells change without any tile coming or going. */
-      paved: Game.Query({ selection: { paved: Game.Query.read(Paved) }, filters: [Game.Query.added(Paved)] })
+      /** A tile laid, or a road just paved: the grid's paved cells change without any tile coming or going. */
+      laid: Game.Query({ selection: {}, filters: [Game.Query.anyOf(Game.Query.added(Tile), Game.Query.added(Paved))] })
     },
     despawned: { entities: Game.System.readDespawned() },
     resources: { land: Game.System.readResource(Land), grid: Game.System.writeResource(Grid) }
   },
   ({ queries, despawned, resources }) => {
     const known = resources.grid.get().tiles
-    const changed = known === undefined || queries.laid.each().length > 0 || queries.paved.each().length > 0 || despawned.entities.all().some((id) => known.has(id))
+    const changed = known === undefined || queries.laid.each().length > 0 || despawned.entities.all().some((id) => known.has(id))
     if (!changed) return
     const grid = new GridBuilder(resources.land.get().mask)
     const tiles = new Set<number>()

@@ -1846,18 +1846,17 @@ export const DrawGround = Game.System(
     queries: {
       roads: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road] }),
       paved: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road, Paved] }),
-      added: Game.Query({ selection: { paved: Game.Query.read(Paved) }, filters: [Game.Query.added(Paved)] }),
       water: Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Water] }),
       parks: ParkRead,
-      relaid: Game.Query({ selection: { park: Game.Query.read(Park) }, filters: [Game.Query.changed(Park)] }),
-      laid: Game.Query({ selection: { tile: Game.Query.read(Tile) }, filters: [Game.Query.added(Tile)] })
+      /** A tile laid, a road paved, or a park relaid. */
+      laid: Game.Query({ selection: {}, filters: [Game.Query.anyOf(Game.Query.added(Tile), Game.Query.added(Paved), Game.Query.changed(Park))] })
     },
     despawned: { entities: Game.System.readDespawned() },
     services: { stage: Game.System.service(StageService) }
   },
   ({ queries, despawned, services }) => {
     const dirty = services.stage.groundDirty
-    if (!dirty && queries.laid.each().length === 0 && queries.added.each().length === 0 && queries.relaid.each().length === 0 && despawned.entities.all().length === 0) return
+    if (!dirty && queries.laid.each().length === 0 && despawned.entities.all().length === 0) return
     const cellsOf = (rows: ReadonlyArray<{ readonly data: { readonly tile: { get(): TileLike } } }>) =>
       new Set(rows.map(({ data }) => key(data.tile.get().x, data.tile.get().y)))
     const roads = cellsOf(queries.roads.each())
