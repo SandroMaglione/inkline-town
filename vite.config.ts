@@ -1,9 +1,12 @@
 import { defineConfig } from "vite"
 
+import * as ReplayVitePlugin from "@typeonce/bevy-ts-devtools/ReplayVitePlugin"
+
 import { sharesInDev } from "./src/server/dev.ts"
 
 export default defineConfig({
-  plugins: [sharesInDev()],
+  // In `pnpm dev`, replays saved in the page land in .replays/ (see PLAYTEST.md).
+  plugins: [sharesInDev(), ReplayVitePlugin.plugin()],
   environments: {
     // The pages are the client's alone: on deploy, the Worker (src/server/worker.ts) builds as an environment of its own.
     client: {

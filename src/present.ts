@@ -21,6 +21,8 @@ import {
   Appeal,
   Building,
   BuildingNodes,
+  Selection,
+  Toast,
   Burning,
   Census,
   Charter,
@@ -365,6 +367,24 @@ const needIcons = { food: "food", bread: "bread", cloth: "cloth", faith: "faith"
 
 const appealColor = (v: number) =>
   v >= home.tiers[3].appeal ? 0x1f4f8f : v >= home.tiers[2].appeal ? GOOD : v >= 0 ? 0xc6d4e4 : v > home.squalid ? 0xeaa26a : BAD
+
+/** What the simulation told the page this step: toasts to show, and the panel's selection. */
+export const ShowFeedback = Game.System(
+  "Town/ShowFeedback",
+  {
+    events: { toast: Game.System.readEvent(Toast), selection: Game.System.readEvent(Selection) },
+    services: { ui: Game.System.service(Ui) }
+  },
+  ({ events, services }) => {
+    const ui = services.ui
+    for (const message of events.toast.all()) ui.toast(message)
+    for (const change of events.selection.all()) {
+      if ("select" in change) ui.selected = change.select
+      else if ("clear" in change) ui.selected = null
+      else if (ui.selected === change.clearIf) ui.selected = null
+    }
+  }
+)
 
 export const Interact = Game.System(
   "Town/Interact",
@@ -2061,6 +2081,7 @@ export const Stroll = Game.System(
 )
 
 export const present = Game.Schedule(
+  ShowFeedback,
   Interact,
   DrawLand,
   RenderBuildings,

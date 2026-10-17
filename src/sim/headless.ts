@@ -4,9 +4,11 @@
  * this, pushing the same edits the page does and reading the world through
  * the same snapshots it saves.
  */
+import type * as Replay from "@typeonce/bevy-ts-devtools/Replay"
+
 import { STEP_SECONDS, type CharterValue } from "../content.ts"
 import { resolveRules, type Rules as RuleInputs } from "../rules/config.ts"
-import { Game, Rules, Ui } from "../schema.ts"
+import { Edits, Game, Rules, Toast } from "../schema.ts"
 import { emptyPreview, type Edit, type UiValue } from "../ui.ts"
 import { blankResources, simulate } from "./index.ts"
 
@@ -31,6 +33,26 @@ const blankUi = (charter: CharterValue, toast: (message: string) => void): UiVal
 
 const lintCharter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }
 
+/** The simulation's input from a page: each step takes the edits queued since the last. */
+export const editsOf = (ui: Pick<UiValue, "edits">) => ({ snapshot: (): ReadonlyArray<Edit> => ui.edits.splice(0) })
+
+/** The toasts the last step emitted (an inspector: it reads, and does not hold, the stream). */
+const Toasts = Game.Inspector("Town/Toasts", { events: { toast: Game.System.readEvent(Toast) } }, ({ events }) => events.toast.all())
+
+/**
+ * The simulation on a debug runtime fed by a replay (see `Replay.session` and
+ * `pnpm replay`): the recorded edits instead of a page's.
+ */
+export const replayTarget = (playback: Replay.Playback) => {
+  const made = Game.Runtime.make({
+    services: Game.Runtime.services(Game.Runtime.service(Edits, playback.source(Edits)), Game.Runtime.service(Rules, resolveRules())),
+    resources: blankResources(),
+    debug: true
+  })
+  if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
+  return { runtime: made.value, schedules: { simulate } }
+}
+
 /**
  * What `bevy-ts-devtools lint src/sim/headless.ts` checks (`pnpm lint:game`,
  * part of `pnpm check`): the simulation on a debug runtime, and the page's
@@ -40,7 +62,7 @@ export const lintTarget = async () => {
   // Loaded here only: tests and bots that use `headless` never load the renderer.
   const { present } = await import("../present.ts")
   const made = Game.Runtime.make({
-    services: Game.Runtime.services(Game.Runtime.service(Ui, blankUi(lintCharter, () => {})), Game.Runtime.service(Rules, resolveRules())),
+    services: Game.Runtime.services(Game.Runtime.service(Edits, editsOf(blankUi(lintCharter, () => {}))), Game.Runtime.service(Rules, resolveRules())),
     resources: blankResources(),
     debug: true
   })
@@ -49,13 +71,15 @@ export const lintTarget = async () => {
 }
 
 export const headless = (charter: CharterValue, options: { readonly toast?: (message: string) => void; readonly rules?: RuleInputs } = {}) => {
-  const ui = blankUi(charter, options.toast ?? (() => {}))
-  const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Ui, ui), Game.Runtime.service(Rules, options.rules ?? resolveRules())), resources: blankResources() })
+  const toast = options.toast ?? (() => {})
+  const ui = blankUi(charter, toast)
+  const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Edits, editsOf(ui)), Game.Runtime.service(Rules, options.rules ?? resolveRules())), resources: blankResources() })
   if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
   const runtime = made.value
   const step = () => {
     const stepped = runtime.tick(simulate)
     if (!stepped.ok) throw new Error(`A step failed: ${JSON.stringify(stepped.error)}`)
+    for (const message of runtime.inspect(Toasts)) toast(message)
   }
   const town = {
     ui,

@@ -12,7 +12,7 @@ import { amounts, anA, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, T
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
-import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Treasury, Ui, Upgraded, Works } from "../schema.ts"
+import { Appeal, Building, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Toast, Treasury, Upgraded, Works, Edits, Selection } from "../schema.ts"
 import { salvageOf, salvageText, withWorks } from "../rules/salvage.ts"
 import { elapsed, rollWinters, termTicks, TileRead, useOf, write } from "./shared.ts"
 import type { Rules as RuleInputs } from "../rules/config.ts"
@@ -81,14 +81,15 @@ export const ApplyEdits = Game.System(
       pantry: Game.System.writeResource(Pantry),
       fires: Game.System.writeResource(Fires)
     },
-    services: { ui: Game.System.service(Ui), rules: Game.System.service(Rules) }
+    events: { toast: Game.System.writeEvent(Toast), selection: Game.System.writeEvent(Selection) },
+    services: { edits: Game.System.service(Edits), rules: Game.System.service(Rules) }
   },
-  ({ queries, resources, services, commands }) => {
+  ({ queries, resources, events, services, commands }) => {
     const rules = services.rules
     const { kinds, home, goods, grounds, props, lands, sizes, trade, roadCost: ROAD_COST, paveCost: PAVE_COST } = rules
 
-    const ui = services.ui
-    if (ui.edits.length === 0) return
+    const queued = services.edits.snapshot()
+    if (queued.length === 0) return
     const grid = new GridBuilder(resources.land.get().mask)
     const rows = queries.tiles.each()
     type Id = (typeof rows)[number]["entity"]["id"]
@@ -162,7 +163,7 @@ export const ApplyEdits = Game.System(
     const playing = () => resources.fate.get().state === "playing"
     const t = elapsed(resources.time.get(), resources.charter.get())
 
-    edits: for (const edit of ui.edits.splice(0)) {
+    edits: for (const edit of queued) {
       if (edit.type !== "newTown" && edit.type !== "nextTerm" && !playing()) continue
       switch (edit.type) {
         case "building": {
@@ -170,22 +171,22 @@ export const ApplyEdits = Game.System(
           const tile = { ...edit.cell, size: kind.size }
           if (!kind.buildable) break
           if (!unlocked(kind, resources.census.get())) {
-            ui.toast(`${kind.title} ${lockReason(kind, resources.census.get())}`)
+            events.toast.emit(`${kind.title} ${lockReason(kind, resources.census.get())}`)
             break
           }
           if (!canPlace(grid.value(), tile)) {
-            ui.toast("No room there")
+            events.toast.emit("No room there")
             break
           }
           const short = afford(kind.cost)
           if (short) {
-            ui.toast(short)
+            events.toast.emit(short)
             break
           }
           pay(kind.cost)
           const id = spawn(buildingDraft(kind, edit.cell), tile, "building")
           commands.insert(id, startOf(kind), ...rolesOf(kind, rules))
-          if (edit.open) ui.selected = id
+          if (edit.open) events.selection.emit({ select: id })
           break
         }
         case "homes": {
@@ -199,7 +200,7 @@ export const ApplyEdits = Game.System(
             const id = spawn(houseDraft(cell), tile, "house")
             commands.insert(id, ...houseStart(rules))
           }
-          if (short) ui.toast(short)
+          if (short) events.toast.emit(short)
           break
         }
         case "roads": {
@@ -214,7 +215,7 @@ export const ApplyEdits = Game.System(
             coins -= ROAD_COST
             spawn(roadDraft(cell), tile, "road")
           }
-          if (short) ui.toast("Not enough coins")
+          if (short) events.toast.emit("Not enough coins")
           break
         }
         case "pave": {
@@ -235,7 +236,7 @@ export const ApplyEdits = Game.System(
             commands.insert(road, Game.Command.entry(Paved, {}))
           }
           take({ stone })
-          if (short) ui.toast(short)
+          if (short) events.toast.emit(short)
           break
         }
         case "ground": {
@@ -256,26 +257,26 @@ export const ApplyEdits = Game.System(
             else spawn(parkDraft(cell, edit.ground), tile, "park")
           }
           take(spent)
-          if (short) ui.toast(short)
+          if (short) events.toast.emit(short)
           break
         }
         case "prop": {
           const piece = props[edit.prop]
           if (!unlocked(piece, resources.census.get())) {
-            ui.toast(`${piece.title} needs a bigger town`)
+            events.toast.emit(`${piece.title} needs a bigger town`)
             break
           }
           const row = useAt(grid.value(), edit.cell.x, edit.cell.y) === "park"
             ? queries.parks.each().find((r) => r.entity.id === ownerAt(grid.value(), edit.cell.x, edit.cell.y))
             : undefined
           if (!row) {
-            ui.toast("Lay park ground first")
+            events.toast.emit("Lay park ground first")
             break
           }
           if (row.data.park.get().prop === edit.prop) break
           const short = afford(piece.cost)
           if (short) {
-            ui.toast(short)
+            events.toast.emit(short)
             break
           }
           pay(piece.cost)
@@ -292,12 +293,12 @@ export const ApplyEdits = Game.System(
           if (use === "rock") {
             const rock = queries.rocks.get(owner)
             if (!rock.ok || rock.value.data.rock.get().amount > 1) {
-              ui.toast("Quarry it down first: only a worked face can be cleared")
+              events.toast.emit("Quarry it down first: only a worked face can be cleared")
               break
             }
           }
           if (halls.has(owner)) {
-            ui.toast("The town hall stays")
+            events.toast.emit("The town hall stays")
             break
           }
           // A park's furnishing goes before its ground.
@@ -313,13 +314,13 @@ export const ApplyEdits = Game.System(
             const own = salvageOf(b ? builtCost(kinds[b.kind], maybe(built.value.data.upgraded)?.level ?? 0) : home.cost, maybe(built.value.data.site)?.owed ?? null, rules)
             const s = b ? withWorks(own, kinds[b.kind], maybe(built.value.data.works), rules) : own
             if (s.fee > 0 && coins < s.fee) {
-              ui.toast(`Pulling it down costs ${s.fee} coins`)
+              events.toast.emit(`Pulling it down costs ${s.fee} coins`)
               break
             }
             coins -= s.fee
             const lost = stash(s.back)
             const said = salvageText(s)
-            if (said !== "") ui.toast(`${built.value.data.site.present ? "Cancelled" : "Pulled down"} · ${said}${lost > 0 ? ` (${lost} found no room in storage)` : ""}`)
+            if (said !== "") events.toast.emit(`${built.value.data.site.present ? "Cancelled" : "Pulled down"} · ${said}${lost > 0 ? ` (${lost} found no room in storage)` : ""}`)
           }
           // A building's walkers and a farm's fields are its children, and go with it.
           commands.despawn(owner)
@@ -330,7 +331,7 @@ export const ApplyEdits = Game.System(
               grid.use[k] = "empty"
             }
           }
-          if (ui.selected === owner) ui.selected = null
+          events.selection.emit({ clearIf: owner })
           break
         }
         case "tax":
@@ -359,7 +360,7 @@ export const ApplyEdits = Game.System(
           const c = resources.crown.get()
           if (!c.open) break
           if ((left[c.good] ?? 0) < c.amount) {
-            ui.toast(`Not enough ${goods[c.good].title}`)
+            events.toast.emit(`Not enough ${goods[c.good].title}`)
             break
           }
           let owed = c.amount
@@ -374,7 +375,7 @@ export const ApplyEdits = Game.System(
           coins += c.reward
           resources.crown.set({ ...c, open: false, met: c.met + 1, streak: 0 })
           write(resources.chronicle, t, `Sent the crown ${c.amount} ${goods[c.good].title}, for ${c.reward} coins.`)
-          ui.toast(`Sent · +${c.reward} coins`)
+          events.toast.emit(`Sent · +${c.reward} coins`)
           break
         }
         case "nextTerm": {
@@ -413,11 +414,11 @@ export const ApplyEdits = Game.System(
           if (!up || data.works.present || begun.has(row.value.entity.id) || data.site.present || data.rising.present) break
           const blocked = upgradeBlock(up, resources.fate.get().rank, rules)
           if (blocked) {
-            ui.toast(`${up.title} ${blocked}`)
+            events.toast.emit(`${up.title} ${blocked}`)
             break
           }
           if (coins < up.cost.coins) {
-            ui.toast("Not enough coins")
+            events.toast.emit("Not enough coins")
             break
           }
           coins -= up.cost.coins
@@ -426,7 +427,7 @@ export const ApplyEdits = Game.System(
           commands.insert(row.value.entity.id, Game.Command.entry(Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }))
           const was = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
           write(resources.chronicle, t, `Works begin on the ${was}: it is to be ${anA(up.title.toLowerCase())}.`)
-          ui.toast(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)
+          events.toast.emit(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)
           break
         }
         case "reserve":
@@ -469,7 +470,7 @@ export const ApplyEdits = Game.System(
             lines: [{ tick: 0, text: `Founded on ${sizes[charter.size].title}, ${richness.title} land, for a term of ${charter.term} minutes.`, alarm: false, at: null }]
           })
           resources.rng.set(charter.seed)
-          ui.selected = null
+          events.selection.emit({ clear: true })
           // Nothing else this step: the new land is not on the grid yet.
           break edits
         }

@@ -15,7 +15,8 @@ import { present } from "./present.ts"
 import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World } from "./save.ts"
 import type { CameraView } from "./render3d/scene.ts"
 import { download, sharedId } from "./share/client.ts"
-import { BuildingNodes, Clock, FieldNodes, Game, Rules, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
+import { BuildingNodes, Clock, Edits, FieldNodes, Game, Rules, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, Ui, WalkerNodes } from "./schema.ts"
+import { editsOf } from "./sim/headless.ts"
 import { blankResources, simulate } from "./sim/index.ts"
 
 /** Minutes of game time between autosaves. */
@@ -61,6 +62,7 @@ const start = async () => {
   const made = Game.Runtime.make({
     services: Game.Runtime.services(
       Game.Runtime.service(Ui, ui),
+      Game.Runtime.service(Edits, editsOf(ui)),
       Game.Runtime.service(Rules, resolveRules()),
       Game.Runtime.service(Clock, clock),
       Game.Runtime.service(StageService, stage),
@@ -72,7 +74,9 @@ const start = async () => {
       Game.Runtime.service(FieldNodes, fieldNodes),
       Game.Runtime.service(RuinNodes, ruinNodes)
     ),
-    resources: blankResources()
+    resources: blankResources(),
+    // Dev builds carry the debug handle, for the monitor and the replay recorder.
+    debug: import.meta.env.DEV
   })
   if (!made.ok) {
     mount.textContent = `The town could not start: ${JSON.stringify(made.error)}`
@@ -87,6 +91,11 @@ const start = async () => {
       for (let i = 0; i < Math.round(seconds / STEP_SECONDS); i++) runtime.tick(simulate)
     }
     Object.assign(window, { town: { ui, runtime, advance, view: stage } })
+    if (runtime.debug !== undefined) {
+      // Loaded in dev only: the production bundle never includes devtools.
+      const { attachDevtools } = await import("./dev/devtools.ts")
+      attachDevtools({ runtime: { ...runtime, debug: runtime.debug }, mount: document.body, fetch: (url, init) => fetch(url, init), now: () => Date.now(), demo: new URLSearchParams(location.search).has("replay-demo") })
+    }
   }
 
   // Saves are Effect programs over the browser's storage and this town (see `save.ts`);
