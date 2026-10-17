@@ -94,7 +94,7 @@ export const SendWalkers = Game.System(
     },
     resources: { grid: Game.System.readResource(Grid), time: Game.System.readResource(Time) },
     services: { rules: Game.System.service(Rules) },
-    commands: Game.System.commands(Game.System.spawns(Roam), Game.System.inserts(Patrol))
+    commands: Game.System.commands(Game.System.spawns(Roam), Game.System.inserts(Patrol), Game.System.relates(WalkerOf))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
