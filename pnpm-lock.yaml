@@ -9,20 +9,20 @@ importers:
   .:
     dependencies:
       '@typeonce/ritmo':
-        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/core
-        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/core
+        specifier: 0.8.0
+        version: 0.8.0(typescript@7.0.2)
       '@typeonce/ritmo-browser':
-        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/browser
-        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/browser
+        specifier: 0.8.0
+        version: 0.8.0(typescript@7.0.2)
       '@typeonce/ritmo-math':
-        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/math
-        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/math
+        specifier: 0.8.0
+        version: 0.8.0(typescript@7.0.2)
       '@typeonce/ritmo-pixi':
-        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/pixi
-        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/pixi
+        specifier: 0.8.0
+        version: 0.8.0(typescript@7.0.2)
       '@typeonce/ritmo-render':
-        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/render
-        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/render
+        specifier: 0.8.0
+        version: 0.8.0(typescript@7.0.2)
       effect:
         specifier: 4.0.3
         version: 4.0.3
@@ -34,8 +34,8 @@ importers:
         version: 0.186.1
     devDependencies:
       '@typeonce/ritmo-devtools':
-        specifier: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/devtools
-        version: link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/devtools
+        specifier: 0.8.0
+        version: 0.8.0(typescript@7.0.2)
       '@types/node':
         specifier: 25.5.0
         version: 25.5.0
@@ -275,6 +275,36 @@ packages:
 
   '@tweenjs/tween.js@23.1.3':
     resolution: {integrity: sha512-vJmvvwFxYuGnF2axRtPYocag6Clbb5YS7kLL+SO/TeVFzHqDIWrNKYtcsPMibjDx9O+bu+psAy9NKfWklassUA==}
+
+  '@typeonce/ritmo-browser@0.8.0':
+    resolution: {integrity: sha512-/NusLAYF/SHjIstJVdW9rnAKtY6+AE7ohy6zvnEiFAfwwY1HjwOfw2YjHB5Ry0eyiWSX/1py/y7C9F7eMFdH2Q==}
+    engines: {node: '>=20'}
+
+  '@typeonce/ritmo-devtools@0.8.0':
+    resolution: {integrity: sha512-1+tXZE3kcRwG6rodtvzVYTW0LzSse+ud2YuzPSE/WHx5Mg2sOTQBXpZT03fDGOu9BbA4blt11rOrceA1C18DKQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  '@typeonce/ritmo-math@0.8.0':
+    resolution: {integrity: sha512-EAr6bHDeGhL0vWUii+hrshNbW6jmX1J3P0EwD2+lMN7InAj/LtAfMNSB72/5zNrMtUWgayXKOPWmobGsRsiMkw==}
+    engines: {node: '>=20'}
+
+  '@typeonce/ritmo-pixi@0.8.0':
+    resolution: {integrity: sha512-jE4CahYLamJ75aTdogJ6mQtCBRB9NXp2GCLhnFu25t399b/RfrVlUMxL9LaSU5emVsTu2w2a/R3hYuOcPc6wHA==}
+    engines: {node: '>=20'}
+
+  '@typeonce/ritmo-render@0.8.0':
+    resolution: {integrity: sha512-G85irkBDY58xfZg7TSGtipTT1GABoNcSUSGijn5MvirzPw06clRq/dbbs+jW7lQ8l0POMwBrqUemOgBRJCi5eA==}
+    engines: {node: '>=20'}
+
+  '@typeonce/ritmo@0.8.0':
+    resolution: {integrity: sha512-0Gfp2LhZyUYAllRb2EQpNhSPeZHQGZ7yD+AWfictdFrv/Eo44p+U63zm1r1VL6yCRCJmyBNF43XarZ6mjMgA2A==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      typescript: '>=5.9'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   '@types/earcut@3.0.0':
     resolution: {integrity: sha512-k/9fOUGO39yd2sCjrbAJvGDEQvRwRnQIZlBz43roGwUZo5SHAmyVvSFyaVVZkicRVCaDXPKlbxrUcBuJoSWunQ==}
@@ -759,6 +789,40 @@ snapshots:
   '@rolldown/pluginutils@1.0.1': {}
 
   '@tweenjs/tween.js@23.1.3': {}
+
+  '@typeonce/ritmo-browser@0.8.0(typescript@7.0.2)':
+    dependencies:
+      '@typeonce/ritmo': 0.8.0(typescript@7.0.2)
+    transitivePeerDependencies:
+      - typescript
+
+  '@typeonce/ritmo-devtools@0.8.0(typescript@7.0.2)':
+    dependencies:
+      '@typeonce/ritmo': 0.8.0(typescript@7.0.2)
+    transitivePeerDependencies:
+      - typescript
+
+  '@typeonce/ritmo-math@0.8.0(typescript@7.0.2)':
+    dependencies:
+      '@typeonce/ritmo': 0.8.0(typescript@7.0.2)
+    transitivePeerDependencies:
+      - typescript
+
+  '@typeonce/ritmo-pixi@0.8.0(typescript@7.0.2)':
+    dependencies:
+      '@typeonce/ritmo-render': 0.8.0(typescript@7.0.2)
+    transitivePeerDependencies:
+      - typescript
+
+  '@typeonce/ritmo-render@0.8.0(typescript@7.0.2)':
+    dependencies:
+      '@typeonce/ritmo': 0.8.0(typescript@7.0.2)
+    transitivePeerDependencies:
+      - typescript
+
+  '@typeonce/ritmo@0.8.0(typescript@7.0.2)':
+    optionalDependencies:
+      typescript: 7.0.2
 
   '@types/earcut@3.0.0': {}
 

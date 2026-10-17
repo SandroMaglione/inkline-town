@@ -6,12 +6,13 @@
  * carried to the site afterwards. Upgrading a building is paid at once.
  * Once the term has ended, only a new town, or another term, is taken.
  */
-import { BuildingParts, buildingDraft, houseDraft, HouseParts, houseStart, ParkParts, parkDraft, RoadParts, roadDraft, RockParts, rockDraft, RoleParts, rolesOf, StartParts, startOf, TreeParts, treeDraft, WaterParts, waterDraft } from "../archetypes.ts"
+import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, RoleParts, rolesOf, StartParts, startOf, treeDraft, waterDraft } from "../archetypes.ts"
 import * as Random from "@typeonce/ritmo-math/Random"
 import { amounts, anA, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, stepsOf, total, upgradeAt, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../content.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
+import { Road, Water, Tree } from "../schema.ts"
 import { Appeal, Building, Tile, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Toast, Treasury, Upgraded, Works, Edits, Selection } from "../schema.ts"
 import { salvageOf, salvageText, withWorks } from "../rules/salvage.ts"
 import { elapsed, rollWinters, termTicks, TileRead, useOf, write } from "./shared.ts"
@@ -84,7 +85,7 @@ export const ApplyEdits = Game.System(
     events: { toast: Game.System.writeEvent(Toast), selection: Game.System.writeEvent(Selection) },
     services: { edits: Game.System.service(Edits), rules: Game.System.service(Rules) },
     commands: Game.System.commands(
-      Game.System.spawns(...BuildingParts, ...HouseParts, ...RoadParts, ...ParkParts, ...WaterParts, ...TreeParts, ...RockParts),
+      Game.System.spawns(Building, House, Road, Park, Water, Tree, Rock),
       Game.System.inserts(...StartParts, ...RoleParts, Paved, Paused, Works, TownHall, Status, Inventory),
       Game.System.removes(Paused),
       Game.System.despawns(Tile)
@@ -375,8 +376,8 @@ export const ApplyEdits = Game.System(
           const row = id === undefined ? undefined : queries.built.get(id)
           if (!row?.ok || halls.has(owner) || row.value.data.site.present || row.value.data.paused.present === edit.on) break
           if (!row.value.data.building.present && !row.value.data.house.present) break
-          if (edit.on) commands.insert(row.value.entity.id, Game.Command.entry(Paused, {}))
-          else commands.remove(row.value.entity.id, Paused)
+          if (edit.on) commands.insert(row.value.entity, Game.Command.entry(Paused, {}))
+          else commands.remove(row.value.entity, Paused)
           break
         }
         case "deliver": {
@@ -447,7 +448,7 @@ export const ApplyEdits = Game.System(
           coins -= up.cost.coins
           begun.add(row.value.entity.id)
           const owed = amounts(up.cost.materials)
-          commands.insert(row.value.entity.id, Game.Command.entry(Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }))
+          commands.insert(row.value.entity, Game.Command.entry(Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }))
           const was = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
           write(resources.chronicle, t, `Works begin on the ${was}: it is to be ${anA(up.title.toLowerCase())}.`)
           events.toast.emit(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)

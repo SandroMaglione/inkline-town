@@ -13,7 +13,7 @@ import { near, riskIncrements } from "../rules/risks.ts"
 import * as Random from "@typeonce/ritmo-math/Random"
 
 import { appealGrid, appealAt, buildingSource, homeSource, landSource, parkSources, type AppealSource } from "../appeal.ts"
-import { RuinParts, ruinDraft } from "../archetypes.ts"
+import { ruinDraft } from "../archetypes.ts"
 import { goodIds, risk, upgradeAt, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../grid.ts"
 import { counted, placeName, type Landmark } from "../places.ts"
@@ -112,7 +112,7 @@ export const Hazards = Game.System(
     },
     services: { rules: Game.System.service(Rules) },
     commands: Game.System.commands(
-      Game.System.spawns(...RuinParts, Figure, Route, Rescue),
+      Game.System.spawns(Ruin, Rescue),
       Game.System.inserts(Burning, Sick),
       Game.System.removes(Sick),
       Game.System.despawns(Tile)
@@ -184,13 +184,13 @@ export const Hazards = Game.System(
         const id = fires.next
         fires.next += 1
         fires.fires.push({ id, x: tile.x, y: tile.y, homes: 0, buildings: 0 })
-        commands.insert(row.entity.id, Game.Command.entry(Burning, { left: risk.fire.burns, fire: id }))
+        commands.insert(row.entity, Game.Command.entry(Burning, { left: risk.fire.burns, fire: id }))
         ignited.set(row.entity.id, id)
         r.fire = 0
         news(`Fire on ${where(tile)}!`, tile)
       }
       if (h && r.health >= RISK_MAX && !data.sick.present) {
-        commands.insert(row.entity.id, Game.Command.entry(Sick, { left: risk.health.lasts }))
+        commands.insert(row.entity, Game.Command.entry(Sick, { left: risk.health.lasts }))
         r.health = 0
         if (sickNow === 0) news(`Sickness on ${where(tile)}: a physician can cure it.`, tile)
       }
@@ -234,7 +234,7 @@ export const Hazards = Game.System(
       const s = data.sick.get()
       const left = s.left - RISK_TICKS
       if (left <= 0) {
-        commands.remove(entity.id, Sick)
+        commands.remove(entity, Sick)
         continue
       }
       data.sick.set({ left })
@@ -272,7 +272,7 @@ export const Hazards = Game.System(
       if (!neighbour) continue
       const chance = risk.fire.catches + (risk.fire.spread * neighbour.data.risk.get().fire) / RISK_MAX
       if (random.next() < chance) {
-        commands.insert(neighbour.entity.id, Game.Command.entry(Burning, { left: risk.fire.burns, fire: b.fire }))
+        commands.insert(neighbour.entity, Game.Command.entry(Burning, { left: risk.fire.burns, fire: b.fire }))
         ignited.set(neighbour.entity.id, b.fire)
       }
     }
@@ -337,7 +337,7 @@ export const Douse = Game.System(
   {
     queries: { crews: Game.Query({ selection: { route: Game.Query.write(Route), rescue: Game.Query.write(Rescue) } }), burning: BurningRead },
     resources: { fires: Game.System.writeResource(Fires) },
-    commands: Game.System.commands(Game.System.spawns(...RuinParts), Game.System.despawns(Rescue, Burning))
+    commands: Game.System.commands(Game.System.spawns(Ruin), Game.System.despawns(Rescue, Burning))
   },
   ({ queries, resources, commands }) => {
     for (const { entity, data } of queries.crews.each()) {

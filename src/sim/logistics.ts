@@ -55,7 +55,7 @@ export const Dispatch = Game.System(
     },
     resources: { grid: Game.System.readResource(Grid), appeal: Game.System.readResource(Appeal), time: Game.System.readResource(Time) },
     services: { rules: Game.System.service(Rules) },
-    commands: Game.System.commands(Game.System.spawns(Figure, Route, Errand))
+    commands: Game.System.commands(Game.System.spawns(Errand))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules

@@ -7,9 +7,10 @@ import { spoilExpectation } from "../rules/decay.ts"
  */
 import * as Random from "@typeonce/ritmo-math/Random"
 
-import { RuinParts, ruinDraft } from "../archetypes.ts"
+import { ruinDraft } from "../archetypes.ts"
 import { foods, goodIds, stepsOf } from "../content.ts"
 import { counted, placeName } from "../places.ts"
+import { Ruin } from "../schema.ts"
 import { Building, Burning, Charter, Chronicle, Condition, Game, Rules, House, Inventory, Pantry, Recipe, Rising, Rng, Site, Staff, Tile, Time, maybe } from "../schema.ts"
 import { elapsed, write } from "./shared.ts"
 
@@ -37,7 +38,7 @@ export const Decay = Game.System(
       chronicle: Game.System.writeResource(Chronicle)
     },
     services: { rules: Game.System.service(Rules) },
-    commands: Game.System.commands(Game.System.spawns(...RuinParts), Game.System.despawns(Condition))
+    commands: Game.System.commands(Game.System.spawns(Ruin), Game.System.despawns(Condition))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules

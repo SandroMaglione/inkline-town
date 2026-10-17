@@ -32,17 +32,17 @@
     "engine:prepare": "node scripts/use-ritmo.ts"
   },
   "dependencies": {
-    "@typeonce/ritmo": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/core",
-    "@typeonce/ritmo-browser": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/browser",
-    "@typeonce/ritmo-math": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/math",
-    "@typeonce/ritmo-pixi": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/pixi",
-    "@typeonce/ritmo-render": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/render",
+    "@typeonce/ritmo": "0.8.0",
+    "@typeonce/ritmo-browser": "0.8.0",
+    "@typeonce/ritmo-math": "0.8.0",
+    "@typeonce/ritmo-pixi": "0.8.0",
+    "@typeonce/ritmo-render": "0.8.0",
     "effect": "4.0.3",
     "pixi.js": "^8.22.0",
     "three": "^0.186.1"
   },
   "devDependencies": {
-    "@typeonce/ritmo-devtools": "link:.repos/ritmo-preview/1ec469fd865ae82d2f53a07f5f1662dd1363fe84/packages/devtools",
+    "@typeonce/ritmo-devtools": "0.8.0",
     "@types/node": "25.5.0",
     "@types/three": "^0.186.0",
     "oxlint": "1.87.0",
@@ -50,6 +50,5 @@
     "typescript": "7.0.2",
     "vite": "8.3.1"
   },
-  "ritmoRelease": "0.7.0",
-  "ritmoSource": "1ec469fd865ae82d2f53a07f5f1662dd1363fe84"
+  "ritmoRelease": "0.8.0"
 }

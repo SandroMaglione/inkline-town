@@ -8,7 +8,7 @@ import { wildTreeSpots, canSeedTree } from "../rules/land.ts"
  */
 import * as Random from "@typeonce/ritmo-math/Random"
 
-import { FieldParts, fieldDraft, TreeParts, treeDraft } from "../archetypes.ts"
+import { fieldDraft, treeDraft } from "../archetypes.ts"
 import { amounts, anA, asUpgraded, crewOf, goodIds, stepsOf, total, upgradeAt, worksNeeded, type Amounts, type Crew } from "../content.ts"
 
 /** The flow of goods is counted in slices this many seconds long, and the last `FLOW_SLICES` of them (a minute) are kept. */
@@ -34,16 +34,15 @@ export const IndexGrid = Game.System(
   {
     queries: {
       tiles: TileRead,
-      laid: Game.Query({ selection: { tile: Game.Query.read(Tile) }, filters: [Game.Query.added(Tile)] }),
-      /** A road just paved: the grid's paved cells change without any tile coming or going. */
-      paved: Game.Query({ selection: { paved: Game.Query.read(Paved) }, filters: [Game.Query.added(Paved)] })
+      /** A tile laid, or a road just paved: the grid's paved cells change without any tile coming or going. */
+      laid: Game.Query({ selection: {}, filters: [Game.Query.anyOf(Game.Query.added(Tile), Game.Query.added(Paved))] })
     },
     despawned: { entities: Game.System.readDespawned() },
     resources: { land: Game.System.readResource(Land), grid: Game.System.writeResource(Grid) }
   },
   ({ queries, despawned, resources }) => {
     const known = resources.grid.get().tiles
-    const changed = known === undefined || queries.laid.each().length > 0 || queries.paved.each().length > 0 || despawned.entities.all().some((id) => known.has(id))
+    const changed = known === undefined || queries.laid.each().length > 0 || despawned.entities.all().some((id) => known.has(id))
     if (!changed) return
     const grid = new GridBuilder(resources.land.get().mask)
     const tiles = new Set<number>()
@@ -207,29 +206,29 @@ export const Raise = Game.System(
       }
       if (total(works.owed) > 0 || works.done < needed) continue
       const base = rules.kinds[data.building.get().kind], kind = asUpgraded(base, works.level)
-      commands.remove(entity.id, Works)
-      commands.insert(entity.id, Game.Command.entry(Upgraded, { level: works.level }))
+      commands.remove(entity, Works)
+      commands.insert(entity, Game.Command.entry(Upgraded, { level: works.level }))
       data.staff.set({ ...data.staff.get(), needed: kind.workers })
       const recipe = maybe(data.recipe), carriers = maybe(data.carriers), service = maybe(data.service)
-      if (recipe && kind.recipe) commands.insert(entity.id, Game.Command.entry(Recipe, { ...recipe, period: stepsOf(kind.recipe.seconds) }))
+      if (recipe && kind.recipe) commands.insert(entity, Game.Command.entry(Recipe, { ...recipe, period: stepsOf(kind.recipe.seconds) }))
       if (shelves.ok && kind.holds) shelves.value.data.inventory.set({ ...shelves.value.data.inventory.get(), cap: kind.holds.cap })
-      if (carriers && kind.carriers) commands.insert(entity.id, Game.Command.entry(Carriers, { count: kind.carriers }))
-      if (service && kind.service) commands.insert(entity.id, Game.Command.entry(Service, { ...service, interval: stepsOf(kind.service.seconds), range: kind.service.range }))
+      if (carriers && kind.carriers) commands.insert(entity, Game.Command.entry(Carriers, { count: kind.carriers }))
+      if (service && kind.service) commands.insert(entity, Game.Command.entry(Service, { ...service, interval: stepsOf(kind.service.seconds), range: kind.service.range }))
       const was = (upgradeAt(base, works.level - 1)?.title ?? base.title).toLowerCase()
       write(resources.chronicle, elapsed(resources.time.get(), resources.charter.get()), `The ${was} is now ${anA(upgradeAt(base, works.level)!.title.toLowerCase())}.`, true)
     }
 
     for (const { entity, data } of queries.sites.each()) {
       if (total(data.site.get().owed) > 0) continue
-      commands.remove(entity.id, Site)
-      commands.insert(entity.id, Game.Command.entry(Rising, { ticks: Math.round(BUILD_TICKS * SITE_SHARE) }))
+      commands.remove(entity, Site)
+      commands.insert(entity, Game.Command.entry(Rising, { ticks: Math.round(BUILD_TICKS * SITE_SHARE) }))
     }
     for (const { entity, data } of queries.rising.each()) {
       const ticks = data.rising.get().ticks + 1
       if (ticks >= BUILD_TICKS) {
-        commands.remove(entity.id, Rising)
+        commands.remove(entity, Rising)
         // Up and standing; its work (if it has any) says otherwise from here on.
-        if (data.status.present) commands.insert(entity.id, Game.Command.entry(Status, "idle"))
+        if (data.status.present) commands.insert(entity, Game.Command.entry(Status, "idle"))
       } else data.rising.set({ ticks })
     }
   }
@@ -531,7 +530,7 @@ export const Plant = Game.System(
     },
     resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) },
     services: { rules: Game.System.service(Rules) },
-    commands: Game.System.commands(Game.System.spawns(...TreeParts, ...FieldParts))
+    commands: Game.System.commands(Game.System.spawns(Tree, Field))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules
@@ -586,7 +585,7 @@ export const Spread = Game.System(
     queries: { trees: Game.Query({ selection: { tile: Game.Query.read(Tile), tree: Game.Query.read(Tree) } }) },
     resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) },
     services: { rules: Game.System.service(Rules) },
-    commands: Game.System.commands(Game.System.spawns(...TreeParts))
+    commands: Game.System.commands(Game.System.spawns(Tree))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules

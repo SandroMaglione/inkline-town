@@ -98,7 +98,7 @@ export const Households = Game.System(
         if (tier <= h.tier || tier <= built) next.tier = tier
         else if (pay(home.tiers[tier].rise)) {
           next.tier = tier
-          commands.insert(entity.id, Game.Command.entry(Rebuilt, { tier: tier as 2 | 3 }))
+          commands.insert(entity, Game.Command.entry(Rebuilt, { tier: tier as 2 | 3 }))
         }
         const well = connected(grid, tile) ? capacity(next, approval, desirability, rules, rateOf(policy, next.tier)) : 0
         const cap = data.sick.present ? Math.floor(well * risk.health.sickly) : well
