@@ -4,9 +4,9 @@ import { resolveRules } from "./rules/config.ts"
  * bevy-ts ECS with a 3D view. The simulation runs on a fixed step;
  * the views follow once a frame.
  */
-import { HostClock, Result } from "@typeonce/ritmo"
+import { FixedLoop, HostClock, Result } from "@typeonce/ritmo"
 import { Effect } from "effect"
-import { BrowserHostClock, FixedLoop } from "@typeonce/ritmo-browser"
+import { BrowserHostClock } from "@typeonce/ritmo-browser"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
 import { lands, sizes, step } from "./content.ts"

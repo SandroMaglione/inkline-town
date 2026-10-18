@@ -9,6 +9,7 @@ import { ApplyEdits } from "./edits.ts"
 import { Deliver, Dispatch } from "./logistics.ts"
 import { Decay } from "./decay.ts"
 import { Appraise, Douse, Hazards } from "./hazards.ts"
+import { DropOrphans } from "./orphans.ts"
 import { Approve, foundedFate, Judge, Record, Requests, Seasons } from "./term.ts"
 import { Collect, Households, TakeCensus } from "./town.ts"
 import { SendWalkers, Walk, Wander } from "./walkers.ts"
@@ -41,6 +42,8 @@ export const simulate = Game.Schedule(
   Households,
   Hazards,
   Game.Schedule.applyDeferred(),
+  // Walkers and fields whose building went before they joined it go now.
+  DropOrphans,
   Decay,
   Game.Schedule.applyDeferred(),
   Collect,

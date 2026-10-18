@@ -530,7 +530,7 @@ export const Plant = Game.System(
     },
     resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) },
     services: { rules: Game.System.service(Rules) },
-    commands: Game.System.commands(Game.System.spawns(Tree, Field))
+    commands: Game.System.commands(Game.System.spawns(Tree, Field), Game.System.relates(FieldOf))
   },
   ({ queries, resources, commands, services }) => {
     const rules = services.rules

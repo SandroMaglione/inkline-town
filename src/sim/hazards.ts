@@ -115,7 +115,8 @@ export const Hazards = Game.System(
       Game.System.spawns(Ruin, Rescue),
       Game.System.inserts(Burning, Sick),
       Game.System.removes(Sick),
-      Game.System.despawns(Tile)
+      Game.System.despawns(Tile),
+      Game.System.relates(WalkerOf)
     )
   },
   ({ queries, resources, commands, services }) => {
