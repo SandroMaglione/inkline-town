@@ -33,7 +33,8 @@ try {
     s.resources["Town/Treasury"].coins = 5000
     const hall = s.entities.find((e: any) => e.components["Town/TownHall"])
     hall.components["Town/Inventory"].stock = { ...hall.components["Town/Inventory"].stock, planks: 90, stone: 90, tools: 20 }
-    runtime.restore(s)
+    const restored = runtime.restore(s)
+    if (!restored.ok) throw new Error(`The changed town did not load: ${JSON.stringify(restored.error)}`)
   })
   await page.evaluate(() => (window as any).town.advance(1))
   const hall = await page.evaluate(() => (window as any).town.runtime.snapshot().entities.find((e: any) => e.components["Town/TownHall"]).components["Town/Tile"])
@@ -62,7 +63,8 @@ try {
     const hall=s.entities.find((e:any)=>e.components["Town/TownHall"])
     Object.assign(hall.components["Town/Inventory"].stock,{planks:120,stone:120,tools:40,cloth:40})
     s.resources["Town/Treasury"].coins=5000
-    t.runtime.restore(s)
+    const restored = t.runtime.restore(s)
+    if (!restored.ok) throw new Error(`The changed town did not load: ${JSON.stringify(restored.error)}`)
   })
   await page.evaluate(([x,y])=>(window as any).town.ui.edits.push({type:"upgrade",cell:{x,y}}),[hall.x,hall.y])
   await page.evaluate(()=>(window as any).town.advance(80))

@@ -7,7 +7,7 @@ import { shippedRules } from "../rules/config.ts"
  */
 import { crown, HISTORY_TICKS, stepsOf, WINTER_WARNING, type GoodId } from "../content.ts"
 import * as Random from "@typeonce/ritmo-math/Random"
-import { Building, Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, House, Inventory, Ledger, Mood, Pantry, Paused, Policy, Recipe, Rising, Rng, Site, Stock, Storage, Time, Treasury, TownHall, Upgraded, maybe } from "../schema.ts"
+import { Building, Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, House, Inventory, Ledger, Mood, Pantry, Paused, Policy, Recipe, Rising, Rng, Site, Stock, Storage, Time, Treasury, TownHall, Upgraded } from "../schema.ts"
 import { elapsed, seasonAt, termTicks, write } from "./shared.ts"
 
 // ── Time ──────────────────────────────────────────────────────────────────
@@ -120,9 +120,7 @@ export const Requests = Game.System(
     // Only what keeps: fish and bread would rot on the way.
     const options = [...rates.keys()].filter((g) => spoils[g] === undefined).sort()
     if (options.length === 0) return
-    const random = Random.make(resources.rng.get())
-    const good = random.pick(options)!
-    resources.rng.set(random.state)
+    const good = Random.draw(resources.rng).pick(options)!
     // Larger the later in this term it is: a new term starts the crown small again.
     const progress = Math.min(1, Math.max(0, t - resources.fate.get().began) / termTicks(charter, rules))
     const window = (crownGap(charter, rules) * crown.window) / 3600
@@ -225,7 +223,7 @@ export const Judge = Game.System(
     const { crown, fate, ranks } = rules
     // The town hall's upgrades: a city asks for a guildhall.
     const hallRow = queries.halls.each()[0]
-    const hall = hallRow ? maybe(hallRow.data.upgraded)?.level ?? 0 : 0
+    const hall = hallRow ? hallRow.data.upgraded.value()?.level ?? 0 : 0
 
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)

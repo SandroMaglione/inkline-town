@@ -18,7 +18,7 @@ import { goodIds, risk, upgradeAt, type GoodId } from "../content.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../grid.ts"
 import { counted, placeName, type Landmark } from "../places.ts"
 import type { Point } from "../iso.ts"
-import { Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Rules, Grid, House, Inventory, Mood, Park, Paused, Paved, Rescue, Rising, Risk, Rng, Road, Route, Ruin, Service, Sick, Site, Staff, Storage, Tile, Time, Tree, Treasury, Upgraded, WalkerOf, Water, maybe } from "../schema.ts"
+import { Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Rules, Grid, House, Inventory, Mood, Park, Paused, Paved, Rescue, Rising, Risk, Rng, Road, Route, Ruin, Service, Sick, Site, Staff, Storage, Tile, Time, Tree, Treasury, Upgraded, WalkerOf, Water } from "../schema.ts"
 import { elapsed, seasonAt, write } from "./shared.ts"
 
 // ── Desirability ──────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ export const Appraise = Game.System(
     if (!every(resources.time.get(), appeal.every) && resources.appeal.get().cells.length > 0) return
     const sources: Array<AppealSource> = []
     for (const { data } of queries.buildings.each()) {
-      const s = buildingSource(data.building.get().kind, data.tile.get(), rules, maybe(data.upgraded)?.level ?? 0)
+      const s = buildingSource(data.building.get().kind, data.tile.get(), rules, data.upgraded.value()?.level ?? 0)
       if (s) sources.push(s)
     }
     for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get(), rules))
@@ -115,7 +115,8 @@ export const Hazards = Game.System(
       Game.System.spawns(Ruin, Rescue),
       Game.System.inserts(Burning, Sick),
       Game.System.removes(Sick),
-      Game.System.despawns(Tile)
+      Game.System.despawns(Tile),
+      Game.System.relates(WalkerOf)
     )
   },
   ({ queries, resources, commands, services }) => {
@@ -131,7 +132,7 @@ export const Hazards = Game.System(
     const approval = resources.mood.get().approval
     const season = seasonAt(t, charter, rules)
     const heating = season.severity !== null && winters[season.severity].heating
-    const random = Random.make(resources.rng.get())
+    const random = Random.draw(resources.rng)
     const news = (text: string, at: Point | null = null) => write(resources.chronicle, t, text, true, at)
     const landmarks: Array<Landmark> = queries.landmarks.each().map(({ data }) => ({ kind: data.building.get().kind, ...data.tile.get() }))
     const where = (cell: Point) => placeName(landmarks, cell)
@@ -139,7 +140,7 @@ export const Hazards = Game.System(
 
     const rows = queries.cared.each()
     const hot = rows.filter(({ data }) => {
-      const b = maybe(data.building)
+      const b = data.building.value()
       return b !== undefined && kinds[b.kind].hot === true && !data.burning.present
     }).map(({ data }) => data.tile.get())
     const dusty = landmarks.filter((l) => kinds[l.kind].dusty)
@@ -162,10 +163,10 @@ export const Hazards = Game.System(
       const { data } = row
       if (data.burning.present) continue
       const tile = data.tile.get()
-      const h = maybe(data.house)
+      const h = data.house.value()
       // A closed home has nobody in it to fall sick, steal, or knock over a lamp.
       if (h && data.paused.present) continue
-      const b = maybe(data.building)
+      const b = data.building.value()
       const r = { ...data.risk.get() }
       const increments = riskIncrements({
         tile, condition: data.condition.get().value, desirability: appealAt(cells, tile.x, tile.y), approval, heating,
@@ -294,7 +295,7 @@ export const Hazards = Game.System(
       let best: { readonly watch: (typeof watches)[number]; readonly roads: ReturnType<typeof reach>; readonly cell: Point; readonly distance: number } | null = null
       for (const watch of watches) {
         // A fire brigade sends more (see `Upgrade.crews`).
-        const crews = upgradeAt(kinds.firewatch, maybe(watch.data.upgraded)?.level ?? 0)?.crews ?? risk.fire.crews
+        const crews = upgradeAt(kinds.firewatch, watch.data.upgraded.value()?.level ?? 0)?.crews ?? risk.fire.crews
         if ((out.get(watch.entity.id) ?? 0) >= crews) continue
         const starts = doors(grid, watch.data.tile.get())
         if (starts.length === 0) continue
@@ -322,7 +323,6 @@ export const Hazards = Game.System(
       news(`Fire on ${where(f)}: ${took.length > 0 ? `${took.join(" and ")} lost` : "put out"}.`, { x: f.x, y: f.y })
     }
     resources.fires.set({ fires: fires.fires.filter((f) => stillBurning.has(f.id)), next: fires.next })
-    resources.rng.set(random.state)
   }
 )
 

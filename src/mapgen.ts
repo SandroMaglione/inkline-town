@@ -8,6 +8,7 @@ import { shippedRules, type Rules } from "./rules/config.ts"
  * the rest).
  * Pure: the same charter always makes the same land.
  */
+import { Ops } from "@typeonce/ritmo-math"
 import * as Random from "@typeonce/ritmo-math/Random"
 
 import { GROWN, type CharterValue } from "./content.ts"
@@ -29,7 +30,7 @@ export interface Land {
 const CLEARING = 7
 
 /** The angle from `a` to `b`, -π → π. */
-const turn = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a))
+const turn = (a: number, b: number) => Ops.atan2(Ops.sin(b - a), Ops.cos(b - a))
 
 /**
  * The shape of the land: a circle of the size's radius whose edge swells
@@ -48,15 +49,15 @@ const shape = (random: Random.Random, radius: number): Array<boolean> => {
   const edge = (angle: number) =>
     radius *
     (1 +
-      waves.reduce((sum, w) => sum + w.size * Math.sin(w.k * angle + w.phase), 0) +
-      capes.reduce((sum, c) => sum + c.size * Math.exp(-((turn(c.at, angle) / c.width) ** 2)), 0))
+      waves.reduce((sum, w) => sum + w.size * Ops.sin(w.k * angle + w.phase), 0) +
+      capes.reduce((sum, c) => sum + c.size * Ops.exp(-((turn(c.at, angle) / c.width) ** 2)), 0))
 
   let land = new Array<boolean>(GRID * GRID).fill(false)
   for (let y = 1; y < GRID - 1; y++) {
     for (let x = 1; x < GRID - 1; x++) {
       const dx = x + 0.5 - centre
       const dy = y + 0.5 - centre
-      land[key(x, y)] = Math.hypot(dx, dy) < edge(Math.atan2(dy, dx)) + random.range(-0.8, 0.8)
+      land[key(x, y)] = Ops.hypot(dx, dy) < edge(Ops.atan2(dy, dx)) + random.range(-0.8, 0.8)
     }
   }
   // Smooth the shore: a cell mostly surrounded by water floods, a cove mostly surrounded by land fills.
@@ -104,7 +105,7 @@ export const generate = (charter: CharterValue, rules: Rules = shippedRules): La
   const taken = new Set<number>()
   const centre = { x: GRID / 2, y: GRID / 2 }
   const hall = { x: centre.x - 2, y: centre.y - 2 }
-  const near = (c: Point, r: number) => Math.hypot(c.x + 0.5 - centre.x, c.y + 0.5 - centre.y) < r
+  const near = (c: Point, r: number) => Ops.hypot(c.x + 0.5 - centre.x, c.y + 0.5 - centre.y) < r
   const onLand = (c: Point) => inside(c.x, c.y) && ground[key(c.x, c.y)]!
   const free = (c: Point) => onLand(c) && !taken.has(key(c.x, c.y)) && !near(c, CLEARING)
   const take = (c: Point) => taken.add(key(c.x, c.y))
@@ -162,7 +163,7 @@ export const generate = (charter: CharterValue, rules: Rules = shippedRules): La
     for (let tries = 0; placed < count && tries < count * 4; tries++) {
       const spread = Math.sqrt(random.next()) * 4
       const angle = random.range(0, Math.PI * 2)
-      const c = { x: Math.round(at.x + Math.cos(angle) * spread), y: Math.round(at.y + Math.sin(angle) * spread) }
+      const c = { x: Math.round(at.x + Ops.cos(angle) * spread), y: Math.round(at.y + Ops.sin(angle) * spread) }
       if (!free(c)) continue
       plant(c)
       placed += 1

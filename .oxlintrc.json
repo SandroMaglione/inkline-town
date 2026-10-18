@@ -1,12 +1,38 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript"],
-  "jsPlugins": ["./tools/lint/plugin.mjs"],
+  "jsPlugins": ["./tools/lint/plugin.mjs", "@typeonce/oxlint-plugin-ritmo"],
   "categories": {
     "correctness": "off"
   },
   "rules": {
-    "town/no-cast-escape": "error"
+    "town/no-cast-escape": "error",
+    "ritmo/handle-tick-result": "error",
+    "ritmo/prefix-descriptor-and-system-names": "error",
+    "ritmo/use-cell-value": "error"
   },
+  "overrides": [
+    {
+      "files": [
+        "src/sim/**",
+        "src/rules/**",
+        "src/grid.ts",
+        "src/mapgen.ts",
+        "src/places.ts",
+        "src/appeal.ts",
+        "src/content.ts",
+        "src/schema.ts",
+        "src/archetypes.ts",
+        "src/iso.ts"
+      ],
+      "rules": {
+        "ritmo/use-clock-for-time": "error",
+        "ritmo/use-random-for-randomness": "error",
+        "ritmo/use-ops-for-math": "error",
+        "ritmo/keep-simulation-headless": "error",
+        "ritmo/no-infinity-in-simulation-data": "error"
+      }
+    }
+  ],
   "ignorePatterns": ["dist/**", "node_modules/**", "deploy/**", "output/**"]
 }

@@ -3,12 +3,14 @@
  * renderer, so it runs headless too.
  */
 import { Clock } from "@typeonce/ritmo"
+import * as Random from "@typeonce/ritmo-math/Random"
 import { amounts, defaultCharter, goodIds, step, TRADE_LOAD } from "../content.ts"
 import { Game, Time } from "../schema.ts"
 import { ApplyEdits } from "./edits.ts"
 import { Deliver, Dispatch } from "./logistics.ts"
 import { Decay } from "./decay.ts"
 import { Appraise, Douse, Hazards } from "./hazards.ts"
+import { DropOrphans } from "./orphans.ts"
 import { Approve, foundedFate, Judge, Record, Requests, Seasons } from "./term.ts"
 import { Collect, Households, TakeCensus } from "./town.ts"
 import { SendWalkers, Walk, Wander } from "./walkers.ts"
@@ -41,6 +43,8 @@ export const simulate = Game.Schedule(
   Households,
   Hazards,
   Game.Schedule.applyDeferred(),
+  // Walkers and fields whose building went before they joined it go now.
+  DropOrphans,
   Decay,
   Game.Schedule.applyDeferred(),
   Collect,
@@ -55,7 +59,7 @@ export const simulate = Game.Schedule(
 /** The world's resources before any town is founded (a `newTown` edit fills them in). */
 export const blankResources = () => ({
   Time: Clock.start(step),
-  Rng: 0x5eed,
+  Rng: Random.seed(0x5eed),
   Treasury: { coins: 0 },
   Ledger: { taxes: 0, trade: 0, upkeep: 0, admin: 0 },
   Census: { homes: 0, settlers: 0, citizens: 0, burghers: 0, jobs: 0, employed: 0, food: 0, bread: 0, cloth: 0, faith: 0, furniture: 0, sick: 0, burning: 0 },

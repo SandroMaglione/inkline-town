@@ -1,12 +1,12 @@
 import { resolveRules } from "./rules/config.ts"
 /**
  * A town simulation of line-drawn buildings, homes, roads, and land, on the
- * bevy-ts ECS with a 3D view. The simulation runs on a fixed step;
+ * Ritmo ECS with a 3D view. The simulation runs on a fixed step;
  * the views follow once a frame.
  */
-import { HostClock, Result } from "@typeonce/ritmo"
+import { FixedLoop, HostClock, Result } from "@typeonce/ritmo"
 import { Effect } from "effect"
-import { BrowserHostClock, FixedLoop } from "@typeonce/ritmo-browser"
+import { BrowserHostClock } from "@typeonce/ritmo-browser"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "./render3d/views.ts"
 import { lands, sizes, step } from "./content.ts"
@@ -90,7 +90,10 @@ const start = async () => {
   // `town.runtime.snapshot()`, and `town.advance(seconds)` to fast-forward the simulation.
   if (import.meta.env.DEV) {
     const advance = (seconds: number) => {
-      for (let i = 0; i < Math.round(seconds / step.dt); i++) runtime.tick(simulate)
+      for (let i = 0; i < Math.round(seconds / step.dt); i++) {
+        const stepped = runtime.tick(simulate)
+        if (!stepped.ok) throw new Error(`A step failed: ${JSON.stringify(stepped.error)}`)
+      }
     }
     Object.assign(window, { town: { ui, runtime, advance, view: stage } })
     if (runtime.debug !== undefined) {

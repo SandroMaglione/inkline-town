@@ -13,7 +13,7 @@ import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../grid.ts"
 import { inside } from "../iso.ts"
 import { generate } from "../mapgen.ts"
 import { Road, Water, Tree } from "../schema.ts"
-import { Appeal, Building, Tile, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, maybe, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Toast, Treasury, Upgraded, Works, Edits, Selection } from "../schema.ts"
+import { Appeal, Building, Tile, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Toast, Treasury, Upgraded, Works, Edits, Selection } from "../schema.ts"
 import { salvageOf, salvageText, withWorks } from "../rules/salvage.ts"
 import { elapsed, rollWinters, termTicks, TileRead, useOf, write } from "./shared.ts"
 import type { Rules as RuleInputs } from "../rules/config.ts"
@@ -331,9 +331,9 @@ export const ApplyEdits = Game.System(
           // A building or a home: a fee, and part of its materials back (a site's, all of it).
           const built = queries.built.get(owner)
           if (built.ok && (built.value.data.building.present || built.value.data.house.present)) {
-            const b = maybe(built.value.data.building)
-            const own = salvageOf(b ? builtCost(kinds[b.kind], maybe(built.value.data.upgraded)?.level ?? 0) : home.cost, maybe(built.value.data.site)?.owed ?? null, rules)
-            const s = b ? withWorks(own, kinds[b.kind], maybe(built.value.data.works), rules) : own
+            const b = built.value.data.building.value()
+            const own = salvageOf(b ? builtCost(kinds[b.kind], built.value.data.upgraded.value()?.level ?? 0) : home.cost, built.value.data.site.value()?.owed ?? null, rules)
+            const s = b ? withWorks(own, kinds[b.kind], built.value.data.works.value(), rules) : own
             if (s.fee > 0 && coins < s.fee) {
               events.toast.emit(`Pulling it down costs ${s.fee} coins`)
               break
@@ -433,7 +433,7 @@ export const ApplyEdits = Game.System(
           if (!row?.ok) break
           const { data } = row.value
           const kind = kinds[data.building.get().kind]
-          const level = maybe(data.upgraded)?.level ?? 0
+          const level = data.upgraded.value()?.level ?? 0
           const up = nextUpgrade(kind, level)
           if (!up || data.works.present || begun.has(row.value.entity.id) || data.site.present || data.rising.present) break
           const blocked = upgradeBlock(up, resources.fate.get().rank, rules)
@@ -495,7 +495,7 @@ export const ApplyEdits = Game.System(
           resources.chronicle.set({
             lines: [{ tick: 0, text: `Founded on ${sizes[charter.size].title}, ${richness.title} land, for a term of ${charter.term} minutes.`, alarm: false, at: null }]
           })
-          resources.rng.set(charter.seed)
+          resources.rng.set(Random.seed(charter.seed))
           events.selection.emit({ clear: true })
           // Nothing else this step: the new land is not on the grid yet.
           break edits
