@@ -1,7 +1,7 @@
 import { resolveRules } from "./rules/config.ts"
 /**
  * A town simulation of line-drawn buildings, homes, roads, and land, on the
- * bevy-ts ECS with a 3D view. The simulation runs on a fixed step;
+ * Ritmo ECS with a 3D view. The simulation runs on a fixed step;
  * the views follow once a frame.
  */
 import { FixedLoop, HostClock, Result } from "@typeonce/ritmo"

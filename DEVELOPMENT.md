@@ -3,7 +3,7 @@
 [← back to the README](README.md)
 
 Inkline Town is a TypeScript game. The simulation runs on the
-[bevy-ts](https://github.com/SandroMaglione/bevy-ts) ECS at a fixed step and
+[Ritmo](https://github.com/typeonce-dev/ritmo) ECS at a fixed step and
 knows nothing of the page; [Three.js](https://threejs.org) draws the 3D world;
 Pixi renders the original menu thumbnails; saving is
 written with [Effect](https://effect.website).
@@ -13,7 +13,7 @@ pnpm install
 pnpm dev --host --port 5232
 pnpm typecheck
 pnpm test       # model-based tests: random mayors, rules that must always hold; and saving
-pnpm check      # every way a term can end, ends it
+pnpm check      # lint (oxlint and Ritmo's schedule lints), then every way a term can end, ends it
 pnpm check:browser # the actual 3D game: placement, picking, saves, populated towns and phone layout
 pnpm check:phone   # phone sizes: the picker's found button on screen, the folded HUD opens and closes
 pnpm balance    # a bot plays terms headless and reports the pressure
@@ -210,7 +210,8 @@ The README shows the film as an animated AVIF, because GitHub plays no
 - `src/sim/`: the fixed-step simulation (no renderer access): edits, work (staffing by crew and commute, tools,
   pace), logistics, walkers (services, mending), town (households and tiers), hazards (desirability, risk
   meters, fire and firefighters, sickness, theft), decay (wear, collapse, spoilage, the pantry), and the term
-  (seasons and the almanac, the crown, approval, the end of the term, history).
+  (seasons and the almanac, the crown, approval, the end of the term, history); orphans drops a walker or field
+  whose building went before it could join it.
 - `src/present.ts`: per-frame interaction, panel, and view sync.
 - `src/art.ts`: all drawing: buildings and their yards, homes, the land, roads, carts, and figures.
 - `src/render3d/`: live world renderer, model instances, camera and map input,
@@ -317,8 +318,13 @@ and a five-second MP4 in `output/inkline-3d/park-review/`.
   (the mayor's own, or the autosave), typed errors for each way a load can fail.
 - `src/ui.ts`, `src/host.ts`, `src/main.ts`: the page bridge, camera, input, panels, and start-up.
 
-The simulation runs on bevy-ts-browser's `FixedLoop` at 60 steps a second
-(times the chosen speed), with integer state and a seeded random resource.
+The simulation runs on Ritmo's `FixedLoop` at 60 steps a second (times the
+chosen speed), with integer state and a seeded random resource: `Town/Rng`,
+declared with `Descriptor.ConstructedResource(Random)` and started with
+`Random.seed(...)`. Systems draw with `Random.draw(resources.rng)`, which
+writes every draw back (and rolls it back with a failed system). Seeded
+streams that are not world state, such as the land in `mapgen.ts` and the
+almanac's winters, use `Random.make(seed)`.
 Every saved component and resource is validated, so **save** / **load**
 snapshot the whole world, history and chronicle included, to localStorage;
 the page also autosaves every two minutes of game time, and **load** takes
@@ -326,6 +332,29 @@ whichever is newer.
 
 In development the console has `town.ui`, `town.runtime`, and
 `town.advance(seconds)` to fast-forward the simulation.
+
+### Simulation rules and lint
+
+`pnpm lint` (part of `pnpm check`) runs oxlint with two plugins: the town's
+own (`tools/lint/plugin.mjs`: no `as never` or `as unknown as`) and
+[`@typeonce/oxlint-plugin-ritmo`](https://github.com/typeonce-dev/ritmo/tree/main/packages/oxlint-plugin).
+In every file, a `runtime.tick(...)` or `runtime.restore(...)` result is
+checked (`void` ignores one on purpose), descriptor and system names carry
+the `Town/` prefix, and an optional query cell is read with `cell.value()`.
+
+The simulation files, listed in the `overrides` of `.oxlintrc.json`
+(`src/sim/`, `src/rules/`, and the pure modules they run: `grid.ts`,
+`mapgen.ts`, `places.ts`, `appeal.ts`, `content.ts`, `schema.ts`,
+`archetypes.ts`, `iso.ts`), must replay exactly and run headless. They read
+time from the `Town/Time` clock and randomness from `Town/Rng` or a seeded
+`Random.make`, never `Date.now()` or `Math.random()`; they never touch the
+page, host I/O or the renderer; they keep `Infinity` and `NaN` out of data,
+which would save but not load; and they do engine-approximated math
+(`sin`, `cos`, `atan2`, `exp`, `hypot`, `a ** b`) with `Ops` from
+`@typeonce/ritmo-math`, which returns the same bits on every engine.
+`Math.sqrt`, `min`, `max`, `floor`, `abs` and `x ** 2` are exact everywhere
+and stay. A new module the simulation runs joins that list. `pnpm lint:game`
+then checks the schedules themselves with Ritmo's devtools lints.
 
 ## Balancing
 
