@@ -90,7 +90,10 @@ const start = async () => {
   // `town.runtime.snapshot()`, and `town.advance(seconds)` to fast-forward the simulation.
   if (import.meta.env.DEV) {
     const advance = (seconds: number) => {
-      for (let i = 0; i < Math.round(seconds / step.dt); i++) runtime.tick(simulate)
+      for (let i = 0; i < Math.round(seconds / step.dt); i++) {
+        const stepped = runtime.tick(simulate)
+        if (!stepped.ok) throw new Error(`A step failed: ${JSON.stringify(stepped.error)}`)
+      }
     }
     Object.assign(window, { town: { ui, runtime, advance, view: stage } })
     if (runtime.debug !== undefined) {

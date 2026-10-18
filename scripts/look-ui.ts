@@ -76,7 +76,8 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
         const t = e.components["Town/Tile"], w = e.components["Town/Water"]
         if (w && Math.abs(t.x - f.x) <= 3 && Math.abs(t.y - f.y) <= 3) e.components["Town/Water"] = { fished: tick }
       }
-      runtime.restore(s)
+      const restored = runtime.restore(s)
+      if (!restored.ok) throw new Error(`The changed town did not load: ${JSON.stringify(restored.error)}`)
     }, f)
     await page.evaluate(() => (window as any).town.advance(12))
     await look(f.x + 1, f.y + 1, phone ? 1.4 : 2)
@@ -102,7 +103,8 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
     const s = runtime.snapshot()
     s.resources["Town/Fate"].rank = Math.max(s.resources["Town/Fate"].rank, 2)
     s.resources["Town/Treasury"].coins = 5000
-    runtime.restore(s)
+    const restored = runtime.restore(s)
+    if (!restored.ok) throw new Error(`The changed town did not load: ${JSON.stringify(restored.error)}`)
   })
   await page.evaluate(() => (window as any).town.advance(1))
   const hall = (await find(page, (e) => e.components["Town/TownHall"])).components["Town/Tile"] as Tile
@@ -124,7 +126,8 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
         const inv = e.components["Town/Inventory"]
         if (e.components["Town/Storage"] && inv) inv.stock = { ...inv.stock, planks: Math.min(inv.cap, 120), stone: Math.min(inv.cap, 120), tools: Math.min(inv.cap, 40), cloth: Math.min(inv.cap, 40) }
       }
-      runtime.restore(s)
+      const restored = runtime.restore(s)
+      if (!restored.ok) throw new Error(`The changed town did not load: ${JSON.stringify(restored.error)}`)
     })
     const kinds = ["townhall", "warehouse", "farm", "bakery", "market", "chapel", "quarry", "firewatch"]
     const picked: Array<{ kind: string; tile: Tile }> = []
