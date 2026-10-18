@@ -12,7 +12,6 @@
  * whole world snapshots to plain data and loads back checked.
  */
 import { Clock as SimulationClock, Decode, Descriptor, Schema } from "@typeonce/ritmo"
-import type { OptionalReadCell } from "@typeonce/ritmo/Query"
 import * as Random from "@typeonce/ritmo-math/Random"
 import type { NodeRegistry } from "@typeonce/ritmo-render"
 import { step } from "./content.ts"
@@ -24,9 +23,6 @@ import type { Rules as RuleInputs } from "./rules/config.ts"
 import type { Edit, UiValue } from "./ui.ts"
 
 export const Root = Schema.defineRoot("Town")
-
-/** An optional query slot's value, or `undefined` when the entity lacks it. */
-export const maybe = <T>(cell: OptionalReadCell<T>) => (cell.present ? cell.get() : undefined)
 
 const integer = Decode.integer
 const cell = Decode.struct({ x: integer, y: integer })

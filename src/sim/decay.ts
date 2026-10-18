@@ -11,7 +11,7 @@ import { ruinDraft } from "../archetypes.ts"
 import { foods, goodIds, stepsOf } from "../content.ts"
 import { counted, placeName } from "../places.ts"
 import { Ruin } from "../schema.ts"
-import { Building, Burning, Charter, Chronicle, Condition, Game, Rules, House, Inventory, Pantry, Recipe, Rising, Rng, Site, Staff, Tile, Time, maybe } from "../schema.ts"
+import { Building, Burning, Charter, Chronicle, Condition, Game, Rules, House, Inventory, Pantry, Recipe, Rising, Rng, Site, Staff, Tile, Time } from "../schema.ts"
 import { elapsed, write } from "./shared.ts"
 
 /** The pantry warns of rotting food at most this often. */
@@ -57,7 +57,7 @@ export const Decay = Game.System(
           continue
         }
         const tile = data.tile.get()
-        const b = maybe(data.building)
+        const b = data.building.value()
         commands.despawn(entity)
         commands.spawn(ruinDraft(tile, "collapsed"))
         write(
@@ -76,7 +76,7 @@ export const Decay = Game.System(
       let rotted = 0
       for (const { data } of queries.shelves.each()) {
         const inv = data.inventory.get()
-        const keeps = kinds[maybe(data.building)?.kind ?? "townhall"].keeps ?? 1
+        const keeps = kinds[data.building.value()?.kind ?? "townhall"].keeps ?? 1
         let stock = inv.stock
         for (const g of goodIds) {
           const life = spoils[g]

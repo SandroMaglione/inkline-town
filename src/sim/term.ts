@@ -7,7 +7,7 @@ import { shippedRules } from "../rules/config.ts"
  */
 import { crown, HISTORY_TICKS, stepsOf, WINTER_WARNING, type GoodId } from "../content.ts"
 import * as Random from "@typeonce/ritmo-math/Random"
-import { Building, Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, House, Inventory, Ledger, Mood, Pantry, Paused, Policy, Recipe, Rising, Rng, Site, Stock, Storage, Time, Treasury, TownHall, Upgraded, maybe } from "../schema.ts"
+import { Building, Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, House, Inventory, Ledger, Mood, Pantry, Paused, Policy, Recipe, Rising, Rng, Site, Stock, Storage, Time, Treasury, TownHall, Upgraded } from "../schema.ts"
 import { elapsed, seasonAt, termTicks, write } from "./shared.ts"
 
 // ── Time ──────────────────────────────────────────────────────────────────
@@ -223,7 +223,7 @@ export const Judge = Game.System(
     const { crown, fate, ranks } = rules
     // The town hall's upgrades: a city asks for a guildhall.
     const hallRow = queries.halls.each()[0]
-    const hall = hallRow ? maybe(hallRow.data.upgraded)?.level ?? 0 : 0
+    const hall = hallRow ? hallRow.data.upgraded.value()?.level ?? 0 : 0
 
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)

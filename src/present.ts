@@ -83,7 +83,6 @@ import {
   WalkerNodes,
   WalkerOf,
   Water,
-  maybe,
   type GridValue,
   type Status as StatusValue
 } from "./schema.ts"
@@ -720,7 +719,7 @@ export const Interact = Game.System(
       for (const row of buildings) {
         const { data } = row
         if (data.building.get().kind !== ui.upgrading || data.site.present || data.rising.present) continue
-        const kind = kinds[ui.upgrading], level = maybe(data.upgraded)?.level ?? 0, up = nextUpgrade(kind, level)
+        const kind = kinds[ui.upgrading], level = data.upgraded.value()?.level ?? 0, up = nextUpgrade(kind, level)
         const tile = data.tile.get()
         if (!up) continue
         const blocked = upgradeBlock(up, rank, { ranks })
@@ -758,7 +757,7 @@ export const Interact = Game.System(
       } else if (tile) preview.plots.push({ ...tile, look: "picked" })
       if (row && tile) {
         showReach(tile, kinds[row.data.building.get().kind])
-        rangeOfKind(tile, kinds[row.data.building.get().kind], maybe(row.data.service)?.range)
+        rangeOfKind(tile, kinds[row.data.building.get().kind], row.data.service.value()?.range)
       }
     }
 
@@ -769,7 +768,7 @@ export const Interact = Game.System(
       sources = []
       for (const { data } of buildings) {
         if (data.site.present || data.rising.present) continue
-        const s = buildingSource(data.building.get().kind, data.tile.get(), undefined, maybe(data.upgraded)?.level ?? 0)
+        const s = buildingSource(data.building.get().kind, data.tile.get(), undefined, data.upgraded.value()?.level ?? 0)
         if (s) sources.push(s)
       }
       for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get()))
@@ -779,7 +778,7 @@ export const Interact = Game.System(
       for (const { data } of ruins) sources.push(landSource("ruin", data.tile.get()))
       for (const { data } of houses) {
         if (data.site.present || data.rising.present) continue
-        if ((maybe(data.condition)?.value ?? CONDITION_MAX) < wear.worn) sources.push(landSource("worn", data.tile.get()))
+        if ((data.condition.value()?.value ?? CONDITION_MAX) < wear.worn) sources.push(landSource("worn", data.tile.get()))
         const fine = data.closed.present ? null : homeSource(data.house.get().tier, data.tile.get())
         if (fine) sources.push(fine)
       }
@@ -811,8 +810,8 @@ export const Interact = Game.System(
     /** Built homes no food walker reaches: reckoned only until a market stands, as it is a walk from each walker's door. */
     const unreachedHomes = () => {
       const walks = buildings
-        .filter((row) => maybe(row.data.service)?.service === "goods" && finished(row))
-        .map((row) => ({ way: reach(grid, doors(grid, row.data.tile.get())), range: maybe(row.data.service)!.range }))
+        .filter((row) => row.data.service.value()?.service === "goods" && finished(row))
+        .map((row) => ({ way: reach(grid, doors(grid, row.data.tile.get())), range: row.data.service.value()!.range }))
       return houses.filter((row) => {
         if (!finished(row)) return false
         const ds = doors(grid, row.data.tile.get())
@@ -830,10 +829,10 @@ export const Interact = Game.System(
       const tick = resources.time.get().step
       if (Math.floor(tick / 60) === wanted.at) return wanted.why
       const why = new Map<number, string>()
-      const standingRows = buildings.filter((r) => !r.data.site.present && !r.data.rising.present && !maybe(r.data.works))
+      const standingRows = buildings.filter((r) => !r.data.site.present && !r.data.rising.present && !r.data.works.value())
       const homes = houses.filter((r) => !r.data.site.present && !r.data.rising.present && !r.data.closed.present)
       const full = (r: (typeof buildings)[number]) => {
-        const inv = maybe(r.data.inventory)
+        const inv = r.data.inventory.value()
         return !!inv && goodIds.some((g) => inv.accepts.includes(g) && inv.stock[g] >= inv.cap * 0.9)
       }
       const near = (r: (typeof buildings)[number], tile: TileLike, range: number) => {
@@ -845,9 +844,9 @@ export const Interact = Game.System(
       const millsWait = standingRows.some((r) => r.data.building.get().kind === "mill" && r.data.status.get() === "starved")
       const breadShort = resources.stock.get().bread < 5 && homes.some((r) => fishy(r, "bread"))
       for (const r of standingRows) {
-        const kind = kinds[r.data.building.get().kind], level = maybe(r.data.upgraded)?.level ?? 0, status = r.data.status.get()
+        const kind = kinds[r.data.building.get().kind], level = r.data.upgraded.value()?.level ?? 0, status = r.data.status.get()
         if (!nextUpgrade(kind, level)) continue
-        const reach = maybe(r.data.service)?.range ?? 0
+        const reach = r.data.service.value()?.range ?? 0
         const reason =
           kind.id === "townhall" ? (nextHall > level ? "the next rank asks for it" : full(r) ? "its shelves are full" : null)
           : kind.id === "warehouse" ? (full(r) ? "its shelves are full" : null)
@@ -856,7 +855,7 @@ export const Interact = Game.System(
           : kind.id === "bakery" ? (status === "working" && breadShort ? "homes go without bread while it works flat out" : null)
           : kind.id === "market" ? (unreachedHomes() > 0 ? "homes lie beyond every food walker" : null)
           : kind.id === "chapel" ? (homes.some((h) => fishy(h, "faith") && !near(r, h.data.tile.get(), reach)) ? "homes lie beyond its priest" : null)
-          : kind.id === "firewatch" ? (homes.some((h) => (maybe(h.data.risk)?.fire ?? 0) >= risk.warn && near(r, h.data.tile.get(), reach + 6)) ? "homes on its streets are at high fire risk" : null)
+          : kind.id === "firewatch" ? (homes.some((h) => (h.data.risk.value()?.fire ?? 0) >= risk.warn && near(r, h.data.tile.get(), reach + 6)) ? "homes on its streets are at high fire risk" : null)
           : null
         if (reason) why.set(r.entity.id, reason)
       }
@@ -872,7 +871,7 @@ export const Interact = Game.System(
     const describeBuilding = (row: (typeof buildings)[number]) => {
       const kind = kinds[row.data.building.get().kind]
       const status = row.data.status.get()
-      const site = maybe(row.data.site)
+      const site = row.data.site.value()
       if (site) {
         const owed = (Object.entries(site.owed) as Array<[GoodId, number]>).filter(([, n]) => n > 0)
         const line: Line =
@@ -900,15 +899,15 @@ export const Interact = Game.System(
               : undefined
         })
       }
-      const recipe = maybe(row.data.recipe)
+      const recipe = row.data.recipe.value()
       if (recipe)
         work.push({ icon: recipe.output, label: "makes", value: recipe.input ? `${goods[recipe.input].title} → ${goods[recipe.output].title}` : goods[recipe.output].title })
-      const service = maybe(row.data.service)
+      const service = row.data.service.value()
       if (service)
         work.push({
           icon: service.service === "goods" ? "trade" : service.service === "faith" ? "faith" : service.service === "repair" ? "repair" : service.service,
           label: "walkers out",
-          value: `${maybe(row.data.walkers)?.length ?? 0}`
+          value: `${row.data.walkers.value()?.length ?? 0}`
         })
       // A provisions walker's building: what its walkers handed to homes over the last minute, which its shelf
       // alone cannot say (food leaves in the basket as soon as it comes; furniture mostly comes back).
@@ -924,7 +923,7 @@ export const Interact = Game.System(
             : { icon: "people", label: "handed out, last minute", value: "nothing", tone: "dim", note: "no home on its walks needed what it had" }
         )
       }
-      const inventory = maybe(row.data.inventory)
+      const inventory = row.data.inventory.value()
       if (inventory) {
         const held = inventory.accepts.filter((g) => inventory.stock[g] > 0).map((g) => ({ good: g, count: inventory.stock[g] }))
         // A market's shelf is only what waits for the next walker.
@@ -938,10 +937,10 @@ export const Interact = Game.System(
             : { icon: "tools", label: "tools", value: "none", tone: "bad", note: "half pace until one comes: a smithy makes them, or buy them in the town panel" }
         )
       const running: Array<Line> = []
-      const level = maybe(row.data.upgraded)?.level ?? 0
+      const level = row.data.upgraded.value()?.level ?? 0
       const upkeep = upkeepOf(kind, level)
       if (upkeep > 0) running.push({ icon: "upkeep", label: "upkeep", value: `${upkeep} coins a minute` })
-      const condition = maybe(row.data.condition)
+      const condition = row.data.condition.value()
       if (condition)
         running.push({
           icon: "condition",
@@ -950,7 +949,7 @@ export const Interact = Game.System(
           tone: condition.value < wear.worn ? "bad" : condition.value < wear.mend ? "warn" : "ok",
           note: condition.value < wear.worn ? "half pace, and it may fall: a builder's yard mends it" : condition.value < wear.mend ? "a builder's yard mends it as its builder passes" : undefined
         })
-      const r = maybe(row.data.risk)
+      const r = row.data.risk.value()
       if (r)
         running.push({
           icon: "fire",
@@ -987,8 +986,8 @@ export const Interact = Game.System(
       const stock = resources.stock.get()
       const sum = { fish: stock.fish, smoked: stock.smoked, bread: stock.bread, cloth: stock.cloth, furniture: stock.furniture }
       for (const { data } of buildings) {
-        const inv = maybe(data.inventory)
-        if (!inv || maybe(data.service)?.service !== "goods" || data.site.present || data.rising.present) continue
+        const inv = data.inventory.value()
+        if (!inv || data.service.value()?.service !== "goods" || data.site.present || data.rising.present) continue
         sum.fish += inv.stock.fish
         sum.smoked += inv.stock.smoked
         sum.bread += inv.stock.bread
@@ -1004,7 +1003,7 @@ export const Interact = Game.System(
       const way = reach(grid, ds)
       const served = { goods: false, faith: false }
       for (const { data } of buildings) {
-        const service = maybe(data.service)
+        const service = data.service.value()
         if (!service || data.site.present || data.rising.present || data.burning.present) continue
         if (service.service !== "goods" && service.service !== "faith") continue
         if (served[service.service]) continue
@@ -1020,7 +1019,7 @@ export const Interact = Game.System(
      */
     const describeHouse = (row: (typeof houses)[number]) => {
       const h = row.data.house.get()
-      const site = maybe(row.data.site)
+      const site = row.data.site.value()
       const quiet = (summary: string, line: Line) => ({ h, summary, trouble: false, groups: [{ title: "household", icon: "homes", lines: [line] }] as Array<Group> })
       if (site) return quiet("being built", { icon: "planks", label: "builders", value: "waiting for its plank", tone: "warn" })
       if (row.data.closed.present)
@@ -1031,9 +1030,9 @@ export const Interact = Game.System(
       const there = appealParts(appealSources(), tile)
       const desirability = appealAt(cells, tile.x, tile.y)
       const street: Street = { desirability, parts: there.parts }
-      const r = maybe(row.data.risk)
+      const r = row.data.risk.value()
       const work = workOf(tile, h.tier)
-      const condition = maybe(row.data.condition)
+      const condition = row.data.condition.value()
       const town = inTown()
       const served = servedAt(tile)
       const rate = h.tier === 1 ? rates.settlers : rates.citizens
@@ -1098,7 +1097,7 @@ export const Interact = Game.System(
       else needs.push({ icon: "appeal", label: "street", value: signed(desirability), tone: "ok" })
       if (blocks.some((b) => b.what === "services")) needs.push({ icon: "order", label: "services", value: `for ${home.tiers[3].title}`, tone: "warn", ...told(servicesCause(r)) })
       // Rising is a rebuilding, paid at once from the treasury and the store, once.
-      const rebuilt = nextTier !== null && (maybe(row.data.rebuilt)?.tier ?? 1) >= nextTier
+      const rebuilt = nextTier !== null && (row.data.rebuilt.value()?.tier ?? 1) >= nextTier
       const short = nextTier && !rebuilt ? shortOf(home.tiers[nextTier].rise, resources.treasury.get().coins, resources.stock.get()) : null
       if (nextTier)
         needs.push({
@@ -1166,16 +1165,16 @@ export const Interact = Game.System(
     if (ui.tool === "upgrade") {
     } else if (hoveredBuilding) {
       const { kind, status, problem } = describeBuilding(hoveredBuilding)
-      const level = maybe(hoveredBuilding.data.upgraded)?.level ?? 0, works = maybe(hoveredBuilding.data.works)
+      const level = hoveredBuilding.data.upgraded.value()?.level ?? 0, works = hoveredBuilding.data.works.value()
       const title = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
       preview.tooltip = ui.tool === "bulldoze"
-        ? `${title} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(builtCost(kind, level), maybe(hoveredBuilding.data.site), works && { kind, ...works })}`
+        ? `${title} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(builtCost(kind, level), hoveredBuilding.data.site.value(), works && { kind, ...works })}`
         : `${title} · ${problem ?? status}${works ? ` · becoming ${anA(upgradeAt(kind, works.level)!.title.toLowerCase())}, ${Math.round(worksShare(works)! * 100)}% built` : ""}`
     } else if (hoveredHouse) {
       const h = hoveredHouse.data.house.get()
       const t = hoveredHouse.data.tile.get()
       preview.tooltip = ui.tool === "bulldoze"
-        ? `${tierHome[h.tier]} · ${salvageFor(home.cost, maybe(hoveredHouse.data.site))}`
+        ? `${tierHome[h.tier]} · ${salvageFor(home.cost, hoveredHouse.data.site.value())}`
         : hoveredHouse.data.closed.present
         ? `${tierHome[h.tier]} · closed`
         : `${tierHome[h.tier]} · ${h.residents} resident${h.residents === 1 ? "" : "s"} · desirability ${appealAt(cells, t.x, t.y)}${hoveredHouse.data.burning.present ? " · on fire!" : hoveredHouse.data.sick.present ? " · sick" : ""}`
@@ -1208,9 +1207,9 @@ export const Interact = Game.System(
       const { kind, status, problem, state, groups } = describeBuilding(pickedBuilding)
       const standing = !pickedBuilding.data.site.present && !pickedBuilding.data.rising.present
       const pausable = kind.id !== "townhall" && standing
-      const level = maybe(pickedBuilding.data.upgraded)?.level ?? 0
+      const level = pickedBuilding.data.upgraded.value()?.level ?? 0
       const now = upgradeAt(kind, level)
-      const works = maybe(pickedBuilding.data.works)
+      const works = pickedBuilding.data.works.value()
       const up = works ? undefined : nextUpgrade(kind, level)
       const upgradeOffer = up && standing
         ? { title: up.title, blurb: up.blurb, price: upgradePrice(up), cost: up.cost, changes: upgradeChanges(kind, level), needed: upgradesWanted().get(pickedBuilding.entity.id) ?? null,
@@ -1241,7 +1240,7 @@ export const Interact = Game.System(
         groups,
         pausable,
         paused: pickedBuilding.data.paused.present,
-        salvage: salvageFor(builtCost(kind, level), maybe(pickedBuilding.data.site), works && { kind, ...works }),
+        salvage: salvageFor(builtCost(kind, level), pickedBuilding.data.site.value(), works && { kind, ...works }),
         level,
         upgraded: level > 0,
         upgrade: upgradeOffer,
@@ -1253,7 +1252,7 @@ export const Interact = Game.System(
         type: "house", id: pickedHouse.entity.id, cell: pickedHouse.data.tile.get(), tier: h.tier, summary, trouble, groups,
         closable: !pickedHouse.data.site.present && !pickedHouse.data.rising.present && !pickedHouse.data.burning.present,
         closed: pickedHouse.data.closed.present,
-        salvage: salvageFor(home.cost, maybe(pickedHouse.data.site))
+        salvage: salvageFor(home.cost, pickedHouse.data.site.value())
       }
     } else if (pickedPark && picked) {
       ui.panel = {
@@ -1342,7 +1341,7 @@ export const Interact = Game.System(
         }
       } else if (view === "fire" || view === "health" || view === "order") {
         for (const { entity, data } of standing(houses)) {
-          const r = maybe(data.risk)
+          const r = data.risk.value()
           if (!r) continue
           const struck = view === "fire" ? data.burning.present : view === "health" ? data.sick.present : r.thefts > 0
           const color = struck ? BAD : meterColor(r[view], RISK_MAX, risk.warn)
@@ -1350,8 +1349,8 @@ export const Interact = Game.System(
           tints.set(entity.id, tintOf(color))
         }
         for (const { entity, data } of standing(buildings)) {
-          const service = maybe(data.service)?.service
-          const r = maybe(data.risk)
+          const service = data.service.value()?.service
+          const r = data.risk.value()
           if (service === view) {
             out.push({ ...data.tile.get(), color: MARK, alpha: 0.55, ring: true })
             tints.set(entity.id, TINT.mark)
@@ -1363,13 +1362,13 @@ export const Interact = Game.System(
         }
       } else if (view === "condition") {
         for (const row of [...standing(houses), ...standing(buildings)]) {
-          const c = maybe(row.data.condition)
+          const c = row.data.condition.value()
           if (!c) continue
           const color = c.value < wear.worn ? BAD : c.value < wear.mend ? FAIR : GOOD
           out.push({ ...row.data.tile.get(), color, alpha: 0.5 })
           tints.set(row.entity.id, tintOf(color))
         }
-        for (const { entity, data } of standing(buildings)) if (maybe(data.service)?.service === "repair") {
+        for (const { entity, data } of standing(buildings)) if (data.service.value()?.service === "repair") {
           out.push({ ...data.tile.get(), color: MARK, alpha: 0.55, ring: true })
           tints.set(entity.id, TINT.mark)
         }
@@ -1443,8 +1442,8 @@ export const Interact = Game.System(
       const { data } = row
       if (data.site.present || data.rising.present) continue
       const kind = kinds[data.building.get().kind]
-      const level = maybe(data.upgraded)?.level ?? 0
-      const works = maybe(data.works)
+      const level = data.upgraded.value()?.level ?? 0
+      const works = data.works.value()
       const from = works ? works.level - 1 : level
       if (!nextUpgrade(kind, from)) continue
       const k = `${kind.id}:${from}`
@@ -1472,7 +1471,7 @@ export const Interact = Game.System(
     const due = new Map([...upgradesWanted()].filter(([id]) => {
       const row = buildings.find((b) => b.entity.id === id)
       const kind = row && kinds[row.data.building.get().kind]
-      const up = row && kind && nextUpgrade(kind, maybe(row.data.upgraded)?.level ?? 0)
+      const up = row && kind && nextUpgrade(kind, row.data.upgraded.value()?.level ?? 0)
       if (!up || !kind || arrowed.has(kind.id) || upgradeBlock(up, rank, { ranks }) !== null || coinsNow < up.cost.coins) return false
       arrowed.add(kind.id)
       return true
@@ -1481,7 +1480,7 @@ export const Interact = Game.System(
     const [firstId, firstWhy] = [...due][0] ?? []
     const dueFirst = firstId === undefined ? undefined : buildings.find((b) => b.entity.id === firstId)
     if (dueFirst && !upgrades.some((u) => u.underway > 0)) {
-      const kind = kinds[dueFirst.data.building.get().kind], level = maybe(dueFirst.data.upgraded)?.level ?? 0
+      const kind = kinds[dueFirst.data.building.get().kind], level = dueFirst.data.upgraded.value()?.level ?? 0
       const from = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase(), to = nextUpgrade(kind, level)!.title.toLowerCase()
       alerts.push({ tone: "hint", text: `${firstWhy}: the ${from} can become ${anA(to)}. {Tap|Click} it, under its gold arrow, to begin`, at: dueFirst.data.tile.get(), size: dueFirst.data.tile.get().size, id: dueFirst.entity.id })
     }
@@ -1527,7 +1526,7 @@ export const Interact = Game.System(
     }
     const placedKinds = new Set(buildings.map(({ data }) => data.building.get().kind))
     const standingKinds = new Set(buildings.filter(({ data }) => !data.site.present && !data.rising.present).map(({ data }) => data.building.get().kind))
-    const wornRow = buildings.find((row) => finished(row) && !row.data.hall.present && (maybe(row.data.condition)?.value ?? CONDITION_MAX) < wear.mend)
+    const wornRow = buildings.find((row) => finished(row) && !row.data.hall.present && (row.data.condition.value()?.value ?? CONDITION_MAX) < wear.mend)
     // A settlers' home with bread, cloth, and faith, kept from citizens only by its street.
     const poorRow = houses.find((row) => {
       const h = row.data.house.get()
@@ -1578,9 +1577,9 @@ export const Interact = Game.System(
       rank: f.rank,
       upgraded: new Set(buildings.filter((row) => row.data.upgraded.present).map((row) => row.data.building.get().kind)),
       risk: {
-        fire: houses.some((row) => (maybe(row.data.risk)?.fire ?? 0) >= RISK_MAX * 0.35),
-        health: houses.some((row) => (maybe(row.data.risk)?.health ?? 0) >= RISK_MAX * 0.35),
-        order: houses.some((row) => (maybe(row.data.risk)?.order ?? 0) >= RISK_MAX * 0.35)
+        fire: houses.some((row) => (row.data.risk.value()?.fire ?? 0) >= RISK_MAX * 0.35),
+        health: houses.some((row) => (row.data.risk.value()?.health ?? 0) >= RISK_MAX * 0.35),
+        order: houses.some((row) => (row.data.risk.value()?.order ?? 0) >= RISK_MAX * 0.35)
       },
       fewTrees: buildings.some((row) => {
         if (row.data.building.get().kind !== "lumberjack" || !finished(row)) return false
@@ -1702,7 +1701,7 @@ export const Interact = Game.System(
       goals: goalsOf(
         charter,
         { settlers: census.settlers, citizens: census.citizens, burghers: census.burghers, coins, net: steadyNet(resources.history.get().samples, net), approval: mood.approval,
-          hall: hallRow ? maybe(hallRow.data.upgraded)?.level ?? 0 : 0 },
+          hall: hallRow ? hallRow.data.upgraded.value()?.level ?? 0 : 0 },
         undefined,
         f.rank
       ),
@@ -1934,28 +1933,28 @@ export const Animate = Game.System(
       const status = data.status.get()
       // An upgrade the town needs now, and can make (see `upgradesWanted`).
       const upgradable = services.ui.wanted.has(entity.id)
-      const recipe = maybe(data.recipe)
-      const walkers = maybe(data.walkers)?.length ?? 0
-      const worn = (maybe(data.condition)?.value ?? CONDITION_MAX) < wear.worn
-      const r = maybe(data.risk)
+      const recipe = data.recipe.value()
+      const walkers = data.walkers.value()?.length ?? 0
+      const worn = (data.condition.value()?.value ?? CONDITION_MAX) < wear.worn
+      const r = data.risk.value()
       services.buildingNodes.get(entity.id)?.update(
         {
           alert: alertOf(r ? { fire: r.fire, health: 0, order: 0 } : undefined, false, worn),
           burning: data.burning.present,
           worn,
           effects: {
-            wear: 1-(maybe(data.condition)?.value??CONDITION_MAX)/CONDITION_MAX,
+            wear: 1-(data.condition.value()?.value??CONDITION_MAX)/CONDITION_MAX,
             fireRisk: hazardStrength(r?.fire??0,risk.warn,RISK_MAX)
           },
           working: status === "working",
           tint: services.ui.tints.get(entity.id),
           problem: problemOf(kind, status) !== null,
-          build: buildOf(maybe(data.site), maybe(data.rising)),
-          beat: recipe ? recipe.made : maybe(data.service) ? walkers : 0,
+          build: buildOf(data.site.value(), data.rising.value()),
+          beat: recipe ? recipe.made : data.service.value() ? walkers : 0,
           doors: doorsOf(grid, data.tile.get()),
-          site: siteShare(maybe(data.site)),
-          level: maybe(data.upgraded)?.level ?? 0,
-          works: worksShare(maybe(data.works)),
+          site: siteShare(data.site.value()),
+          level: data.upgraded.value()?.level ?? 0,
+          works: worksShare(data.works.value()),
           upgradable
         },
         dt,
@@ -1964,24 +1963,24 @@ export const Animate = Game.System(
     }
     for (const { entity, data } of queries.houses.each()) {
       const tile = data.tile.get()
-      const worn = (maybe(data.condition)?.value ?? CONDITION_MAX) < wear.worn
+      const worn = (data.condition.value()?.value ?? CONDITION_MAX) < wear.worn
       const desirability = appealAt(cells, tile.x, tile.y)
       services.houseNodes
         .get(entity.id)
         ?.update(
           {
             tier: data.house.get().tier,
-            build: buildOf(maybe(data.site), maybe(data.rising)),
+            build: buildOf(data.site.value(), data.rising.value()),
             doors: doorsOf(grid, tile),
-            site: siteShare(maybe(data.site)),
-            alert: data.site.present ? null : alertOf(maybe(data.risk), data.sick.present, worn),
+            site: siteShare(data.site.value()),
+            alert: data.site.present ? null : alertOf(data.risk.value(), data.sick.present, worn),
             burning: data.burning.present,
             worn,
             effects: {
-              wear: Math.max(desirability<0?0.55:0,1-(maybe(data.condition)?.value??CONDITION_MAX)/CONDITION_MAX),
-              fireRisk: hazardStrength(maybe(data.risk)?.fire??0,risk.warn,RISK_MAX),
-              health: hazardStrength(maybe(data.risk)?.health??0,risk.warn,RISK_MAX),
-              order: hazardStrength(maybe(data.risk)?.order??0,risk.warn,RISK_MAX),
+              wear: Math.max(desirability<0?0.55:0,1-(data.condition.value()?.value??CONDITION_MAX)/CONDITION_MAX),
+              fireRisk: hazardStrength(data.risk.value()?.fire??0,risk.warn,RISK_MAX),
+              health: hazardStrength(data.risk.value()?.health??0,risk.warn,RISK_MAX),
+              order: hazardStrength(data.risk.value()?.order??0,risk.warn,RISK_MAX),
               sick: Number(data.sick.present)
             },
             band: desirability < 0 ? "poor" : desirability >= home.tiers[2].appeal ? "fine" : "plain",
@@ -1994,11 +1993,11 @@ export const Animate = Game.System(
     for (const { entity } of queries.ruins.each()) services.ruinNodes.get(entity.id)?.update(emphasis(entity.id))
     for (const { entity, data } of queries.walkers.each()) {
       const p = walkerAt(data.route.get())
-      const errand = maybe(data.errand)
-      const roam = maybe(data.roam)
+      const errand = data.errand.value()
+      const roam = data.roam.value()
       const load: Load = errand
         ? { kind: "cart", good: errand.good, count: !errand.back || errand.count > 0 ? errand.count : 0 }
-        : maybe(data.rescue)
+        : data.rescue.value()
           ? { kind: "service", role: "firefighter" }
         : roam?.service === "fire"
           ? { kind: "service", role: "watchman" }
@@ -2073,7 +2072,7 @@ export const Stroll = Game.System(
     const waiting = ui.founding || (ui.stats !== null && ui.stats.fate.state !== "playing")
     const homes = queries.houses
       .each()
-      .filter(({ data }) => !maybe(data.site) && !maybe(data.rising))
+      .filter(({ data }) => !data.site.value() && !data.rising.value())
       .map(({ data }) => ({ ...data.tile.get(), tier: data.house.get().tier, residents: data.house.get().residents }))
     townsfolk.folk.step(waiting ? 0 : services.clock.deltaSeconds * ui.speed, homes, resources.grid.get())
   }

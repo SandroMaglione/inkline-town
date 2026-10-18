@@ -14,7 +14,7 @@ import { appealAt } from "../appeal.ts"
 import { amounts, categoryColor, each, provisions, stepsOf, total, type Amounts } from "../content.ts"
 import { DIRS, doors, isRoad, key, nearest, ownerAt, pathTo, reach, useAt } from "../grid.ts"
 import { inside, type Point } from "../iso.ts"
-import { Building, Burning, Condition, Figure, Game, Rules, Grid, Appeal, Handed, Patrol, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Roam, Route, Service, Sick, Site, Staff, Status, Tile, Time, WalkerOf, maybe, type HandedValue, type Status as StatusValue } from "../schema.ts"
+import { Building, Burning, Condition, Figure, Game, Rules, Grid, Appeal, Handed, Patrol, House, Inventory, Pantry, Paused, Recipe, Rescue, Rising, Risk, Roam, Route, Service, Sick, Site, Staff, Status, Tile, Time, WalkerOf, type HandedValue, type Status as StatusValue } from "../schema.ts"
 import { CELL_STEPS } from "./shared.ts"
 import { paced } from "./work.ts"
 
@@ -109,13 +109,13 @@ export const SendWalkers = Game.System(
       const service = data.service.get()
       const staff = data.staff.get()
       const starts = doors(grid, data.tile.get())
-      const stock = maybe(data.inventory)?.stock
+      const stock = data.inventory.value()?.stock
       const staffed = !data.paused.present && (staff.needed === 0 || staff.assigned > 0)
       const carries = (g: (typeof provisions)[number]) =>
         service.service === "goods" ? provisions.includes(g) : service.service === "repair" ? g === "planks" || g === "stone" : false
       const basket: Amounts = each((g) => (stock && carries(g) ? Math.min(BASKET, stock[g]) : 0))
       const goes = service.service === "goods" ? total(basket) > 0 : service.service === "repair" ? basket.planks > 0 : true
-      if (!maybe(data.recipe)) {
+      if (!data.recipe.value()) {
         const status: StatusValue = data.paused.present
           ? "paused"
           : starts.length === 0

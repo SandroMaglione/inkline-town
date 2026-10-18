@@ -17,7 +17,7 @@ const FLOW_SLICES = 6
 
 const each = (f: (g: (typeof goodIds)[number]) => number): Amounts => Object.fromEntries(goodIds.map((g) => [g, f(g)])) as Amounts
 import { around, doors, GridBuilder, key, ownerAt, reach, roadPrint, useAt } from "../grid.ts"
-import { Building, Burning, Carriers, Charter, Chronicle, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Service, Site, Staff, Status, Stock, Storage, Tile, Time, Treasury, Tree, Upgraded, maybe, type Status as StatusValue, Water, Works } from "../schema.ts"
+import { Building, Burning, Carriers, Charter, Chronicle, Errand, Flow, Roam, Condition, Field, FieldOf, Game, Rules, Gatherer, Grid, House, Inventory, Land, Paused, Paved, Planter, Recipe, Rising, Rng, Rock, Service, Site, Staff, Status, Stock, Storage, Tile, Time, Treasury, Tree, Upgraded, type Status as StatusValue, Water, Works } from "../schema.ts"
 import { connected, elapsed, seasonAt, TileRead, useOf, write } from "./shared.ts"
 
 import { assignWorkers, equipmentPace, effort, paced } from "../rules/production.ts"
@@ -209,7 +209,7 @@ export const Raise = Game.System(
       commands.remove(entity, Works)
       commands.insert(entity, Game.Command.entry(Upgraded, { level: works.level }))
       data.staff.set({ ...data.staff.get(), needed: kind.workers })
-      const recipe = maybe(data.recipe), carriers = maybe(data.carriers), service = maybe(data.service)
+      const recipe = data.recipe.value(), carriers = data.carriers.value(), service = data.service.value()
       if (recipe && kind.recipe) commands.insert(entity, Game.Command.entry(Recipe, { ...recipe, period: stepsOf(kind.recipe.seconds) }))
       if (shelves.ok && kind.holds) shelves.value.data.inventory.set({ ...shelves.value.data.inventory.get(), cap: kind.holds.cap })
       if (carriers && kind.carriers) commands.insert(entity, Game.Command.entry(Carriers, { count: kind.carriers }))
@@ -458,7 +458,7 @@ export const Work = Game.System(
       const tile = data.tile.get()
       const kind = kinds[data.building.get().kind]
       const staff = data.staff.get()
-      const gatherer = maybe(data.gatherer)
+      const gatherer = data.gatherer.value()
       let recipe = data.recipe.get()
       const inventory = data.inventory.get()
       let stock = inventory.stock
@@ -468,7 +468,7 @@ export const Work = Game.System(
       let short = !fed
 
       if (open && staff.assigned > 0 && recipe.progress === 0 && room && fed) {
-        const deep = upgradeAt(kind, maybe(data.upgraded)?.level ?? 0)?.deep ?? false
+        const deep = upgradeAt(kind, data.upgraded.value()?.level ?? 0)?.deep ?? false
         if (gatherer && !gather(gatherer.source, tile, gatherer.radius, deep)) short = true
         else {
           if (recipe.input !== null) stock = { ...stock, [recipe.input]: stock[recipe.input] - recipe.inputs }
@@ -476,7 +476,7 @@ export const Work = Game.System(
         }
       }
 
-      const pace = equipmentPace(kind, stock.tools, maybe(data.condition)?.value ?? Infinity, fishing, rules)
+      const pace = equipmentPace(kind, stock.tools, data.condition.value()?.value ?? Infinity, fishing, rules)
       const put = effort(staff, tick, rules)
       if (open && recipe.progress > 0 && put > 0 && paced(pace, tick)) {
         const progress = recipe.progress + put
@@ -554,7 +554,7 @@ export const Plant = Game.System(
       const grown = reach.filter((c) => useAt(grid, c.x, c.y) === planter.what).length
       const spots = reach.filter((c) => useAt(grid, c.x, c.y) === "empty" && !sown.has(key(c.x, c.y)))
       // A forester has no recipe of its own: its status is its planting.
-      if (!maybe(data.recipe)) {
+      if (!data.recipe.value()) {
         const status: StatusValue = data.paused.present ? "paused" : !open ? "unconnected" : staff.assigned === 0 ? "unstaffed" : grown < planter.max && spots.length > 0 ? "working" : "idle"
         if (data.status.get() !== status) data.status.set(status)
       }
