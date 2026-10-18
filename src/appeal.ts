@@ -1,3 +1,4 @@
+import { Ops } from "@typeonce/ritmo-math"
 import { shippedRules, type Rules } from "./rules/config.ts"
 /**
  * Desirability: how pleasant each cell is to live on. Buildings and the land
@@ -197,7 +198,7 @@ export const parkValue = (cells: ReadonlyArray<ParkCell>, road: (x: number, y: n
     .map((p) => {
       const n = seen.get(p) ?? 0
       seen.set(p, n + 1)
-      return { prop: p, worth: props[p].beauty * park.repeat ** n }
+      return { prop: p, worth: props[p].beauty * Ops.pow(park.repeat, n) }
     })
     .sort((a, b) => b.worth - a.worth)
   const counted = worths.slice(0, room)
