@@ -72,7 +72,7 @@ export const Decay = Game.System(
 
     // Spoiling: each shelf loses its share of what spoils, a granary's a fifth as much.
     if (tick % SPOIL_TICKS === 0) {
-      const random = Random.make(resources.rng.get())
+      const random = Random.draw(resources.rng)
       let rotted = 0
       for (const { data } of queries.shelves.each()) {
         const inv = data.inventory.get()
@@ -89,7 +89,6 @@ export const Decay = Game.System(
         }
         if (stock !== inv.stock) data.inventory.set({ ...inv, stock })
       }
-      resources.rng.set(random.state)
       if (rotted > 0) resources.pantry.update((p) => ({ ...p, rotted: p.rotted + rotted }))
     }
 

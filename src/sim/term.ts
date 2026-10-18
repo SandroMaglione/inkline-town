@@ -120,9 +120,7 @@ export const Requests = Game.System(
     // Only what keeps: fish and bread would rot on the way.
     const options = [...rates.keys()].filter((g) => spoils[g] === undefined).sort()
     if (options.length === 0) return
-    const random = Random.make(resources.rng.get())
-    const good = random.pick(options)!
-    resources.rng.set(random.state)
+    const good = Random.draw(resources.rng).pick(options)!
     // Larger the later in this term it is: a new term starts the crown small again.
     const progress = Math.min(1, Math.max(0, t - resources.fate.get().began) / termTicks(charter, rules))
     const window = (crownGap(charter, rules) * crown.window) / 3600

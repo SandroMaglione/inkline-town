@@ -495,7 +495,7 @@ export const ApplyEdits = Game.System(
           resources.chronicle.set({
             lines: [{ tick: 0, text: `Founded on ${sizes[charter.size].title}, ${richness.title} land, for a term of ${charter.term} minutes.`, alarm: false, at: null }]
           })
-          resources.rng.set(charter.seed)
+          resources.rng.set(Random.seed(charter.seed))
           events.selection.emit({ clear: true })
           // Nothing else this step: the new land is not on the grid yet.
           break edits

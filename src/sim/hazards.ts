@@ -132,7 +132,7 @@ export const Hazards = Game.System(
     const approval = resources.mood.get().approval
     const season = seasonAt(t, charter, rules)
     const heating = season.severity !== null && winters[season.severity].heating
-    const random = Random.make(resources.rng.get())
+    const random = Random.draw(resources.rng)
     const news = (text: string, at: Point | null = null) => write(resources.chronicle, t, text, true, at)
     const landmarks: Array<Landmark> = queries.landmarks.each().map(({ data }) => ({ kind: data.building.get().kind, ...data.tile.get() }))
     const where = (cell: Point) => placeName(landmarks, cell)
@@ -323,7 +323,6 @@ export const Hazards = Game.System(
       news(`Fire on ${where(f)}: ${took.length > 0 ? `${took.join(" and ")} lost` : "put out"}.`, { x: f.x, y: f.y })
     }
     resources.fires.set({ fires: fires.fires.filter((f) => stillBurning.has(f.id)), next: fires.next })
-    resources.rng.set(random.state)
   }
 )
 

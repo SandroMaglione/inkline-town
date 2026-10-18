@@ -537,7 +537,7 @@ export const Plant = Game.System(
     const { staffTicks: STAFF_TICKS } = rules
 
     const grid = resources.grid.get()
-    const random = Random.make(resources.rng.get())
+    const random = Random.draw(resources.rng)
     const sown = new Set<number>()
     const tick = resources.time.get().step
     for (const { entity, data } of queries.planters.each()) {
@@ -569,7 +569,6 @@ export const Plant = Game.System(
       else commands.spawn(Game.Command.relate(fieldDraft(spot), FieldOf, entity.id))
       data.planter.set({ ...planter, cooldown: planter.interval })
     }
-    resources.rng.set(random.state)
   }
 )
 
@@ -593,7 +592,7 @@ export const Spread = Game.System(
 
     if (!every(resources.time.get(), SPREAD_TICKS)) return
     const grid = resources.grid.get()
-    const random = Random.make(resources.rng.get())
+    const random = Random.draw(resources.rng)
     const grown = queries.trees.each().filter(({ data }) => data.tree.get().growth >= GROWN.tree)
     const parent = random.pick(grown)
     if (parent) {
@@ -601,7 +600,6 @@ export const Spread = Game.System(
       const spot = random.pick(wildTreeSpots(grid, t))
       if (spot && canSeedTree(grid, spot)) commands.spawn(treeDraft(spot, 0))
     }
-    resources.rng.set(random.state)
   }
 )
 

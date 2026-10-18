@@ -13,6 +13,7 @@
  */
 import { Clock as SimulationClock, Decode, Descriptor, Schema } from "@typeonce/ritmo"
 import type { OptionalReadCell } from "@typeonce/ritmo/Query"
+import * as Random from "@typeonce/ritmo-math/Random"
 import type { NodeRegistry } from "@typeonce/ritmo-render"
 import { step } from "./content.ts"
 
@@ -194,8 +195,8 @@ export const { relation: FieldOf } = Descriptor.Hierarchy("Town/FieldOf", "Town/
 // ── Resources ─────────────────────────────────────────────────────────────
 
 export const Time = SimulationClock.resource("Town/Time", step)
-/** The deterministic random state (see `@typeonce/ritmo-math/Random`). */
-export const Rng = Descriptor.ConstructedResource(integer)("Town/Rng")
+/** The world's seeded random state: systems draw with `Random.draw(resources.rng)` (see `@typeonce/ritmo-math/Random`). */
+export const Rng = Descriptor.ConstructedResource(Random)("Town/Rng")
 export const Treasury = Descriptor.ConstructedResource(Decode.struct({ coins: integer }))("Town/Treasury")
 /** The last collection's taxes, trade (sold less bought), upkeep, and administration, per minute. */
 export const Ledger = Descriptor.ConstructedResource(Decode.struct({ taxes: integer, trade: integer, upkeep: integer, admin: integer }))("Town/Ledger")
