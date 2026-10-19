@@ -5,7 +5,7 @@ import { rockOutcrop } from "./land.ts"
 import { Drawing, palette, pale, type InkAsset, type Side, type Vertex } from "./primitives.ts"
 import type { BuildingOptions } from "./buildings.ts"
 
-export const workshopIds = ["mine", "smithy", "sawmill"] as const
+export const workshopIds = ["mine", "smithy", "sawmill"] as const satisfies ReadonlyArray<KindId>
 export type WorkshopId = typeof workshopIds[number]
 export const isWorkshop = (id: KindId): id is WorkshopId => workshopIds.some(kind => kind === id)
 export const wood = [0xe9d2a8, 0xd0b58c, 0xb08a5e] as const
