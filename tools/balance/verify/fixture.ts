@@ -1,10 +1,10 @@
 /** This is the only layer that imports the ECS runtime. Model inputs stay plain data. */
-import { goodIds } from "../../../src/content.ts"
-import { GRID } from "../../../src/iso.ts"
-import { ownerAt } from "../../../src/grid.ts"
-import { rolesOf, wearOf } from "../../../src/archetypes.ts"
-import { headless, type Headless, type Snapshot } from "../../../src/sim/headless.ts"
-import type { Rules } from "../../../src/rules/config.ts"
+import { goodIds } from "../../../src/game/content/index.ts"
+import { GRID } from "../../../src/game/world/iso.ts"
+import { ownerAt } from "../../../src/game/world/grid.ts"
+import { rolesOf, wearOf } from "../../../src/game/world/archetypes.ts"
+import { headless, type Headless, type Snapshot } from "../../../src/game/headless.ts"
+import type { Rules } from "../../../src/game/rules/config.ts"
 import { scenarioGrid, validateScenario } from "../scenario.ts"
 import type { BuildAction, Scenario } from "../types.ts"
 

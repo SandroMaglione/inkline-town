@@ -71,6 +71,6 @@ steps that show it into a test, fixes it, and deletes the replay.
   the start is easy to rebuild (`test/homes-edit.test.ts` came from one).
 - A replay recorded before a schema change fails with "replay recorded with
   an older schema": ask for a new one.
-- The recorder is wired in `src/dev/devtools.ts`; the simulation's input is
+- The recorder is wired in `src/app/devtools.ts`; the simulation's input is
   the `Edits` source (plain edits), and its messages to the page are the
   `Toast` and `Selection` events.

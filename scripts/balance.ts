@@ -1,4 +1,4 @@
-import { resolveRules } from "../src/rules/config.ts"
+import { resolveRules } from "../src/game/rules/config.ts"
 /**
  * Balance runs: a bot plays the real simulation headless on several seeds,
  * the way a kind of mayor would, and reports how each term ended and how
@@ -46,20 +46,20 @@ import { resolveRules } from "../src/rules/config.ts"
  * wants at each decision, and `DEBUG=1` every edit it pushes. The bot only does what a player
  * could: it reads the world, then pushes the same edits the page does.
  */
-import { goodIds, home, kinds, landIds, ROAD_COST, sizeIds, type Amounts, type CharterValue, type GoodId, type GroundId, type Kind, type KindId, type PropId } from "../src/content.ts"
-import * as content from "../src/content.ts"
-import { around, canPlace, DIRS, entrances, GridBuilder, isRoad, key, doors, nearest, reach, roadPrint, useAt, type Use } from "../src/grid.ts"
-import { parksOf, ringOf, effectAt } from "../src/appeal.ts"
-import { GRID, inside, type Point } from "../src/iso.ts"
-import type { GridValue } from "../src/schema.ts"
-import { headless, type Snapshot } from "../src/sim/headless.ts"
-import { goalsOf, larder, seasonAt } from "../src/sim/index.ts"
-import type { Edit } from "../src/ui.ts"
-import { SAVE_FORMAT, SAVE_VERSION } from "../src/save.ts"
+import { goodIds, home, kinds, landIds, ROAD_COST, sizeIds, type Amounts, type CharterValue, type GoodId, type GroundId, type Kind, type KindId, type PropId } from "../src/game/content/index.ts"
+import * as content from "../src/game/content/index.ts"
+import { around, canPlace, DIRS, entrances, GridBuilder, isRoad, key, doors, nearest, reach, roadPrint, useAt, type Use } from "../src/game/world/grid.ts"
+import { parksOf, ringOf, effectAt } from "../src/game/world/appeal.ts"
+import { GRID, inside, type Point } from "../src/game/world/iso.ts"
+import type { GridValue } from "../src/game/schema.ts"
+import { headless, type Snapshot } from "../src/game/headless.ts"
+import { goalsOf, larder, seasonAt } from "../src/game/schedule.ts"
+import type { Edit } from "../src/game/edits.ts"
+import { SAVE_FORMAT, SAVE_VERSION } from "../src/platform/save.ts"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { fingerprint } from "../tools/balance/provenance.ts"
-import { capacity, mealsOf, moreAdmin, taxOf } from "../src/rules/households.ts"
+import { capacity, mealsOf, moreAdmin, taxOf } from "../src/game/rules/households.ts"
 
 // ── Options ───────────────────────────────────────────────────────────────
 
@@ -759,7 +759,6 @@ const run = (seed: number) => {
   roading.clear()
   resting.clear()
   const town = headless({ size, term, land, seed }, { rules, toast: (m) => { if (process.env.DEBUG) console.log("toast:", m) } })
-  const ui = town.ui
   const step = town.run
 
   const rows: Array<Row> = []
@@ -784,7 +783,7 @@ const run = (seed: number) => {
       }
     }
     if (process.env.DEBUG) console.log(t, JSON.stringify(chosen).slice(0, 200))
-    ui.edits.push(...chosen)
+    town.edit(...chosen)
     step(DECIDE)
     w = read(town.snapshot())
     if (w.fate.goalSince >= 0) longestGoalHold = Math.max(longestGoalHold, (w.tick - w.charter.founded - w.fate.goalSince) / 60)

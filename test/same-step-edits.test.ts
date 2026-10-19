@@ -7,8 +7,8 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { step, type CharterValue } from "../src/content.ts"
-import { headless } from "../src/sim/headless.ts"
+import { step, type CharterValue } from "../src/game/content/index.ts"
+import { headless } from "../src/game/headless.ts"
 
 const charter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }
 const roads = Array.from({ length: 9 }, (_, i) => ({ x: 34 + i, y: 31 }))

@@ -6,7 +6,7 @@ the town draws them once a market or chapel is upgraded (see `Kind.upgrade`).
 
 ## Asset API
 
-`src/asset-lab/service-upgrades.ts` exports `marketHall()`, `church()`, and:
+`src/render/three/assets/service-upgrades.ts` exports `marketHall()`, `church()`, and:
 
 ```ts
 serviceBuilding("market", 2) // market-hall
@@ -23,7 +23,7 @@ integration should support the existing `BuildingOptions` conventions for
 road-facing doors, construction fitting, plate visibility and separate motion.
 Do not replace `buildingAsset()` with the preview help## In the town
 
-`buildingAsset(id, …, upgraded)` in `src/render3d/models.ts` draws an
+`buildingAsset(id, …, upgraded)` in `src/render/three/models.ts` draws an
 upgraded market or chapel with `serviceBuilding(kind, 2, { plate: false, doors })`.
 The town draws plates apart, so the model leaves its own out. The model turns a
 quarter at a time (`quartersFor`) to put the most of its street fronts on the
@@ -35,7 +35,7 @@ marker). The market hall drops the market's flag. The model cache key includes
 the tier.
 
 The building panel pictures an upgraded building with its model
-(`src/render3d/portrait.ts`): drawn once from the town's own camera, at the
+(`src/render/three/portrait.ts`): drawn once from the town's own camera, at the
 town's scale and cropped to the model, beside the 2D pictures of the rest.
 
 oes not activate upgrades.

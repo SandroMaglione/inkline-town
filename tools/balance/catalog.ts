@@ -1,5 +1,5 @@
-import { type KindId } from "../../src/content.ts"
-import type { Rules } from "../../src/rules/config.ts"
+import { type KindId } from "../../src/game/content/index.ts"
+import type { Rules } from "../../src/game/rules/config.ts"
 import { district } from "./scenario.ts"
 import type { BuildAction, Scenario } from "./types.ts"
 

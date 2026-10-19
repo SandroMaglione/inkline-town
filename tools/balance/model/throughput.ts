@@ -1,8 +1,8 @@
-import type { Kind, WinterId } from "../../../src/content.ts"
-import { around, useAt, ownerAt, type GridBuilder } from "../../../src/grid.ts"
-import { ruleTicks, type Rules } from "../../../src/rules/config.ts"
-import { equipmentPace, effort, paced } from "../../../src/rules/production.ts"
-import type { Assignment } from "../../../src/rules/production.ts"
+import type { Kind, WinterId } from "../../../src/game/content/index.ts"
+import { around, useAt, ownerAt, type GridBuilder } from "../../../src/game/world/grid.ts"
+import { ruleTicks, type Rules } from "../../../src/game/rules/config.ts"
+import { equipmentPace, effort, paced } from "../../../src/game/rules/production.ts"
+import type { Assignment } from "../../../src/game/rules/production.ts"
 import type { RecipeCapacity, Scenario, ModelBuilding } from "../types.ts"
 
 /** Tiny periodic cadence calculation, not an ECS run. Products of average paces are insufficient. */

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import * as THREE from "three"
-import { makeBuilding, buildingSmokeOrigin, buildingDimensions } from "../src/asset-lab/buildings.ts"
-import { workshopIds, workshopPoint } from "../src/asset-lab/workshops.ts"
-import { vertex3 } from "../src/asset-lab/renderer.ts"
-import { buildingAsset, noDoors } from "../src/render3d/models.ts"
-import { sides } from "../src/asset-lab/primitives.ts"
-import { U } from "../src/iso.ts"
+import { makeBuilding, buildingSmokeOrigin, buildingDimensions } from "../src/render/three/assets/buildings.ts"
+import { workshopIds, workshopPoint } from "../src/render/three/assets/workshops.ts"
+import { vertex3 } from "../src/render/three/assets/renderer.ts"
+import { buildingAsset, noDoors } from "../src/render/three/models.ts"
+import { sides } from "../src/render/three/assets/primitives.ts"
+import { U } from "../src/game/world/iso.ts"
 
 test("open workshop forecourts retain air above the work floor on every road heading", () => {
   for (const id of workshopIds) for (const side of sides) {

@@ -1,6 +1,6 @@
-import type { GoodId } from "../../../src/content.ts"
-import { doors, nearest, reach } from "../../../src/grid.ts"
-import { preferDelivery } from "../../../src/rules/transport.ts"
+import type { GoodId } from "../../../src/game/content/index.ts"
+import { doors, nearest, reach } from "../../../src/game/world/grid.ts"
+import { preferDelivery } from "../../../src/game/rules/transport.ts"
 import { scenarioGrid } from "../scenario.ts"
 import type { Inputs } from "../types.ts"
 

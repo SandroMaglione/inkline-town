@@ -9,10 +9,10 @@ import { gunzipSync, gzipSync } from "node:zlib"
 
 import { Effect } from "effect"
 
-import { fileOf, loadText, memoryStorage, Storage, World } from "../src/save.ts"
+import { fileOf, loadText, memoryStorage, Storage, World } from "../src/platform/save.ts"
 import { DAILY_SHARES, handle, memoryBucket, type Env, type Limiter } from "../src/server/handler.ts"
-import { checkMeta, ID_PATTERN, newId, pictureType, TOWN_LIMIT } from "../src/share/format.ts"
-import { headless, type Headless } from "../src/sim/headless.ts"
+import { checkMeta, ID_PATTERN, newId, pictureType, TOWN_LIMIT } from "../src/platform/share/format.ts"
+import { headless, type Headless } from "../src/game/headless.ts"
 
 const PAGE = `<!doctype html><html><head><title>Inkline Town</title></head><body><div id="app"></div></body></html>`
 const ORIGIN = "https://inkline.test"

@@ -6,8 +6,8 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { resolveRules } from "../src/rules/config.ts"
-import { headless, type Snapshot } from "../src/sim/headless.ts"
+import { resolveRules } from "../src/game/rules/config.ts"
+import { headless, type Snapshot } from "../src/game/headless.ts"
 
 const FOREVER = 1e9
 const hallOf = (s: Snapshot) => s.entities.find((e) => e.components["Town/TownHall"])!

@@ -2,8 +2,8 @@
 import { gzipSync } from "node:zlib"
 import { mkdir, writeFile } from "node:fs/promises"
 import { execFileSync } from "node:child_process"
-import { parkReviewModels } from "../src/model-review/park-models.ts"
-import { assetById } from "../src/asset-lab/assets.ts"
+import { parkReviewModels } from "../src/labs/model-review/park-models.ts"
+import { assetById } from "../src/render/three/assets/assets.ts"
 
 const revision=execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim()
 if(revision!=="f4df9d5f9e1ff74552e5a29a3366ec9f541bb3bd")throw new Error("Capture parks from the approved proportion revision")

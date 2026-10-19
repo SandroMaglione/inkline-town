@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { readFileSync, readdirSync } from "node:fs"
-import { amounts, goodIds, kinds } from "../src/content.ts"
-import { resolveRules } from "../src/rules/config.ts"
+import { amounts, goodIds, kinds } from "../src/game/content/index.ts"
+import { resolveRules } from "../src/game/rules/config.ts"
 import { analyze } from "../tools/balance/model/analyze.ts"
 import { project } from "../tools/balance/model/project.ts"
 import { searchParameters, searchDistricts } from "../tools/balance/model/search.ts"
@@ -13,13 +13,13 @@ import { verifyBuilds } from "../tools/balance/verify/builds.ts"
 import { provenance } from "../tools/balance/provenance.ts"
 import { assessTransfers } from "../tools/balance/model/transport.ts"
 import { fixture } from "../tools/balance/verify/fixture.ts"
-import { capacity, moreAdmin, serveGoods, taxOf, taxOutlook, taxRoom, wantsCitizenGoods } from "../src/rules/households.ts"
-import { approvalTarget } from "../src/rules/approval.ts"
-import { tradeCollection } from "../src/rules/trade.ts"
-import { assignWorkers } from "../src/rules/production.ts"
-import { planPatrols } from "../src/rules/patrol.ts"
+import { capacity, moreAdmin, serveGoods, taxOf, taxOutlook, taxRoom, wantsCitizenGoods } from "../src/game/rules/households.ts"
+import { approvalTarget } from "../src/game/rules/approval.ts"
+import { tradeCollection } from "../src/game/rules/trade.ts"
+import { assignWorkers } from "../src/game/rules/production.ts"
+import { planPatrols } from "../src/game/rules/patrol.ts"
 import { scenarioGrid } from "../tools/balance/scenario.ts"
-import { GRID } from "../src/iso.ts"
+import { GRID } from "../src/game/world/iso.ts"
 
 test("candidate rules are immutable, isolated and also executed by the game", () => {
   const base = resolveRules(), original = kinds.weaver.recipe!.seconds
@@ -37,10 +37,10 @@ test("candidate rules are immutable, isolated and also executed by the game", ()
 
 test("the mathematical layer has no runtime or rendering value imports", () => {
   const paths = [...readdirSync("tools/balance/model").filter((f) => f.endsWith(".ts")).map((f) => `tools/balance/model/${f}`),
-    ...readdirSync("src/rules").filter((f) => f.endsWith(".ts")).map((f) => `src/rules/${f}`), "tools/balance/scenario.ts"]
+    ...readdirSync("src/game/rules").filter((f) => f.endsWith(".ts")).map((f) => `src/game/rules/${f}`), "tools/balance/scenario.ts"]
   for (const path of paths) {
     const text = readFileSync(path, "utf8").replace(/^import type [\s\S]*?from [^\n]+\n/gm, "")
-    assert(!/import[^\n]*from ["'][^"']*(?:sim\/|schema\.ts|render3d|bevy-ts)[^"']*["']/.test(text), path)
+    assert(!/import[^\n]*from ["'][^"']*(?:systems\/|schema\.ts|render\/|bevy-ts)[^"']*["']/.test(text), path)
   }
 })
 

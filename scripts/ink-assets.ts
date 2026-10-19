@@ -1,10 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { build } from "vite"
-import { inkAssets } from "../src/asset-lab/assets.ts"
+import { inkAssets } from "../src/render/three/assets/assets.ts"
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
-import { exportAsset } from "../src/asset-lab/renderer.ts"
+import { exportAsset } from "../src/render/three/assets/renderer.ts"
 
 // GLTFExporter uses the browser's FileReader to assemble binary buffers.
 // There are no textures here; only readAsArrayBuffer is needed in Node.

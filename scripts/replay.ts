@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync } from "node:fs"
 
 import { Replay } from "@typeonce/ritmo-devtools"
 
-import { replayTarget } from "../src/sim/headless.ts"
+import { replayTarget } from "../src/game/headless.ts"
 
 const [path, flag, range, out] = process.argv.slice(2)
 if (path === undefined) {

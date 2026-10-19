@@ -1,6 +1,6 @@
 import { citizenPark } from "../catalog.ts"
-import { amounts, type KindId } from "../../../src/content.ts"
-import { type Rules } from "../../../src/rules/config.ts"
+import { amounts, type KindId } from "../../../src/game/content/index.ts"
+import { type Rules } from "../../../src/game/rules/config.ts"
 import { analyze } from "../model/analyze.ts"
 import { recipeCapacity } from "../model/throughput.ts"
 import { project } from "../model/project.ts"

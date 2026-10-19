@@ -4,7 +4,7 @@ import assert from "node:assert/strict"
 import { existsSync } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
 import { chromium } from "playwright"
-import { kindIds } from "../src/content.ts"
+import { kindIds } from "../src/game/content/index.ts"
 
 const executablePath = process.env.BROWSER_EXECUTABLE_PATH ?? ["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(existsSync)
 const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })

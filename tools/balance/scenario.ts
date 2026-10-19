@@ -1,9 +1,9 @@
-import type { ParkCell } from "../../src/appeal.ts"
-import { amounts, goodIds, type KindId, type Tier } from "../../src/content.ts"
-import { GridBuilder, canPlace, doors, key, nearest, reach, type Use, type TileLike } from "../../src/grid.ts"
-import { GRID } from "../../src/iso.ts"
-import { shippedRules, type Rules } from "../../src/rules/config.ts"
-import type { Snapshot } from "../../src/sim/headless.ts"
+import type { ParkCell } from "../../src/game/world/appeal.ts"
+import { amounts, goodIds, type KindId, type Tier } from "../../src/game/content/index.ts"
+import { GridBuilder, canPlace, doors, key, nearest, reach, type Use, type TileLike } from "../../src/game/world/grid.ts"
+import { GRID } from "../../src/game/world/iso.ts"
+import { shippedRules, type Rules } from "../../src/game/rules/config.ts"
+import type { Snapshot } from "../../src/game/headless.ts"
 import type { ModelBuilding, ModelHome, Scenario } from "./types.ts"
 
 export const scenarioGrid = (s: Scenario, rules: Rules = shippedRules): GridBuilder => {

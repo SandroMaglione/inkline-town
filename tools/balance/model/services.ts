@@ -1,7 +1,7 @@
-import { doors, key, nearest, reach, type TileLike } from "../../../src/grid.ts"
-import { planPatrols, serviceDoors } from "../../../src/rules/patrol.ts"
-import type { Rules } from "../../../src/rules/config.ts"
-import type { Assignment } from "../../../src/rules/production.ts"
+import { doors, key, nearest, reach, type TileLike } from "../../../src/game/world/grid.ts"
+import { planPatrols, serviceDoors } from "../../../src/game/rules/patrol.ts"
+import type { Rules } from "../../../src/game/rules/config.ts"
+import type { Assignment } from "../../../src/game/rules/production.ts"
 import { scenarioGrid } from "../scenario.ts"
 import type { ModelBuilding, Scenario } from "../types.ts"
 

@@ -23,7 +23,7 @@ try {
   await page.waitForFunction(() => (window as any).town)
   await page.getByRole("button", { name: "small", exact: true }).click()
   await page.getByRole("button", { name: "Start new", exact: true }).click()
-  await page.waitForFunction(() => !(window as any).town.ui.founding)
+  await page.waitForFunction(() => !(window as any).town.interaction.founding)
   await page.locator(".toolbar .pause").click()
   // A town that has reached the town rank, with coins and materials to spare.
   await page.evaluate(() => {
@@ -66,7 +66,7 @@ try {
     const restored = t.runtime.restore(s)
     if (!restored.ok) throw new Error(`The changed town did not load: ${JSON.stringify(restored.error)}`)
   })
-  await page.evaluate(([x,y])=>(window as any).town.ui.edits.push({type:"upgrade",cell:{x,y}}),[hall.x,hall.y])
+  await page.evaluate(([x,y])=>(window as any).town.edits.push({type:"upgrade",cell:{x,y}}),[hall.x,hall.y])
   await page.evaluate(()=>(window as any).town.advance(80))
   await page.waitForTimeout(300)
   await page.screenshot({path:`${out}/5-cityhall-works.png`})
@@ -76,7 +76,7 @@ try {
   await page.screenshot({path:`${out}/5-cityhall.png`})
   // The new workshop's actual model portrait and upgrade choices must fit a phone.
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.evaluate(() => { const ui = (window as any).town.ui; ui.selected = null; ui.menu = "build" })
+  await page.evaluate(() => { const ui = (window as any).town.interaction; ui.selected = null; ui.menu = "build" })
   const carpenter = page.locator(".panel .option").filter({ has: page.locator(".name", { hasText: /^carpenter$/i }) })
   await carpenter.scrollIntoViewIfNeeded()
   await carpenter.locator("img").evaluate(async (img: HTMLImageElement) => { if (!img.complete) await new Promise<void>(resolve => img.addEventListener("load", () => resolve(), { once: true })) })

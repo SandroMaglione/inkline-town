@@ -7,8 +7,8 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { step } from "../src/content.ts"
-import { headless } from "../src/sim/headless.ts"
+import { step } from "../src/game/content/index.ts"
+import { headless } from "../src/game/headless.ts"
 
 test("a homes edit along a fresh road raises every cottage in one step, empty", () => {
   const town = headless({ size: "small", term: 45, land: "fair", seed: 7 })

@@ -11,7 +11,7 @@ plank bearers, chairs and chest stay inside the original two-cell plot.
 It has no flue or smoke emitter. Furniture uses the same chair and chest
 geometry in the work yard and on delivery carts.
 
-The civic milestones have full models in `src/asset-lab/civic.ts`. The
+The civic milestones have full models in `src/render/three/assets/civic.ts`. The
 guildhall is a steep-roofed guild house with a prominent clock tower,
 balcony, dormers and guild banners. The city hall has lower wings, corner
 pavilions, a columned portico, ceremonial stair and large ribbed dome with
@@ -46,7 +46,7 @@ geometry, economy values and simulation rules are unchanged. The three home
 height fields in content are drawing dimensions used by construction and effects.
 
 Construction uses `scaffoldAsset(size, height, share)` from
-`src/asset-lab/scaffolding.ts`. It has no building-kind branches or model
+`src/render/three/assets/scaffolding.ts`. It has no building-kind branches or model
 lookup. Modular timber bays, up to two working platforms, an access ladder,
 canvas screens and supply piles fit inside the plot. Central bays on all
 four sides remain clear at ground level. One generator covers every

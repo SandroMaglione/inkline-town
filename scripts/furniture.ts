@@ -9,9 +9,9 @@
  *
  *   node scripts/furniture.ts [minutes]
  */
-import { kinds } from "../src/content.ts"
-import { resolveRules } from "../src/rules/config.ts"
-import { headless, type Snapshot } from "../src/sim/headless.ts"
+import { kinds } from "../src/game/content/index.ts"
+import { resolveRules } from "../src/game/rules/config.ts"
+import { headless, type Snapshot } from "../src/game/headless.ts"
 
 const minutes = Number(process.argv[2] ?? 30)
 const FOREVER = 1e9

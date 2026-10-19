@@ -7,13 +7,14 @@ import { existsSync } from "node:fs"
 import { mkdir,readFile,writeFile } from "node:fs/promises"
 import { execFileSync } from "node:child_process"
 import { chromium } from "playwright"
-import type { UiValue } from "../src/ui.ts"
-import type { GameScene } from "../src/render3d/scene.ts"
-import type { Snapshot } from "../src/sim/headless.ts"
+import type { EditQueue } from "../src/game/edits.ts"
+import type { Interaction, Shown } from "../src/view/contracts.ts"
+import type { GameScene } from "../src/render/three/scene.ts"
+import type { Snapshot } from "../src/game/headless.ts"
 
 declare global {
   interface Window {
-    town:{ui:UiValue;view:GameScene;advance:(seconds:number)=>void;runtime:{snapshot:()=>Snapshot}}
+    town:{interaction:Interaction;shown:Shown;edits:EditQueue;view:GameScene;advance:(seconds:number)=>void;runtime:{snapshot:()=>Snapshot}}
   }
 }
 const executable=process.env.BROWSER_EXECUTABLE_PATH??["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser","/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(existsSync)
@@ -44,13 +45,13 @@ try {
   await page.waitForFunction(()=>window.town)
   await page.getByRole("button",{name:"small",exact:true}).click()
   await page.getByRole("button",{name:"Start new",exact:true}).click()
-  await page.waitForFunction(()=>!window.town.ui.founding)
+  await page.waitForFunction(()=>!window.town.interaction.founding)
   await page.locator(".toolbar .pause").click()
   const hall=(await entities("Town/TownHall"))[0]!,tile=hall.components["Town/Tile"]
   await page.keyboard.press("e")
   await clickGrid(tile.x+1.5,tile.y+1.5,48)
-  await page.waitForFunction(id=>window.town.ui.selected===id,hall.id)
-  assert.equal((await page.evaluate(()=>window.town.ui.panel))?.type,"building")
+  await page.waitForFunction(id=>window.town.interaction.selected===id,hall.id)
+  assert.equal((await page.evaluate(()=>window.town.shown.town.panel))?.type,"building")
   facts.rotatedSelection=true
   await tool("road")
   await dragGrid([tile.x+4.5,tile.y+1.5],[tile.x+8.5,tile.y+1.5])
@@ -69,14 +70,14 @@ try {
   facts.rotatedBuildingPlacement=true
   await capture("construction")
   await page.evaluate(()=>window.town.advance(90))
-  await page.waitForFunction(()=>window.town.ui.stats!.settlers>0)
+  await page.waitForFunction(()=>window.town.shown.town.stats!.settlers>0)
   assert.ok((await entities("Town/House")).some(e=>!("Town/Site" in e.components)))
   facts.liveConstruction=true
   await tool("select")
   await page.keyboard.press("e")
   const lt=lumber.components["Town/Tile"]
   await clickGrid(lt.x+1,lt.y+1,16)
-  await page.waitForFunction(id=>window.town.ui.selected===id,lumber.id)
+  await page.waitForFunction(id=>window.town.interaction.selected===id,lumber.id)
   const pauseWork=page.getByRole("button",{name:"Pause work",exact:true})
   await pauseWork.click()
   await page.waitForFunction(id=>!!window.town.runtime.snapshot().entities.find(e=>e.id===id)?.components["Town/Paused"],lumber.id)
@@ -106,7 +107,7 @@ try {
   await page.getByRole("button",{name:"large",exact:true}).click()
   await page.getByRole("button",{name:"rich",exact:true}).click()
   await page.getByRole("button",{name:"Start new",exact:true}).click()
-  await page.waitForFunction(()=>!window.town.ui.founding&&window.town.ui.stats?.charter.size==="large")
+  await page.waitForFunction(()=>!window.town.interaction.founding&&window.town.shown.town.stats?.charter.size==="large")
   assert.equal((await entities("Town/House")).length,0)
   assert.equal((await entities("Town/TownHall")).length,1)
   await page.locator(".toolbar .pause").click()
@@ -123,9 +124,10 @@ try {
   },grown)
   await page.getByRole("button",{name:"load",exact:true}).click()
   await page.getByRole("button",{name:"Load without saving",exact:true}).click()
-  await page.waitForFunction(()=>window.town.ui.stats!.settlers>100)
-  // The guide puts away what the bot's town has already done on the page's first frame; the rest loads exactly as saved.
+  await page.waitForFunction(()=>window.town.shown.town.stats!.settlers>100)
+  // The guide puts away what the bot's town has already done (as edits, kept on the next frame without a step of time); the rest loads exactly as saved.
   const withoutGuide=(w:Snapshot)=>({...w,resources:{...w.resources,"Town/Guide":null}})
+  await page.waitForFunction(()=>window.town.runtime.snapshot().resources["Town/Guide"].done.length>0)
   const loaded=await snapshot()
   assert.deepEqual(withoutGuide(loaded),withoutGuide(grown.world))
   assert.ok(["homes","fishery","market"].every(id=>loaded.resources["Town/Guide"].done.includes(id)),"The guide puts away what the town has done")
@@ -140,7 +142,7 @@ try {
   for (let angle=0;angle<8;angle++) {
     await page.keyboard.press("e")
     await clickGrid(ht.x+1.5,ht.y+1.5,48)
-    await page.waitForFunction(id=>window.town.ui.selected===id,grownHall.id)
+    await page.waitForFunction(id=>window.town.interaction.selected===id,grownHall.id)
     await page.locator(".panel .close").click()
   }
   facts.selectionAllEightAngles=true
@@ -191,7 +193,7 @@ try {
   await page.getByRole("button",{name:"Load without saving",exact:true}).click()
   await page.getByRole("button",{name:"Next term",exact:true}).waitFor({state:"visible"})
   await page.getByRole("button",{name:"Retire: found a new town",exact:true}).waitFor({state:"visible"})
-  assert.equal(await page.evaluate(()=>window.town.ui.stats!.fate.state),"over")
+  assert.equal(await page.evaluate(()=>window.town.shown.town.stats!.fate.state),"over")
   facts.reckoning=true
   // Sharing: the card, then a link that opens the town in another browser (a phone), which can play on from there.
   await page.getByRole("button",{name:"Share the town",exact:true}).click()

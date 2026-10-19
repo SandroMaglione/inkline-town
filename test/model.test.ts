@@ -16,12 +16,12 @@ import { Arbitrary, Data, Effect, Schema } from "effect"
 
 import {
   CONDITION_MAX, crown, goodIds, groundIds, home, kindOrder, kinds, landIds, market, propIds, ranks, RESERVE_MAX, RISK_MAX, TAX_STEPS, TRADE_LOAD, type CharterValue
-} from "../src/content.ts"
-import { canPlace, cellsOf, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/grid.ts"
-import { GRID, inside, type Point } from "../src/iso.ts"
-import { load, memoryStorage, save, Storage, World } from "../src/save.ts"
-import { headless, type Headless, type Snapshot } from "../src/sim/headless.ts"
-import type { Edit } from "../src/ui.ts"
+} from "../src/game/content/index.ts"
+import { canPlace, cellsOf, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/game/world/grid.ts"
+import { GRID, inside, type Point } from "../src/game/world/iso.ts"
+import { load, memoryStorage, save, Storage, World } from "../src/platform/save.ts"
+import { headless, type Headless, type Snapshot } from "../src/game/headless.ts"
+import type { Edit } from "../src/game/edits.ts"
 
 const RUNS = Number(process.env.RUNS ?? 25)
 /** How large generated scenarios grow: at this size, sequences run to their full length. */
