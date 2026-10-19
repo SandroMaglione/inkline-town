@@ -19,7 +19,33 @@
         "ritmo/use-random-for-randomness": "error",
         "ritmo/use-ops-for-math": "error",
         "ritmo/keep-simulation-headless": "error",
-        "ritmo/no-infinity-in-simulation-data": "error"
+        "ritmo/no-infinity-in-simulation-data": "error",
+        "no-restricted-imports": ["error", {"patterns": [{"regex": "^(\\.\\./)+(view|ui|render|platform|app|labs)/", "message": "The simulation imports only itself: hand the page and the renderer what they need through edits, events, and the view."}]}]
+      }
+    },
+    {
+      "files": ["src/view/**"],
+      "rules": {
+        "ritmo/keep-simulation-headless": "error",
+        "no-restricted-imports": ["error", {"patterns": [{"regex": "^(\\.\\./)+(ui|render|platform|app|labs)/", "message": "The view reads the world into plain data (view/contracts.ts): any UI and any renderer read that, so the view imports neither."}]}]
+      }
+    },
+    {
+      "files": ["src/ui/**"],
+      "rules": {
+        "no-restricted-imports": ["error", {"patterns": [{"regex": "^(\\.\\./)+(render|app|labs|game/systems)/", "message": "The page's UI reaches the map only through MapPort, and the world only through the view and edits."}]}]
+      }
+    },
+    {
+      "files": ["src/render/**"],
+      "rules": {
+        "no-restricted-imports": ["error", {"patterns": [{"regex": "^(\\.\\./)+(ui|app|labs|game/systems)/", "message": "A renderer draws the world and the SceneView: it never reaches into a UI or the simulation's systems."}]}]
+      }
+    },
+    {
+      "files": ["src/platform/**"],
+      "rules": {
+        "no-restricted-imports": ["error", {"patterns": [{"regex": "^(\\.\\./)+(view|ui|render|app|labs)/", "message": "Platform adapters (storage, sharing) know the game's data, not the page or the renderer."}]}]
       }
     }
   ],

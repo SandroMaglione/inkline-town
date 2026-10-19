@@ -40,7 +40,7 @@ go off the map (over the tool bar, say) is dropped and shows red while it
 would be, as are a right click or Esc mid-drag. On touch the tooltip shows
 only for what is about to be built, never while panning or picking, in a
 thin full-width strip under the top line. This lives entirely in `src/render/three/input.ts`
-(and the bar in `host.ts`); the game still sees one ordinary press and
+(and the bar in `src/ui/dom/index.ts`); the game still sees one ordinary press and
 release.
 
 Phones get their layout from `src/ui/dom/styles/phone.css`, loaded after `factory.css`. On
@@ -48,7 +48,7 @@ a narrow or short screen the HUD folds away: one top line (clock, treasury,
 people, and a chip of planks, stone and tools), one tool bar along the bottom
 (town, the tools, pause (a switch: play while paused), a speed button that cycles, and a ⋯ menu holding
 share, guide, save, load, new town and recentre), and two buttons top right
-for the guide and the map overlays. `host.ts` sets `body.fold-goods`,
+for the guide and the map overlays. `src/ui/dom/folds.ts` sets `body.fold-goods`,
 `fold-guide`, `fold-views` or `fold-more` while one is open; a tap on the map
 folds it, a pan or pinch does not. Once the town has a minute of goods
 (`body.flow-ready`), the goods chip opens the made/used table straight away,
@@ -199,33 +199,87 @@ The README shows the film as an animated AVIF, because GitHub plays no
 
 ## Code
 
-- `src/game/world/iso.ts`: the grid and the unit everything is measured in (1/16 cell = 2×1 px).
-- `src/game/content/index.ts`: goods, building kinds, home tiers, costs, upkeep, taxes: plain data.
-- `src/game/world/archetypes.ts`: content to components.
-- `src/game/world/mapgen.ts`: the land of a new town, from its charter.
-- `src/game/schema.ts`: the ECS world: components, relations, resources, services.
-- `src/game/world/appeal.ts`: desirability: what buildings and the land do to the cells around them, the whole grid, and one cell explained.
-- `src/game/world/places.ts`: street names for the news ("Mill Lane"), from the nearest landmark.
-- `src/game/world/grid.ts`: occupancy, entrances, reach, and road paths.
-- `src/sim/`: the fixed-step simulation (no renderer access): edits, work (staffing by crew and commute, tools,
-  pace), logistics, walkers (services, mending), town (households and tiers), hazards (desirability, risk
-  meters, fire and firefighters, sickness, theft), decay (wear, collapse, spoilage, the pantry), and the term
-  (seasons and the almanac, the crown, approval, the end of the term, history); orphans drops a walker or field
-  whose building went before it could join it.
-- `src/view/present.ts`: per-frame interaction, panel, and view sync.
-- `src/render/art.ts`: all drawing: buildings and their yards, homes, the land, roads, carts, and figures.
-- `src/render3d/`: live world renderer, model instances, camera and map input,
-  overlays, ruins, surface shaders and roof particle emitters.
-- `src/render/three/assets/town-props.ts`: parks (ground and furnishings, drawn cell by cell), stone paving and ruins.
-- `src/render/three/assets/services.ts`: grain hoist, fish racks, watch tower, herbs,
-  medical signs, street noticeboard and builder's equipment.
-- `src/share/`: sharing a town: the card it is shared as (`card.ts`), the format and limits the page and the
-  server agree on (`format.ts`), and the page's side: uploading, fetching, and the device's share sheet (`client.ts`).
+The source is split into layers, each a folder under `src/`, and each may
+import only the layers below it (`.oxlintrc.json` enforces it):
+
+```
+app/        start-up: the one module that knows every layer
+ui/dom/     the page's UI          render/three/   the Three.js renderer
+         \                        /
+          view/   the world as plain data for any UI and any renderer
+            |
+          game/   the simulation: headless, replays exactly
+platform/   storage and sharing (knows game data only)      labs/   dev-only pages
+```
+
+The layers talk through small typed contracts, so a new UI (a native app)
+or a new renderer (Pixi) is a new folder, not a change to the others:
+
+- **Edits** (`src/game/edits.ts`): what the player asks of the town. Every UI, bot and test sends them;
+  only the simulation applies them, at the start of its next step (`systems/edits`), and replays record them.
+- **`Interaction`** (`src/view/contracts.ts`): what the player is doing with the map. The UI sets the tool,
+  the menu, the speed and the map view; the map input sets the pointer and queues gestures.
+- **`TownView`** and **`SceneView`** (`src/view/contracts.ts`): what the view shows, filled in once a frame.
+  The UI reads the first (panel, numbers, tooltip, toasts), the renderer the second (preview, map view,
+  tints, the upgrades' arrows).
+
+One frame runs three schedules: `simulate` (at the chosen speed), then `project` (the view), then `draw`
+(the renderer). While the town waits, `settle` keeps the guide's books without a step of time.
+
+- `src/game/`: the simulation, with no page or renderer in it.
+  - `schema.ts`: the ECS world: components, relations, resources, the `Edits` and `Rules` services, the events.
+  - `edits.ts`: the player's edits, and the queue the page and the view push them to.
+  - `content/`: plain data, one module per closed set: `goods.ts`, `kinds/` (one file per category,
+    merged in `kinds/index.ts`), `homes.ts`, `parks.ts`, `lands.ts`, `town.ts` (ranks, the crown, fate,
+    costs), and the rest. A table every kind must fill is typed `satisfies Record<KindId, …>`, so a new
+    kind fails to compile until it is in each.
+  - `rules/`: pure calculations: production, households, taxes, approval, the guide's steps, explanations.
+  - `world/`: the grid (`iso.ts`, `grid.ts`), the land (`mapgen.ts`), desirability (`appeal.ts`), street
+    names (`places.ts`), and content to components (`archetypes.ts`).
+  - `systems/<area>/`: one file per system, each area's `index.ts` its public names: edits, work (staffing
+    by crew and commute, tools, pace), logistics, walkers (services, mending), town (households and tiers),
+    hazards (risk meters, fire and firefighters, sickness, theft), decay (wear, collapse, spoilage, the
+    pantry), the term (seasons and the almanac, the crown, approval, the end of the term, history), and
+    orphans (a walker or field whose building went before it could join it).
+  - `schedule.ts`: `simulate`, `settle`, and the world's resources before a town is founded.
+  - `headless.ts`: a town with no page, stepped from code: what the tests, `check`, `balance` and replays play.
+- `src/view/`: the world read once a frame (`frame.ts`) into the contracts above, by the `Project` system
+  (`project.ts`). It never writes the world.
+  - `interaction/`: the pointer's gestures as a selection, drags, and edits.
+  - `preview.ts`, `tooltip.ts`, `overlay.ts` (the map views and their legends), `alerts.ts`, `upgrades.ts`,
+    `guide.ts`, `stats.ts`, and `panels/` (a building, a home, a park, a ruin): each fills its part.
+  - `tools.ts`: every command, tool and map view, defined once: the tool bar, the keys, and the `[homes]`
+    chips in messages all come from it.
+  - `icons.ts`: every icon name the view can use; each UI must draw them all.
+- `src/ui/dom/`: the page. `index.ts` composes it and wires its actions (`controls.ts`); it reaches the map
+  only through the `MapPort` the app hands it.
+  - `kit/`: the building blocks (rows, lines, sections, sliders, cost chips, pictures, text, icons), each in
+    every state on `/ui-kit.html` (`kit/examples.ts`). A new state of one goes there, not into a panel's CSS.
+  - `hud.ts`, `toolbar.ts`, `map-views.ts`, `ticker.ts` (the guide, alerts, news), `system-menu.ts`,
+    `folds.ts` (a phone's folded HUD), `keys.ts`, `toast.ts`.
+  - `panels/`: the side panel's frame, the build menu, the town panel, and what is picked.
+  - `screens/`: the charter a town is founded from, sharing (and its card), a visit to a shared town, the
+    reckoning at the end of a term, and the confirm dialog.
+  - `styles/`: `factory.css`, and `phone.css` after it.
+- `src/render/three/`: the live renderer: `services.ts` (its scene and view registries), `sync.ts` (a view
+  for each entity), `draw/` (the land, the ground, the map view, the preview, animation, the townsfolk),
+  `schedule.ts` (`draw`), `scene.ts` (camera and frame source), `input.ts` (map input), `views.ts`,
+  `pool.ts`, `thumbnails.ts` (the pictures the page's menus show), effects and shaders.
+  - `assets/`: the models, drawn in code: buildings, homes, people, the land, parks (`town-props.ts`),
+    services (`services.ts`: grain hoist, fish racks, watch tower, herbs, medical signs, noticeboard, builder's
+    equipment), and `appearance.ts` (material state metadata for catalogue presets; wear, neighbourhood,
+    hazards and winter are per-instance attributes, so a state change does not change the geometry cache key).
+- `src/render/art.ts`: the town's look shared by every picture of it: ink, dress colours, measures, and the
+  2D drawings the gallery shows.
+- `src/platform/`: `save.ts` (saving and loading as [Effect](https://effect.website) programs: a versioned file
+  in a slot, the mayor's own or the autosave, typed errors for each way a load can fail) and `share/` (the format
+  and limits the page and the server agree on, and the page's side: uploading, fetching, the share sheet).
 - `src/server/`: the only server code: the routes behind shared towns (`handler.ts`), the Cloudflare Worker that
   runs them (`worker.ts`), and the same routes under `pnpm dev`, over a bucket in memory (`dev.ts`).
-- `src/render/three/assets/appearance.ts`: material state metadata for catalogue presets.
-  Wear, neighbourhood, hazards and winter are per-instance attributes in the
-  live renderer. A state change does not change the geometry cache key.
+- `src/app/`: `browser.ts` (start-up: the runtime, the scene, the map input, the page, the loop, saves),
+  `lint.ts` (what `pnpm lint:game` checks), and `devtools.ts` (the dev monitor and replay recorder).
+- `src/labs/`: the dev-only pages: the art gallery, the asset lab, the map, park, effects and model reviews,
+  the service study, and the UI kit.
 
 ### Reviewing the new town models
 
@@ -264,7 +318,7 @@ and house geometry is checked against its plate bounds. Natural rock deposits
 use six seeded silhouettes while retaining their simulation cell footprints.
 `pnpm check:revisions` renders every catalogue entry, checks the exclamation
 mark from both sides and verifies animated smoke through rendered pixels.
-The chimney plume uses `render3d/smoke-effects.ts` in both the catalogue and
+The chimney plume uses `src/render/three/smoke-effects.ts` in both the catalogue and
 working buildings. Smoke's GLB stores emitter metadata; particles run at runtime.
 
 Open [`/effects-lab.html`](http://localhost:5232/effects-lab.html) to inspect
@@ -305,18 +359,11 @@ road setts and the park simulation rules are unchanged.
 Open `/park-lab.html` for a park assembled from 25 cells using the current
 park layout system, with two street entrances. The three retained furnishings
 are framed lanterns, tiered fountains and simple stone busts;
-`render3d/fountain-effects.ts` supplies moving droplets and impact ripples in
+`src/render/three/fountain-effects.ts` supplies moving droplets and impact ripples in
 the actual basin. Park rendering in the game, catalogue, map and preview shares
 the same emitter metadata and water renderer. `pnpm check:park` verifies the
 rendered animation, pause, camera controls and phone layout, and captures stills
 and a five-second MP4 in `output/inkline-3d/park-review/`.
-- `src/render/three/townsfolk.ts`: residents out walking, for looking at only: not simulated, not saved.
-- `src/ui/dom/kit/icons.ts`: the page's line-drawn icons.
-- `src/labs/gallery/main.ts`: the dev-only art gallery (see above).
-- `src/game/headless.ts`: a town with no page, stepped from code: what the tests, `check`, and `balance` play.
-- `src/platform/save.ts`: saving and loading as [Effect](https://effect.website) programs: a versioned file in a slot
-  (the mayor's own, or the autosave), typed errors for each way a load can fail.
-- `src/view/contracts.ts`, `src/ui/dom/host.ts`, `src/app/browser.ts`: the page bridge, camera, input, panels, and start-up.
 
 The simulation runs on Ritmo's `FixedLoop` at 60 steps a second (times the
 chosen speed), with integer state and a seeded random resource: `Town/Rng`,
@@ -330,8 +377,8 @@ snapshot the whole world, history and chronicle included, to localStorage;
 the page also autosaves every two minutes of game time, and **load** takes
 whichever is newer.
 
-In development the console has `town.ui`, `town.runtime`, and
-`town.advance(seconds)` to fast-forward the simulation.
+In development the console has `town.interaction`, `town.shown`, `town.edits`,
+`town.runtime`, and `town.advance(seconds)` to fast-forward the simulation.
 
 ### Simulation rules and lint
 
@@ -342,10 +389,8 @@ In every file, a `runtime.tick(...)` or `runtime.restore(...)` result is
 checked (`void` ignores one on purpose), descriptor and system names carry
 the `Town/` prefix, and an optional query cell is read with `cell.value()`.
 
-The simulation files, listed in the `overrides` of `.oxlintrc.json`
-(`src/sim/`, `src/rules/`, and the pure modules they run: `grid.ts`,
-`mapgen.ts`, `places.ts`, `appeal.ts`, `content.ts`, `schema.ts`,
-`archetypes.ts`, `iso.ts`), must replay exactly and run headless. They read
+The simulation, everything under `src/game/` (one glob in the `overrides` of
+`.oxlintrc.json`), must replay exactly and run headless. They read
 time from the `Town/Time` clock and randomness from `Town/Rng` or a seeded
 `Random.make`, never `Date.now()` or `Math.random()`; they never touch the
 page, host I/O or the renderer; they keep `Infinity` and `NaN` out of data,
@@ -353,8 +398,11 @@ which would save but not load; and they do engine-approximated math
 (`sin`, `cos`, `atan2`, `exp`, `hypot`, `a ** b`) with `Ops` from
 `@typeonce/ritmo-math`, which returns the same bits on every engine.
 `Math.sqrt`, `min`, `max`, `floor`, `abs` and `x ** 2` are exact everywhere
-and stay. A new module the simulation runs joins that list. `pnpm lint:game`
-then checks the schedules themselves with Ritmo's devtools lints.
+and stay. A module the simulation runs belongs under `src/game/`, which is
+all the lint needs. The same file keeps each layer to its imports (see
+**Code**): the view, for one, imports no UI and no renderer, and is linted
+headless too. `pnpm lint:game` then checks the schedules themselves with
+Ritmo's devtools lints (`src/app/lint.ts`).
 
 ## Balancing
 

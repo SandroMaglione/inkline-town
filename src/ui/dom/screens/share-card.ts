@@ -3,10 +3,10 @@
  * strip of paper along the bottom saying what it is and how it stands (its
  * verdict once the term is over), drawn in the page's ink and type.
  */
-import { lands, sizes } from "../../game/content/index.ts"
-import { icon, type IconName } from "../../ui/dom/kit/icons.ts"
-import type { Stats } from "../../view/contracts.ts"
-import { PICTURE_HEIGHT, PICTURE_WIDTH, type ShareMeta } from "./format.ts"
+import { lands, sizes } from "../../../game/content/index.ts"
+import { icon, type IconName } from "../kit/icons.ts"
+import type { Stats } from "../../../view/contracts.ts"
+import { PICTURE_HEIGHT, PICTURE_WIDTH, type ShareMeta } from "../../../platform/share/format.ts"
 
 const INK = "#3d4943",
   MUTED = "#77817a",

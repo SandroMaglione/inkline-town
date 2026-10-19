@@ -24,13 +24,11 @@ export interface Snapshot {
 }
 
 /** The edit queue of a town about to be founded: one edit founds it on the first step. */
-const founding = (charter: CharterValue) => {
+export const founding = (charter: CharterValue) => {
   const edits = editQueue()
   edits.push({ type: "newTown", charter })
   return edits
 }
-
-const lintCharter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }
 
 /** The toasts the last step emitted (an inspector: it reads, and does not hold, the stream). */
 const Toasts = Game.Inspector("Town/Toasts", { events: { toast: Game.System.readEvent(Toast) } }, ({ events }) => events.toast.all())
@@ -49,25 +47,6 @@ export const replayTarget = (playback: Replay.Playback) => {
   })
   if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
   return { runtime: made.value, schedules: { simulate }, hostClock }
-}
-
-/**
- * What `ritmo-devtools lint src/game/headless.ts` checks (`pnpm lint:game`,
- * part of `pnpm check`): the simulation on a debug runtime, and the view's
- * `project` and the renderer's `draw` schedules described without running
- * (they need a page).
- */
-export const lintTarget = async () => {
-  // Loaded here only: tests and bots that use `headless` never load the view or the renderer.
-  const { project } = await import("../view/schedule.ts")
-  const { draw } = await import("../render/three/schedule.ts")
-  const made = Game.Runtime.make({
-    services: Game.Runtime.services(Game.Runtime.service(Edits, founding(lintCharter)), Game.Runtime.service(Rules, resolveRules())),
-    resources: blankResources(),
-    debug: { hostClock: HostClock.test() }
-  })
-  if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
-  return { runtime: made.value, schedules: { simulate }, describe: { project, draw } }
 }
 
 export const headless = (charter: CharterValue, options: { readonly toast?: (message: string) => void; readonly rules?: RuleInputs; readonly hostClock?: HostClock.HostClock } = {}) => {

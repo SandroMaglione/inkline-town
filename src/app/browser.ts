@@ -18,10 +18,12 @@ import { blankResources, settle, simulate } from "../game/schedule.ts"
 import { Edits, Game, Rules } from "../game/schema.ts"
 import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World } from "../platform/save.ts"
 import { download, sharedId } from "../platform/share/client.ts"
-import type { CameraView } from "../render/three/scene.ts"
+import { MapInput } from "../render/three/input.ts"
+import { GameScene, type CameraView } from "../render/three/scene.ts"
 import { draw } from "../render/three/schedule.ts"
 import { BuildingNodes, FieldNodes, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, WalkerNodes } from "../render/three/services.ts"
-import { createHost, type Persistence } from "../ui/dom/host.ts"
+import { thumbnails } from "../render/three/thumbnails.ts"
+import { createDomUi, type Persistence } from "../ui/dom/index.ts"
 import { blankInteraction, blankShown } from "../view/contracts.ts"
 import { project } from "../view/schedule.ts"
 import { Clock, Interaction, Outbox, Shown } from "../view/services.ts"
@@ -39,7 +41,7 @@ const loaded = () => {
 
 const start = async () => {
   const mount = document.getElementById("app")!
-  let persistence: Persistence = { save: () => "Not ready", load: () => "Not ready", shareFile: () => "" }
+  let persistence: Persistence<CameraView> = { save: () => "Not ready", load: () => "Not ready", shareFile: () => "" }
   // A shared town's link (`/t/<id>`): fetch it while the page starts, and load it once the town is up.
   const shared = sharedId(location.pathname)
   let arriving: string | null = null
@@ -50,7 +52,29 @@ const start = async () => {
   const interaction = blankInteraction()
   const shown = blankShown()
   const edits = editQueue()
-  const { stage, syncPage, resetPage, toast, visit, visitFailed, visiting } = createHost(mount, () => persistence, { interaction, shown, send: edits.push }, { shared: shared !== null, saved })
+  // The renderer draws into `mount`; the page's UI goes around it, and reaches the map only through `MapPort`.
+  const stage = new GameScene(mount)
+  let input: MapInput | null = null
+  const page = createDomUi<CameraView>(
+    { interaction, shown, send: edits.push },
+    {
+      surface: mount,
+      focus: (x, y) => stage.focus(x, y),
+      resetCamera: () => stage.resetCamera(),
+      camera: () => stage.view(),
+      picture: (width, height, scale) => stage.picture(width, height, scale),
+      pointer: () => input?.tip ?? null,
+      confirmStroke: () => input?.confirmStroke(),
+      cancelStroke: () => input?.cancelStroke(),
+      reset: () => input?.reset(),
+      sync: () => input?.sync()
+    },
+    thumbnails(),
+    () => persistence,
+    { shared: shared !== null, saved }
+  )
+  input = new MapInput(stage, interaction, shown, { toast: page.toast, blocked: page.blocked })
+  const { syncPage, resetPage, toast, visit, visitFailed, visiting } = page
   if (shared)
     download(shared).then(
       (text) => (arriving = text),

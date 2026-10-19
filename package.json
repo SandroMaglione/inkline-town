@@ -13,7 +13,7 @@
     "balance:worth": "node scripts/worth.ts",
     "balance:furniture": "node scripts/furniture.ts",
     "balance:model:check": "node --test test/balance-model.test.ts",
-    "lint:game": "ritmo-devtools lint src/game/headless.ts",
+    "lint:game": "ritmo-devtools lint src/app/lint.ts",
     "replay": "node scripts/replay.ts",
     "check": "pnpm lint && pnpm lint:game && node scripts/check.ts",
     "check:browser": "node scripts/check-browser.ts",
