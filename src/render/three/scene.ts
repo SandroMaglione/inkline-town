@@ -7,9 +7,9 @@ import type { InkAsset } from "./assets/primitives.ts"
 import { GRID, type Point } from "../../game/world/iso.ts"
 import { key } from "../../game/world/grid.ts"
 import { kinds } from "../../game/content/index.ts"
-import type { Preview, UiValue } from "../../view/contracts.ts"
+import type { OverlayCell, Preview, Tool } from "../../view/contracts.ts"
 import { ModelHandle, ModelPool } from "./pool.ts"
-import { groundAsset, landAsset, overlayAsset, previewAsset, type OverlayCell } from "./models.ts"
+import { groundAsset, landAsset, overlayAsset, previewAsset } from "./models.ts"
 import { parkAsset } from "./assets/town-props.ts"
 import { FishWater } from "./fish-effects.ts"
 import type { ParkCell } from "../../game/world/appeal.ts"
@@ -122,7 +122,7 @@ export class GameScene {
     const point = this.raycaster.ray.intersectPlane(this.plane, new THREE.Vector3()) ?? this.target
     return { x: point.x / floorScale, y: point.z / floorScale }
   }
-  inputAt(sx: number, sy: number, tool: UiValue["tool"]) {
+  inputAt(sx: number, sy: number, tool: Tool) {
     let at = this.groundAt(sx, sy)
     let hit: number | null = null
     const intersects = this.raycaster.intersectObjects(this.pool.pickables(), false)

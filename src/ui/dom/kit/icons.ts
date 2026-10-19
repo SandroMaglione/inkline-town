@@ -4,12 +4,13 @@
  * two line weights as the town, so they sit beside it as part of one drawing.
  */
 import { goods, type GoodId } from "../../../game/content/index.ts"
+import type { IconName } from "../../../view/icons.ts"
 
 const ink = "#3d4943"
 const hex = (color: number) => `#${color.toString(16).padStart(6, "0")}`
 
 /** Shapes inside a 16 × 16 box: `s` strokes in ink, `f(color)` fills with an ink outline. */
-const paths: Record<string, string> = {
+const paths = {
   // ── Goods ──
   wood: `<path d="M3 6.5h8.5v5H3z" fill="#d9b98c"/><ellipse cx="11.5" cy="9" rx="2" ry="2.5" fill="#f1dcb4"/><circle cx="11.5" cy="9" r=".8" fill="none"/><path d="M3 6.5a2 2.5 0 0 0 0 5" fill="none"/>`,
   planks: `<path d="M2 10.5l7 3 5-2.5-7-3z" fill="#f0c59a"/><path d="M2 10.5v1.5l7 3v-1.5" fill="#e2a873"/><path d="M9 15v-1.5l5-2.5V12.5z" fill="#d2945c"/><path d="M2 6.5l7 3 5-2.5-7-3z" fill="#f0c59a"/><path d="M2 6.5V8l7 3V9.5" fill="#e2a873"/><path d="M9 11V9.5L14 7v1.5z" fill="#d2945c"/>`,
@@ -78,9 +79,10 @@ const paths: Record<string, string> = {
   condition: `<path d="M2.5 14.5v-8l5.5-4 5.5 4v8z" fill="#f5f6f2"/><path d="M6 6.5l2 2.5-1.5 2 2 3" fill="none" stroke="#b04a39" stroke-width="1.2"/>`,
   view: `<path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z" fill="#f7f8f4"/><circle cx="8" cy="8" r="2.3" fill="#c9d6ee"/>`,
   workers: `<circle cx="8" cy="5" r="2.3" fill="#f5f6f2"/><path d="M5.3 4.5c0-2 1.2-3 2.7-3s2.7 1 2.7 3z" fill="#e3c25a" stroke-width="1"/><path d="M3.5 14c0-3.5 2-5.5 4.5-5.5s4.5 2 4.5 5.5z" fill="#e9c48a"/>`
-}
+} satisfies Record<IconName, string>
 
-export type IconName = keyof typeof paths | GoodId
+export type { IconName }
+/** Every icon the page draws, in the order they are drawn above. */
 export const iconNames = Object.keys(paths) as ReadonlyArray<IconName>
 
 /** An icon as an SVG string, `size` px a side. */

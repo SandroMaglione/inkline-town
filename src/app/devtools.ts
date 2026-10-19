@@ -1,5 +1,5 @@
 /**
- * Dev builds only (`main.ts` imports this behind `import.meta.env.DEV`): the
+ * Dev builds only (`browser.ts` imports this behind `import.meta.env.DEV`): the
  * bevy-ts monitor, and a replay recorder that keeps the last minute of
  * `simulate` and saves it to `.replays/` (through the dev server, see
  * `vite.config.ts`) when a step fails, when an invariant breaks, or when the
@@ -10,9 +10,10 @@ import { Invariant, Monitor, Replay } from "@typeonce/ritmo-devtools"
 import * as ReplayViteSink from "@typeonce/ritmo-devtools/ReplayViteSink"
 
 import { step } from "../game/content/index.ts"
-import { present } from "../view/present.ts"
 import { Building, Game, Root, Treasury } from "../game/schema.ts"
 import { simulate } from "../game/schedule.ts"
+import { draw } from "../render/three/schedule.ts"
+import { project } from "../view/schedule.ts"
 
 /** The treasury holds a whole number of coins: a NaN or a fraction means some sum went wrong. */
 export const CoinsAreWhole = Invariant.fromInspector(Game.Inspector("coins are whole", {
@@ -60,6 +61,6 @@ export const attachDevtools = (host: DevtoolsHost) => {
     hostClock: host.wallClock,
     saveOn: { failure: true, invariants: host.demo ? [CoinsAreWhole, FewerThanTenBuildings] : [CoinsAreWhole] }
   })
-  const monitor = Monitor.attach(host.runtime, { schedules: { simulate, present }, mount: host.mount, host: host.host, replay: recorder })
+  const monitor = Monitor.attach(host.runtime, { schedules: { simulate, project, draw }, mount: host.mount, host: host.host, replay: recorder })
   return { recorder, monitor }
 }

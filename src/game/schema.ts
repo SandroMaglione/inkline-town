@@ -13,15 +13,11 @@
  */
 import { Clock as SimulationClock, Decode, Descriptor, Schema } from "@typeonce/ritmo"
 import * as Random from "@typeonce/ritmo-math/Random"
-import type { NodeRegistry } from "@typeonce/ritmo-render"
 import { step } from "./content/index.ts"
 
-import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "../render/three/views.ts"
-import type { GameScene } from "../render/three/scene.ts"
 import { goodIds, groundIds, kindIds, landIds, propIds, serviceIds, sizeIds, type Amounts, type GoodId } from "./content/index.ts"
 import type { Rules as RuleInputs } from "./rules/config.ts"
 import type { Edit } from "./edits.ts"
-import type { UiValue } from "../view/contracts.ts"
 
 export const Root = Schema.defineRoot("Town")
 
@@ -420,29 +416,17 @@ export const Handed = Descriptor.TransientResource<HandedValue>()("Town/Handed")
 
 export const Rules = Descriptor.Service<RuleInputs>()("Town/Rules")
 /**
- * The page's input to the simulation: each step takes the edits queued since
- * the last one (plain data, so a replay can record and play it back).
+ * The player's input to the simulation: each step takes the edits queued
+ * since the last one (plain data, so a replay can record and play it back).
  */
 export const Edits = Descriptor.Service<{ readonly snapshot: () => ReadonlyArray<Edit> }>()("Town/Edits")
-/** The page itself, for the views only: the simulation never reads it (it talks to the page through `Toast` and `Selection`). */
-export const Ui = Descriptor.Service<UiValue>()("Town/Ui")
 
-// ── What the simulation tells the page ────────────────────────────────────
+// ── What the simulation tells the player ──────────────────────────────────
 
 /** A message for the player (an edit refused: "No room there"). */
 export const Toast = Descriptor.Event<string>()("Town/Toast")
 /** The panel's selection, changed by an edit: open a new building, or let go of one that is gone. */
 export const Selection = Descriptor.Event<{ readonly select: number } | { readonly clear: true } | { readonly clearIf: number }>()("Town/Selection")
-/** The frame's length, for animation only: the simulation runs on `Time`. */
-export const Clock = Descriptor.Service<{ deltaSeconds: number; elapsed: number }>()("Town/Clock")
-export const StageService = Descriptor.Service<GameScene>()("Town/Stage")
-export const BuildingNodes = Descriptor.Service<NodeRegistry.NodeRegistry<BuildingView>>()("Town/BuildingNodes")
-export const HouseNodes = Descriptor.Service<NodeRegistry.NodeRegistry<HouseView>>()("Town/HouseNodes")
-export const WalkerNodes = Descriptor.Service<NodeRegistry.NodeRegistry<WalkerView>>()("Town/WalkerNodes")
-export const TreeNodes = Descriptor.Service<NodeRegistry.NodeRegistry<TreeView>>()("Town/TreeNodes")
-export const RockNodes = Descriptor.Service<NodeRegistry.NodeRegistry<RockView>>()("Town/RockNodes")
-export const FieldNodes = Descriptor.Service<NodeRegistry.NodeRegistry<FieldView>>()("Town/FieldNodes")
-export const RuinNodes = Descriptor.Service<NodeRegistry.NodeRegistry<RuinView>>()("Town/RuinNodes")
 
 export const Game = Schema.bind(
   Schema.fragment({

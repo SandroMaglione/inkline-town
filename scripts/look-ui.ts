@@ -49,19 +49,19 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
   await page.reload()
   await page.waitForFunction(() => (window as any).town)
   await page.getByRole("button", { name: /Continue/ }).first().click()
-  await page.waitForFunction(() => !(window as any).town.ui.founding)
+  await page.waitForFunction(() => !(window as any).town.interaction.founding)
   await page.locator(".toolbar .pause").click()
-  await page.evaluate(() => (window as any).town.ui.guide.push({ type: "off" }))
+  await page.evaluate(() => (window as any).town.interaction.guide.push({ type: "off" }))
 
   // 0. The problem marker over a lumberjack (paused), clear of its roof.
   const lumber = await find(page, (e) => e.components["Town/Building"]?.kind === "lumberjack" && !e.components["Town/Site"])
   if (lumber) {
     const l: Tile = lumber.components["Town/Tile"]
-    await page.evaluate((l) => (window as any).town.ui.edits.push({ type: "pause", cell: { x: l.x, y: l.y }, on: true }), l)
+    await page.evaluate((l) => (window as any).town.edits.push({ type: "pause", cell: { x: l.x, y: l.y }, on: true }), l)
     await page.evaluate(() => (window as any).town.advance(1))
     await look(l.x + 1, l.y + 1, phone ? 2.4 : 3.2)
     await shot("0-marker")
-    await page.evaluate((l) => (window as any).town.ui.edits.push({ type: "pause", cell: { x: l.x, y: l.y }, on: false }), l)
+    await page.evaluate((l) => (window as any).town.edits.push({ type: "pause", cell: { x: l.x, y: l.y }, on: false }), l)
     await page.evaluate(() => (window as any).town.advance(1))
   }
 
@@ -136,7 +136,7 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
       if (!b) continue
       const tile: Tile = b.components["Town/Tile"]
       picked.push({ kind, tile })
-      await page.evaluate((t) => (window as any).town.ui.edits.push({ type: "upgrade", cell: { x: t.x, y: t.y } }), tile)
+      await page.evaluate((t) => (window as any).town.edits.push({ type: "upgrade", cell: { x: t.x, y: t.y } }), tile)
     }
     await page.evaluate(() => (window as any).town.advance(1))
     const progress = async () => (await town(page)).entities.filter((e: any) => e.components["Town/Works"]).length

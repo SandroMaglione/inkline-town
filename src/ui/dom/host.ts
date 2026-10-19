@@ -3,8 +3,6 @@
  * top bar, toolbar, build menu, panel, tooltip, and toasts; the dialog a new
  * town is founded from, and the reckoning at the end of its term.
  */
-import { Application, Graphics } from "pixi.js"
-
 import {
   categoryColor,
   categoryOrder,
@@ -52,9 +50,8 @@ import { GRID } from "../../game/world/iso.ts"
 import { goodIcon, icon, iconEl, type IconName } from "./kit/icons.ts"
 import { generate } from "../../game/world/mapgen.ts"
 import { askOf, priceOf } from "../../game/schedule.ts"
-import type { TradeMode } from "../../game/edits.ts"
-import type { Group, Line, Panel, Stats, Tool, UiValue, View } from "../../view/contracts.ts"
-import { emptyPreview } from "../../view/contracts.ts"
+import type { Edit, TradeMode } from "../../game/edits.ts"
+import type { Group, Interaction, Line, Panel, Shown, Stats, Tool, View } from "../../view/contracts.ts"
 import { GameScene, type CameraView } from "../../render/three/scene.ts"
 import { blobOf, cardFacts, drawCard, metaOf, scaled, verdictOf } from "../../platform/share/card.ts"
 import { handheld, offerLink, offerPicture, upload } from "../../platform/share/client.ts"
@@ -184,16 +181,16 @@ export interface Persistence {
  * `shared`: the page opened on a shared town's link, so it loads that rather than asking for a charter.
  * `saved`: the newest town saved in this browser, which the first charter offers to carry on with.
  */
-export const createHost = async (
+export const createHost = (
   mount: HTMLElement,
   persistence: () => Persistence,
+  view: { readonly interaction: Interaction; readonly shown: Shown; readonly send: (edit: Edit) => void },
   options: { readonly shared?: boolean; readonly saved?: { readonly title: string; readonly savedAt: number } | null } = {}
 ) => {
-  const app = new Application()
-  // Pixi remains an offscreen thumbnail renderer for the unchanged menus.
-  await app.init({ width: 64, height: 64, antialias: true, resolution: 2, autoStart: false, backgroundAlpha: 0 })
-  app.stop()
   const stage = new GameScene(mount)
+  const ui = view.interaction
+  const townView = view.shown.town
+  const queueEdit = view.send
 
   // ── DOM ──
   // Top left: the term's clock and the treasury, the goods in stock below, then the crown's request and any alarm.
@@ -251,7 +248,7 @@ export const createHost = async (
   const send = el("button", "send", "send")
   send.onclick = (event) => {
     event.stopPropagation()
-    ui.edits.push({ type: "deliver" })
+    queueEdit({ type: "deliver" })
   }
   request.append(requestText, send)
   const alarm = el("div", "card alarm")
@@ -294,7 +291,7 @@ export const createHost = async (
   let shortCursor = 0
   jobs.onclick = (event) => {
     event.stopPropagation()
-    const short = ui.stats?.shortStaffed ?? []
+    const short = townView.stats?.shortStaffed ?? []
     if (short.length === 0) return toggleMenu("town")
     const next = short[shortCursor % short.length]!
     shortCursor += 1
@@ -392,43 +389,18 @@ export const createHost = async (
   let toastTimer = 0
   /** When the toast showing went up: a press on the map just after does not put it away. */
   let toastAt = 0
-  const ui: UiValue = {
-    tool: "select",
-    placing: null,
-    upgrading: null,
-    ground: "lawn",
-    prop: "lamp",
-    menu: null,
-    pointer: null,
-    dragFrom: null,
-    selected: null,
-    gestures: [],
-    guide: [],
-    // A town is founded behind the dialog, so there is land to look at while choosing.
-    edits: [{ type: "newTown", charter: defaultCharter((Date.now() & 0x7fffffff) >>> 0) }],
-    preview: emptyPreview(),
-    hits: [],
-    panel: null,
-    centres: new Map(),
-    stats: null,
-    speed: 1,
-    founding: true,
-    view: "none",
-    overlay: { key: "", cells: [] },
-    tints: new Map(),
-    wanted: new Map(),
-    legend: null,
-    flash: null,
-    // Long enough to read (about 15 letters a second, and a moment to look), and gone as soon as the mayor
-    // touches the map again: by then they have read it, or are acting on it.
-    toast: (message) => {
-      toastBox.innerHTML = iconize(escapeHtml(message))
-      toastBox.classList.add("show")
-      toastAt = Date.now()
-      window.clearTimeout(toastTimer)
-      toastTimer = window.setTimeout(() => toastBox.classList.remove("show"), Math.min(8000, Math.max(2200, 1200 + message.length * 65)))
-    }
+  // Long enough to read (about 15 letters a second, and a moment to look), and gone as soon as the mayor
+  // touches the map again: by then they have read it, or are acting on it.
+  const toast = (message: string) => {
+    toastBox.innerHTML = iconize(escapeHtml(message))
+    toastBox.classList.add("show")
+    toastAt = Date.now()
+    window.clearTimeout(toastTimer)
+    toastTimer = window.setTimeout(() => toastBox.classList.remove("show"), Math.min(8000, Math.max(2200, 1200 + message.length * 65)))
   }
+  // A town is founded behind the dialog, so there is land to look at while choosing.
+  ui.founding = true
+  queueEdit({ type: "newTown", charter: defaultCharter((Date.now() & 0x7fffffff) >>> 0) })
 
   const tools: ReadonlyArray<{
     readonly tool: Tool | "build"
@@ -553,14 +525,14 @@ export const createHost = async (
   const guideButton = el("button", "guide-toggle")
   guideButton.title = "Turn the guide on or off: it tells a new mayor what to do next, and why"
   guideButton.append(iconEl("hint"), document.createTextNode("guide"))
-  guideButton.onclick = () => ui.guide.push({ type: ui.stats?.guide.off ? "on" : "off" })
+  guideButton.onclick = () => ui.guide.push({ type: townView.stats?.guide.off ? "on" : "off" })
   system.append(guideButton)
   action("save", "save", "Save the town in this browser (it also autosaves every two minutes)", () =>
-    ui.toast(persistence().save() ?? "Saved")
+    toast(persistence().save() ?? "Saved")
   )
   action("load", "load", "Load the latest save: yours or the autosave, whichever is newer", () =>
     confirmLeave("load the latest save?", "The town as it is now is replaced by the latest save (yours or the autosave).", "Load", () =>
-      ui.toast(persistence().load() ?? "Loaded")
+      toast(persistence().load() ?? "Loaded")
     )
   )
   action("newTown", "new town", "Found a new town on new land", () =>
@@ -595,7 +567,7 @@ export const createHost = async (
     const saveFirst = el("button", "frame", `Save, then ${go.toLowerCase()}`)
     saveFirst.onclick = () => {
       const failed = persistence().save()
-      if (failed) return ui.toast(failed)
+      if (failed) return toast(failed)
       close(true)
       run()
     }
@@ -637,21 +609,21 @@ export const createHost = async (
     ui.menu = null
     choose("place")
     const title = kinds[kind].title.toLowerCase()
-    ui.toast(touchScreen() ? `Tap a spot for the ${title}, then tap it again to build it` : `Click to place a ${title} · Esc to stop`)
+    toast(touchScreen() ? `Tap a spot for the ${title}, then tap it again to build it` : `Click to place a ${title} · Esc to stop`)
   }
   const layGround = (ground: GroundId) => {
     ui.ground = ground
     ui.menu = null
     choose("ground")
     const title = grounds[ground].title.toLowerCase()
-    ui.toast(touchScreen() ? `Drag a rectangle to lay ${title}, then tap Build` : `Drag a rectangle to lay ${title} · Esc to stop`)
+    toast(touchScreen() ? `Drag a rectangle to lay ${title}, then tap Build` : `Drag a rectangle to lay ${title} · Esc to stop`)
   }
   const furnish = (prop: PropId) => {
     ui.prop = prop
     ui.menu = null
     choose("prop")
     const title = props[prop].title.toLowerCase()
-    ui.toast(touchScreen() ? `Tap a cell of park for the ${title}, then tap it again to set it` : `Click a cell of park to set a ${title} · Esc to stop`)
+    toast(touchScreen() ? `Tap a cell of park for the ${title}, then tap it again to set it` : `Click a cell of park to set a ${title} · Esc to stop`)
   }
   choose("select")
 
@@ -699,7 +671,7 @@ export const createHost = async (
   const SAMPLE_SECONDS = 4
   const HISTORY = 150
   window.setInterval(() => {
-    const s = ui.stats
+    const s = townView.stats
     if (!s) return
     history.push({ coins: s.coins, residents: s.settlers + s.citizens, stock: s.stock })
     if (history.length > HISTORY) history.shift()
@@ -827,7 +799,7 @@ export const createHost = async (
   }
 
   const lockText = (kind: Pick<Kind, "unlock"> | ParkPiece): string | null => {
-    const s = ui.stats
+    const s = townView.stats
     if (!s) return null
     const residents = s.settlers + s.citizens
     if (residents < kind.unlock.residents) return `needs ${kind.unlock.residents} residents`
@@ -842,13 +814,13 @@ export const createHost = async (
     if (cost.coins > 0) {
       const chip = el("span", "chip")
       chip.innerHTML = `${icon("coins", 14)}${cost.coins}`
-      chips.push({ chip, short: () => (ui.stats?.coins ?? 0) < cost.coins })
+      chips.push({ chip, short: () => (townView.stats?.coins ?? 0) < cost.coins })
     }
     for (const [g, n] of Object.entries(cost.materials) as Array<[GoodId, number]>) {
       const chip = el("span", "chip")
       chip.title = goods[g].title
       chip.innerHTML = `${goodIcon(g, 14)}${n}`
-      chips.push({ chip, short: () => (ui.stats?.stock[g] ?? 0) < n })
+      chips.push({ chip, short: () => (townView.stats?.stock[g] ?? 0) < n })
     }
     box.append(...chips.map((c) => c.chip))
     const refresh = () => {
@@ -1022,23 +994,23 @@ export const createHost = async (
       name.innerHTML = icon(tier, 16)
       name.append(document.createTextNode(tier))
       line.append(name, value)
-      const rate = slider(TAX_STEPS[0], TAX_STEPS.at(-1)!, 5, (to) => ui.edits.push({ type: "tax", tier, rate: to }))
+      const rate = slider(TAX_STEPS[0], TAX_STEPS.at(-1)!, 5, (to) => queueEdit({ type: "tax", tier, rate: to }))
       rate.input.classList.add("tax")
       rate.input.title = "Drag to set the rate; double-click for the usual 100%"
-      rate.input.ondblclick = () => ui.edits.push({ type: "tax", tier, rate: 100 })
+      rate.input.ondblclick = () => queueEdit({ type: "tax", tier, rate: 100 })
       const effect = el("p", "effect")
       const outlook = el("p", "effect outlook")
       outlook.title = "Taxes a minute from every home if this rate stayed there and the homes settled: residents move away above 100%, and approval follows the rate"
       levers.append(line, rate.input, effect, outlook)
       live.push(() => {
-        const now = ui.stats?.policy[tier] ?? 100
+        const now = townView.stats?.policy[tier] ?? 100
         rate.sync(now)
         value.textContent = `${now}%`
         const sway = Math.round((100 - now) * moodRules.perTaxPoint)
         const grudge = now > moodRules.grudge.above ? " · a grudge builds while it stays this high, and fades slowly" : ""
         effect.textContent = (sway === 0 ? "the usual rate" : `${signed(sway)} approval`) + grudge
         effect.className = `effect ${sway > 0 ? "up" : sway < 0 ? "down" : ""}`
-        const steps = ui.stats?.taxOutlook[tier] ?? []
+        const steps = townView.stats?.taxOutlook[tier] ?? []
         const best = steps.reduce<{ rate: number; taxes: number } | null>((b, o) => (b === null || o.taxes > b.taxes ? o : b), null)
         const text = steps.length === 0 || best === null
           ? ""
@@ -1111,7 +1083,7 @@ export const createHost = async (
     const reserveLine = el("div", "row lever")
     const reserveValue = el("span", "rate")
     reserveLine.append(el("span", "label", "keep in store"), reserveValue)
-    const reserve = slider(0, RESERVE_MAX, 5, (amount) => ui.edits.push({ type: "reserve", amount }))
+    const reserve = slider(0, RESERVE_MAX, 5, (amount) => queueEdit({ type: "reserve", amount }))
     reserve.input.title = "How much of each good the town keeps: it sells only beyond this, and buys only up to it"
     store.append(reserveLine, reserve.input, el("p", "effect", "of each good: sold only above this, bought only up to it"))
     /** Collections a minute: the traders come at every ledger. */
@@ -1130,11 +1102,11 @@ export const createHost = async (
       top.append(name, right)
       // Left of the middle sells, right of it buys, the middle neither; how far out is how much a collection.
       const deal = slider(-TRADE_LOAD, TRADE_LOAD, 1, (v) =>
-        ui.edits.push(v === 0 ? { type: "trade", good: g, mode: "none" } : { type: "trade", good: g, mode: v < 0 ? "sell" : "buy", amount: Math.abs(v) })
+        queueEdit(v === 0 ? { type: "trade", good: g, mode: "none" } : { type: "trade", good: g, mode: v < 0 ? "sell" : "buy", amount: Math.abs(v) })
       )
       deal.input.classList.add("deal")
       deal.input.title = `Drag left to sell ${goods[g].title}, right to buy it; the further, the more each time the traders call. Double-click to stop trading it.`
-      deal.input.ondblclick = () => ui.edits.push({ type: "trade", good: g, mode: "none" })
+      deal.input.ondblclick = () => queueEdit({ type: "trade", good: g, mode: "none" })
       const mode = el("span", "mode")
       const bottom = el("div", "deal-line")
       bottom.append(deal.input, mode)
@@ -1150,7 +1122,7 @@ export const createHost = async (
     panel.append(chronicle)
 
     live.push(() => {
-      const s = ui.stats
+      const s = townView.stats
       if (!s) return
       sub.textContent = `${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · a ${s.fate.rankTitle} · term ${s.fate.term}, ${s.charter.term} minutes`
       sub.title = `seed ${s.charter.seed}`
@@ -1340,16 +1312,16 @@ export const createHost = async (
     syncLines(gets, getRows, offer.changes.filter((c) => c !== upkeep).map(gainLine))
     const begin = el("button", "frame primary", `Begin the ${offer.title.toLowerCase()}`)
     begin.onclick = () => {
-      const now = ui.panel
-      if (now?.type === "building") ui.edits.push({ type: "upgrade", cell: now.cell })
+      const now = townView.panel
+      if (now?.type === "building") queueEdit({ type: "upgrade", cell: now.cell })
     }
     const why = el("p", "sub", "")
     live.push(() => {
-      const now = ui.panel
+      const now = townView.panel
       if (now?.type !== "building" || !now.upgrade) return
       needed.textContent = now.upgrade.needed ? `needed now: ${now.upgrade.needed}` : "not needed yet: the gold arrow shows when it is"
       needed.classList.toggle("now", now.upgrade.needed !== null)
-      const coins = ui.stats?.coins ?? 0, stock = ui.stats?.stock
+      const coins = townView.stats?.coins ?? 0, stock = townView.stats?.stock
       const materials = (Object.entries(offer.cost.materials) as Array<[GoodId, number]>).filter(([, n]) => n > 0)
       const lacking = materials.filter(([g, n]) => (stock?.[g] ?? 0) < n).map(([g, n]) => `${n - (stock?.[g] ?? 0)} ${goods[g].title}`)
       syncLines(pays, payRows, [
@@ -1371,7 +1343,7 @@ export const createHost = async (
   }
 
   const buildPanel = () => {
-    const p = ui.panel
+    const p = townView.panel
     live = []
     panel.replaceChildren()
     if (!p) return
@@ -1406,7 +1378,7 @@ export const createHost = async (
       box.classList.add("lines", "state")
       const rows: Array<HTMLElement> = []
       live.push(() => {
-        const now = ui.panel
+        const now = townView.panel
         if (now?.type !== "building") return
         box.classList.toggle("trouble", now.problem !== null)
         syncLines(box, rows, [now.state])
@@ -1438,7 +1410,7 @@ export const createHost = async (
       for (const extra of slots.slice(groups.length)) extra.box.style.display = "none"
     }
     live.push(() => {
-      const now = ui.panel
+      const now = townView.panel
       if (!now || now.type === "build" || now.type === "town" || now.type !== p.type) return
       if (now.type === "building") {
         status.textContent = now.problem ?? now.status
@@ -1465,11 +1437,11 @@ export const createHost = async (
         const pause = el("button", "frame", "Pause work")
         pause.title = "A paused building has no workers and pays a quarter of its upkeep"
         pause.onclick = () => {
-          const now = ui.panel
-          if (now?.type === "building") ui.edits.push({ type: "pause", cell: now.cell, on: !now.paused })
+          const now = townView.panel
+          if (now?.type === "building") queueEdit({ type: "pause", cell: now.cell, on: !now.paused })
         }
         live.push(() => {
-          const now = ui.panel
+          const now = townView.panel
           if (now?.type !== "building") return
           pause.textContent = now.paused ? "Resume work" : "Pause work"
           pause.style.display = now.pausable ? "" : "none"
@@ -1480,11 +1452,11 @@ export const createHost = async (
         const close = el("button", "frame", "Close home")
         close.title = "A closed home stands empty: no taxes, and no cost to the town hall's administration. Reopen it and settlers move back in."
         close.onclick = () => {
-          const now = ui.panel
-          if (now?.type === "house") ui.edits.push({ type: "pause", cell: now.cell, on: !now.closed })
+          const now = townView.panel
+          if (now?.type === "house") queueEdit({ type: "pause", cell: now.cell, on: !now.closed })
         }
         live.push(() => {
-          const now = ui.panel
+          const now = townView.panel
           if (now?.type !== "house") return
           close.textContent = now.closed ? "Reopen home" : "Close home"
           close.style.display = now.closable ? "" : "none"
@@ -1492,9 +1464,9 @@ export const createHost = async (
         actions.append(close)
       }
       const remove = el("button", "frame danger", "Remove")
-      remove.onclick = () => ui.edits.push({ type: "remove", cell: p.cell })
+      remove.onclick = () => queueEdit({ type: "remove", cell: p.cell })
       live.push(() => {
-        const now = ui.panel
+        const now = townView.panel
         remove.title = now?.type === "building" || now?.type === "house" ? now.salvage : ""
       })
       actions.append(remove)
@@ -1504,7 +1476,7 @@ export const createHost = async (
 
   /** Rebuilds the panel when what it shows changes, and refreshes its numbers every frame. */
   const syncPanel = () => {
-    const p = ui.panel
+    const p = townView.panel
     const next =
       p === null
         ? ""
@@ -1662,7 +1634,7 @@ export const createHost = async (
     const found = el("button", "frame primary", "Start new")
     found.onclick = () => {
       if (visiting) endVisit()
-      ui.edits.push({ type: "newTown", charter: { ...choice } })
+      queueEdit({ type: "newTown", charter: { ...choice } })
       history.length = 0
       ui.selected = null
       ui.menu = null
@@ -1679,7 +1651,7 @@ export const createHost = async (
       resume.title = `Carry on with the town saved in this browser: ${saved.title}${saved.savedAt > 0 ? `, saved ${ago(saved.savedAt)}` : ""}`
       resume.onclick = () => {
         const said = persistence().load() ?? "Loaded"
-        ui.toast(said)
+        toast(said)
         if (!said.startsWith("Loaded")) return
         history.length = 0
         ui.selected = null
@@ -1719,7 +1691,7 @@ export const createHost = async (
     if (event.target === shareBox) closeShare()
   }
   const openShare = async () => {
-    const s = ui.stats
+    const s = townView.stats
     if (!s || shareBox.classList.contains("open")) return
     shareSpeed = ui.speed
     setSpeed(0)
@@ -1730,7 +1702,7 @@ export const createHost = async (
       png = await blobOf(card, "image/png")
     } catch (error) {
       setSpeed(shareSpeed)
-      return ui.toast(error instanceof Error ? error.message : "The picture could not be made")
+      return toast(error instanceof Error ? error.message : "The picture could not be made")
     }
     const name = `inkline-town-${s.fate.state === "playing" ? `year-${s.season.year}` : `term-${s.fate.term}`}.png`
     const caption = `${metaOf(facts).title} · ${metaOf(facts).description}`
@@ -1746,7 +1718,7 @@ export const createHost = async (
     const actions = el("div", "actions")
     const picture = el("button", "frame primary", "")
     picture.append(iconEl("picture", 15), document.createTextNode(handheld() ? "Share the picture" : "Save the picture"))
-    picture.onclick = async () => ui.toast(await offerPicture(png, name, caption))
+    picture.onclick = async () => toast(await offerPicture(png, name, caption))
     const link = el("button", "frame", "")
     link.append(iconEl("link", 15), document.createTextNode("Make a link"))
     const linkRow = el("div", "link-row")
@@ -1762,7 +1734,7 @@ export const createHost = async (
         field.value = made.url
         field.onfocus = () => field.select()
         const copy = el("button", "frame primary", handheld() ? "Share the link" : "Copy the link")
-        copy.onclick = async () => ui.toast(await offerLink(made.url, metaOf(facts).title))
+        copy.onclick = async () => toast(await offerLink(made.url, metaOf(facts).title))
         const open = el("a", "frame", "Open")
         open.setAttribute("href", made.url)
         open.setAttribute("target", "_blank")
@@ -1773,7 +1745,7 @@ export const createHost = async (
       } catch (error) {
         link.disabled = false
         link.lastChild!.textContent = "Try the link again"
-        ui.toast(error instanceof Error ? error.message : "Could not share the town")
+        toast(error instanceof Error ? error.message : "Could not share the town")
       }
     }
     const close = el("button", "frame", "Close")
@@ -1812,7 +1784,7 @@ export const createHost = async (
     play.title = "Make this town yours: build, govern, and it autosaves in this browser"
     play.onclick = () => {
       endVisit()
-      ui.toast("The town is yours: it autosaves as you play")
+      toast("The town is yours: it autosaves as you play")
     }
     const own = el("button", "frame", "Found your own")
     own.onclick = () => openCharter(true)
@@ -1826,7 +1798,7 @@ export const createHost = async (
   const visitFailed = (message: string) => {
     window.history.replaceState(null, "", "/")
     openCharter(false)
-    ui.toast(message)
+    toast(message)
   }
 
   // ── The end of the term ──
@@ -1863,7 +1835,7 @@ export const createHost = async (
   let reckoningOpen = false
   const showReckoning = (open: boolean) => {
     reckoningOpen = open
-    reckoning.classList.toggle("open", open && ui.stats !== null && ui.stats.fate.state !== "playing")
+    reckoning.classList.toggle("open", open && townView.stats !== null && townView.stats.fate.state !== "playing")
   }
   const syncReckoning = (s: Stats) => {
     const over = s.fate.state !== "playing"
@@ -1911,7 +1883,7 @@ export const createHost = async (
       const stand = el("button", "frame primary", "Next term")
       stand.title = `Stand for another ${s.charter.term} minutes: the same town, new winters, and the crown's requests start small again`
       stand.onclick = () => {
-        ui.edits.push({ type: "nextTerm" })
+        queueEdit({ type: "nextTerm" })
         showReckoning(false)
       }
       actions.append(stand)
@@ -1932,7 +1904,7 @@ export const createHost = async (
     showReckoning(true)
   }
 
-  const input = new MapInput(stage, ui)
+  const input = new MapInput(stage, ui, view.shown, { toast, blocked: () => document.querySelector(".dialog.open") !== null })
   // A road, a row of homes, or a patch of park let go of on a touch screen is held here until built or
   // dropped; the tooltip says what it lays and costs.
   const strokeBar = el("div", "stroke-bar")
@@ -1986,7 +1958,7 @@ export const createHost = async (
     // On a phone: tuck the step away into the bulb, or open the guide in full.
     if (target.closest("[data-tuck]")) {
       tucked = stepNow
-      if (!toldWhere) ui.toast("The guide is in the bulb at the top right")
+      if (!toldWhere) toast("The guide is in the bulb at the top right")
       toldWhere = true
       return
     }
@@ -2004,7 +1976,7 @@ export const createHost = async (
     }
     if (target.closest("[data-guide-off]")) {
       ui.guide.push({ type: "off" })
-      ui.toast("Guide off · turn it back on from the bottom right")
+      toast("Guide off · turn it back on from the bottom right")
       return
     }
     // A building the line is about: go to it.
@@ -2049,8 +2021,9 @@ export const createHost = async (
   let toldWhere = false
   /** Copies the town's numbers and preview into the page, once a frame. */
   const syncPage = () => {
+    for (const message of townView.toasts.splice(0)) toast(message)
     syncPanel()
-    const s = ui.stats
+    const s = townView.stats
     if (s) {
       // The treasury as the goods are shown: which way it went over the last minute, and by how much; the steady rate until a minute is counted.
       const cf = s.flow?.coins ?? null
@@ -2211,11 +2184,11 @@ export const createHost = async (
       const latest = s.chronicle.at(-1)
       const seen = `${s.charter.seed}|${latest?.tick ?? -1}|${s.chronicle.length}`
       if (seen !== lastNews) {
-        if (lastNews !== "" && latest?.alarm && minute - latest.tick < 120) ui.toast(latest.text)
+        if (lastNews !== "" && latest?.alarm && minute - latest.tick < 120) toast(latest.text)
         lastNews = seen
       }
       // The map view's legend.
-      const l = ui.legend
+      const l = townView.legend
       const legendHtml = l
         ? `<b>${l.title}</b>${l.keys.map((k) => `<span class="key"><i style="background:${hex(k.color)}"></i>${k.label}</span>`).join("")}<small>${l.note}</small>`
         : ""
@@ -2229,9 +2202,9 @@ export const createHost = async (
     input.sync()
     const screenPointer = input.tip
     // A stroke being drawn says what it lays and costs.
-    const text = ui.dragFrom && ui.stroke !== "cancel" && ui.preview.stroke ? ui.preview.stroke : ui.preview.tooltip
+    const text = ui.dragFrom && ui.stroke !== "cancel" && townView.stroke ? townView.stroke : townView.tooltip
     // A held touch stroke waits for its build button.
-    const held = ui.stroke === "held" && ui.preview.stroke !== null
+    const held = ui.stroke === "held" && townView.stroke !== null
     strokeBar.classList.toggle("open", held)
     document.body.classList.toggle("stroke-held", held)
     if (text && screenPointer) {
@@ -2242,7 +2215,7 @@ export const createHost = async (
     } else tooltip.style.display = "none"
   }
 
-  return { app, stage, ui, syncPage, resetPage, input, visit, visitFailed, visiting: () => visiting }
+  return { stage, syncPage, resetPage, toast, input, visit, visitFailed, visiting: () => visiting }
 }
 
 /** Which way a good (or the treasury) went over the last minute: made and bought against used and sold, past a tenth of the traffic either way. */

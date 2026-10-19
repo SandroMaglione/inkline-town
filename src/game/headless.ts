@@ -10,8 +10,7 @@ import type * as Replay from "@typeonce/ritmo-devtools/Replay"
 import { step as simulationStep, type CharterValue } from "./content/index.ts"
 import { resolveRules, type Rules as RuleInputs } from "./rules/config.ts"
 import { Edits, Game, Rules, Toast } from "./schema.ts"
-import type { Edit } from "./edits.ts"
-import { emptyPreview, type UiValue } from "../view/contracts.ts"
+import { editQueue, type Edit } from "./edits.ts"
 import { blankResources, simulate } from "./schedule.ts"
 
 /** A saved world, as plain data. */
@@ -24,19 +23,14 @@ export interface Snapshot {
   machines: Record<string, string>
 }
 
-/** The page's UI state before anything is clicked, with one edit founding the town. */
-const blankUi = (charter: CharterValue, toast: (message: string) => void): UiValue => ({
-  tool: "select", placing: null, upgrading: null, ground: "lawn", prop: "lamp", menu: null, pointer: null, dragFrom: null, selected: null, gestures: [], guide: [],
-  edits: [{ type: "newTown", charter }],
-  preview: emptyPreview(), hits: [], panel: null, centres: new Map(), stats: null, speed: 1, founding: false,
-  view: "none", overlay: { key: "", cells: [] }, tints: new Map(), wanted: new Map(), legend: null, flash: null,
-  toast
-})
+/** The edit queue of a town about to be founded: one edit founds it on the first step. */
+const founding = (charter: CharterValue) => {
+  const edits = editQueue()
+  edits.push({ type: "newTown", charter })
+  return edits
+}
 
 const lintCharter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }
-
-/** The simulation's input from a page: each step takes the edits queued since the last. */
-export const editsOf = (ui: Pick<UiValue, "edits">) => ({ snapshot: (): ReadonlyArray<Edit> => ui.edits.splice(0) })
 
 /** The toasts the last step emitted (an inspector: it reads, and does not hold, the stream). */
 const Toasts = Game.Inspector("Town/Toasts", { events: { toast: Game.System.readEvent(Toast) } }, ({ events }) => events.toast.all())
@@ -59,34 +53,38 @@ export const replayTarget = (playback: Replay.Playback) => {
 
 /**
  * What `ritmo-devtools lint src/game/headless.ts` checks (`pnpm lint:game`,
- * part of `pnpm check`): the simulation on a debug runtime, and the page's
- * `present` schedule described without running (it needs the renderer).
+ * part of `pnpm check`): the simulation on a debug runtime, and the view's
+ * `project` and the renderer's `draw` schedules described without running
+ * (they need a page).
  */
 export const lintTarget = async () => {
-  // Loaded here only: tests and bots that use `headless` never load the renderer.
-  const { present } = await import("../view/present.ts")
+  // Loaded here only: tests and bots that use `headless` never load the view or the renderer.
+  const { project } = await import("../view/schedule.ts")
+  const { draw } = await import("../render/three/schedule.ts")
   const made = Game.Runtime.make({
-    services: Game.Runtime.services(Game.Runtime.service(Edits, editsOf(blankUi(lintCharter, () => {}))), Game.Runtime.service(Rules, resolveRules())),
+    services: Game.Runtime.services(Game.Runtime.service(Edits, founding(lintCharter)), Game.Runtime.service(Rules, resolveRules())),
     resources: blankResources(),
     debug: { hostClock: HostClock.test() }
   })
   if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
-  return { runtime: made.value, schedules: { simulate }, describe: { present } }
+  return { runtime: made.value, schedules: { simulate }, describe: { project, draw } }
 }
 
 export const headless = (charter: CharterValue, options: { readonly toast?: (message: string) => void; readonly rules?: RuleInputs; readonly hostClock?: HostClock.HostClock } = {}) => {
-  const toast = options.toast ?? (() => {})
-  const ui = blankUi(charter, toast)
-  const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Edits, editsOf(ui)), Game.Runtime.service(Rules, options.rules ?? resolveRules())), resources: blankResources(), debug: { hostClock: options.hostClock ?? HostClock.test() } })
+  const edits = founding(charter)
+  const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Edits, edits), Game.Runtime.service(Rules, options.rules ?? resolveRules())), resources: blankResources(), debug: { hostClock: options.hostClock ?? HostClock.test() } })
   if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
   const runtime = made.value
   const step = () => {
     const stepped = runtime.tick(simulate)
     if (!stepped.ok) throw new Error(`A step failed: ${JSON.stringify(stepped.error)}`)
-    for (const message of runtime.inspect(Toasts)) toast(message)
+    for (const message of runtime.inspect(Toasts)) town.toast(message)
   }
   const town = {
-    ui,
+    /** The edits waiting for the next step: what `edit` pushes to. */
+    edits,
+    /** Where the town's messages go ("No room there"): `options.toast`, or set it. */
+    toast: options.toast ?? ((_message: string) => {}),
     /** The runtime itself, for tools (devtools sessions, lints, replays) and type-level checks. */
     runtime,
     /** Runs the town on for `seconds` of game time. */
@@ -94,8 +92,8 @@ export const headless = (charter: CharterValue, options: { readonly toast?: (mes
       for (let i = 0; i < Math.round(seconds / simulationStep.dt); i++) step()
     },
     /** Pushes edits, applied on the next step. */
-    edit: (...edits: ReadonlyArray<Edit>) => {
-      ui.edits.push(...edits)
+    edit: (...queued: ReadonlyArray<Edit>) => {
+      edits.push(...queued)
     },
     /** The world as plain data (a copy: changing it changes nothing until it is restored). */
     snapshot: (): Snapshot => JSON.parse(JSON.stringify(runtime.snapshot())),

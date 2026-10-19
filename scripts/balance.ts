@@ -759,7 +759,6 @@ const run = (seed: number) => {
   roading.clear()
   resting.clear()
   const town = headless({ size, term, land, seed }, { rules, toast: (m) => { if (process.env.DEBUG) console.log("toast:", m) } })
-  const ui = town.ui
   const step = town.run
 
   const rows: Array<Row> = []
@@ -784,7 +783,7 @@ const run = (seed: number) => {
       }
     }
     if (process.env.DEBUG) console.log(t, JSON.stringify(chosen).slice(0, 200))
-    ui.edits.push(...chosen)
+    town.edit(...chosen)
     step(DECIDE)
     w = read(town.snapshot())
     if (w.fate.goalSince >= 0) longestGoalHold = Math.max(longestGoalHold, (w.tick - w.charter.founded - w.fate.goalSince) / 60)

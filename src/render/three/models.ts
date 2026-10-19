@@ -6,7 +6,7 @@ import { hash } from "./assets/land.ts"
 import { kinds, home, type GroundId, type KindId, type PropId, type Tier } from "../../game/content/index.ts"
 import { GRID, U, type Point } from "../../game/world/iso.ts"
 import { key, cellOf, DIRS } from "../../game/world/grid.ts"
-import type { Preview } from "../../view/contracts.ts"
+import type { OverlayCell, Preview } from "../../view/contracts.ts"
 import { withAppearance, type Appearance } from "./assets/appearance.ts"
 import { parkAsset, setts } from "./assets/town-props.ts"
 import { isWorkshop, workshopConstruction } from "./assets/workshops.ts"
@@ -368,15 +368,6 @@ export function previewAsset(preview: Preview, time: number) {
 export const quantizeBuild = (build: number) => Math.min(1, Math.round(build * 32) / 32)
 
 /** A footprint washed in a colour, for a map view. */
-export interface OverlayCell {
-  readonly x: number
-  readonly y: number
-  readonly size: number
-  readonly color: number
-  readonly alpha: number
-  /** Outlined, for what the view is about (a workplace and its homes). */
-  readonly ring?: boolean
-}
 export function overlayAsset(cells: ReadonlyArray<OverlayCell>) {
   const d = new Drawing("overlay", "Map view", "")
   for (const c of cells) {

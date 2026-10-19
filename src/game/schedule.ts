@@ -56,6 +56,13 @@ export const simulate = Game.Schedule(
   Record
 )
 
+/**
+ * The player's edits, applied without a step of time: for edits that may come
+ * while the town waits (paused, founding, or a term over) and must not move it
+ * on, such as the guide's.
+ */
+export const settle = Game.Schedule(ApplyEdits, Game.Schedule.applyDeferred())
+
 /** The world's resources before any town is founded (a `newTown` edit fills them in). */
 export const blankResources = () => ({
   Time: Clock.start(step),

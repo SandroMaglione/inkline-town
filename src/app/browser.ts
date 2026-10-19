@@ -1,8 +1,10 @@
-import { resolveRules } from "../game/rules/config.ts"
 /**
- * A town simulation of line-drawn buildings, homes, roads, and land, on the
- * Ritmo ECS with a 3D view. The simulation runs on a fixed step;
- * the views follow once a frame.
+ * The page: a town simulation of line-drawn buildings, homes, roads, and
+ * land, on the Ritmo ECS with a 3D view. This is the one module that knows
+ * every layer: it makes the world's runtime (`game`), hands it the view's
+ * and the renderer's services, mounts the page's UI (`ui/dom`), and runs the
+ * loop: the simulation on a fixed step, then the view and the renderer once
+ * a frame.
  */
 import { FixedLoop, HostClock, Result } from "@typeonce/ritmo"
 import { Effect } from "effect"
@@ -10,14 +12,19 @@ import { BrowserHostClock } from "@typeonce/ritmo-browser"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "../render/three/views.ts"
 import { lands, sizes, step } from "../game/content/index.ts"
-import { createHost, type Persistence } from "../ui/dom/host.ts"
-import { present } from "../view/present.ts"
+import { bookkeeping, editQueue } from "../game/edits.ts"
+import { resolveRules } from "../game/rules/config.ts"
+import { blankResources, settle, simulate } from "../game/schedule.ts"
+import { Edits, Game, Rules } from "../game/schema.ts"
 import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World } from "../platform/save.ts"
-import type { CameraView } from "../render/three/scene.ts"
 import { download, sharedId } from "../platform/share/client.ts"
-import { BuildingNodes, Clock, Edits, FieldNodes, Game, Rules, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, Ui, WalkerNodes } from "../game/schema.ts"
-import { editsOf } from "../game/headless.ts"
-import { blankResources, simulate } from "../game/schedule.ts"
+import type { CameraView } from "../render/three/scene.ts"
+import { draw } from "../render/three/schedule.ts"
+import { BuildingNodes, FieldNodes, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, WalkerNodes } from "../render/three/services.ts"
+import { createHost, type Persistence } from "../ui/dom/host.ts"
+import { blankInteraction, blankShown } from "../view/contracts.ts"
+import { project } from "../view/schedule.ts"
+import { Clock, Interaction, Outbox, Shown } from "../view/services.ts"
 
 /** Minutes of game time between autosaves. */
 const AUTOSAVE_MINUTES = 2
@@ -39,7 +46,11 @@ const start = async () => {
   // A town saved in this browser before: the founding screen offers to carry on with it.
   const last = Effect.runSync(Effect.result(latest.pipe(Effect.provideService(Storage, browserStorage(localStorage)))))
   const saved = last._tag === "Success" && last.success !== null ? { title: last.success.title, savedAt: last.success.savedAt } : null
-  const { stage, ui, syncPage, resetPage, visit, visitFailed, visiting } = await createHost(mount, () => persistence, { shared: shared !== null, saved })
+  // What the player is doing, what the view shows, and the edits waiting for the next step: shared by the UI, the view, and the simulation.
+  const interaction = blankInteraction()
+  const shown = blankShown()
+  const edits = editQueue()
+  const { stage, syncPage, resetPage, toast, visit, visitFailed, visiting } = createHost(mount, () => persistence, { interaction, shown, send: edits.push }, { shared: shared !== null, saved })
   if (shared)
     download(shared).then(
       (text) => (arriving = text),
@@ -63,8 +74,10 @@ const start = async () => {
   const hostClock = BrowserHostClock.make(window)
   const made = Game.Runtime.make({
     services: Game.Runtime.services(
-      Game.Runtime.service(Ui, ui),
-      Game.Runtime.service(Edits, editsOf(ui)),
+      Game.Runtime.service(Interaction, interaction),
+      Game.Runtime.service(Shown, shown),
+      Game.Runtime.service(Outbox, edits),
+      Game.Runtime.service(Edits, edits),
       Game.Runtime.service(Rules, resolveRules()),
       Game.Runtime.service(Clock, clock),
       Game.Runtime.service(StageService, stage),
@@ -86,7 +99,7 @@ const start = async () => {
     return
   }
   const runtime = made.value
-  // In development, the page's console can reach the town: `town.ui.edits.push(...)`,
+  // In development, the page's console can reach the town: `town.edits.push(...)`, `town.interaction`, `town.shown`,
   // `town.runtime.snapshot()`, and `town.advance(seconds)` to fast-forward the simulation.
   if (import.meta.env.DEV) {
     const advance = (seconds: number) => {
@@ -95,7 +108,7 @@ const start = async () => {
         if (!stepped.ok) throw new Error(`A step failed: ${JSON.stringify(stepped.error)}`)
       }
     }
-    Object.assign(window, { town: { ui, runtime, advance, view: stage } })
+    Object.assign(window, { town: { interaction, shown, edits, runtime, advance, view: stage } })
     if (runtime.debug !== undefined) {
       // Loaded in dev only: the production bundle never includes devtools.
       const { attachDevtools } = await import("./devtools.ts")
@@ -113,7 +126,7 @@ const start = async () => {
       return restored.ok ? null : restored.error._tag
     },
     title: () => {
-      const s = ui.stats
+      const s = shown.town.stats
       return s
         ? `${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · year ${s.season.year} · ${Math.floor(s.minute)} min in`
         : "a town"
@@ -151,13 +164,13 @@ const start = async () => {
   /** The page autosaves every `AUTOSAVE_MINUTES` of game time while a term runs. */
   let autosaved = 0
   const autosave = () => {
-    const s = ui.stats
-    if (!s || s.fate.state !== "playing" || ui.founding || visiting()) return
+    const s = shown.town.stats
+    if (!s || s.fate.state !== "playing" || interaction.founding || visiting()) return
     if (s.minute < autosaved) autosaved = 0
     if (s.minute < autosaved + AUTOSAVE_MINUTES) return
     autosaved = Math.floor(s.minute / AUTOSAVE_MINUTES) * AUTOSAVE_MINUTES
     const saved = run(save("auto"))
-    if (saved._tag === "Failure") ui.toast(describe(saved.failure))
+    if (saved._tag === "Failure") toast(describe(saved.failure))
   }
 
   /** A shared town has just loaded and not yet been drawn. */
@@ -171,7 +184,7 @@ const start = async () => {
     // new-town dialog is open, and once the term has ended (an edit, such as
     // founding a new town, still gets its step).
     update: () => {
-      if (arriving !== null && ui.edits.length === 0) {
+      if (arriving !== null && edits.queued.length === 0) {
         const text = arriving
         arriving = null
         arrive(text)
@@ -179,13 +192,16 @@ const start = async () => {
       }
       // The town's numbers are still the old town's until the next frame draws the new one: wait for them.
       if (settling) return Result.success(undefined)
-      if (ui.edits.some((edit) => edit.type === "newTown")) {
+      if (edits.queued.some((edit) => edit.type === "newTown")) {
         resetPresentation()
         stage.resetCamera()
       }
-      const waiting = ui.speed === 0 || ui.founding || (ui.stats !== null && ui.stats.fate.state !== "playing")
-      // Guide edits are bookkeeping: they wait for the next step rather than run one while the town waits.
-      const steps = waiting ? (ui.edits.some((edit) => edit.type !== "guide" && edit.type !== "guideOff") ? 1 : 0) : ui.speed
+      const waiting = interaction.speed === 0 || interaction.founding || (shown.town.stats !== null && shown.town.stats.fate.state !== "playing")
+      // An edit still gets its step while the town waits; the guide's books are kept without one.
+      const pending = edits.queued.length > 0
+      const books = pending && edits.queued.every(bookkeeping)
+      if (waiting && books) return runtime.tick(settle)
+      const steps = waiting ? (pending ? 1 : 0) : interaction.speed
       for (let i = 0; i < steps; i++) {
         const stepped = runtime.tick(simulate)
         if (!stepped.ok) return stepped
@@ -195,8 +211,10 @@ const start = async () => {
     render: ({ elapsedSeconds }) => {
       clock.deltaSeconds = elapsedSeconds
       clock.elapsed += elapsedSeconds
-      const shown = runtime.tick(present)
-      if (!shown.ok) throw new Error(`The town view stopped: ${JSON.stringify(shown.error)}`)
+      const viewed = runtime.tick(project)
+      if (!viewed.ok) throw new Error(`The town view stopped: ${JSON.stringify(viewed.error)}`)
+      const drawn = runtime.tick(draw)
+      if (!drawn.ok) throw new Error(`The town view stopped: ${JSON.stringify(drawn.error)}`)
       settling = false
       syncPage()
       autosave()

@@ -43,8 +43,8 @@ if (mode === "stills") {
   await page.locator(".sheet.wide").screenshot({ path: `${out}/charter.png` })
 }
 await page.getByRole("button", { name: /Continue/ }).first().click()
-await until(() => page.evaluate(() => !(window as any).town.ui.founding))
-await page.evaluate(() => (window as any).town.ui.guide.push({ type: "off" }))
+await until(() => page.evaluate(() => !(window as any).town.interaction.founding))
+await page.evaluate(() => (window as any).town.interaction.guide.push({ type: "off" }))
 // The news, the overlay list, the camera buttons, and the "loaded" toast stay out of the pictures.
 await page.addStyleTag({ content: ".ticker, .views, .camera-controls, .toast { display: none !important; }" })
 await run(1000)
@@ -94,7 +94,7 @@ if (mode === "film") {
   // The page's own loop is held (its speed buttons hidden), and the town is stepped here at twice its pace, exactly
   // two thirtieths of a second a frame: under Playwright's clock the loop's frames come unevenly.
   await page.addStyleTag({ content: ".toolbar .speed, .paused-tag { display: none !important; }" })
-  await page.evaluate(() => { (window as any).town.ui.speed = 0 })
+  await page.evaluate(() => { (window as any).town.interaction.speed = 0 })
   await mkdir(`${out}/frames`, { recursive: true })
   for (let f = 0; f < fps * seconds; f++) {
     await camera(at(f / fps))

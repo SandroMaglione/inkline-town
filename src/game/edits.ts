@@ -43,6 +43,9 @@ export type Edit =
 
 export type TradeMode = "sell" | "buy" | "none"
 
+/** Edits that only keep the guide's books: they never need a step of time (see `settle`). */
+export const bookkeeping = (edit: Edit) => edit.type === "guide" || edit.type === "guideOff"
+
 /** Edits waiting for the next step: pushed by the page and the view, taken by the simulation's `Edits` service. */
 export const editQueue = () => {
   const queued: Array<Edit> = []

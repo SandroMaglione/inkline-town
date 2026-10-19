@@ -1,15 +1,15 @@
 /**
- * The bridge between the page and the town. The page writes the pointer and
- * gestures; the town's present systems turn gestures into a selection, a
- * preview, and edits; the simulation applies the edits on its next step.
- * None of it is saved: it is host state, handed to systems as a service.
+ * What the view layer trades with every UI and renderer, as plain data: no
+ * page, no Three.js. A UI (the page in `ui/dom`, or any other) and the map
+ * input write the `Interaction`; the view's systems read the world and it,
+ * move the selection and drags on, and fill in what is `Shown`: a
+ * `TownView` for the UI and a `SceneView` for the renderer. Player actions
+ * go to the simulation as edits (`game/edits.ts`). None of it is saved.
  */
 import type { Amounts, CharterValue, GoodId, GroundId, KindId, PropId, Tier, WinterId } from "../game/content/index.ts"
-import type { IconName } from "../ui/dom/kit/icons.ts"
 import type { Point } from "../game/world/iso.ts"
 import type { Status } from "../game/schema.ts"
-import type { OverlayCell } from "../render/three/models.ts"
-import type { Edit } from "../game/edits.ts"
+import type { IconName } from "./icons.ts"
 
 /** How a line of a panel reads: fine, worth a look, wrong, or an aside. */
 export type Tone = "ok" | "warn" | "bad" | "dim"
@@ -170,13 +170,6 @@ export type Panel =
       readonly cause: "burnt" | "collapsed" | "derelict"
       readonly lines: ReadonlyArray<Line>
     }
-
-/** A thing's hit area for the pointer, nearest first. */
-export interface HitBox {
-  readonly id: number
-  readonly depth: number
-  readonly contains: (at: Point) => boolean
-}
 
 /** The town's numbers for the top bar and the panels. */
 export interface Stats {
@@ -358,7 +351,27 @@ export interface Legend {
   readonly note: string
 }
 
-export interface UiValue {
+/** A map view's cell: a colour washed over it, and whether it is outlined. */
+export interface OverlayCell {
+  readonly x: number
+  readonly y: number
+  readonly size: number
+  readonly color: number
+  readonly alpha: number
+  /** Outlined, for what the view is about (a workplace and its homes). */
+  readonly ring?: boolean
+}
+
+/** What the mayor tells the guide: put a step away, or turn the guide off or on (see `Guide`). */
+export type GuideAction = { readonly type: "skip"; readonly id: string } | { readonly type: "off" | "on" }
+
+/**
+ * What the player is doing with the map. The UI sets the tool, the menu, the
+ * speed, and the map view; the map input sets the pointer and queues
+ * gestures; the view's systems turn gestures into a selection, drags, and
+ * edits.
+ */
+export interface Interaction {
   tool: Tool
   /** The kind being placed with the `place` tool, and the kind whose buildings the `upgrade` tool upgrades. */
   placing: KindId | null
@@ -378,28 +391,57 @@ export interface UiValue {
   stroke?: "held" | "cancel" | null
   selected: number | null
   gestures: Array<Gesture>
-  edits: Array<Edit>
-  preview: Preview
-  hits: ReadonlyArray<HitBox>
-  panel: Panel | null
-  /** Where each building and home stands on the grid, for the camera to look at. */
-  centres: ReadonlyMap<number, Point>
-  stats: Stats | null
+  /** What the mayor told the guide since the last frame. */
+  guide: Array<GuideAction>
   /** Steps of the simulation a fixed step: 0 (paused), 1, 2, or 4. */
   speed: number
   /** The new-town dialog is open: the town waits. */
   founding: boolean
-  /** The map view shown over the town, its cells (rebuilt as the town changes), and its legend. */
+  /** The map view shown over the town. */
   view: View
+  /** A place the page points at (from the ticker): outlined until `until`, in milliseconds of the wall clock. */
+  flash: { readonly cell: Point; readonly size: number; readonly until: number } | null
+}
+
+/** What the UI shows, filled in by the view once a frame. */
+export interface TownView {
+  panel: Panel | null
+  stats: Stats | null
+  legend: Legend | null
+  /** What the pointer is over, or what the stroke being dragged lays and costs. */
+  tooltip: string | null
+  stroke: string | null
+  /** Messages for the player since the last frame: the UI takes them. */
+  toasts: Array<string>
+}
+
+/** What the renderer draws besides the world's entities, filled in by the view once a frame. */
+export interface SceneView {
+  preview: Preview
+  /** The map view's cells (rebuilt as the town changes, `key` says when). */
   overlay: { readonly key: string; readonly cells: ReadonlyArray<OverlayCell> }
   /** The view's colour for each building and home, washed over the model itself so it reads from above. */
   tints: ReadonlyMap<number, number>
   /** The buildings whose upgrade the town needs now, with why (the gold arrow over each). */
   wanted: ReadonlyMap<number, string>
-  legend: Legend | null
-  /** A place the page points at (from the ticker): outlined until `until`, in the clock's seconds. */
-  flash: { readonly cell: Point; readonly size: number; readonly until: number } | null
-  /** What the mayor told the guide since the last frame: put a step away, or turn the guide off or on (see `Guide`). */
-  guide: Array<{ readonly type: "skip"; readonly id: string } | { readonly type: "off" | "on" }>
-  toast: (message: string) => void
+  /** How fast the town's people move about: the speed, or 0 while the town waits. */
+  pace: number
 }
+
+/** Everything the view shows, in two parts: the UI's and the renderer's. */
+export interface Shown {
+  readonly town: TownView
+  readonly scene: SceneView
+}
+
+/** The map before anything is clicked. */
+export const blankInteraction = (): Interaction => ({
+  tool: "select", placing: null, upgrading: null, ground: "lawn", prop: "lamp", menu: null, pointer: null, dragFrom: null, selected: null, gestures: [], guide: [],
+  speed: 1, founding: false, view: "none", flash: null
+})
+
+/** Nothing shown yet. */
+export const blankShown = (): Shown => ({
+  town: { panel: null, stats: null, legend: null, tooltip: null, stroke: null, toasts: [] },
+  scene: { preview: emptyPreview(), overlay: { key: "", cells: [] }, tints: new Map(), wanted: new Map(), pace: 1 }
+})

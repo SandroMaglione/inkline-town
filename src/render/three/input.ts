@@ -1,5 +1,5 @@
 import type { Point } from "../../game/world/iso.ts"
-import type { UiValue } from "../../view/contracts.ts"
+import type { Interaction, Shown } from "../../view/contracts.ts"
 import type { GameScene } from "./scene.ts"
 
 /** Camera gestures and game gestures share the canvas, but a pan, orbit or
@@ -16,9 +16,19 @@ import type { GameScene } from "./scene.ts"
  * button) lays it; a tap anywhere else drops it, and dragging again starts a
  * new one. With any pointer, letting go off the map (over the tool bar, say)
  * drops the stroke, as a button drops a click released outside it. */
+/** What the map input needs from the page around it. */
+export interface MapHost {
+  /** Says something to the player. */
+  readonly toast: (message: string) => void
+  /** A dialog is open over the map: the keyboard is not the map's. */
+  readonly blocked: () => boolean
+}
+
 export class MapInput {
   private scene: GameScene
-  private ui: UiValue
+  private ui: Interaction
+  private shown: Shown
+  private host: MapHost
   private pointers = new Map<number, Point>()
   /** `deferred`: a press while a stroke is held, which is a tap on it until it moves. */
   private press: { id: number; start: Point; last: Point; mode: "edit" | "pan" | "rotate"; moved: boolean; deferred: boolean } | null = null
@@ -33,9 +43,11 @@ export class MapInput {
   private touch = false
   readonly controls: HTMLElement
   private abort = new AbortController()
-  constructor(scene: GameScene, ui: UiValue) {
+  constructor(scene: GameScene, ui: Interaction, shown: Shown, host: MapHost) {
     this.scene = scene
     this.ui = ui
+    this.shown = shown
+    this.host = host
     const canvas = scene.canvas,
       signal = this.abort.signal
     canvas.style.touchAction = "none"
@@ -209,7 +221,7 @@ export class MapInput {
     window.addEventListener(
       "keydown",
       (e) => {
-        if (ui.founding || document.querySelector(".dialog.open")) return
+        if (ui.founding || host.blocked()) return
         if (e.target instanceof HTMLElement && e.target.closest("input,select,textarea,button,a,[contenteditable=true]")) return
         const moves: Record<string, [number, number]> = { arrowleft: [40, 0], arrowright: [-40, 0], arrowup: [0, 40], arrowdown: [0, -40] }
         const key = e.key.toLowerCase()
@@ -248,7 +260,7 @@ export class MapInput {
     const same = armed && armed.tool === tool && (tool === "bulldoze" && hit !== null ? armed.hit === hit : Math.hypot(armed.at.x - at.x, armed.at.y - at.y) < 1.5)
     if (same) return false
     this.armed = { tool, at, hit }
-    this.ui.toast(tool === "bulldoze" ? "tap it again to remove it" : "tap it again to build it here")
+    this.host.toast(tool === "bulldoze" ? "tap it again to remove it" : "tap it again to build it here")
     this.updatePointer()
     return true
   }
@@ -320,7 +332,7 @@ export class MapInput {
         : "grabbing"
       : this.mode === "rotate"
         ? "ew-resize"
-        : this.ui.preview.hover !== null || this.ui.tool !== "select"
+        : this.shown.scene.preview.hover !== null || this.ui.tool !== "select"
           ? "pointer"
           : "grab"
   }

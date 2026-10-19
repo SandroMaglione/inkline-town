@@ -7,7 +7,7 @@ import type { BuildAction, Inputs } from "../types.ts"
 export const verifyBuilds = (inputs: Inputs, builds: ReadonlyArray<BuildAction>, seconds = 600) => {
   const started = performance.now(), prediction = project(inputs, { seconds, builds }), messages: string[] = []
   const town = fixture(inputs.scenario, inputs.rules)
-  town.ui.toast = (message) => messages.push(message)
+  town.toast = (message) => messages.push(message)
   const actions = [...builds].sort((a, b) => a.at - b.at)
   const actual: Array<{ second: number; coins: number; residents: number; citizens: number; completed: number }> = []
   let firstCitizenSecond: number | null = null
