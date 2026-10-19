@@ -21,7 +21,7 @@ import { canPlace, cellsOf, DIRS, entrances, GridBuilder, isRoad, key, type Use 
 import { GRID, inside, type Point } from "../src/game/world/iso.ts"
 import { load, memoryStorage, save, Storage, World } from "../src/platform/save.ts"
 import { headless, type Headless, type Snapshot } from "../src/game/headless.ts"
-import type { Edit } from "../src/view/contracts.ts"
+import type { Edit } from "../src/game/edits.ts"
 
 const RUNS = Number(process.env.RUNS ?? 25)
 /** How large generated scenarios grow: at this size, sequences run to their full length. */

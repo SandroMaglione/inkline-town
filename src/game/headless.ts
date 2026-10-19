@@ -10,7 +10,8 @@ import type * as Replay from "@typeonce/ritmo-devtools/Replay"
 import { step as simulationStep, type CharterValue } from "./content/index.ts"
 import { resolveRules, type Rules as RuleInputs } from "./rules/config.ts"
 import { Edits, Game, Rules, Toast } from "./schema.ts"
-import { emptyPreview, type Edit, type UiValue } from "../view/contracts.ts"
+import type { Edit } from "./edits.ts"
+import { emptyPreview, type UiValue } from "../view/contracts.ts"
 import { blankResources, simulate } from "./schedule.ts"
 
 /** A saved world, as plain data. */

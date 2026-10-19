@@ -20,7 +20,8 @@ import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, 
 import type { GameScene } from "../render/three/scene.ts"
 import { goodIds, groundIds, kindIds, landIds, propIds, serviceIds, sizeIds, type Amounts, type GoodId } from "./content/index.ts"
 import type { Rules as RuleInputs } from "./rules/config.ts"
-import type { Edit, UiValue } from "../view/contracts.ts"
+import type { Edit } from "./edits.ts"
+import type { UiValue } from "../view/contracts.ts"
 
 export const Root = Schema.defineRoot("Town")
 

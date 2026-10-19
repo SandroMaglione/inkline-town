@@ -417,11 +417,13 @@ export const Interact = Game.System(
       chronicle: Game.System.readResource(Chronicle),
       appeal: Game.System.readResource(Appeal),
       pantry: Game.System.readResource(Pantry),
-      guide: Game.System.writeResource(Guide)
+      guide: Game.System.readResource(Guide)
     },
-    services: { ui: Game.System.service(Ui) }
+    services: { ui: Game.System.service(Ui) },
+    /** Guide edits sent but not yet applied by the simulation: they count at once, so the guide moves on before the next step. */
+    local: () => ({ guide: { done: new Set<string>(), off: null as boolean | null } })
   },
-  ({ queries, resources, services }) => {
+  ({ queries, resources, services, local }) => {
     const ui = services.ui
     const grid = resources.grid.get()
     const rates = resources.policy.get()
@@ -1519,10 +1521,16 @@ export const Interact = Game.System(
 
     // ── The mayor's guide ──
     // The page writes what the mayor told it; then the guide puts away what the town has done, and picks the step to show.
+    // Only the simulation writes the guide: both go to it as edits, and count here until it has applied them.
+    const pending = local.guide
     for (const action of ui.guide.splice(0)) {
-      resources.guide.update((g) =>
-        action.type === "skip" ? (g.done.includes(action.id) ? g : { ...g, done: [...g.done, action.id] }) : { ...g, off: action.type === "off" }
-      )
+      if (action.type === "skip") {
+        pending.done.add(action.id)
+        ui.edits.push({ type: "guide", done: [action.id] })
+      } else {
+        pending.off = action.type === "off"
+        ui.edits.push({ type: "guideOff", off: pending.off })
+      }
     }
     const placedKinds = new Set(buildings.map(({ data }) => data.building.get().kind))
     const standingKinds = new Set(buildings.filter(({ data }) => !data.site.present && !data.rising.present).map(({ data }) => data.building.get().kind))
@@ -1534,7 +1542,10 @@ export const Interact = Game.System(
       const tile = row.data.tile.get()
       return met(h, "bread") && met(h, "cloth") && met(h, "faith") && appealAt(cells, tile.x, tile.y) < home.tiers[2].appeal
     })
-    const guide = resources.guide.get()
+    const saved = resources.guide.get()
+    for (const id of saved.done) pending.done.delete(id)
+    if (pending.off === saved.off) pending.off = null
+    const guide = { done: [...saved.done, ...pending.done], off: pending.off ?? saved.off }
     const put = new Set(guide.done)
     /** A road within two cells of water: reckoned only until the guide's road step is put away. */
     const roadNearWater = () => {
@@ -1591,8 +1602,11 @@ export const Interact = Game.System(
     const playing = f.state === "playing" && !ui.founding
     const newly = playing ? guideDone(facts, put) : []
     if (newly.length > 0) {
-      resources.guide.update((g) => ({ ...g, done: [...g.done, ...newly] }))
-      for (const id of newly) put.add(id)
+      ui.edits.push({ type: "guide", done: newly })
+      for (const id of newly) {
+        put.add(id)
+        pending.done.add(id)
+      }
     }
     // The guide keeps quiet a while after a step is put away; a new town (the clock gone back) starts it afresh.
     if (t < guidePace.since) Object.assign(guidePace, { shown: null, since: 0, quietUntil: 0 })

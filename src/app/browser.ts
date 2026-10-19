@@ -184,7 +184,8 @@ const start = async () => {
         stage.resetCamera()
       }
       const waiting = ui.speed === 0 || ui.founding || (ui.stats !== null && ui.stats.fate.state !== "playing")
-      const steps = waiting ? (ui.edits.length > 0 ? 1 : 0) : ui.speed
+      // Guide edits are bookkeeping: they wait for the next step rather than run one while the town waits.
+      const steps = waiting ? (ui.edits.some((edit) => edit.type !== "guide" && edit.type !== "guideOff") ? 1 : 0) : ui.speed
       for (let i = 0; i < steps; i++) {
         const stepped = runtime.tick(simulate)
         if (!stepped.ok) return stepped

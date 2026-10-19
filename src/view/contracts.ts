@@ -9,6 +9,7 @@ import type { IconName } from "../ui/dom/kit/icons.ts"
 import type { Point } from "../game/world/iso.ts"
 import type { Status } from "../game/schema.ts"
 import type { OverlayCell } from "../render/three/models.ts"
+import type { Edit } from "../game/edits.ts"
 
 /** How a line of a panel reads: fine, worth a look, wrong, or an aside. */
 export type Tone = "ok" | "warn" | "bad" | "dim"
@@ -60,38 +61,6 @@ export type Tool = "select" | "road" | "pave" | "home" | "bulldoze" | "place" | 
 export const viewIds = ["none", "appeal", "workers", "fire", "health", "order", "condition"] as const
 export type View = (typeof viewIds)[number]
 
-/** A change to the town, applied by the simulation (see `ApplyEdits`). */
-export type Edit =
-  /** `open`: show the new building in the panel. */
-  | { readonly type: "building"; readonly kind: KindId; readonly cell: Point; readonly open: boolean }
-  | { readonly type: "homes"; readonly cells: ReadonlyArray<Point> }
-  | { readonly type: "roads"; readonly cells: ReadonlyArray<Point> }
-  /** Paves the road on each cell (coins, and stone from storage). */
-  | { readonly type: "pave"; readonly cells: ReadonlyArray<Point> }
-  /** Lays park ground on each empty cell (or relays a park cell's ground). */
-  | { readonly type: "ground"; readonly ground: GroundId; readonly cells: ReadonlyArray<Point> }
-  /** Sets a furnishing on a cell of park. */
-  | { readonly type: "prop"; readonly prop: PropId; readonly cell: Point }
-  /** Removes whatever stands on a cell (not rocks, water, or the town hall); on a park, its furnishing first. */
-  | { readonly type: "remove"; readonly cell: Point }
-  /** Sets a tier's tax rate, in percent of the usual. */
-  | { readonly type: "tax"; readonly tier: "settlers" | "citizens"; readonly rate: number }
-  /** Sells a good to traders beyond the reserve, buys it up to the reserve, or neither; `amount`, up to how much a collection. */
-  | { readonly type: "trade"; readonly good: GoodId; readonly mode: TradeMode; readonly amount?: number }
-  /** How much of each good the town keeps before selling, and buys up to. */
-  | { readonly type: "reserve"; readonly amount: number }
-  /** Pauses the building on a cell (or closes the home), or sets it back to work. */
-  | { readonly type: "pause"; readonly cell: Point; readonly on: boolean }
-  /** Sends the crown what it asked for. */
-  | { readonly type: "deliver" }
-  /** Once a term has run out, stands for another: the same town, a new term. */
-  | { readonly type: "nextTerm" }
-  /** Upgrades the building on a cell where it stands (see `Kind.upgrade`). */
-  | { readonly type: "upgrade"; readonly cell: Point }
-  /** Clears everything and founds a new town on the land a charter describes. */
-  | { readonly type: "newTown"; readonly charter: CharterValue }
-
-export type TradeMode = "sell" | "buy" | "none"
 
 /** What the pointer did, in grid coordinates. */
 export type Gesture =

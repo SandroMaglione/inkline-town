@@ -1,7 +1,7 @@
 /**
  * The player's edits, applied at the start of a step: building, laying
  * roads and homes, laying out parks, bulldozing, pausing, the town's policy, answering the
- * crown, and founding a new town. Costs are checked against the treasury
+ * crown, putting guide steps away, and founding a new town. Costs are checked against the treasury
  * and the town's stock and paid up front in coins; the materials are
  * carried to the site afterwards. Upgrading a building is paid at once.
  * Once the term has ended, only a new town, or another term, is taken.
@@ -179,7 +179,7 @@ export const ApplyEdits = Game.System(
     const t = elapsed(resources.time.get(), resources.charter.get())
 
     edits: for (const edit of queued) {
-      if (edit.type !== "newTown" && edit.type !== "nextTerm" && !playing()) continue
+      if (edit.type !== "newTown" && edit.type !== "nextTerm" && edit.type !== "guide" && edit.type !== "guideOff" && !playing()) continue
       switch (edit.type) {
         case "building": {
           const kind = kinds[edit.kind]
@@ -454,6 +454,15 @@ export const ApplyEdits = Game.System(
           events.toast.emit(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)
           break
         }
+        case "guide":
+          resources.guide.update((g) => {
+            const fresh = edit.done.filter((id) => !g.done.includes(id))
+            return fresh.length === 0 ? g : { ...g, done: [...g.done, ...fresh] }
+          })
+          break
+        case "guideOff":
+          resources.guide.update((g) => (g.off === edit.off ? g : { ...g, off: edit.off }))
+          break
         case "reserve":
           resources.policy.update((p) => ({ ...p, reserve: Math.max(0, Math.min(RESERVE_MAX, Math.round(edit.amount))) }))
           break
