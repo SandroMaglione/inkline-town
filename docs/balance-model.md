@@ -2,7 +2,7 @@
 
 The model reads the game's content and pure rules. It runs independently of the ECS and renderer. The game never imports `tools/balance/`. The verification layer deliberately starts the real headless game to check selected predictions.
 
-No values in `src/content.ts` changed when this component was added. Private carrier/walker constants moved into shared configuration with their original values. `src/rules/` owns immutable inputs and the existing household, tax, trade, approval, production cadence, staffing, season, risk, road-choice and dispatch-priority functions. The simulation calls the same functions. Grid and desirability calculations retain their existing shared implementations.
+No values in `src/game/content/index.ts` changed when this component was added. Private carrier/walker constants moved into shared configuration with their original values. `src/rules/` owns immutable inputs and the existing household, tax, trade, approval, production cadence, staffing, season, risk, road-choice and dispatch-priority functions. The simulation calls the same functions. Grid and desirability calculations retain their existing shared implementations.
 
 The model shares the street factors on room and taxes, the bread bonus, and the continuous desirability rules with the game. It does not model the grudge over taxes (the forecast keeps the memory at zero) nor the faster walking on paved streets; neither appears in the verified scenarios.
 
@@ -34,7 +34,7 @@ The original bot is used as an existing consumer for diagnosis and behavior-pres
 ## API and ownership
 
 ```ts
-import { resolveRules } from "./src/rules/config.ts"
+import { resolveRules } from "./src/game/rules/config.ts"
 import { analyze, project, fromSnapshot, assessTransfers } from "./tools/balance/index.ts"
 
 const rules = resolveRules()
