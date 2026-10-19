@@ -4,8 +4,8 @@ import { Drawing, palette, pale, type Side, type Vertex } from "./primitives.ts"
 import { beam, block, iron, post, stone, wood } from "./workshops.ts"
 import { human } from "./dimensions.ts"
 
-export const ruralIds = ["firewatch", "lumberjack", "forester", "farm", "sheep", "smokehouse", "builder", "chapel", "granary"] as const
-export const ruralDoorIds = ["lumberjack", "forester", "farm", "sheep", "smokehouse", "builder", "granary"] as const
+export const ruralIds = ["firewatch", "lumberjack", "forester", "farm", "sheep", "smokehouse", "builder", "chapel", "granary"] as const satisfies ReadonlyArray<KindId>
+export const ruralDoorIds = ["lumberjack", "forester", "farm", "sheep", "smokehouse", "builder", "granary"] as const satisfies ReadonlyArray<KindId>
 type RuralDoorId = typeof ruralDoorIds[number]
 export const isRuralDoor = (id: KindId): id is RuralDoorId => ruralDoorIds.some(kind => kind === id)
 export const ruralNotes: Partial<Record<KindId, string>> = {

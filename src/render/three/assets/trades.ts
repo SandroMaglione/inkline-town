@@ -5,7 +5,7 @@ import { Drawing, palette, pale, type Side, type Vertex } from "./primitives.ts"
 import type { BuildingOptions } from "./buildings.ts"
 import { beam, block, iron, orient, post, roof, stone, wheel, wood, workshopPoint } from "./workshops.ts"
 
-export const tradeYardIds = ["warehouse", "fishery", "bakery", "weaver"] as const
+export const tradeYardIds = ["warehouse", "fishery", "bakery", "weaver"] as const satisfies ReadonlyArray<KindId>
 export type TradeYardId = typeof tradeYardIds[number]
 export const isTradeYard = (id: KindId): id is TradeYardId => tradeYardIds.some(kind => kind === id)
 export const tradeNotes = {
