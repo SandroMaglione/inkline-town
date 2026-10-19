@@ -7,10 +7,10 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { amounts, FACE_TICKS, goodIds, kinds, ranks, stepsOf, YEARS_PER_TERM } from "../src/content.ts"
-import { canPlace, GridBuilder } from "../src/grid.ts"
-import { goalsOf, nextRank, scoreOf } from "../src/rules/goals.ts"
-import { headless, type Snapshot } from "../src/sim/headless.ts"
+import { amounts, FACE_TICKS, goodIds, kinds, ranks, stepsOf, YEARS_PER_TERM } from "../src/game/content/index.ts"
+import { canPlace, GridBuilder } from "../src/game/world/grid.ts"
+import { goalsOf, nextRank, scoreOf } from "../src/game/rules/goals.ts"
+import { headless, type Snapshot } from "../src/game/headless.ts"
 
 const charter = { size: "small", term: 45, land: "fair", seed: 11 } as const
 

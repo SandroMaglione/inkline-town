@@ -1,11 +1,11 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { inkAssets, assetById } from "../src/asset-lab/assets.ts"
-import { kindIds, goodIds, kinds } from "../src/content.ts"
-import { testMap } from "../src/map-lab/map.ts"
-import { U } from "../src/iso.ts"
-import { makeRock } from "../src/asset-lab/land.ts"
-import { church, marketHall, quartersFor } from "../src/asset-lab/service-upgrades.ts"
+import { inkAssets, assetById } from "../src/render/three/assets/assets.ts"
+import { kindIds, goodIds, kinds } from "../src/game/content/index.ts"
+import { testMap } from "../src/labs/map-lab/map.ts"
+import { U } from "../src/game/world/iso.ts"
+import { makeRock } from "../src/render/three/assets/land.ts"
+import { church, marketHall, quartersFor } from "../src/render/three/assets/service-upgrades.ts"
 
 test("the portable catalogue covers all world object families", () => {
   assert.equal(assetById.size, inkAssets.length, "Asset IDs must be unique")

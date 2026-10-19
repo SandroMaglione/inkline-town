@@ -1,9 +1,9 @@
-import type { Amounts, CharterValue, GroundId, PropId, KindId } from "../../src/content.ts"
-import type { ParkCell } from "../../src/appeal.ts"
-import type { TileLike } from "../../src/grid.ts"
-import type { Rules } from "../../src/rules/config.ts"
-import type { Needs, Rates } from "../../src/rules/households.ts"
-import type { TradePolicy } from "../../src/rules/trade.ts"
+import type { Amounts, CharterValue, GroundId, PropId, KindId } from "../../src/game/content/index.ts"
+import type { ParkCell } from "../../src/game/world/appeal.ts"
+import type { TileLike } from "../../src/game/world/grid.ts"
+import type { Rules } from "../../src/game/rules/config.ts"
+import type { Needs, Rates } from "../../src/game/rules/households.ts"
+import type { TradePolicy } from "../../src/game/rules/trade.ts"
 
 export interface ModelHome extends Needs {
   readonly id: number; readonly tile: TileLike; readonly residents: number; readonly clock: number

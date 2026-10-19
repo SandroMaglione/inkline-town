@@ -1,0 +1,2290 @@
+/**
+ * The page around the town: the 3D scene, camera and pointer gestures, and the
+ * top bar, toolbar, build menu, panel, tooltip, and toasts; the dialog a new
+ * town is founded from, and the reckoning at the end of its term.
+ */
+import { Application, Graphics } from "pixi.js"
+
+import {
+  categoryColor,
+  categoryOrder,
+  costText,
+  defaultCharter,
+  goodIds,
+  goods,
+  groundIds,
+  grounds,
+  home,
+  kindOrder,
+  park as parkRules,
+  propIds,
+  props,
+  PAVE_COST,
+  PAVED_PACE,
+  tierHome,
+  winters,
+  kinds,
+  landIds,
+  lands,
+  mood as moodRules,
+  needTitle,
+  LEDGER_TICKS,
+  RESERVE_MAX,
+  step,
+  TRADE_LOAD,
+  ROAD_COST,
+  sizeIds,
+  sizes,
+  TAX_STEPS,
+  TERMS,
+  YEARS_PER_TERM,
+  type Category,
+  type CharterValue,
+  type GoodId,
+  type GroundId,
+  type Kind,
+  type KindId,
+  type ParkPiece,
+  type PropId,
+  type Tier
+} from "../../game/content/index.ts"
+import { GRID } from "../../game/world/iso.ts"
+import { goodIcon, icon, iconEl, type IconName } from "./kit/icons.ts"
+import { generate } from "../../game/world/mapgen.ts"
+import { askOf, priceOf } from "../../game/schedule.ts"
+import type { Group, Line, Panel, Stats, Tool, TradeMode, UiValue, View } from "../../view/contracts.ts"
+import { emptyPreview } from "../../view/contracts.ts"
+import { GameScene, type CameraView } from "../../render/three/scene.ts"
+import { blobOf, cardFacts, drawCard, metaOf, scaled, verdictOf } from "../../platform/share/card.ts"
+import { handheld, offerLink, offerPicture, upload } from "../../platform/share/client.ts"
+import { PICTURE_HEIGHT, PICTURE_QUALITY, PICTURE_WIDTH } from "../../platform/share/format.ts"
+import { MapInput } from "../../render/three/input.ts"
+import { portrait } from "../../render/three/portrait.ts"
+import { pictureAsset } from "../../render/three/models.ts"
+
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
+  const node = document.createElement(tag)
+  node.className = className
+  node.textContent = text
+  return node
+}
+/**
+ * Sets a node's markup only when it changed. Rewriting it every frame would
+ * replace the element under the pointer between press and release, and the
+ * browser then drops the click.
+ */
+const setHtml = (node: HTMLElement, html: string) => {
+  if (node.dataset.html === html) return
+  node.dataset.html = html
+  node.innerHTML = html
+}
+const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+
+/** Words in the town's messages that name a building or a good, longest first, so "smoked fish" wins over "fish". */
+const namedThings: ReadonlyArray<{ readonly word: string; readonly ref: { readonly kind: KindId } | { readonly good: GoodId } }> = [
+  ...kindOrder.flatMap((id) => {
+    const title = kinds[id].title.toLowerCase()
+    return [title, `${title}s`].map((word) => ({ word, ref: { kind: id } }))
+  }),
+  ...goodIds.map((id) => ({ word: goods[id].title, ref: { good: id } })),
+  { word: "loaves", ref: { good: "bread" as GoodId } },
+  { word: "loaf", ref: { good: "bread" as GoodId } }
+].sort((a, b) => b.word.length - a.word.length)
+/**
+ * Tools, panels, and map views a message can name in brackets ("[homes]",
+ * "[view:fire]"): a chip that picks the tool, opens the panel, or shows the
+ * view. The key goes beside it, for a keyboard (touch screens hide it).
+ */
+const toolRefs: Readonly<Record<string, { readonly label: string; readonly icon: IconName; readonly key?: string; readonly title: string }>> = {
+  select: { label: "select", icon: "select", key: "S", title: "Select: pick a building or home to see what it does" },
+  road: { label: "road", icon: "road", key: "R", title: "Road: drag to lay one" },
+  pave: { label: "pave", icon: "pave", key: "P", title: "Pave: drag along a road to pave it" },
+  homes: { label: "homes", icon: "homes", key: "H", title: "Homes: drag along a road to lay a row" },
+  build: { label: "build", icon: "build", key: "B", title: "Open the build menu" },
+  bulldoze: { label: "bulldoze", icon: "bulldoze", key: "X", title: "Bulldoze: remove what stands on a cell" },
+  town: { label: "town", icon: "town", key: "T", title: "Open the town panel: goals, taxes, and trade" },
+  speed: { label: "speed", icon: "clock", title: "Run time faster: 1×, 2×, 4×" },
+  pause: { label: "pause", icon: "pause", key: "space", title: "Pause the town, or run it again" },
+  "view:appeal": { label: "desirability map", icon: "appeal", key: "D", title: "Colour the map by desirability" },
+  "view:workers": { label: "workers map", icon: "workers", key: "W", title: "Colour the map by workers" },
+  "view:fire": { label: "fire map", icon: "fire", key: "F", title: "Colour the map by fire risk" },
+  "view:health": { label: "health map", icon: "health", key: "A", title: "Colour the map by health risk" },
+  "view:order": { label: "order map", icon: "order", key: "O", title: "Colour the map by the risk of theft" },
+  "view:condition": { label: "condition map", icon: "condition", key: "C", title: "Colour the map by the condition of buildings" }
+}
+const namedPattern = new RegExp(
+  `\\b(${namedThings.map((t) => t.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b|\\(([A-Z])\\)|\\[([a-z]+(?::[a-z]+)?)\\]`,
+  "gi"
+)
+/** Goods as numbers name them ("2 planks", "1 plank"), and as recipes do ("flour → bread"), by title. */
+const goodWords: ReadonlyArray<readonly [string, GoodId]> = [
+  ...goodIds.map((id) => [goods[id].title, id] as const),
+  ...goodIds.filter((id) => goods[id].title.endsWith("s")).map((id) => [goods[id].title.slice(0, -1), id] as const)
+].sort((a, b) => b[0].length - a[0].length)
+const goodAlternatives = goodWords.map(([w]) => w).join("|")
+const goodOf = (word: string) => goodWords.find(([w]) => w === word)![1]
+/**
+ * Amounts in a line of (escaped) text as icons, where the icon says it as
+ * well as the word: "3 coins a minute" as a coin and 3/min, "2 planks" as a
+ * plank and 2, "flour → bread" with each good's icon.
+ */
+const iconize = (html: string): string =>
+  html
+    .replace(/([+−-]?)(\d+) coins a minute/g, (_, sign: string, n: string) => `<span class="amount">${sign}${icon("coins", 13)}${n}/min</span>`)
+    .replace(/(\d+) coins\b/g, (_, n: string) => `<span class="amount">${icon("coins", 13)}${n}</span>`)
+    .replace(new RegExp(`(\\d+) (${goodAlternatives})\\b`, "g"), (_, n: string, w: string) => `<span class="amount">${goodIcon(goodOf(w), 13)}${n}</span>`)
+    .replace(new RegExp(`\\b(${goodAlternatives}) → (${goodAlternatives})\\b`, "g"), (_, a: string, b: string) => `<span class="amount">${goodIcon(goodOf(a), 13)}${a}</span> → <span class="amount">${goodIcon(goodOf(b), 13)}${b}</span>`)
+    // A cost as icons side by side: the dots between them only crowd it.
+    .replace(/<\/span> · <span class="amount">/g, '</span> <span class="amount">')
+
+/** A finger rather than a mouse: messages say "tap", and keys are left out. */
+const touchScreen = () => matchMedia("(pointer: coarse)").matches
+/** `{tap|click}`: the first on a touch screen, the second with a mouse. */
+const forDevice = (text: string) => text.replace(/\{([^{}|]*)\|([^{}|]*)\}/g, (_, touch: string, mouse: string) => (touchScreen() ? touch : mouse))
+
+/**
+ * A message as markup: each building it names becomes a chip to click (to
+ * build one), each good a chip with its icon, each key in round brackets a
+ * key, and each tool in square brackets a chip that picks it.
+ * `standing`: buildings the line is about, which stand already; their chips go to them rather than placing another.
+ * `asks`: when given, only these buildings become chips to place one; others it names are plain words.
+ */
+const callouts = (text: string, standing: ReadonlySet<KindId> = new Set(), asks?: ReadonlySet<KindId>): string =>
+  escapeHtml(forDevice(text)).replace(namedPattern, (match, word: string | undefined, key: string | undefined, tool: string | undefined) => {
+    if (key) return `<kbd class="key">${key}</kbd>`
+    if (tool) {
+      const ref = toolRefs[tool]
+      if (!ref) return match
+      return `<button class="ref tool" data-tool="${tool}" title="${escapeHtml(ref.title)}">${icon(ref.icon, 13)}${ref.label}${ref.key ? `<kbd>${ref.key}</kbd>` : ""}</button>`
+    }
+    const thing = namedThings.find((t) => t.word === word!.toLowerCase())
+    if (!thing) return match
+    if ("good" in thing.ref) return `<span class="ref ware" title="${goods[thing.ref.good].title}">${goodIcon(thing.ref.good, 13)}${match}</span>`
+    const kind = kinds[thing.ref.kind]
+    if (standing.has(thing.ref.kind)) return `<button class="ref kind go" data-go="${thing.ref.kind}" title="Go to the ${kind.title.toLowerCase()}">${icon("locate", 13)}${match}</button>`
+    return kind.buildable && (!asks || asks.has(thing.ref.kind))
+      ? `<button class="ref kind" data-kind="${thing.ref.kind}" title="Build a ${kind.title.toLowerCase()}: ${escapeHtml(kind.blurb)}">${icon("build", 13)}${match}</button>`
+      : `<span class="ref kind" title="${escapeHtml(kind.blurb)}">${icon("town", 13)}${match}</span>`
+  })
+
+const hex = (color: number) => `#${color.toString(16).padStart(6, "0")}`
+/** Seconds as m:ss. */
+const clockText = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`
+const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)}`
+
+export interface Persistence {
+  readonly save: () => string | null
+  readonly load: () => string | null
+  /** The town as a save file (as text), with where the camera stands, to share. */
+  readonly shareFile: (camera: CameraView) => string
+}
+
+/**
+ * `shared`: the page opened on a shared town's link, so it loads that rather than asking for a charter.
+ * `saved`: the newest town saved in this browser, which the first charter offers to carry on with.
+ */
+export const createHost = async (
+  mount: HTMLElement,
+  persistence: () => Persistence,
+  options: { readonly shared?: boolean; readonly saved?: { readonly title: string; readonly savedAt: number } | null } = {}
+) => {
+  const app = new Application()
+  // Pixi remains an offscreen thumbnail renderer for the unchanged menus.
+  await app.init({ width: 64, height: 64, antialias: true, resolution: 2, autoStart: false, backgroundAlpha: 0 })
+  app.stop()
+  const stage = new GameScene(mount)
+
+  // ── DOM ──
+  // Top left: the term's clock and the treasury, the goods in stock below, then the crown's request and any alarm.
+  // Top right: the people and their mood, which opens the town's panel.
+  const hud = el("div", "hud left")
+  const bar = el("div", "card bar")
+  const clock = el("div", "cell clock")
+  const coins = el("div", "cell coins")
+  bar.append(clock, coins)
+  const stock = el("div", "card stock")
+  /** What each good is for, for the stock bar's tooltips: who makes it, who takes it. */
+  const goodHelp: Readonly<Record<GoodId, string>> = {
+    wood: "lumberjacks fell it; a sawmill saws it into planks",
+    planks: "what homes and buildings are built from: a sawmill makes them from wood",
+    stone: "for building and paving: quarries cut it from rocks, which run out",
+    ore: "only for tools: once the town has 10 citizens, a mine digs it from the rust-red deposits, and a smithy forges it into tools",
+    tools: "for building, and workshops wear one out every 50 or 60 jobs: a smithy forges them, or buy them",
+    fish: "food for settlers: fisheries catch it by the water; it rots in about three minutes",
+    smoked: "fish that keeps all winter: a smokehouse smokes it",
+    wheat: "farms grow it; a mill grinds it into flour (not in winter)",
+    flour: "a mill's; a bakery bakes it into bread",
+    bread: "food that citizens need, and a cottage with bread pays half again: it rots in about five minutes",
+    wool: "sheep farms shear it; a weaver weaves it into cloth",
+    cloth: "citizens need it: only brought to streets with desirability 5 or more",
+    furniture: "burghers need it in their townhouses: a carpenter makes it from planks; only brought to streets fine enough for townhouses"
+  }
+  const groups: ReadonlyArray<ReadonlyArray<GoodId>> = [
+    ["wood", "planks", "stone", "ore", "tools"],
+    ["fish", "smoked", "wheat", "flour", "bread"],
+    ["wool", "cloth", "furniture"]
+  ]
+  stock.title = "Goods in the town's storage, and which way each is going · click for what the town makes and uses"
+  const goodCells = new Map<GoodId, HTMLElement>()
+  const goodTrends = new Map<GoodId, HTMLElement>()
+  for (const group of groups) {
+    const cell = el("div", "group")
+    for (const g of group) {
+      const item = el("span", "good")
+      item.title = `${goods[g].title}: ${goodHelp[g]}`
+      item.setAttribute("aria-label", goods[g].title)
+      const glyph = el("span", "glyph")
+      glyph.innerHTML = goodIcon(g, 18)
+      const count = el("span", "count", "0")
+      const trend = el("span", "trend")
+      item.append(glyph, count, trend)
+      cell.append(item)
+      goodCells.set(g, count)
+      goodTrends.set(g, trend)
+    }
+    stock.append(cell)
+  }
+  // The crown's request, when there is one, and what threatens the term (or is about to raise the town a rank).
+  const request = el("div", "card request")
+  const requestText = el("div", "cell")
+  const send = el("button", "send", "send")
+  send.onclick = (event) => {
+    event.stopPropagation()
+    ui.edits.push({ type: "deliver" })
+  }
+  request.append(requestText, send)
+  const alarm = el("div", "card alarm")
+  // The town ticker: what needs looking at now, and the latest news.
+  const ticker = el("div", "card ticker")
+  // The top line: the clock and treasury (on a phone, the people and a chip of the building goods beside them).
+  const topline = el("div", "topline")
+  const goodsChip = el("button", "card goods-chip")
+  goodsChip.title = "The goods in storage"
+  topline.append(bar, goodsChip)
+  // Under the goods, on a click: each good's last minute, made against used, and where it is held.
+  const flowCard = el("div", "card flow")
+  stock.onclick = (event) => {
+    event.stopPropagation()
+    flowCard.classList.toggle("open")
+  }
+  flowCard.onclick = () => flowCard.classList.remove("open")
+  hud.append(topline, stock, flowCard, request, alarm, ticker)
+  const people = el("div", "hud right")
+  const folk = el("div", "card bar folk")
+  const approval = el("div", "cell")
+  const settlerCell = el("div", "cell")
+  const citizenCell = el("div", "cell")
+  const jobs = el("div", "cell jobs")
+  folk.append(approval, settlerCell, citizenCell, jobs)
+  people.append(folk)
+  folk.title = "Open the town's numbers, goals, and levers (T)"
+  folk.onclick = () => toggleMenu("town")
+  /** Points the page at a place: the camera goes there, it is outlined for a moment, and (when it is a thing) it is selected. */
+  const goTo = (at: { readonly x: number; readonly y: number }, size: number, id: number | null) => {
+    setFold(null)
+    stage.focus(at.x + size / 2, at.y + size / 2)
+    ui.flash = { cell: { x: at.x, y: at.y }, size, until: Date.now() + 4000 }
+    if (id !== null) {
+      ui.selected = id
+      ui.menu = null
+      refreshTools()
+    }
+  }
+  let shortCursor = 0
+  jobs.onclick = (event) => {
+    event.stopPropagation()
+    const short = ui.stats?.shortStaffed ?? []
+    if (short.length === 0) return toggleMenu("town")
+    const next = short[shortCursor % short.length]!
+    shortCursor += 1
+    goTo(next.cell, next.size, next.id)
+  }
+  const tooltip = el("div", "tooltip")
+  const toastBox = el("div", "toast")
+  const toolbar = el("div", "toolbar")
+  const system = el("div", "system")
+  const panel = el("aside", "panel")
+  const dialog = el("div", "dialog")
+  const confirmBox = el("div", "dialog")
+  const reckoning = el("div", "dialog")
+  const shareBox = el("div", "dialog share")
+  const visitBar = el("div", "card visit")
+  const result = el("button", "result", "")
+  result.onclick = () => showReckoning(true)
+  // Map views, and the legend of the one shown.
+  const views = el("div", "views")
+  const legend = el("div", "card legend")
+  // A phone's buttons for what stays folded away: the guide and the map views.
+  const foldButtons = el("div", "fold-buttons")
+  const guideBulb = el("button", "card")
+  guideBulb.title = "The guide, and what needs looking at now"
+  const guideBadge = el("span", "badge")
+  guideBulb.append(iconEl("hint", 16), guideBadge)
+  const layersButton = el("button", "card")
+  layersButton.title = "Map overlays"
+  layersButton.append(iconEl("layers", 16))
+  foldButtons.append(guideBulb, layersButton)
+  document.body.append(hud, people, tooltip, toastBox, toolbar, system, panel, result, dialog, confirmBox, reckoning, shareBox, visitBar, views, legend, foldButtons)
+
+  // ── Phones: the HUD folds away ──
+  // On a small screen only the top line and the tool bar stay out; the goods,
+  // the guide, the map views, and the system buttons each open on a tap, one
+  // at a time, and a tap on the map folds them again.
+  const phone = window.matchMedia("(max-width: 760px), (max-height: 500px)")
+  type Fold = "goods" | "guide" | "views" | "more"
+  let fold: Fold | null = null
+  const setFold = (next: Fold | null) => {
+    fold = next
+    for (const f of ["goods", "guide", "views", "more"] as const) document.body.classList.toggle(`fold-${f}`, f === next)
+    goodsChip.classList.toggle("on", next === "goods")
+    guideBulb.classList.toggle("on", next === "guide")
+    layersButton.classList.toggle("on", next === "views" || ui.view !== "none")
+    moreButton.classList.toggle("on", next === "more")
+    if (next !== null) {
+      ticker.classList.remove("peek")
+      // The panel and a fold would cover each other: the fold wins.
+      if (ui.menu !== null || ui.selected !== null) {
+        ui.menu = null
+        ui.selected = null
+        refreshTools()
+      }
+    }
+  }
+  const toggleFold = (f: Fold) => setFold(fold === f ? null : f)
+  goodsChip.onclick = (event) => {
+    event.stopPropagation()
+    toggleFold("goods")
+  }
+  // The treasury opens the same minute the goods do.
+  coins.onclick = (event) => {
+    event.stopPropagation()
+    if (phone.matches) toggleFold("goods")
+    else flowCard.classList.toggle("open")
+  }
+  guideBulb.onclick = () => toggleFold("guide")
+  layersButton.onclick = () => toggleFold("views")
+  // A tap on the map folds them; a pan or a pinch, to look around with the goods or the guide open, does not.
+  let mapPress: { id: number; x: number; y: number; moved: boolean } | null = null
+  mount.addEventListener("pointerdown", (e) => {
+    mapPress = mapPress === null && e.isPrimary ? { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false } : null
+  })
+  mount.addEventListener("pointermove", (e) => {
+    if (mapPress?.id === e.pointerId && Math.hypot(e.clientX - mapPress.x, e.clientY - mapPress.y) > 8) mapPress.moved = true
+  })
+  mount.addEventListener("pointerup", (e) => {
+    // A tap on the map puts a toast away (one it raised itself stays): a pan or a pinch, to look for the spot, does not.
+    if (mapPress?.id === e.pointerId && !mapPress.moved && toastBox.classList.contains("show") && Date.now() - toastAt > 250) {
+      window.clearTimeout(toastTimer)
+      toastBox.classList.remove("show")
+    }
+    if (mapPress?.id === e.pointerId && !mapPress.moved && fold !== null) setFold(null)
+    if (mapPress?.id === e.pointerId) mapPress = null
+  })
+  mount.addEventListener("pointercancel", () => (mapPress = null))
+  // The people's card joins the top line on a phone, and goes back to the top right on a wider screen.
+  const placeFolk = () => {
+    if (phone.matches) topline.insertBefore(folk, goodsChip)
+    else people.append(folk)
+    if (!phone.matches) setFold(null)
+  }
+
+  let toastTimer = 0
+  /** When the toast showing went up: a press on the map just after does not put it away. */
+  let toastAt = 0
+  const ui: UiValue = {
+    tool: "select",
+    placing: null,
+    upgrading: null,
+    ground: "lawn",
+    prop: "lamp",
+    menu: null,
+    pointer: null,
+    dragFrom: null,
+    selected: null,
+    gestures: [],
+    guide: [],
+    // A town is founded behind the dialog, so there is land to look at while choosing.
+    edits: [{ type: "newTown", charter: defaultCharter((Date.now() & 0x7fffffff) >>> 0) }],
+    preview: emptyPreview(),
+    hits: [],
+    panel: null,
+    centres: new Map(),
+    stats: null,
+    speed: 1,
+    founding: true,
+    view: "none",
+    overlay: { key: "", cells: [] },
+    tints: new Map(),
+    wanted: new Map(),
+    legend: null,
+    flash: null,
+    // Long enough to read (about 15 letters a second, and a moment to look), and gone as soon as the mayor
+    // touches the map again: by then they have read it, or are acting on it.
+    toast: (message) => {
+      toastBox.innerHTML = iconize(escapeHtml(message))
+      toastBox.classList.add("show")
+      toastAt = Date.now()
+      window.clearTimeout(toastTimer)
+      toastTimer = window.setTimeout(() => toastBox.classList.remove("show"), Math.min(8000, Math.max(2200, 1200 + message.length * 65)))
+    }
+  }
+
+  const tools: ReadonlyArray<{
+    readonly tool: Tool | "build"
+    readonly label: string
+    readonly key: string
+    readonly icon: IconName
+    readonly tip: string
+  }> = [
+    {
+      tool: "select",
+      label: "select",
+      key: "S",
+      icon: "select",
+      tip: "Click a building or home to see what it does · drag to pan · wheel to zoom"
+    },
+    { tool: "road", label: "road", key: "R", icon: "road", tip: `Drag to lay a road · ${ROAD_COST} coins a cell` },
+    {
+      tool: "pave",
+      label: "pave",
+      key: "P",
+      icon: "pave",
+      tip: `Drag along a road to pave it: carriers and walkers go ${PAVED_PACE}× as fast on it, and homes beside it like it · ${PAVE_COST.coins} coins and ${PAVE_COST.stone} stone a cell`
+    },
+    { tool: "home", label: "homes", key: "H", icon: "homes", tip: `Drag to lay a row of homes along a road · ${costText(home.cost)} each` },
+    { tool: "build", label: "build", key: "B", icon: "build", tip: "Choose a building, then click to place it · Esc to stop" },
+    { tool: "bulldoze", label: "bulldoze", key: "X", icon: "bulldoze", tip: "Click a building, home, road, tree, or field to remove it" }
+  ]
+  // The town's panel is opened most: it has a button of its own, first and larger.
+  const townButton = el("button", "town-button")
+  townButton.title = "The town's goals, numbers, taxes, and trade (T)"
+  townButton.append(iconEl("town", 22), el("span", "", "town"), el("kbd", "", "T"))
+  townButton.onclick = () => toggleMenu("town")
+  // Everything the bottom-right buttons do, folded into one menu on a phone.
+  const moreButton = el("button", "more")
+  moreButton.title = "Share, the guide, save, load, new town"
+  moreButton.append(iconEl("more"))
+  moreButton.onclick = () => toggleFold("more")
+  const toolGroup = el("div", "group")
+  toolbar.append(townButton, toolGroup)
+  const buttons = tools.map((tool) => {
+    const button = el("button", "")
+    button.title = tool.tip
+    button.append(iconEl(tool.icon), document.createTextNode(tool.label), el("kbd", "", tool.key))
+    button.onclick = () => (tool.tool === "build" ? toggleMenu("build") : choose(tool.tool))
+    toolGroup.append(button)
+    return { tool, button }
+  })
+  const speedGroup = el("div", "group speed")
+  toolbar.append(speedGroup)
+  const speeds = [
+    { speed: 0, label: "", key: "space" },
+    { speed: 1, label: "1×", key: "1" },
+    { speed: 2, label: "2×", key: "2" },
+    { speed: 4, label: "4×", key: "3" }
+  ].map(({ speed, label, key }) => {
+    const button = el("button", speed === 0 ? "pause" : "", label)
+    if (speed === 0) button.append(iconEl("pause", 14))
+    button.title = speed === 0 ? "Pause the town, or run it again (space)" : `Run the town at ${label} (${key})`
+    // Pause is a switch: pressed again it runs the town at its last speed.
+    button.onclick = () => setSpeed(speed === 0 && ui.speed === 0 ? lastSpeed : speed)
+    speedGroup.append(button)
+    return { speed, button }
+  })
+  // A phone has room for one speed button: it runs a paused town, else goes on to the next speed.
+  const cycle = el("button", "cycle")
+  cycle.title = "Change speed: 1×, 2×, 4×"
+  cycle.onclick = () => setSpeed(ui.speed === 0 ? lastSpeed : ui.speed === 4 ? 1 : ui.speed * 2)
+  speedGroup.append(cycle)
+  toolbar.append(moreButton)
+  let lastSpeed = 1
+  const setSpeed = (speed: number) => {
+    if (speed > 0) lastSpeed = speed
+    ui.speed = speed
+    for (const s of speeds) s.button.classList.toggle("on", s.speed === speed)
+    // Paused, the pause button shows play.
+    const pause = speeds[0]!.button
+    pause.replaceChildren(iconEl(speed === 0 ? "play" : "pause", 14))
+    pause.setAttribute("aria-label", speed === 0 ? "Run the town" : "Pause the town")
+    cycle.textContent = `${speed === 0 ? lastSpeed : speed}×`
+    cycle.title = speed === 0 ? `Run the town at ${lastSpeed}×` : "Change speed: 1×, 2×, 4×"
+  }
+  setSpeed(1)
+
+  // ── Map views ──
+  const viewButtons: ReadonlyArray<{ readonly view: Exclude<View, "none">; readonly label: string; readonly key: string; readonly icon: IconName }> = [
+    { view: "appeal", label: "desirability", key: "D", icon: "appeal" },
+    { view: "workers", label: "workers", key: "W", icon: "workers" },
+    { view: "fire", label: "fire", key: "F", icon: "fire" },
+    { view: "health", label: "health", key: "A", icon: "health" },
+    { view: "order", label: "order", key: "O", icon: "order" },
+    { view: "condition", label: "condition", key: "C", icon: "condition" }
+  ]
+  const viewsTitle = el("div", "views-title", "map overlays")
+  viewsTitle.title = "Colour the map by one of these, to see where the town is doing well or badly. Press the key again (or click) to hide it."
+  views.append(viewsTitle)
+  const viewEls = viewButtons.map((v) => {
+    const button = el("button", "")
+    button.title = `Show ${v.label} over the map (${v.key}); again to hide it`
+    button.append(iconEl(v.icon, 15), document.createTextNode(v.label), el("kbd", "", v.key))
+    button.onclick = () => setView(ui.view === v.view ? "none" : v.view)
+    views.append(button)
+    return { ...v, button }
+  })
+  const setView = (view: View) => {
+    ui.view = view
+    for (const v of viewEls) v.button.classList.toggle("on", v.view === view)
+    // On a phone the list folds away once one is chosen, so the map shows.
+    if (fold === "views") setFold(null)
+    layersButton.classList.toggle("on", view !== "none")
+  }
+  // Share, the guide, save, load, and new town: a row of icons in the bottom
+  // right. Founding or loading replaces the town, so each asks first.
+  const action = (name: IconName, label: string, tip: string, run: () => void) => {
+    const button = el("button", name === "share" ? "labelled" : "")
+    button.title = tip
+    button.append(iconEl(name), document.createTextNode(label))
+    button.onclick = run
+    system.append(button)
+  }
+  action("share", "share", "Share a picture of the town, or a link anyone can open to watch it and play on", () => void openShare())
+  // The guide, on or off (it is on for a new mayor).
+  const guideButton = el("button", "guide-toggle")
+  guideButton.title = "Turn the guide on or off: it tells a new mayor what to do next, and why"
+  guideButton.append(iconEl("hint"), document.createTextNode("guide"))
+  guideButton.onclick = () => ui.guide.push({ type: ui.stats?.guide.off ? "on" : "off" })
+  system.append(guideButton)
+  action("save", "save", "Save the town in this browser (it also autosaves every two minutes)", () =>
+    ui.toast(persistence().save() ?? "Saved")
+  )
+  action("load", "load", "Load the latest save: yours or the autosave, whichever is newer", () =>
+    confirmLeave("load the latest save?", "The town as it is now is replaced by the latest save (yours or the autosave).", "Load", () =>
+      ui.toast(persistence().load() ?? "Loaded")
+    )
+  )
+  action("newTown", "new town", "Found a new town on new land", () =>
+    confirmLeave("found a new town?", "This town is left behind for good unless it is saved first.", "Choose new land", () =>
+      openCharter(true)
+    )
+  )
+  // A phone has no camera bar: this puts the camera back.
+  action("view", "recentre", "Back to the original angle and centre", () => stage.resetCamera())
+  system.lastElementChild!.classList.add("phone-only")
+  // A choice from the menu folds it.
+  system.addEventListener("click", () => {
+    if (fold === "more") setFold(null)
+  })
+  placeFolk()
+  phone.addEventListener("change", placeFolk)
+
+  /** Asks before something that replaces the town: save first, go ahead, or stay. */
+  const confirmLeave = (title: string, text: string, go: string, run: () => void) => {
+    const wasSpeed = ui.speed
+    setSpeed(0)
+    confirmBox.replaceChildren()
+    const card = el("div", "sheet narrow")
+    card.append(el("h2", "", title), el("p", "sub", text))
+    const actions = el("div", "actions")
+    const close = (resume: boolean) => {
+      confirmBox.classList.remove("open")
+      if (resume) setSpeed(wasSpeed)
+    }
+    const stay = el("button", "frame primary", "Keep playing")
+    stay.onclick = () => close(true)
+    const saveFirst = el("button", "frame", `Save, then ${go.toLowerCase()}`)
+    saveFirst.onclick = () => {
+      const failed = persistence().save()
+      if (failed) return ui.toast(failed)
+      close(true)
+      run()
+    }
+    const leave = el("button", "frame danger", `${go} without saving`)
+    leave.onclick = () => {
+      close(true)
+      run()
+    }
+    actions.append(stay, saveFirst, leave)
+    card.append(actions)
+    confirmBox.append(card)
+    confirmBox.classList.add("open")
+    stay.focus()
+  }
+
+  const refreshTools = () => {
+    for (const { tool, button } of buttons) {
+      const on = tool.tool === "build" ? ui.menu === "build" || ui.tool === "place" || ui.tool === "ground" || ui.tool === "prop" || ui.tool === "upgrade" : tool.tool === ui.tool
+      button.classList.toggle("on", on)
+    }
+    townButton.classList.toggle("on", ui.menu === "town")
+  }
+  const choose = (tool: Tool) => {
+    ui.tool = tool
+    ui.dragFrom = null
+    if (tool !== "place") ui.placing = null
+    if (tool !== "upgrade") ui.upgrading = null
+    if (tool !== "select") ui.selected = null
+    refreshTools()
+  }
+  const toggleMenu = (menu: "build" | "town") => {
+    setFold(null)
+    ui.menu = ui.menu === menu ? null : menu
+    if (ui.menu) ui.selected = null
+    refreshTools()
+  }
+  const place = (kind: KindId) => {
+    ui.placing = kind
+    ui.menu = null
+    choose("place")
+    const title = kinds[kind].title.toLowerCase()
+    ui.toast(touchScreen() ? `Tap a spot for the ${title}, then tap it again to build it` : `Click to place a ${title} · Esc to stop`)
+  }
+  const layGround = (ground: GroundId) => {
+    ui.ground = ground
+    ui.menu = null
+    choose("ground")
+    const title = grounds[ground].title.toLowerCase()
+    ui.toast(touchScreen() ? `Drag a rectangle to lay ${title}, then tap Build` : `Drag a rectangle to lay ${title} · Esc to stop`)
+  }
+  const furnish = (prop: PropId) => {
+    ui.prop = prop
+    ui.menu = null
+    choose("prop")
+    const title = props[prop].title.toLowerCase()
+    ui.toast(touchScreen() ? `Tap a cell of park for the ${title}, then tap it again to set it` : `Click a cell of park to set a ${title} · Esc to stop`)
+  }
+  choose("select")
+
+  window.addEventListener("keydown", (event) => {
+    if (event.target instanceof HTMLElement && event.target.closest("input,select,textarea,[contenteditable=true]")) return
+    if (event.key === " " && event.target instanceof HTMLButtonElement) return
+    if (confirmBox.classList.contains("open") && event.key === "Escape") confirmBox.querySelector<HTMLButtonElement>(".primary")?.click()
+    if (shareBox.classList.contains("open") && event.key === "Escape") closeShare()
+    if (ui.founding || reckoning.classList.contains("open") || confirmBox.classList.contains("open") || shareBox.classList.contains("open") || visiting) return
+    if (event.key === " ") {
+      event.preventDefault()
+      setSpeed(ui.speed === 0 ? lastSpeed : 0)
+    }
+    if (event.key === "1") setSpeed(1)
+    if (event.key === "2") setSpeed(2)
+    if (event.key === "3") setSpeed(4)
+    if (event.key === "Escape") {
+      // A stroke being drawn or held is dropped first; the tool stays.
+      if (ui.dragFrom) input.cancelStroke()
+      else if (ui.tool !== "select") choose("select")
+      else if (ui.menu) ui.menu = null
+      else ui.selected = null
+      refreshTools()
+    }
+    const key = event.key.toLowerCase()
+    if (key === "s") choose("select")
+    if (key === "r") choose("road")
+    if (key === "p") choose("pave")
+    const viewKey = viewButtons.find((v) => v.key.toLowerCase() === key)
+    if (viewKey) setView(ui.view === viewKey.view ? "none" : viewKey.view)
+    if (key === "h") choose("home")
+    if (key === "x") choose("bulldoze")
+    if (key === "b") toggleMenu("build")
+    if (key === "t") toggleMenu("town")
+  })
+
+  // ── History, for the town panel's lines ──
+  interface Sample {
+    readonly coins: number
+    readonly residents: number
+    readonly stock: Readonly<Record<GoodId, number>>
+  }
+  /** One sample every `SAMPLE_SECONDS`, the last ten minutes of them. */
+  const history: Array<Sample> = []
+  const SAMPLE_SECONDS = 4
+  const HISTORY = 150
+  window.setInterval(() => {
+    const s = ui.stats
+    if (!s) return
+    history.push({ coins: s.coins, residents: s.settlers + s.citizens, stock: s.stock })
+    if (history.length > HISTORY) history.shift()
+  }, SAMPLE_SECONDS * 1000)
+
+  /** A thin ink line of `values`, scaled to its own range. */
+  const sparkline = (values: ReadonlyArray<number>): string => {
+    if (values.length < 2) return ""
+    const w = 300
+    const h = 36
+    const lo = Math.min(...values)
+    const hi = Math.max(...values)
+    const span = hi - lo || 1
+    const points = values
+      .map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - 2 - ((v - lo) / span) * (h - 4)).toFixed(1)}`)
+      .join(" ")
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="#3d4943" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`
+  }
+
+  // ── Pictures of buildings, for the build menu and the panel ──
+  const pictures = new Map<string, Promise<string>>()
+  /**
+   * A building (or a home of a tier) drawn as the town draws it, as an image.
+   * An upgraded market or chapel has no 2D drawing: its model is pictured
+   * from the town's camera instead (see `portrait`).
+   */
+  /**
+   * Pictures for the build menu and the panel. A building or a home is its 3D model, as the town draws it,
+   * turned to the town's camera (see `portrait`), so the picture matches what stands on the map; one model
+   * a frame, so a menu of them does not stall the page. A park piece is its drawing.
+   */
+  let portraits: Promise<unknown> = Promise.resolve()
+  const modelPicture = (make: () => Parameters<typeof portrait>[0]): Promise<string> => {
+    const url = portraits.then(() => new Promise<string>((done) => requestAnimationFrame(() => done(portrait(make())))))
+    portraits = url.catch(() => undefined)
+    return url
+  }
+  const both = { right: true, left: true }
+  const picture = (what: KindId | Tier | `park:${GroundId | PropId}`, level: number | boolean = 0): HTMLImageElement => {
+    const img = document.createElement("img")
+    img.className = "thumb"
+    img.alt = ""
+    const lvl = Number(level), upgraded = lvl > 0
+    const id = `${String(what)}${upgraded ? `/upgraded${lvl}` : ""}`
+    let url = pictures.get(id)
+    if (!url) {
+      // The model the map draws, as it stands: one source for the map and every picture of it.
+      url = modelPicture(() => pictureAsset(what, lvl))
+      pictures.set(id, url)
+    }
+    void url.then((src) => (img.src = src))
+    return img
+  }
+
+  // ── Panel ──
+  /** Volatile parts of the panel, updated in place without rebuilding it. */
+  let live: Array<() => void> = []
+  let shape = ""
+
+  /** A section of the panel, its heading with an icon; `help` is kept behind an ⓘ rather than spelled out. */
+  const section = (heading: string, glyph?: IconName, help?: string) => {
+    const box = el("section", "")
+    const h3 = el("h3", "")
+    if (glyph) h3.append(iconEl(glyph))
+    h3.append(document.createTextNode(heading))
+    box.append(h3)
+    if (help) {
+      const info = el("button", "help")
+      info.append(iconEl("info", 15))
+      info.title = "What this means"
+      info.setAttribute("aria-expanded", "false")
+      const text = el("p", "help-text", help)
+      info.onclick = () => {
+        const open = !text.classList.contains("open")
+        text.classList.toggle("open", open)
+        info.setAttribute("aria-expanded", String(open))
+      }
+      h3.append(info)
+      box.append(text)
+    }
+    return box
+  }
+  /**
+   * A slider for one of the town's levers. While it is held, the town's
+   * numbers do not move it back; `sync` sets it otherwise.
+   */
+  const slider = (min: number, max: number, step: number, onInput: (value: number) => void) => {
+    const input = el("input", "slider")
+    input.type = "range"
+    input.min = String(min)
+    input.max = String(max)
+    input.step = String(step)
+    let held = false
+    input.addEventListener("pointerdown", () => (held = true))
+    input.addEventListener("pointerup", () => (held = false))
+    input.addEventListener("blur", () => (held = false))
+    const paint = () => input.style.setProperty("--at", `${((Number(input.value) - min) / (max - min)) * 100}%`)
+    input.oninput = () => {
+      paint()
+      onInput(Number(input.value))
+    }
+    const sync = (value: number) => {
+      if (held || input.value === String(value)) return
+      input.value = String(value)
+      paint()
+    }
+    paint()
+    return { input, sync }
+  }
+  const header = (title: string, lead: HTMLElement, below?: HTMLElement) => {
+    const head = el("header", "")
+    const text = el("div", "title")
+    text.append(el("h2", "", title))
+    if (below) text.append(below)
+    const closeButton = el("button", "close")
+    closeButton.title = "Close (Esc)"
+    closeButton.append(iconEl("close", 18))
+    closeButton.onclick = () => {
+      ui.selected = null
+      ui.menu = null
+      refreshTools()
+    }
+    head.append(lead, text, closeButton)
+    return head
+  }
+
+  const lockText = (kind: Pick<Kind, "unlock"> | ParkPiece): string | null => {
+    const s = ui.stats
+    if (!s) return null
+    const residents = s.settlers + s.citizens
+    if (residents < kind.unlock.residents) return `needs ${kind.unlock.residents} residents`
+    if (s.citizens < kind.unlock.citizens) return `needs ${kind.unlock.citizens} citizens`
+    return null
+  }
+
+  /** A cost as icon chips, each marked when the town is short of it. */
+  const costChips = (cost: Kind["cost"]) => {
+    const box = el("span", "chips")
+    const chips: Array<{ chip: HTMLElement; short: () => boolean }> = []
+    if (cost.coins > 0) {
+      const chip = el("span", "chip")
+      chip.innerHTML = `${icon("coins", 14)}${cost.coins}`
+      chips.push({ chip, short: () => (ui.stats?.coins ?? 0) < cost.coins })
+    }
+    for (const [g, n] of Object.entries(cost.materials) as Array<[GoodId, number]>) {
+      const chip = el("span", "chip")
+      chip.title = goods[g].title
+      chip.innerHTML = `${goodIcon(g, 14)}${n}`
+      chips.push({ chip, short: () => (ui.stats?.stock[g] ?? 0) < n })
+    }
+    box.append(...chips.map((c) => c.chip))
+    const refresh = () => {
+      let short = false
+      for (const c of chips) {
+        const now = c.short()
+        c.chip.classList.toggle("short", now)
+        short ||= now
+      }
+      return short
+    }
+    return { box, refresh }
+  }
+
+  const categoryIcon: Readonly<Record<Category, IconName>> = {
+    storage: "jobs",
+    gathering: "wood",
+    crafts: "tools",
+    food: "bread",
+    services: "faith"
+  }
+
+  const buildMenu = () => {
+    panel.append(header("build", iconEl("build", 30), el("p", "sub", touchScreen() ? "Pick one, then tap the map where it goes" : "Pick one, then click the map · Esc to stop")))
+    for (const category of categoryOrder) {
+      const options = kindOrder.filter((id) => kinds[id].category === category && kinds[id].buildable)
+      if (options.length === 0) continue
+      const box = section(category, categoryIcon[category])
+      box.style.borderTop = `3px solid ${hex(categoryColor[category])}`
+      for (const id of options) {
+        const kind = kinds[id]
+        const option = el("button", "option")
+        const cost = costChips(kind.cost)
+        cost.box.prepend(el("span", "cap", "cost"))
+        const terms = el("span", "chips")
+        const r = kind.recipe
+        const does = [
+          r ? `<span class="chip" title="${r.input ? `turns ${r.inputs} ${goods[r.input].title} into ${r.batch} ${goods[r.output].title}` : `makes ${r.batch} ${goods[r.output].title}`} every ${r.seconds} s">${r.input ? `${goodIcon(r.input, 14)}<i>→</i>` : ""}${goodIcon(r.output, 14)}${r.batch > 1 ? r.batch : ""}</span>` : "",
+          kind.service ? `<span class="chip" title="its walkers serve the homes within ${kind.service.range} road cells of its door">${icon(kind.service.service === "goods" ? "trade" : kind.service.service === "faith" ? "faith" : kind.service.service === "repair" ? "repair" : kind.service.service, 14)}${kind.service.range}</span>` : "",
+          kind.holds && !kind.recipe && !kind.service ? `<span class="chip" title="holds up to ${kind.holds.cap} of each good${kind.keeps ? `, and keeps food ${kind.keeps} times as long` : ""}">${icon("jobs", 14)}${kind.holds.cap}</span>` : "",
+          kind.workers > 0 ? `<span class="chip dim" title="${kind.workers} ${kind.crew} to work it, from homes within 15 road cells">${icon(kind.crew === "citizens" ? "citizens" : "settlers", 14)}${kind.workers}</span>` : "",
+          kind.appeal ? `<span class="chip ${kind.appeal.value < 0 ? "bad" : "good"}" title="desirability ${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value} beside it, out to ${kind.appeal.reach} cells${kind.appeal.value < 0 ? ": keep homes away" : ": homes like it"}">${icon("appeal", 14)}${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value}</span>` : "",
+          `<span class="chip dim" title="upkeep: coins a minute while it stands (a quarter when paused)">${icon("upkeep", 14)}${kind.upkeep}/min</span>`
+        ].join("")
+        terms.innerHTML = `<span class="cap">does</span>${does}`
+        const blurb = el("span", "blurb", kind.blurb)
+        option.append(picture(id), el("span", "name", kind.title.toLowerCase()), cost.box, terms, blurb)
+        option.title = `${kind.title}: ${kind.blurb}${kind.workers > 0 ? ` · ${kind.workers} ${kind.crew === "citizens" ? "citizen" : "settler"} workers from within 15 road cells` : ""}${kind.service ? ` · walkers reach ${kind.service.range} road cells` : ""}${kind.appeal ? ` · desirability ${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value} out to ${kind.appeal.reach} cells` : ""} · ${kind.upkeep} coins a minute`
+        option.onclick = () => place(id)
+        live.push(() => {
+          const lock = lockText(kind)
+          const short = cost.refresh()
+          option.disabled = lock !== null
+          option.classList.toggle("short", lock === null && short)
+          blurb.textContent = lock ?? kind.blurb
+        })
+        box.append(option)
+      }
+      panel.append(box)
+    }
+    // Parks are laid out piece by piece: ground first, then what stands on it.
+    const parks = section(
+      "parks",
+      "decor",
+      `Lay ground, then set furnishings on it. Ground that touches is one park: the more it holds the nicer the streets around it (citizens need ${home.tiers[2].appeal}, townhouses ${home.tiers[3].appeal}). One furnishing counts for every ${parkRules.cellsPerProp} cells; where parks meet, the finest counts in full.`
+    )
+    parks.style.borderTop = "3px solid #4f9a6a"
+    const pieces: ReadonlyArray<{ readonly id: GroundId | PropId; readonly piece: ParkPiece; readonly pick: () => void; readonly ground: boolean }> = [
+      ...groundIds.map((id) => ({ id, piece: grounds[id], pick: () => layGround(id), ground: true })),
+      ...propIds.map((id) => ({ id, piece: props[id], pick: () => furnish(id), ground: false }))
+    ]
+    for (const { id, piece, pick, ground } of pieces) {
+      if (ground && id === "lawn") parks.append(el("p", "empty", "ground · drag a rectangle"))
+      if (!ground && id === "lamp") parks.append(el("p", "empty", "furnishings · click a cell of park"))
+      const option = el("button", "option")
+      const cost = costChips(piece.cost)
+      cost.box.prepend(el("span", "cap", "cost"))
+      const terms = el("span", "chips")
+      terms.innerHTML = `<span class="cap">does</span><span class="chip good" title="beauty it adds to its park">${icon("appeal", 14)}+${piece.beauty}</span><span class="chip dim" title="upkeep, coins a minute">${icon("upkeep", 14)}${piece.upkeep}/min</span>`
+      const blurb = el("span", "blurb", piece.blurb)
+      option.append(picture(`park:${id}`), el("span", "name", piece.title.toLowerCase()), cost.box, terms, blurb)
+      option.title = `${piece.title}: ${piece.blurb} · beauty +${piece.beauty}${ground ? " a cell" : ""} · ${piece.upkeep} coins a minute`
+      option.onclick = pick
+      live.push(() => {
+        const lock = lockText(piece)
+        const short = cost.refresh()
+        option.disabled = lock !== null
+        option.classList.toggle("short", lock === null && short)
+        option.classList.toggle("on", (ground ? ui.tool === "ground" && ui.ground === id : ui.tool === "prop" && ui.prop === id))
+        blurb.textContent = lock ?? piece.blurb
+      })
+      parks.append(option)
+    }
+    panel.append(parks)
+  }
+
+  const row = (box: HTMLElement, label: string, glyph?: IconName | GoodId) => {
+    const line = el("div", "row")
+    const value = el("span", "count")
+    const name = el("span", "label")
+    if (glyph) name.innerHTML = icon(glyph, 16)
+    name.append(document.createTextNode(label))
+    line.append(name, value)
+    box.append(line)
+    return value
+  }
+  /** Sets a number with its sign, coloured by it. */
+  const money = (node: HTMLElement, n: number, suffix = "") => {
+    node.textContent = `${signed(n)}${suffix}`
+    node.classList.toggle("up", n > 0)
+    node.classList.toggle("down", n < 0)
+  }
+
+  const townPanel = () => {
+    const sub = el("p", "sub")
+    panel.append(header("town", iconEl("town", 30), sub))
+
+    // The town's rank, the goals that raise it to the next, and how near each one is.
+    const goals = section(
+      "goals",
+      "goal",
+      "The town rises from a hamlet to a village, a town, and a city. Meet every goal of the next rank at once and hold them for two minutes: the crown sends a reward, and the game goes on. A rank is never lost."
+    )
+    const goalRows: Array<{ line: HTMLElement; mark: HTMLElement; text: HTMLElement; value: HTMLElement }> = []
+    const goalNote = el("p", "empty")
+    panel.append(goals)
+
+    const mood = section(
+      "approval",
+      "approval",
+      `Homes hold more residents when approval is high and fewer when it is low. At −50 for two minutes, the town turns the mayor out.`
+    )
+    const moodLine = el("div", "row")
+    const moodValue = el("span", "count total")
+    moodLine.append(el("span", "label", "now → heading for"), moodValue)
+    const moodTrack = el("div", "meter")
+    const moodFill = el("span", "fill")
+    moodTrack.append(moodFill)
+    const moodParts = el("div", "")
+    mood.append(moodLine, moodTrack, moodParts)
+    panel.append(mood)
+
+    const treasury = section(
+      "treasury",
+      "treasury",
+      "Coins a minute. Taxes come only from homes that are fed, in proportion to the needs they have met. Administration is reckoned by the home and grows faster than the town: in a large town another cottage costs about what it pays, while a citizens' home or a townhouse holds two or three times the people for the same cost. Three minutes in debt and the town is bankrupt."
+    )
+    const taxes = row(treasury, "taxes", "taxes")
+    const supplied = row(treasury, "if every home were supplied", "homes")
+    supplied.classList.add("dim")
+    const suppliedNote = el("p", "empty")
+    treasury.append(suppliedNote)
+    const traded = row(treasury, "trade", "trade")
+    const upkeep = row(treasury, "upkeep", "upkeep")
+    const admin = row(treasury, "administration", "town")
+    const net = row(treasury, "a minute", "coins")
+    net.classList.add("total")
+    const coinLine = el("div", "spark")
+    treasury.append(coinLine)
+    panel.append(treasury)
+
+    const levers = section(
+      "tax rates",
+      "taxes",
+      `Lower taxes raise approval, higher ones lower it, weighed by how many of each tier there are. Above 100% some residents also move away, settlers sooner than citizens, so a higher rate does not always bring in more: under each rate is what the homes would pay at each step once they settle there. Above ${moodRules.grudge.above}% the town also keeps a grudge that outlasts the rate: cutting taxes at the end does not undo a term of squeezing.`
+    )
+    for (const tier of ["settlers", "citizens"] as const) {
+      const line = el("div", "row lever")
+      const value = el("span", "rate")
+      const name = el("span", "label")
+      name.innerHTML = icon(tier, 16)
+      name.append(document.createTextNode(tier))
+      line.append(name, value)
+      const rate = slider(TAX_STEPS[0], TAX_STEPS.at(-1)!, 5, (to) => ui.edits.push({ type: "tax", tier, rate: to }))
+      rate.input.classList.add("tax")
+      rate.input.title = "Drag to set the rate; double-click for the usual 100%"
+      rate.input.ondblclick = () => ui.edits.push({ type: "tax", tier, rate: 100 })
+      const effect = el("p", "effect")
+      const outlook = el("p", "effect outlook")
+      outlook.title = "Taxes a minute from every home if this rate stayed there and the homes settled: residents move away above 100%, and approval follows the rate"
+      levers.append(line, rate.input, effect, outlook)
+      live.push(() => {
+        const now = ui.stats?.policy[tier] ?? 100
+        rate.sync(now)
+        value.textContent = `${now}%`
+        const sway = Math.round((100 - now) * moodRules.perTaxPoint)
+        const grudge = now > moodRules.grudge.above ? " · a grudge builds while it stays this high, and fades slowly" : ""
+        effect.textContent = (sway === 0 ? "the usual rate" : `${signed(sway)} approval`) + grudge
+        effect.className = `effect ${sway > 0 ? "up" : sway < 0 ? "down" : ""}`
+        const steps = ui.stats?.taxOutlook[tier] ?? []
+        const best = steps.reduce<{ rate: number; taxes: number } | null>((b, o) => (b === null || o.taxes > b.taxes ? o : b), null)
+        const text = steps.length === 0 || best === null
+          ? ""
+          : `taxes a minute, once settled: ${steps.map((o) => `${o.rate}% ${o.taxes}`).join(" · ")} · most at ${best.rate}%`
+        if (outlook.textContent !== text) outlook.textContent = text
+        outlook.style.display = text ? "" : "none"
+      })
+    }
+    panel.append(levers)
+
+    const town = section("people", "people")
+    const settlers = row(town, "settlers", "settlers")
+    const citizens = row(town, "citizens", "citizens")
+    const burghers = row(town, "of them, burghers", "burghers")
+    const homes = row(town, "homes", "homes")
+    const work = row(town, "jobs filled", "jobs")
+    const workNote = el("p", "empty")
+    town.append(workNote)
+    const peopleLine = el("div", "spark")
+    town.append(peopleLine)
+    panel.append(town)
+
+    const needs = section(
+      "homes supplied",
+      "homes",
+      "A hungry home pays no taxes. Settlers need food (fish, smoked fish, or bread) from a market, and a cottage with bread besides pays half again; a visit feeds a home a fish or a loaf for every four residents, so a citizens' home eats twice what a cottage does and a townhouse three times; citizens and burghers need bread, cloth, and faith, and burghers furniture from a carpenter besides. Cloth is only brought to streets with desirability 5 or more, furniture to streets of 12 or more. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
+    )
+    const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith" | "furniture", IconName>> = {
+      food: "fish",
+      bread: "bread",
+      cloth: "cloth",
+      faith: "faith",
+      furniture: "furniture"
+    }
+    const bars = (["food", "bread", "cloth", "faith", "furniture"] as const).map((n) => {
+      const line = el("div", "need")
+      // The icon alone says which need: the name is its tooltip, so no word runs under the bar.
+      const label = el("span", "label")
+      label.innerHTML = icon(needIcons[n], 16)
+      label.title = needTitle[n]
+      label.setAttribute("aria-label", needTitle[n])
+      const track = el("span", "track")
+      const fill = el("span", "fill")
+      track.append(fill)
+      const value = el("span", "count")
+      line.append(label, track, value)
+      needs.append(line)
+      return { n, fill, value }
+    })
+    const larderLine = row(needs, "food in store", "flour")
+    const eatenLine = row(needs, "eaten · rotted last minute", "fish")
+    const troubleLine = row(needs, "sick homes · on fire", "health")
+    panel.append(needs)
+
+    const crown = section(
+      "the crown",
+      "crown",
+      `Sending what the crown asks for earns coins. A missed request is a fine, and the town remembers the snub for a while; too many missed in a row and the crown dismisses the mayor.`
+    )
+    const crownLine = row(crown, "requests met · missed", "goal")
+    const crownNext = el("p", "empty")
+    crown.append(crownNext)
+    panel.append(crown)
+
+    const store = section(
+      "goods and trade",
+      "trade",
+      "Traders call every few seconds. Drag a good's slider left to sell it beyond what the town keeps, right to buy it up to that (at half again the price), the further the more each call; the middle neither sells nor buys. Prices fall as the town sells and rise, three times as fast, as it buys; a dear price calms only slowly, so buying tops up a shortfall but a town fed on bought food pays more every minute."
+    )
+    const reserveLine = el("div", "row lever")
+    const reserveValue = el("span", "rate")
+    reserveLine.append(el("span", "label", "keep in store"), reserveValue)
+    const reserve = slider(0, RESERVE_MAX, 5, (amount) => ui.edits.push({ type: "reserve", amount }))
+    reserve.input.title = "How much of each good the town keeps: it sells only beyond this, and buys only up to it"
+    store.append(reserveLine, reserve.input, el("p", "effect", "of each good: sold only above this, bought only up to it"))
+    /** Collections a minute: the traders come at every ledger. */
+    const perMinute = 60 / (LEDGER_TICKS * step.dt)
+    const goodRows = goodIds.map((g) => {
+      const line = el("div", "trade-row")
+      const name = el("span", "label")
+      name.innerHTML = goodIcon(g, 16)
+      name.append(document.createTextNode(goods[g].title))
+      const value = el("span", "count")
+      const price = el("span", "price")
+      const top = el("div", "row")
+      const change = el("small", "change")
+      const right = el("span", "label")
+      right.append(change, value, price)
+      top.append(name, right)
+      // Left of the middle sells, right of it buys, the middle neither; how far out is how much a collection.
+      const deal = slider(-TRADE_LOAD, TRADE_LOAD, 1, (v) =>
+        ui.edits.push(v === 0 ? { type: "trade", good: g, mode: "none" } : { type: "trade", good: g, mode: v < 0 ? "sell" : "buy", amount: Math.abs(v) })
+      )
+      deal.input.classList.add("deal")
+      deal.input.title = `Drag left to sell ${goods[g].title}, right to buy it; the further, the more each time the traders call. Double-click to stop trading it.`
+      deal.input.ondblclick = () => ui.edits.push({ type: "trade", good: g, mode: "none" })
+      const mode = el("span", "mode")
+      const bottom = el("div", "deal-line")
+      bottom.append(deal.input, mode)
+      line.append(top, bottom)
+      store.append(line)
+      return { g, value, change, mode, price, deal, line }
+    })
+    panel.append(store)
+
+    const chronicle = section("chronicle", "chronicle")
+    const lines = el("div", "chronicle")
+    chronicle.append(lines)
+    panel.append(chronicle)
+
+    live.push(() => {
+      const s = ui.stats
+      if (!s) return
+      sub.textContent = `${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · a ${s.fate.rankTitle} · term ${s.fate.term}, ${s.charter.term} minutes`
+      sub.title = `seed ${s.charter.seed}`
+      // Goals.
+      while (goalRows.length < s.goals.length) {
+        const line = el("div", "row goal")
+        const mark = el("span", "mark", "✓")
+        const text = el("span", "")
+        const value = el("span", "count")
+        const left = el("span", "label")
+        left.append(mark, text)
+        line.append(left, value)
+        goals.append(line)
+        goalRows.push({ line, mark, text, value })
+      }
+      goals.append(goalNote)
+      goalRows.forEach((r, i) => (r.line.style.display = i < s.goals.length ? "" : "none"))
+      s.goals.forEach((g, i) => {
+        const r = goalRows[i]!
+        r.line.classList.toggle("met", g.met)
+        r.text.textContent = g.text
+        r.value.textContent = g.value
+      })
+      goalNote.textContent = s.fate.nextTitle === null
+        ? `A ${s.fate.rankTitle}, the highest rank: keep it standing, term after term.`
+        : s.fate.rises !== null
+          ? `All met: hold them ${clockText(s.fate.rises)} more and the ${s.fate.rankTitle} is a ${s.fate.nextTitle}.`
+          : `A ${s.fate.rankTitle} now: these make it a ${s.fate.nextTitle}.`
+      goalNote.style.display = goalNote.textContent ? "" : "none"
+      // Approval.
+      moodValue.textContent = `${signed(s.mood.approval)} → ${signed(s.mood.target)}`
+      moodValue.classList.toggle("down", s.mood.approval < 0)
+      moodFill.style.left = `${Math.min(50, 50 + s.mood.approval / 2)}%`
+      moodFill.style.width = `${Math.abs(s.mood.approval) / 2}%`
+      moodFill.classList.toggle("low", s.mood.approval < 0)
+      const parts = s.mood.parts
+        .map(
+          (p) =>
+            `<div class="row"><span class="label">${p.label}</span><span class="count ${p.value > 0 ? "up" : p.value < 0 ? "down" : ""}">${signed(p.value)}</span></div>`
+        )
+        .join("")
+      if (moodParts.dataset.html !== parts) {
+        moodParts.dataset.html = parts
+        moodParts.innerHTML = parts
+      }
+      money(taxes, s.taxes)
+      supplied.textContent = `+${s.suppliedTaxes}`
+      const gap = s.suppliedTaxes - s.taxes
+      suppliedNote.textContent = gap > Math.max(10, s.taxes * 0.1) ? `${gap} coins a minute left on the table: a hungry home pays nothing, a cottage with bread pays half again, a fine street a quarter more` : ""
+      suppliedNote.style.display = suppliedNote.textContent ? "" : "none"
+      money(traded, s.trade)
+      money(upkeep, -s.upkeep)
+      money(admin, -s.admin)
+      money(net, s.net, " coins")
+      settlers.textContent = String(s.settlers)
+      citizens.textContent = String(s.citizens)
+      burghers.textContent = String(s.burghers)
+      homes.textContent = String(s.homes)
+      work.textContent = `${s.employed} of ${s.jobs}`
+      workNote.textContent = s.shortStaffed.length === 0
+        ? "every workplace has its crew"
+        : `${s.shortStaffed.length} short of workers: ${s.shortStaffed.slice(0, 4).map((w) => `${w.title} ${w.assigned}/${w.needed}${w.nobodyNear ? " (nobody within reach)" : ""}`).join(", ")}${s.shortStaffed.length > 4 ? ", …" : ""} · click the jobs counter to visit them`
+      for (const b of bars) {
+        // Furniture is counted against the townhouses: no other home keeps it.
+        const of = b.n === "furniture" ? Math.max(s.townhouses, s.needs.furniture) : s.homes
+        const share = of > 0 ? s.needs[b.n] / of : 0
+        b.fill.style.width = `${Math.round(share * 100)}%`
+        b.fill.className = `fill ${of === 0 ? "" : share < 0.34 ? "none" : share < 0.67 ? "low" : ""}`
+        b.value.textContent = `${s.needs[b.n]}/${of}`
+      }
+      larderLine.textContent = `${s.larder}`
+      eatenLine.textContent = `${s.eaten} · ${s.rotted}`
+      troubleLine.textContent = `${s.sick} · ${s.burning}`
+      crownLine.textContent = `${s.crown.met} · ${s.crown.missed}`
+      crownNext.innerHTML = s.crown.open
+        ? `Wants <b>${s.crown.amount} ${goods[s.crown.good].title}</b> · ${clockText(s.crown.left)} left · +${s.crown.reward} coins`
+        : `Next request in ${clockText(s.crown.next)} · ${s.crown.patience} missed in a row ends the term`
+      // Goods' change over the last minute of samples.
+      const ago = history[Math.max(0, history.length - 1 - Math.round(60 / SAMPLE_SECONDS))]
+      reserveValue.textContent = String(s.policy.reserve)
+      reserve.sync(s.policy.reserve)
+      for (const r of goodRows) {
+        const change = ago ? s.stock[r.g] - ago.stock[r.g] : 0
+        r.change.textContent = change !== 0 ? `${change > 0 ? "+" : ""}${change}/min` : ""
+        r.change.className = `change ${change > 0 ? "up" : "down"}`
+        r.value.textContent = String(s.stock[r.g])
+        const now: TradeMode = s.policy.sells.includes(r.g) ? "sell" : s.policy.buys.includes(r.g) ? "buy" : "none"
+        const load = s.policy.loads[r.g]
+        r.deal.sync(now === "sell" ? -load : now === "buy" ? load : 0)
+        r.mode.textContent = now === "none" ? "no trade" : `${now} ≤${Math.round(load * perMinute)}/min`
+        r.mode.className = `mode ${now}`
+        r.line.className = `trade-row ${now}`
+        const price = now === "buy" ? askOf(r.g, s.prices[r.g]) : Math.round(priceOf(r.g, s.prices[r.g]) * 10) / 10
+        r.price.textContent = `${price}c${s.prices[r.g] !== 100 ? ` (${s.prices[r.g]}%)` : ""}`
+        r.price.title = now === "buy" ? "what traders ask for one" : "what traders pay for one"
+      }
+      const samples = s.history
+      const coinsSvg = sparkline(samples.map((h) => h.coins))
+      if (coinLine.dataset.svg !== coinsSvg) {
+        coinLine.dataset.svg = coinsSvg
+        coinLine.innerHTML = coinsSvg
+      }
+      const peopleSvg = sparkline(samples.map((h) => h.residents))
+      if (peopleLine.dataset.svg !== peopleSvg) {
+        peopleLine.dataset.svg = peopleSvg
+        peopleLine.innerHTML = peopleSvg
+      }
+      const recent = s.chronicle
+        .slice(-10)
+        .reverse()
+        .map((l) => `<p><b>${clockText(Math.round(l.tick / 60))}</b> ${l.text}</p>`)
+        .join("")
+      if (lines.dataset.html !== recent) {
+        lines.dataset.html = recent
+        lines.innerHTML = recent
+      }
+    })
+  }
+
+  /** A line of a description as a row: its icon and what it is about, its value, any goods as chips, and a note underneath saying why. */
+  const renderLine = (row: HTMLElement, l: Line) => {
+    // Every row the same way: what on the left, its value on the right, any note under both.
+    row.className = `line ${l.tone ?? ""}`
+    const chips = l.goods ? `<span class="chips">${l.goods.map((g) => `<span class="chip" title="${goods[g.good].title}">${goodIcon(g.good, 14)}${g.count}</span>`).join("")}</span>` : ""
+    // Goods take the value's place: chips on the right.
+    row.innerHTML = `<span class="mark">${icon(l.icon, 16)}</span><span class="what"></span>${chips || `<span class="count"></span>`}${l.note ? `<small class="note"></small>` : ""}`
+    row.querySelector<HTMLElement>(".what")!.textContent = l.label
+    if (!chips) row.querySelector<HTMLElement>(".count")!.innerHTML = iconize(escapeHtml(l.value ?? ""))
+    if (l.note) row.querySelector<HTMLElement>(".note")!.innerHTML = iconize(escapeHtml(l.note))
+    // What to do about it, on a row of its own: a building to place shows its picture, and the row places one.
+    if (l.fix) {
+      const build = l.fix.build && kinds[l.fix.build].buildable ? l.fix.build : undefined
+      const fix = el(build ? "button" : "div", "fix")
+      if (build) {
+        fix.dataset.build = build
+        fix.title = `Build a ${kinds[build].title.toLowerCase()}`
+        fix.append(picture(build))
+      } else fix.append(iconEl("hint", 14))
+      const text = el("span", "do")
+      text.innerHTML = iconize(callouts(l.fix.text))
+      fix.append(text)
+      row.append(fix)
+    }
+  }
+  /** Keeps a box of rows in step with its lines, touching only the rows that changed. */
+  const syncLines = (box: HTMLElement, rows: Array<HTMLElement>, lines: ReadonlyArray<Line>) => {
+    while (rows.length < lines.length) {
+      const line = el("div", "line")
+      rows.push(line)
+      box.append(line)
+    }
+    rows.forEach((row, i) => {
+      const l = lines[i]
+      const text = l ? JSON.stringify(l) : ""
+      if (row.dataset.text === text) return
+      row.dataset.text = text
+      row.style.display = l ? "" : "none"
+      if (l) renderLine(row, l)
+    })
+  }
+
+  /** What upgrading a building would give and cost, said in full before the mayor pays for it, with the button that begins it. */
+  /** An upgrade's gain as a row: what changes, on the left; from what to what, on the right. */
+  const gainLine = (change: string): Line => {
+    const at = change.search(/[+−-]?\d/)
+    const label = at > 0 ? change.slice(0, at).trim() : change, rest = at > 0 ? change.slice(at) : undefined
+    // "+6 → +8, out to 6 cells": the change on the right, what qualifies it under it.
+    const [value, note] = rest?.includes(", ") ? [rest.slice(0, rest.indexOf(", ")), rest.slice(rest.indexOf(", ") + 2)] : [rest, undefined]
+    const glyph: IconName =
+      /^holds/.test(change) ? "build" : /^carriers/.test(change) ? "trade" : /^walker|^a walker/.test(change) ? "people"
+      : /^administration/.test(change) ? "taxes" : /^desirability/.test(change) ? "appeal" : /^workers/.test(change) ? "workers"
+      : /^firefighters/.test(change) ? "fire" : /rock/.test(change) ? "stone" : /a minute/.test(change) ? "jobs" : "goal"
+    return { icon: glyph, label, value, note, tone: "ok" }
+  }
+  /**
+   * What upgrading a building would cost and give, said in full before the mayor pays: what is paid now, what
+   * carriers bring later and the upkeep after; then what it gives. The button that begins it comes last, alone.
+   */
+  const upgradeBox = (offer: NonNullable<Extract<Panel, { type: "building" }>["upgrade"]>) => {
+    const box = section(`upgrade to ${offer.title.toLowerCase()}`, "build", offer.blurb)
+    box.classList.add("lines", "upgrade")
+    // Why the town needs it now (the gold arrow over it), or that it can wait.
+    const needed = el("p", "needed", "")
+    const pays = el("div", "part"), gets = el("div", "part")
+    const payRows: Array<HTMLElement> = [], getRows: Array<HTMLElement> = []
+    const upkeep = offer.changes.find((c) => c.startsWith("upkeep"))
+    syncLines(gets, getRows, offer.changes.filter((c) => c !== upkeep).map(gainLine))
+    const begin = el("button", "frame primary", `Begin the ${offer.title.toLowerCase()}`)
+    begin.onclick = () => {
+      const now = ui.panel
+      if (now?.type === "building") ui.edits.push({ type: "upgrade", cell: now.cell })
+    }
+    const why = el("p", "sub", "")
+    live.push(() => {
+      const now = ui.panel
+      if (now?.type !== "building" || !now.upgrade) return
+      needed.textContent = now.upgrade.needed ? `needed now: ${now.upgrade.needed}` : "not needed yet: the gold arrow shows when it is"
+      needed.classList.toggle("now", now.upgrade.needed !== null)
+      const coins = ui.stats?.coins ?? 0, stock = ui.stats?.stock
+      const materials = (Object.entries(offer.cost.materials) as Array<[GoodId, number]>).filter(([, n]) => n > 0)
+      const lacking = materials.filter(([g, n]) => (stock?.[g] ?? 0) < n).map(([g, n]) => `${n - (stock?.[g] ?? 0)} ${goods[g].title}`)
+      syncLines(pays, payRows, [
+        { icon: "coins", label: "now, to begin", value: `${offer.cost.coins} coins`, tone: coins < offer.cost.coins ? "bad" : undefined,
+          note: coins < offer.cost.coins ? `${offer.cost.coins - coins} coins short` : undefined },
+        ...(materials.length > 0
+          ? [{ icon: "trade", label: "later, carried in", goods: materials.map(([good, count]) => ({ good, count })), tone: lacking.length > 0 ? "warn" : undefined,
+              note: lacking.length > 0 ? `the store lacks ${lacking.join(", ")}: the works wait for them` : "from the store: the works go on as they come" } as Line]
+          : []),
+        ...(upkeep ? [{ icon: "upkeep", label: "upkeep after", value: upkeep.replace(/^upkeep /, "") } as Line] : [])
+      ])
+      begin.disabled = now.upgrade.blocked !== null || now.upgrade.short !== null
+      why.textContent = now.upgrade.blocked ?? now.upgrade.short ?? "it goes on working while the works go on, and scaffolding rises inside its plot"
+    })
+    const footer = el("div", "begin")
+    footer.append(begin, why)
+    box.append(needed, el("p", "cap", "you pay"), pays, el("p", "cap", "you get"), gets, footer)
+    return box
+  }
+
+  const buildPanel = () => {
+    const p = ui.panel
+    live = []
+    panel.replaceChildren()
+    if (!p) return
+    if (p.type === "build") return buildMenu()
+    if (p.type === "town") return townPanel()
+
+    const title = p.type === "building" ? p.title.toLowerCase() : p.type === "house" ? tierHome[p.tier] : p.type === "park" ? "park" : "ruin"
+    const status = el("span", "pill")
+    const about = el(
+      "p",
+      "sub",
+      p.type === "building"
+        ? p.blurb
+        : p.type === "ruin"
+          ? "bulldoze it to clear the plot"
+          : p.type === "park"
+            ? "every cell of ground that touches this one: lay more, or set furnishings on it, to make the streets around it nicer"
+          : p.tier === 1
+            ? "settlers live here and do the rough work"
+            : p.tier === 2
+              ? "citizens live here, do the skilled work, and pay twice as much"
+              : "burghers live here, and pay the best taxes"
+    )
+    const below = el("div", "")
+    // A building says how it is in a box of its own, under the header; a home, a park, or a ruin in a word here.
+    if (p.type === "building") below.append(about)
+    else below.append(status, about)
+    panel.append(header(title, p.type === "ruin" ? iconEl("condition", 30) : p.type === "park" ? iconEl("decor", 30) : picture(p.type === "building" ? p.kind : p.tier, p.type === "building" ? p.level : 0), below))
+    // A building: how it is first, and what to do about it; then its upgrade, when it has one to offer.
+    if (p.type === "building") {
+      const box = section("status", p.problem !== null ? "warning" : "jobs")
+      box.classList.add("lines", "state")
+      const rows: Array<HTMLElement> = []
+      live.push(() => {
+        const now = ui.panel
+        if (now?.type !== "building") return
+        box.classList.toggle("trouble", now.problem !== null)
+        syncLines(box, rows, [now.state])
+      })
+      panel.append(box)
+    }
+    if (p.type === "building" && p.upgrade) panel.append(upgradeBox(p.upgrade))
+    // A building or a home: its rows in boxes under headings, kept in step with what the town says each frame.
+    // A park or a ruin: one box.
+    const holder = el("div", "")
+    panel.append(holder)
+    const slots: Array<{ box: HTMLElement; rows: Array<HTMLElement>; key: string }> = []
+    const syncGroups = (groups: ReadonlyArray<Group>) => {
+      groups.forEach((g, i) => {
+        const key = `${g.title}|${g.icon}|${g.help ?? ""}`
+        let slot = slots[i]
+        if (!slot || slot.key !== key) {
+          const box = section(g.title, g.icon, g.help)
+          box.classList.add("lines")
+          const fresh = { box, rows: [] as Array<HTMLElement>, key }
+          if (slot) slot.box.replaceWith(box)
+          else holder.append(box)
+          slots[i] = fresh
+          slot = fresh
+        }
+        slot.box.style.display = ""
+        syncLines(slot.box, slot.rows, g.lines)
+      })
+      for (const extra of slots.slice(groups.length)) extra.box.style.display = "none"
+    }
+    live.push(() => {
+      const now = ui.panel
+      if (!now || now.type === "build" || now.type === "town" || now.type !== p.type) return
+      if (now.type === "building") {
+        status.textContent = now.problem ?? now.status
+        status.className = `pill ${now.problem !== null ? "problem" : now.status === "working" ? "working" : ""}`
+        syncGroups(now.groups)
+      } else if (now.type === "house") {
+        status.textContent = now.summary
+        status.className = `pill ${now.trouble ? "problem" : "working"}`
+        syncGroups(now.groups)
+      } else if (now.type === "park") {
+        status.textContent = `${now.value > 0 ? "+" : ""}${now.value} out to ${now.reach} cells`
+        status.className = "pill working"
+        syncGroups([{ title: "what makes it", icon: "appeal", lines: now.lines }])
+      } else {
+        status.textContent = now.cause
+        status.className = "pill problem"
+        syncGroups([{ title: "what is left", icon: "condition", lines: now.lines }])
+      }
+    })
+    if (p.type === "building" && p.kind === "townhall") return
+    {
+      const actions = el("div", "actions")
+      if (p.type === "building") {
+        const pause = el("button", "frame", "Pause work")
+        pause.title = "A paused building has no workers and pays a quarter of its upkeep"
+        pause.onclick = () => {
+          const now = ui.panel
+          if (now?.type === "building") ui.edits.push({ type: "pause", cell: now.cell, on: !now.paused })
+        }
+        live.push(() => {
+          const now = ui.panel
+          if (now?.type !== "building") return
+          pause.textContent = now.paused ? "Resume work" : "Pause work"
+          pause.style.display = now.pausable ? "" : "none"
+        })
+        actions.append(pause)
+      }
+      if (p.type === "house") {
+        const close = el("button", "frame", "Close home")
+        close.title = "A closed home stands empty: no taxes, and no cost to the town hall's administration. Reopen it and settlers move back in."
+        close.onclick = () => {
+          const now = ui.panel
+          if (now?.type === "house") ui.edits.push({ type: "pause", cell: now.cell, on: !now.closed })
+        }
+        live.push(() => {
+          const now = ui.panel
+          if (now?.type !== "house") return
+          close.textContent = now.closed ? "Reopen home" : "Close home"
+          close.style.display = now.closable ? "" : "none"
+        })
+        actions.append(close)
+      }
+      const remove = el("button", "frame danger", "Remove")
+      remove.onclick = () => ui.edits.push({ type: "remove", cell: p.cell })
+      live.push(() => {
+        const now = ui.panel
+        remove.title = now?.type === "building" || now?.type === "house" ? now.salvage : ""
+      })
+      actions.append(remove)
+      panel.append(actions)
+    }
+  }
+
+  /** Rebuilds the panel when what it shows changes, and refreshes its numbers every frame. */
+  const syncPanel = () => {
+    const p = ui.panel
+    const next =
+      p === null
+        ? ""
+        : p.type === "build" || p.type === "town"
+          ? p.type
+          : `${p.type}|${p.id}|${p.type === "house" ? p.tier : p.type === "building" ? `${p.level}|${p.upgrade?.title ?? ""}|${p.works !== null}` : ""}`
+    if (next !== shape) {
+      shape = next
+      // Keep the old contents while the closed panel slides away.
+      if (p !== null) buildPanel()
+      panel.classList.toggle("open", p !== null)
+      document.body.classList.toggle("panel-open", p !== null)
+      refreshTools()
+    }
+    for (const update of live) update()
+  }
+
+  // ── Founding a town ──
+  const savedTown = options.saved ?? null
+  const choice: { -readonly [K in keyof CharterValue]: CharterValue[K] } = defaultCharter((Date.now() & 0x7fffffff) >>> 0)
+  /** The land a charter would found, drawn small: a dot a cell. */
+  const drawLand = (canvas: HTMLCanvasElement) => {
+    const land = generate(choice)
+    const water = new Set(land.water.map((c) => c.y * GRID + c.x))
+    const trees = new Set(land.trees.map((t) => t.cell.y * GRID + t.cell.x))
+    const rocks = new Map(land.rocks.map((r) => [r.cell.y * GRID + r.cell.x, r.ore]))
+    const scale = 3
+    canvas.width = GRID * scale
+    canvas.height = GRID * scale
+    const g = canvas.getContext("2d")!
+    g.clearRect(0, 0, canvas.width, canvas.height)
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        const k = y * GRID + x
+        if (land.mask[k] !== "1") continue
+        g.fillStyle = water.has(k)
+          ? "#b9cfcb"
+          : trees.has(k)
+            ? "#9bb08a"
+            : rocks.has(k)
+              ? rocks.get(k)
+                ? "#5a6479"
+                : "#8f9891"
+              : "#f7f8f4"
+        g.fillRect(x * scale, y * scale, scale, scale)
+      }
+    }
+    return land
+  }
+  const openCharter = (cancellable: boolean) => {
+    ui.founding = true
+    dialog.replaceChildren()
+    const card = el("div", "sheet wide")
+    const title = el("h2", "title", "Inkline Town ")
+    const by = el("small", "by", "by ")
+    const author = el("a", "", "Sandro Maglione") as HTMLAnchorElement
+    author.href = "https://www.sandromaglione.com/"
+    author.target = "_blank"
+    author.rel = "noopener"
+    by.append(author)
+    title.append(by)
+    card.append(title, el("p", "sub", "Pick the land, then grow the town to its goal before the term runs out."))
+    const body = el("div", "charter")
+    const options = el("div", "")
+    const preview = el("div", "preview")
+    const mapBox = el("div", "map")
+    const map = document.createElement("canvas")
+    mapBox.append(map)
+    const facts = el("p", "note facts")
+    const cells = el("span", "ref ware cells")
+    mapBox.append(cells)
+    preview.append(mapBox, facts)
+    body.append(options, preview)
+    /** A figure of the charter as the town's messages name things: an icon and a few words. */
+    const chip = (glyph: IconName, text: string) => `<span class="ref ware">${icon(glyph, 13)}${escapeHtml(text)}</span>`
+    const group = <T extends string | number>(
+      title: string,
+      glyph: IconName,
+      values: ReadonlyArray<T>,
+      label: (v: T) => string,
+      note: (v: T) => string,
+      tip: (v: T) => string,
+      get: () => T,
+      set: (v: T) => void
+    ) => {
+      const box = section(title, glyph)
+      const row = el("div", "choices")
+      const said = el("p", "note")
+      const buttons = values.map((v) => {
+        const b = el("button", "frame choice", label(v))
+        b.title = tip(v)
+        b.onclick = () => {
+          set(v)
+          refresh()
+        }
+        row.append(b)
+        return { v, b }
+      })
+      box.append(row, said)
+      options.append(box)
+      return () => {
+        for (const { v, b } of buttons) b.classList.toggle("on", v === get())
+        setHtml(said, note(get()))
+      }
+    }
+    const refreshers = [
+      group(
+        "land",
+        "pave",
+        sizeIds,
+        (v) => sizes[v].title,
+        (v) => `a town at ${chip("people", `${sizes[v].goal.residents} residents`)}${chip("coins", `+${sizes[v].goal.income}/min`)}`,
+        (v) => `The town rank asks ${sizes[v].goal.residents} residents and an income of ${sizes[v].goal.income} coins a minute; a village less, a city more`,
+        () => choice.size,
+        (v) => (choice.size = v)
+      ),
+      group(
+        "term",
+        "clock",
+        TERMS,
+        (v) => `${v} min`,
+        (v) => `${chip("clock", `${YEARS_PER_TERM} years of ${Number((v / YEARS_PER_TERM).toFixed(1))} min`)}${chip("winter", `${YEARS_PER_TERM - 1} winters`)}`,
+        (v) => `${v} minutes at 1×: ${YEARS_PER_TERM} years, a winter at the end of each after the first`,
+        () => choice.term,
+        (v) => (choice.term = v)
+      ),
+      group(
+        "richness",
+        "wood",
+        landIds,
+        (v) => lands[v].title,
+        (v) => chip("coins", `${lands[v].coins} coins to start`),
+        (v) => lands[v].blurb,
+        () => choice.land,
+        (v) => (choice.land = v)
+      )
+    ]
+    // The land is drawn from a seed: a fresh one on a click; the number itself only on hover, for whoever wants it.
+    const reroll = el("button", "frame reroll", "↻ other land")
+    reroll.onclick = () => {
+      choice.seed = (Math.random() * 0x7fffffff) >>> 0
+      refresh()
+    }
+    mapBox.append(reroll)
+    const refresh = () => {
+      for (const r of refreshers) r()
+      const land = drawLand(map)
+      reroll.title = `Draw other land (this is seed ${choice.seed})`
+      const rocks = land.rocks.filter((r) => !r.ore).length
+      setHtml(cells, `${icon("pave", 13)}${land.cells} cells`)
+      setHtml(facts, chip("wood", `${land.trees.length} trees`) + chip("stone", `${rocks} stone`) + chip("ore", `${land.rocks.length - rocks} ore`))
+    }
+    refresh()
+    const actions = el("div", "actions")
+    const found = el("button", "frame primary", "Start new")
+    found.onclick = () => {
+      if (visiting) endVisit()
+      ui.edits.push({ type: "newTown", charter: { ...choice } })
+      history.length = 0
+      ui.selected = null
+      ui.menu = null
+      closeCharter()
+      showReckoning(false)
+      choose("select")
+      setSpeed(1)
+    }
+    actions.append(found)
+    // On the way in, a town saved in this browser: carry on with it instead.
+    if (!cancellable && savedTown) {
+      const saved = savedTown
+      const resume = el("button", "frame", "Continue saved")
+      resume.title = `Carry on with the town saved in this browser: ${saved.title}${saved.savedAt > 0 ? `, saved ${ago(saved.savedAt)}` : ""}`
+      resume.onclick = () => {
+        const said = persistence().load() ?? "Loaded"
+        ui.toast(said)
+        if (!said.startsWith("Loaded")) return
+        history.length = 0
+        ui.selected = null
+        ui.menu = null
+        closeCharter()
+        choose("select")
+        setSpeed(1)
+      }
+      actions.append(resume)
+    }
+    if (cancellable) {
+      const cancel = el("button", "frame", "Cancel")
+      cancel.onclick = () => closeCharter()
+      actions.append(cancel)
+    }
+    card.append(body, actions)
+    dialog.append(card)
+    dialog.classList.add("open")
+  }
+  const closeCharter = () => {
+    ui.founding = false
+    dialog.classList.remove("open")
+  }
+  if (!options.shared) openCharter(false)
+
+  // ── Sharing ──
+  // A picture of the town (the card), to post anywhere; and, on asking, a link
+  // that opens the town itself, running, for anyone to watch and play on.
+  let shareSpeed = 1
+  const closeShare = () => {
+    if (!shareBox.classList.contains("open")) return
+    shareBox.classList.remove("open")
+    for (const img of shareBox.querySelectorAll("img")) URL.revokeObjectURL(img.src)
+    if (!visiting) setSpeed(shareSpeed)
+  }
+  shareBox.onclick = (event) => {
+    if (event.target === shareBox) closeShare()
+  }
+  const openShare = async () => {
+    const s = ui.stats
+    if (!s || shareBox.classList.contains("open")) return
+    shareSpeed = ui.speed
+    setSpeed(0)
+    const facts = cardFacts(s)
+    let card: HTMLCanvasElement, png: Blob
+    try {
+      card = await drawCard(stage.picture(PICTURE_WIDTH, PICTURE_HEIGHT, 2), facts, location.host)
+      png = await blobOf(card, "image/png")
+    } catch (error) {
+      setSpeed(shareSpeed)
+      return ui.toast(error instanceof Error ? error.message : "The picture could not be made")
+    }
+    const name = `inkline-town-${s.fate.state === "playing" ? `year-${s.season.year}` : `term-${s.fate.term}`}.png`
+    const caption = `${metaOf(facts).title} · ${metaOf(facts).description}`
+    shareBox.replaceChildren()
+    const sheet = el("div", "sheet")
+    sheet.append(el("h2", "", "share the town"))
+    const preview = document.createElement("img")
+    preview.className = "card-preview"
+    preview.alt = caption
+    preview.src = URL.createObjectURL(png)
+    sheet.append(preview)
+    sheet.append(el("p", "sub", "Post the picture anywhere, or make a link: whoever opens it sees this town running, from where you look at it now, and can play on from here."))
+    const actions = el("div", "actions")
+    const picture = el("button", "frame primary", "")
+    picture.append(iconEl("picture", 15), document.createTextNode(handheld() ? "Share the picture" : "Save the picture"))
+    picture.onclick = async () => ui.toast(await offerPicture(png, name, caption))
+    const link = el("button", "frame", "")
+    link.append(iconEl("link", 15), document.createTextNode("Make a link"))
+    const linkRow = el("div", "link-row")
+    link.onclick = async () => {
+      link.disabled = true
+      link.lastChild!.textContent = "Making a link…"
+      try {
+        const small = await blobOf(scaled(card, PICTURE_WIDTH, PICTURE_HEIGHT), "image/jpeg", PICTURE_QUALITY)
+        const made = await upload(persistence().shareFile(stage.view()), small, metaOf(facts))
+        link.remove()
+        const field = document.createElement("input")
+        field.readOnly = true
+        field.value = made.url
+        field.onfocus = () => field.select()
+        const copy = el("button", "frame primary", handheld() ? "Share the link" : "Copy the link")
+        copy.onclick = async () => ui.toast(await offerLink(made.url, metaOf(facts).title))
+        const open = el("a", "frame", "Open")
+        open.setAttribute("href", made.url)
+        open.setAttribute("target", "_blank")
+        open.setAttribute("rel", "noopener")
+        linkRow.replaceChildren(field, copy, open)
+        linkRow.classList.add("show")
+        copy.focus()
+      } catch (error) {
+        link.disabled = false
+        link.lastChild!.textContent = "Try the link again"
+        ui.toast(error instanceof Error ? error.message : "Could not share the town")
+      }
+    }
+    const close = el("button", "frame", "Close")
+    close.onclick = () => closeShare()
+    actions.append(picture, link, close)
+    sheet.append(actions, linkRow)
+    shareBox.append(sheet)
+    shareBox.classList.add("open")
+    picture.focus()
+  }
+
+  // ── Visiting a shared town ──
+  // The town runs as its mayor left it, with the building tools put away,
+  // until the visitor plays on from here (it becomes theirs, and autosaves)
+  // or founds a town of their own.
+  let visiting = false
+  const endVisit = () => {
+    visiting = false
+    document.body.classList.remove("visiting")
+    visitBar.classList.remove("show")
+    window.history.replaceState(null, "", "/")
+  }
+  /** The shared town is loaded: show it running. */
+  const visit = (title: string) => {
+    visiting = true
+    closeCharter()
+    resetPage()
+    document.body.classList.add("visiting")
+    visitBar.replaceChildren()
+    const text = el("div", "cell")
+    text.append(iconEl("town", 18))
+    const words = el("span", "stack")
+    words.append(el("b", "", "a shared town"), el("small", "", title))
+    text.append(words)
+    const play = el("button", "frame primary", "Play from here")
+    play.title = "Make this town yours: build, govern, and it autosaves in this browser"
+    play.onclick = () => {
+      endVisit()
+      ui.toast("The town is yours: it autosaves as you play")
+    }
+    const own = el("button", "frame", "Found your own")
+    own.onclick = () => openCharter(true)
+    const buttons = el("div", "cell")
+    buttons.append(play, own)
+    visitBar.append(text, buttons)
+    visitBar.classList.add("show")
+    setSpeed(1)
+  }
+  /** The shared town could not be opened: say why, and found a town instead. */
+  const visitFailed = (message: string) => {
+    window.history.replaceState(null, "", "/")
+    openCharter(false)
+    ui.toast(message)
+  }
+
+  // ── The end of the term ──
+  /** Lines of residents, coins, and approval over the term, on the term's own time axis. */
+  const chart = (s: Stats): string => {
+    const w = 520
+    const h = 150
+    const from = s.fate.began * 3600
+    const span = s.charter.term * 3600
+    const history = s.history.filter((p) => p.tick >= from)
+    const line = (values: ReadonlyArray<number>, lo: number, hi: number, color: string, dash = "") => {
+      if (values.length < 2) return ""
+      const range = hi - lo || 1
+      const points = history
+        .map((p, i) => `${(((p.tick - from) / span) * w).toFixed(1)},${(h - 4 - ((values[i]! - lo) / range) * (h - 8)).toFixed(1)}`)
+        .join(" ")
+      return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="${dash}" vector-effect="non-scaling-stroke"/>`
+    }
+    const residents = history.map((p) => p.residents)
+    const coinsLine = history.map((p) => p.coins)
+    const approvalLine = history.map((p) => p.approval)
+    const target = s.goals.find((g) => g.id === "residents")?.target ?? sizes[s.charter.size].goal.residents
+    const top = Math.max(1, ...residents, target)
+    const goal = h - 4 - (target / top) * (h - 8)
+    // The first term spares its first year a winter; later terms do not.
+    const winters = Array.from({ length: 6 }, (_, y) => {
+      if (y === 0 && s.fate.term === 1) return ""
+      const at = ((y + 0.7) / 6) * w
+      return `<rect x="${at.toFixed(1)}" y="0" width="${((w * 0.3) / 6).toFixed(1)}" height="${h}" fill="#3d6db5" opacity="0.06"/>`
+    }).join("")
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${winters}<line x1="0" x2="${w}" y1="${goal}" y2="${goal}" stroke="#77817a" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>${line(coinsLine, Math.min(0, ...coinsLine), Math.max(1, ...coinsLine), "#d6ae2e")}${line(approvalLine, -100, 100, "#3d6db5", "4 3")}${line(residents, 0, top, "#3d4943")}</svg>`
+  }
+  let reckoned = ""
+  let reckoningOpen = false
+  const showReckoning = (open: boolean) => {
+    reckoningOpen = open
+    reckoning.classList.toggle("open", open && ui.stats !== null && ui.stats.fate.state !== "playing")
+  }
+  const syncReckoning = (s: Stats) => {
+    const over = s.fate.state !== "playing"
+    result.classList.toggle("show", over && !reckoningOpen && !ui.founding)
+    if (!over) {
+      reckoned = ""
+      reckoning.classList.remove("open")
+      return
+    }
+    const id = `${s.charter.seed}|${s.fate.state}|${s.fate.at}`
+    result.textContent = s.fate.state === "lost" ? "the term is lost · see how" : `term ${s.fate.term} is over · see how`
+    if (id === reckoned) return
+    reckoned = id
+    const title = s.fate.state === "lost" ? s.fate.reason.split(":")[0]!.toLowerCase() : `term ${s.fate.term} is over: ${verdictOf(s)}`
+    reckoning.replaceChildren()
+    const card = el("div", "sheet wide")
+    card.append(el("h2", "", title), el("p", "sub", s.fate.reason))
+    const facts = el("div", "facts")
+    const fact = (label: string, value: string) => {
+      const f = el("div", "fact")
+      f.append(el("b", "", value), el("span", "", label))
+      facts.append(f)
+    }
+    fact("rank", s.fate.rankTitle)
+    fact("minutes in office", `${Math.round(s.fate.at)}`)
+    fact("residents", `${s.settlers + s.citizens}`)
+    fact("citizens · burghers", `${s.citizens} · ${s.burghers}`)
+    fact("coins", `${s.coins}`)
+    fact("approval", signed(s.mood.approval))
+    fact("crown met · missed", `${s.crown.met} · ${s.crown.missed}`)
+    fact("score", `${s.fate.score}`)
+    card.append(facts)
+    const graph = el("div", "chart")
+    graph.innerHTML = chart(s)
+    card.append(graph, el("p", "legend", "— residents (dashed: the next rank) · coins · - - approval · shaded: winters"))
+    const story = el("div", "chronicle")
+    story.innerHTML = s.chronicle
+      .filter((l) => l.tick >= s.fate.began * 3600)
+      // Timed from the start of this term, as its chart is.
+      .map((l) => `<p><b>${clockText(Math.round((l.tick - s.fate.began * 3600) / 60))}</b> ${l.text}</p>`)
+      .join("")
+    card.append(story)
+    const actions = el("div", "actions")
+    if (s.fate.state === "over") {
+      const stand = el("button", "frame primary", "Next term")
+      stand.title = `Stand for another ${s.charter.term} minutes: the same town, new winters, and the crown's requests start small again`
+      stand.onclick = () => {
+        ui.edits.push({ type: "nextTerm" })
+        showReckoning(false)
+      }
+      actions.append(stand)
+    }
+    const again = el("button", "frame" + (s.fate.state === "over" ? "" : " primary"), s.fate.state === "over" ? "Retire: found a new town" : "Found a new town")
+    again.onclick = () => {
+      showReckoning(false)
+      openCharter(true)
+    }
+    const look = el("button", "frame", "Look at the town")
+    look.onclick = () => showReckoning(false)
+    const share = el("button", "frame", "Share the town")
+    share.title = "A picture of the town and its verdict, or a link anyone can open"
+    share.onclick = () => void openShare()
+    actions.append(again, look, share)
+    card.append(actions)
+    reckoning.append(card)
+    showReckoning(true)
+  }
+
+  const input = new MapInput(stage, ui)
+  // A road, a row of homes, or a patch of park let go of on a touch screen is held here until built or
+  // dropped; the tooltip says what it lays and costs.
+  const strokeBar = el("div", "stroke-bar")
+  const strokeBuild = el("button", "primary", "Build")
+  strokeBuild.onclick = () => input.confirmStroke()
+  const strokeDrop = el("button", "", "Cancel")
+  strokeDrop.onclick = () => input.cancelStroke()
+  strokeBar.append(strokeDrop, strokeBuild)
+  document.body.append(strokeBar)
+  const resetPage = () => {
+    choose("select")
+    ui.menu = null
+    ui.selected = null
+    input.reset()
+  }
+
+  /** What a tool chip in a message does (see `toolRefs`): picks the tool, opens the panel, or shows the map view. */
+  const useTool = (id: string) => {
+    setFold(null)
+    if (id.startsWith("view:")) {
+      const view = id.slice(5) as View
+      return setView(ui.view === view ? "none" : view)
+    }
+    if (id === "build" || id === "town") return ui.menu === id ? undefined : toggleMenu(id)
+    if (id === "speed") return setSpeed(ui.speed === 0 ? lastSpeed : ui.speed === 4 ? 1 : ui.speed * 2)
+    if (id === "pause") return setSpeed(ui.speed === 0 ? lastSpeed : 0)
+    ui.menu = null
+    choose(id === "homes" ? "home" : (id as Tool))
+  }
+  // A panel row's fix: place the building it names, or pick the tool or panel it names.
+  panel.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement
+    const tool = target.closest<HTMLElement>(".fix [data-tool]")
+    if (tool) return useTool(tool.dataset.tool!)
+    const build = target.closest<HTMLElement>("[data-build], .fix [data-kind]")
+    const kind = (build?.dataset.build ?? build?.dataset.kind) as KindId | undefined
+    if (kind && kinds[kind].buildable) {
+      ui.selected = null
+      place(kind)
+    }
+  })
+  /** Ticker lines the mayor has put away, by what they say (and, for news, when). */
+  const dismissed = new Set<string>()
+  let tickerLines: { guide: Stats["guide"]["step"]; alerts: Stats["alerts"]; news: Stats["chronicle"] } = { guide: null, alerts: [], news: [] }
+  ticker.onclick = (event) => {
+    event.stopPropagation()
+    const target = event.target as HTMLElement
+    // A tool, panel, or map view the line names: pick it, with the map in view.
+    const tool = target.closest<HTMLElement>("[data-tool]")
+    if (tool) return useTool(tool.dataset.tool!)
+    // On a phone: tuck the step away into the bulb, or open the guide in full.
+    if (target.closest("[data-tuck]")) {
+      tucked = stepNow
+      if (!toldWhere) ui.toast("The guide is in the bulb at the top right")
+      toldWhere = true
+      return
+    }
+    if (ticker.classList.contains("peek") && !target.closest("[data-kind]")) return setFold("guide")
+    const off = target.closest<HTMLElement>("[data-dismiss]")
+    if (off) {
+      dismissed.add(off.dataset.dismiss!)
+      return
+    }
+    // The guide: put this step away, or turn the guide off (the bottom-right button turns it back on).
+    const skip = target.closest<HTMLElement>("[data-skip]")
+    if (skip) {
+      ui.guide.push({ type: "skip", id: skip.dataset.skip! })
+      return
+    }
+    if (target.closest("[data-guide-off]")) {
+      ui.guide.push({ type: "off" })
+      ui.toast("Guide off · turn it back on from the bottom right")
+      return
+    }
+    // A building the line is about: go to it.
+    const go = target.closest<HTMLElement>("[data-go]")
+    if (go) {
+      const row = go.closest<HTMLElement>("[data-alert]")
+      const there = row ? tickerLines.alerts[Number(row.dataset.alert)]?.places?.[go.dataset.go as KindId] : undefined
+      if (there) goTo(there.at, there.size, there.id)
+      // The guide's step names the building it points at.
+      const guide = tickerLines.guide
+      if (!row && go.closest("[data-guide]") && guide?.at) goTo(guide.at, guide.size, guide.id)
+      return
+    }
+    const ref = target.closest<HTMLElement>("[data-kind]")
+    if (ref) {
+      const kind = ref.dataset.kind as KindId
+      // Straight to placing it, with the map in view: the placement itself says if the town cannot build it yet.
+      if (kinds[kind].buildable) {
+        setFold(null)
+        place(kind)
+      }
+      return
+    }
+    const line = target.closest<HTMLElement>(".cell.place")
+    if (!line) return
+    if (line.dataset.guide !== undefined && tickerLines.guide?.at) return goTo(tickerLines.guide.at, tickerLines.guide.size, tickerLines.guide.id)
+    const alert = line.dataset.alert !== undefined ? tickerLines.alerts[Number(line.dataset.alert)] : undefined
+    if (alert?.at) return goTo(alert.at, alert.size, alert.id)
+    const news = line.dataset.news !== undefined ? tickerLines.news[Number(line.dataset.news)] : undefined
+    if (news?.at) goTo(news.at, 1, null)
+  }
+
+  /** The last chronicle line announced. */
+  let lastNews = ""
+  /**
+   * A phone's guide: the step stays above the tool bar until the mayor tucks it away (`tucked`: the step and
+   * state they tucked; a new step, or the same one under way, comes out again). Tucked away, the bulb pulses,
+   * and the first time a toast says where the guide went.
+   */
+  let stepNow = ""
+  let tucked = ""
+  let toldWhere = false
+  /** Copies the town's numbers and preview into the page, once a frame. */
+  const syncPage = () => {
+    syncPanel()
+    const s = ui.stats
+    if (s) {
+      // The treasury as the goods are shown: which way it went over the last minute, and by how much; the steady rate until a minute is counted.
+      const cf = s.flow?.coins ?? null
+      const change = cf ? cf.made + cf.traded - cf.used : s.net
+      const way = cf ? trendOf(cf.made, cf.used, cf.traded) : 0
+      setHtml(
+        coins,
+        `${icon("coins", 20)}<span class="stack"><b>${s.coins}${cf ? `<span class="trend ${trendClass(way)}">${trendMark(way)}</span>` : ""}</b>` +
+          `<small class="${change >= 0 ? "up" : "down"}">${change >= 0 ? "+" : ""}${change}/min</small></span>`
+      )
+      coins.title = cf
+        ? `Coins in the treasury · click for the town's last minute\nLast minute: ${signed(change)} (made ${cf.made}, used ${cf.used}${cf.traded !== 0 ? `, traded ${signed(cf.traded)}` : ""})\nAt the current rates: ${signed(s.net)}/min (taxes, trade, upkeep, administration)`
+        : `Coins in the treasury, and what it gains (or loses) a minute at the current rates · click for the town's last minute`
+      coins.classList.toggle("debt", s.coins < 0)
+      const left = Math.max(0, s.charter.term * 60 - Math.floor((s.minute - s.fate.began) * 60))
+      const severity = (w: typeof s.season.coming) => (w === null ? "" : ` (${winters[w].title})`)
+      const until = s.season.winter
+        ? `${winters[s.season.severity ?? "normal"].title} winter · spring in ${clockText(s.season.left)}`
+        : s.season.coming === null
+          ? "no more winters this term"
+          : `winter in ${clockText(s.season.left)}${severity(s.season.coming)}`
+      setHtml(clock, `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}${ui.speed === 0 ? `<span class="paused-tag">paused</span>` : ""}</b><small class="${s.season.winter ? "winter" : s.season.coming === "hard" ? "down" : ""}">year ${s.season.year} · ${until}</small></span>`)
+      clock.title = `${s.season.winter ? "Winter: fields lie still, fishing is slow, and homes eat faster" : "Time left in the term"}\nThe almanac: the coming winter is ${s.season.coming === null ? "beyond the term" : winters[s.season.coming].title}, the one after ${s.season.after === null ? "beyond the term" : winters[s.season.after].title}.\nMild: fishing at ${Math.round(winters.mild.fishing * 100)}%. Normal: ${Math.round(winters.normal.fishing * 100)}%. Hard: half as long again, fishing at ${Math.round(winters.hard.fishing * 100)}%, and homes heating are a fire risk.`
+      const trend = s.mood.target > s.mood.approval ? "↑" : s.mood.target < s.mood.approval ? "↓" : ""
+      setHtml(approval, `${icon("approval", 18)}<span class="stack"><b class="${s.mood.approval < 0 ? "down" : ""}">${signed(s.mood.approval)} <span class="${s.mood.target >= s.mood.approval ? "up" : "down"}">${trend}</span></b><small>approval</small></span>`)
+      setHtml(settlerCell, `${icon("settlers", 18)}<span class="stack"><b>${s.settlers}</b><small>settlers</small></span>`)
+      setHtml(citizenCell, `${icon("citizens", 18)}<span class="stack"><b>${s.citizens}</b><small>citizens${s.burghers > 0 ? ` · ${s.burghers} burghers` : ""}</small></span>`)
+      const short = s.shortStaffed.length
+      setHtml(jobs, `${icon("jobs", 18)}<span class="stack"><b>${s.employed}<span class="of">/${s.jobs}</span></b><small class="${short > 0 ? "down" : ""}">${short > 0 ? `${short} short · click` : "jobs filled"}</small></span>`)
+      jobs.title = short > 0
+        ? `Workers at work over workers needed. ${short} workplace${short > 1 ? "s are" : " is"} short: ${s.shortStaffed.slice(0, 5).map((w) => `${w.title} ${w.assigned}/${w.needed}${w.nobodyNear ? " (no homes within 15 road cells)" : ""}`).join(", ")}. Click to visit them in turn.`
+        : "Workers at work over workers needed: every workplace has its crew. Residents walk at most 15 road cells to work."
+      const chipHtml = (["planks", "stone", "tools"] as const)
+        .map((g) => `<span class="${s.stock[g] === 0 ? "short" : ""}">${goodIcon(g, 14)}${s.stock[g]}</span>`)
+        .join("")
+      if (goodsChip.dataset.html !== chipHtml) {
+        goodsChip.dataset.html = chipHtml
+        goodsChip.innerHTML = chipHtml
+      }
+      for (const [g, count] of goodCells) {
+        count.textContent = String(s.stock[g])
+        const way = s.flow ? flowTrend(s.flow, g) : 0
+        const trend = goodTrends.get(g)!
+        trend.textContent = s.flow ? trendMark(way) : ""
+        trend.className = `trend ${trendClass(way)}`
+        // Empty storage is only worth dimming when nothing is held anywhere else either.
+        count.parentElement!.classList.toggle("empty", s.stock[g] === 0 && (s.flow?.elsewhere[g] ?? 0) === 0)
+        count.parentElement!.title = `${goods[g].title}: ${goodHelp[g]}` + (s.flow
+          ? `\nLast minute: made ${s.flow.made[g]}, used ${s.flow.used[g]}${s.flow.traded[g] !== 0 ? `, ${s.flow.traded[g] > 0 ? "bought" : "sold"} ${Math.abs(s.flow.traded[g])}` : ""}. ${s.stock[g]} in storage, ${s.flow.elsewhere[g]} about town (in workshops and markets, and on the way).`
+          : "")
+      }
+      // On a phone the goods chip opens the table itself, once there is a minute to show; the plain goods until then.
+      document.body.classList.toggle("flow-ready", s.flow !== null)
+      if (flowCard.classList.contains("open") || (phone.matches && fold === "goods")) setHtml(flowCard, flowHtml(s))
+      // The crown's request.
+      request.classList.toggle("show", s.crown.open && s.fate.state === "playing")
+      if (s.crown.open) {
+        const have = s.stock[s.crown.good]
+        // What is asked on top, in one line; the terms under it.
+        setHtml(
+          requestText,
+          `${icon("crown", 18)}<span class="lines"><span class="ask">the crown asks for <b>${s.crown.amount}</b> ${goodIcon(s.crown.good, 14)} <b>${goods[s.crown.good].title}</b></span>` +
+            `<span class="terms"><span class="${have < s.crown.amount ? "down" : "up"}">${have} in store</span> · due in <b>${clockText(s.crown.left)}</b> · +${s.crown.reward} coins</span></span>`
+        )
+        send.title = have < s.crown.amount ? `Not enough ${goods[s.crown.good].title} in store yet` : `Send ${s.crown.amount} ${goods[s.crown.good].title} to the crown for ${s.crown.reward} coins`
+        send.disabled = have < s.crown.amount
+      }
+      // What threatens the term, or is about to raise the town a rank.
+      const warnings: Array<string> = []
+      if (s.fate.state === "playing") {
+        if (s.fate.bankrupt !== null)
+          warnings.push(`<b>In debt:</b> bankrupt in ${clockText(s.fate.bankrupt)} unless the treasury recovers`)
+        else if (s.coins < 0) warnings.push("<b>In debt:</b> wages are going unpaid")
+        if (s.fate.revolt !== null) warnings.push(`<b>Uproar:</b> the town turns the mayor out in ${clockText(s.fate.revolt)}`)
+        else if (s.mood.approval < -30) warnings.push("<b>Restless:</b> approval is falling towards revolt")
+        if (s.fate.peak >= 40 && s.settlers + s.citizens < s.fate.peak * 0.4) warnings.push("<b>Emptying:</b> people are leaving the town")
+        if (s.crown.streak > 0 && s.crown.streak >= s.crown.patience - 1) {
+          warnings.push(`<b>The crown's patience:</b> ${s.crown.streak} requests missed in a row; one more and the mayor is dismissed`)
+        }
+        if (s.fate.rises !== null && s.fate.nextTitle !== null) warnings.push(`<b>Every goal met:</b> the town is a ${s.fate.nextTitle} in ${clockText(s.fate.rises)}`)
+      }
+      const html = warnings
+        .map((w) => `<div class="cell">${icon(w.startsWith("<b>Every goal") ? "goal" : "warning", 16)}<span>${w}</span></div>`)
+        .join("")
+      if (alarm.dataset.html !== html) {
+        alarm.dataset.html = html
+        alarm.innerHTML = html
+      }
+      alarm.classList.toggle("show", warnings.length > 0)
+      alarm.classList.toggle("good", warnings.length === 1 && s.fate.rises !== null)
+      // The ticker: what needs looking at now, then the news of the last minute and a half; click a line to go there.
+      const minute = Math.round(s.minute * 3600)
+      const news = s.chronicle.filter((l) => l.alarm && minute - l.tick < 90 * 60).slice(-3).reverse()
+      const ago = (tick: number) => {
+        const sec = Math.max(0, Math.round((minute - tick) / 60))
+        return sec < 5 ? "just now" : sec < 60 ? `${sec} s ago` : `${Math.round(sec / 60)} min ago`
+      }
+      const alerts = s.alerts.filter((a) => !dismissed.has(`a:${a.text}`))
+      // The crown's request has its own card while it is open, and is settled after: its news line would only repeat it.
+      const fresh = news.filter((l) => !dismissed.has(`n:${l.tick}:${l.text}`) && !l.text.startsWith("The crown asks"))
+      const toneIcon = { hint: "hint", warn: "caution", bad: "warning" } as const
+      const row = (kind: string, tone: string, glyph: IconName, text: string, place: boolean, key: string, data: string) =>
+        `<div class="cell ${kind} ${tone}${place ? " place" : ""}" ${data}>${icon(glyph, 16, "mark")}<span class="text">${text}</span><span class="acts">${place ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-dismiss="${escapeHtml(key)}" title="Dismiss">${icon("close", 12)}</button></span></div>`
+      // The guide's step first: what to do next, and why.
+      const g = s.guide.step
+      const guideHtml = g
+        ? (() => {
+            const asks = new Set(g.asks)
+            const say = (text: string) => callouts(text, new Set(g.near ? [g.near] : []), asks)
+            const count = g.count ? `step ${g.count.at} of ${g.count.of}` : ""
+            return [
+              `<div class="head guide"><span>guide · ${escapeHtml(g.chapter)}</span><span class="progress" title="${g.count ? "The first steps of a new town" : ""}">${count}</span><button class="quiet" data-guide-off title="Turn the guide off (the guide button in the bottom right turns it back on)">hide guide</button></div>`,
+              `<div class="cell alert hint guide${g.waiting ? " waiting" : g.locked ? " locked" : ""}${g.at !== null ? " place" : ""}" data-guide>${icon(g.waiting ? "clock" : g.locked ? "caution" : "hint", 16, "mark")}<span class="text">` +
+                `<span class="do">${say(g.text)}</span>` +
+                (g.waiting ? `<span class="why now">${say(g.waiting)}</span>` : g.locked ? `<span class="why now">${say(g.locked)}</span>` : `<span class="why">${say(g.why)}</span>`) +
+                `<span class="goal">${icon("goal", 12)}<span>done when ${say(g.goal)}</span></span>` +
+                (g.next ? `<span class="goal next">${icon("clock", 12)}<span>${say(g.next)}</span></span>` : "") +
+                `</span>` +
+                `<span class="acts">${g.at !== null ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="Skip this step">${icon("close", 12)}</button></span>` +
+                `<button class="act tuck" data-tuck title="Hide: the guide stays in the bulb at the top right">${icon("close", 12)}</button></div>`
+            ]
+          })()
+        : []
+      const tickerHtml = [
+        ...guideHtml,
+        ...(alerts.length > 0 ? [`<div class="head">now</div>`] : []),
+        ...alerts.map((a) => row("alert", a.tone, toneIcon[a.tone], callouts(a.text, new Set(Object.keys(a.places ?? {}) as Array<KindId>)), a.at !== null, `a:${a.text}`, `data-alert="${s.alerts.indexOf(a)}"`)),
+        ...(fresh.length > 0 ? [`<div class="head">lately</div>`] : []),
+        ...fresh.map((l) => row("news", "", "chronicle", `${callouts(l.text)} <em data-tick="${l.tick}"></em>`, l.at !== null, `n:${l.tick}:${l.text}`, `data-news="${news.indexOf(l)}"`))
+      ].join("")
+      if (ticker.dataset.html !== tickerHtml) {
+        ticker.dataset.html = tickerHtml
+        ticker.innerHTML = tickerHtml
+      }
+      for (const em of ticker.querySelectorAll<HTMLElement>("em[data-tick]")) {
+        const text = ago(Number(em.dataset.tick))
+        if (em.textContent !== text) em.textContent = text
+      }
+      tickerLines = { guide: g, alerts: s.alerts, news }
+      guideButton.classList.toggle("on", !s.guide.off)
+      guideButton.title = s.guide.off ? "Turn the guide back on: a next step to take, and why, at the top of the ticker" : "Turn the guide off"
+      ticker.classList.toggle("show", tickerHtml !== "" && s.fate.state === "playing")
+      // The phone's guide button: the step it is on, or how many things need looking at.
+      const bad = alerts.some((a) => a.tone === "bad")
+      const things = alerts.length + (g ? 1 : 0)
+      const badge = g?.count ? `${g.count.at}/${g.count.of}` : things > 0 ? String(things) : ""
+      if (guideBadge.textContent !== badge) guideBadge.textContent = badge
+      guideBulb.classList.toggle("alert", bad)
+      // On a phone the step stays out above the tool bar, until tucked away; not behind the town picker or an open sheet.
+      const stepKey = g ? `${g.key}${g.waiting ? ":under way" : g.locked ? ":locked" : ""}` : ""
+      stepNow = stepKey
+      const peeking = stepKey !== "" && phone.matches && fold === null && tucked !== stepKey && !ui.founding && s.fate.state === "playing"
+      if (ticker.classList.contains("peek") !== peeking) ticker.classList.toggle("peek", peeking)
+      document.body.classList.toggle("peeking", peeking)
+      const nudge = stepKey !== "" && phone.matches && tucked === stepKey && fold !== "guide"
+      if (guideBulb.classList.contains("nudge") !== nudge) guideBulb.classList.toggle("nudge", nudge)
+      // News as it happens: a toast for each new alarm line.
+      const latest = s.chronicle.at(-1)
+      const seen = `${s.charter.seed}|${latest?.tick ?? -1}|${s.chronicle.length}`
+      if (seen !== lastNews) {
+        if (lastNews !== "" && latest?.alarm && minute - latest.tick < 120) ui.toast(latest.text)
+        lastNews = seen
+      }
+      // The map view's legend.
+      const l = ui.legend
+      const legendHtml = l
+        ? `<b>${l.title}</b>${l.keys.map((k) => `<span class="key"><i style="background:${hex(k.color)}"></i>${k.label}</span>`).join("")}<small>${l.note}</small>`
+        : ""
+      if (legend.dataset.html !== legendHtml) {
+        legend.dataset.html = legendHtml
+        legend.innerHTML = legendHtml
+      }
+      legend.classList.toggle("show", l !== null)
+      syncReckoning(s)
+    }
+    input.sync()
+    const screenPointer = input.tip
+    // A stroke being drawn says what it lays and costs.
+    const text = ui.dragFrom && ui.stroke !== "cancel" && ui.preview.stroke ? ui.preview.stroke : ui.preview.tooltip
+    // A held touch stroke waits for its build button.
+    const held = ui.stroke === "held" && ui.preview.stroke !== null
+    strokeBar.classList.toggle("open", held)
+    document.body.classList.toggle("stroke-held", held)
+    if (text && screenPointer) {
+      setHtml(tooltip, iconize(escapeHtml(text)))
+      tooltip.style.display = "block"
+      tooltip.style.left = `${Math.min(screenPointer.x, window.innerWidth - tooltip.offsetWidth - 20)}px`
+      tooltip.style.top = `${screenPointer.y}px`
+    } else tooltip.style.display = "none"
+  }
+
+  return { app, stage, ui, syncPage, resetPage, input, visit, visitFailed, visiting: () => visiting }
+}
+
+/** Which way a good (or the treasury) went over the last minute: made and bought against used and sold, past a tenth of the traffic either way. */
+const trendOf = (made: number, used: number, traded: number): number => {
+  const net = made + traded - used
+  const room = Math.max(1, Math.round((made + used + Math.abs(traded)) / 10))
+  return net > room ? 1 : net < -room ? -1 : 0
+}
+const flowTrend = (flow: NonNullable<Stats["flow"]>, g: GoodId): number => trendOf(flow.made[g], flow.used[g], flow.traded[g])
+
+/** A good's way over the last minute: up, down, or holding steady. */
+const trendMark = (way: number) => (way > 0 ? "↑" : way < 0 ? "↓" : "→")
+const trendClass = (way: number) => (way > 0 ? "up" : way < 0 ? "down" : "steady")
+
+/** The goods' last minute, side by side: only the goods the town has touched. */
+const flowHtml = (s: Stats): string => {
+  const f = s.flow
+  if (f === null) return `<p class="sub">Counting the town's goods: the first numbers come in half a minute…</p>`
+  const rows = goodIds.filter((g) => f.made[g] + f.used[g] + Math.abs(f.traded[g]) + s.stock[g] + f.elsewhere[g] > 0)
+  const head = `<span></span><b title="Made by workshops and gatherers over the last minute">made</b><b title="Eaten, worked up, built with, rotted, or sent away over the last minute">used</b><b title="Bought (+) or sold (−) over the last minute">traded</b><b title="In the town hall, warehouses, and granaries">storage</b><b title="In workshops and markets, walkers' baskets, and carriers' crates">about town</b>`
+  const cell = (n: number) => `<span>${n === 0 ? `<i>–</i>` : n}</span>`
+  const signedCell = (n: number) => `<span>${n === 0 ? `<i>–</i>` : n > 0 ? `+${n}` : `−${-n}`}</span>`
+  // The treasury first: taxes and rewards made, upkeep and building used, trade's coins; it is all in storage.
+  const c = f.coins
+  const way = trendOf(c.made, c.used, c.traded)
+  const treasury = `<span class="name" title="coins">${icon("coins", 14)}<span class="label">coins</span><span class="trend ${trendClass(way)}">${trendMark(way)}</span></span>` +
+    `${cell(c.made)}${cell(c.used)}${signedCell(c.traded)}${cell(s.coins)}<span><i>–</i></span>`
+  const body = treasury + rows.map((g) => {
+    const way = flowTrend(f, g)
+    const traded = f.traded[g] === 0 ? `<i>–</i>` : f.traded[g] > 0 ? `+${f.traded[g]}` : `−${-f.traded[g]}`
+    return `<span class="name" title="${goods[g].title}">${goodIcon(g, 14)}<span class="label">${goods[g].title}</span><span class="trend ${trendClass(way)}">${trendMark(way)}</span></span>` +
+      `${cell(f.made[g])}${cell(f.used[g])}<span>${traded}</span>${cell(s.stock[g])}${cell(f.elsewhere[g])}`
+  }).join("")
+  return `<div class="flow-grid">${head}${body}</div>`
+}
+
+/** How long ago a save was made, roughly: "just now", "12 min ago", "3 h ago", "2 days ago". */
+const ago = (at: number): string => {
+  const minutes = Math.floor((Date.now() - at) / 60000)
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} h ago`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? "yesterday" : `${days} days ago`
+}

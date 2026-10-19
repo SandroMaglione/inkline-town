@@ -15,7 +15,7 @@
  * code runs on Cloudflare (an R2 bucket and the site's assets), under the
  * dev server, and in tests (both in memory).
  */
-import { checkMeta, isGzip, newId, ID_PATTERN, PICTURE_LIMIT, pictureType, picturePath, sharePath, TOWN_LIMIT, type ShareMeta } from "../share/format.ts"
+import { checkMeta, isGzip, newId, ID_PATTERN, PICTURE_LIMIT, pictureType, picturePath, sharePath, TOWN_LIMIT, type ShareMeta } from "../platform/share/format.ts"
 
 /** What the handler needs of an R2 bucket. */
 export interface Bucket {

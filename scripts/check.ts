@@ -25,11 +25,11 @@
  * - citizens will not take settlers' work, and settlers stand in for citizens as apprentices;
  * - and homes with every need met become citizens on a street with a park behind it, not packed beside industry.
  */
-import { amounts, CONDITION_MAX, goodIds, kinds, RISK_MAX, stepsOf, type CharterValue, type GroundId, type KindId, type PropId } from "../src/content.ts"
-import { canPlace, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/grid.ts"
-import { inside } from "../src/iso.ts"
-import { parkValue, ringOf, type ParkCell } from "../src/appeal.ts"
-import { headless, type Snapshot } from "../src/sim/headless.ts"
+import { amounts, CONDITION_MAX, goodIds, kinds, RISK_MAX, stepsOf, type CharterValue, type GroundId, type KindId, type PropId } from "../src/game/content/index.ts"
+import { canPlace, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/game/world/grid.ts"
+import { inside } from "../src/game/world/iso.ts"
+import { parkValue, ringOf, type ParkCell } from "../src/game/world/appeal.ts"
+import { headless, type Snapshot } from "../src/game/headless.ts"
 
 const town = (charter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }) => {
   const t = headless(charter)

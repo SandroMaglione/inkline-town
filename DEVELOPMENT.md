@@ -39,11 +39,11 @@ it, and two fingers move the camera under it. With any pointer, a stroke let
 go off the map (over the tool bar, say) is dropped and shows red while it
 would be, as are a right click or Esc mid-drag. On touch the tooltip shows
 only for what is about to be built, never while panning or picking, in a
-thin full-width strip under the top line. This lives entirely in `src/render3d/input.ts`
+thin full-width strip under the top line. This lives entirely in `src/render/three/input.ts`
 (and the bar in `host.ts`); the game still sees one ordinary press and
 release.
 
-Phones get their layout from `src/phone.css`, loaded after `factory.css`. On
+Phones get their layout from `src/ui/dom/styles/phone.css`, loaded after `factory.css`. On
 a narrow or short screen the HUD folds away: one top line (clock, treasury,
 people, and a chip of planks, stone and tools), one tool bar along the bottom
 (town, the tools, pause (a switch: play while paused), a speed button that cycles, and a ⋯ menu holding
@@ -54,7 +54,7 @@ folds it, a pan or pinch does not. Once the town has a minute of goods
 (`body.flow-ready`), the goods chip opens the made/used table straight away,
 each good by its icon. The guide's step stays above the tool bar until tucked away
 (its ✕); tucked, the bulb pulses, and a new step (or the same one under way)
-comes out again. Guide texts in `src/rules/guide.ts` name tools,
+comes out again. Guide texts in `src/game/rules/guide.ts` name tools,
 panels and map views as `[homes]`, `[town]` or `[view:fire]` and verbs as
 `{tap|click}`, never keys, so they read right on either screen;
 `test/guide.test.ts` checks it. Sheets
@@ -64,7 +64,7 @@ to the bottom. The camera bar is hidden: pinch zooms and turns. New UI needs
 nothing there unless it has to move on a phone; check it at 390×844, 360×640
 and 762×330, and run `pnpm check:phone`.
 
-`src/render3d/scene.ts` owns the orthographic camera, ground projection and
+`src/render/three/scene.ts` owns the orthographic camera, ground projection and
 frame source. `views.ts` follows live construction, upgrades, resources,
 production, problem markers and the simulation's walkers and cargo. Flags,
 mill sails and smoke animate in 3D. `pool.ts` instances repeated geometry,
@@ -133,7 +133,7 @@ Material effects render in the viewers and live game. Ordinary GLB viewers
 show the underlying mesh; effect parameters are preserved as GLB extras and
 in the editable geometry descriptions, rather than baked into duplicate meshes.
 
-- `src/asset-lab/primitives.ts`: renderer-independent polygon/stroke schema
+- `src/render/three/assets/primitives.ts`: renderer-independent polygon/stroke schema
   and reusable modelling operations in the game's cell units and pixel heights.
 - `buildings.ts`, `land.ts`, `people.ts`, `construction.ts`: procedural
   models; `assets.ts` collects them and retains the approved house/prop models.
@@ -199,31 +199,31 @@ The README shows the film as an animated AVIF, because GitHub plays no
 
 ## Code
 
-- `src/iso.ts`: the grid and the unit everything is measured in (1/16 cell = 2×1 px).
-- `src/content.ts`: goods, building kinds, home tiers, costs, upkeep, taxes: plain data.
-- `src/archetypes.ts`: content to components.
-- `src/mapgen.ts`: the land of a new town, from its charter.
-- `src/schema.ts`: the ECS world: components, relations, resources, services.
-- `src/appeal.ts`: desirability: what buildings and the land do to the cells around them, the whole grid, and one cell explained.
-- `src/places.ts`: street names for the news ("Mill Lane"), from the nearest landmark.
-- `src/grid.ts`: occupancy, entrances, reach, and road paths.
+- `src/game/world/iso.ts`: the grid and the unit everything is measured in (1/16 cell = 2×1 px).
+- `src/game/content/index.ts`: goods, building kinds, home tiers, costs, upkeep, taxes: plain data.
+- `src/game/world/archetypes.ts`: content to components.
+- `src/game/world/mapgen.ts`: the land of a new town, from its charter.
+- `src/game/schema.ts`: the ECS world: components, relations, resources, services.
+- `src/game/world/appeal.ts`: desirability: what buildings and the land do to the cells around them, the whole grid, and one cell explained.
+- `src/game/world/places.ts`: street names for the news ("Mill Lane"), from the nearest landmark.
+- `src/game/world/grid.ts`: occupancy, entrances, reach, and road paths.
 - `src/sim/`: the fixed-step simulation (no renderer access): edits, work (staffing by crew and commute, tools,
   pace), logistics, walkers (services, mending), town (households and tiers), hazards (desirability, risk
   meters, fire and firefighters, sickness, theft), decay (wear, collapse, spoilage, the pantry), and the term
   (seasons and the almanac, the crown, approval, the end of the term, history); orphans drops a walker or field
   whose building went before it could join it.
-- `src/present.ts`: per-frame interaction, panel, and view sync.
-- `src/art.ts`: all drawing: buildings and their yards, homes, the land, roads, carts, and figures.
+- `src/view/present.ts`: per-frame interaction, panel, and view sync.
+- `src/render/art.ts`: all drawing: buildings and their yards, homes, the land, roads, carts, and figures.
 - `src/render3d/`: live world renderer, model instances, camera and map input,
   overlays, ruins, surface shaders and roof particle emitters.
-- `src/asset-lab/town-props.ts`: parks (ground and furnishings, drawn cell by cell), stone paving and ruins.
-- `src/asset-lab/services.ts`: grain hoist, fish racks, watch tower, herbs,
+- `src/render/three/assets/town-props.ts`: parks (ground and furnishings, drawn cell by cell), stone paving and ruins.
+- `src/render/three/assets/services.ts`: grain hoist, fish racks, watch tower, herbs,
   medical signs, street noticeboard and builder's equipment.
 - `src/share/`: sharing a town: the card it is shared as (`card.ts`), the format and limits the page and the
   server agree on (`format.ts`), and the page's side: uploading, fetching, and the device's share sheet (`client.ts`).
 - `src/server/`: the only server code: the routes behind shared towns (`handler.ts`), the Cloudflare Worker that
   runs them (`worker.ts`), and the same routes under `pnpm dev`, over a bucket in memory (`dev.ts`).
-- `src/asset-lab/appearance.ts`: material state metadata for catalogue presets.
+- `src/render/three/assets/appearance.ts`: material state metadata for catalogue presets.
   Wear, neighbourhood, hazards and winter are per-instance attributes in the
   live renderer. A state change does not change the geometry cache key.
 
@@ -231,20 +231,20 @@ The README shows the film as an animated AVIF, because GitHub plays no
 
 [`/model-review.html?collection=town`](http://localhost:5232/model-review.html?collection=town)
 shows all 23 building kinds plus the market hall and church upgrades. The final
-nine refinements are grouped at `?collection=rural`. `src/asset-lab/rural.ts`
+nine refinements are grouped at `?collection=rural`. `src/render/three/assets/rural.ts`
 owns timber entrances, nursery and farm fittings, chapel porches, granary louvres
 and the supported fire-watch access route. The same geometry is used in the game,
 catalogue, model sheets and GLB exports.
 
 [`/model-review.html?collection=trades`](http://localhost:5232/model-review.html?collection=trades)
 groups the mill, warehouse, fishery, bakery, weaver and watch house revisions.
-`src/asset-lab/trades.ts` owns their equipment, loading doors, open yards and the
+`src/render/three/assets/trades.ts` owns their equipment, loading doors, open yards and the
 bakery smoke origin. The mill keeps its animated sails. Cargo sits on the ground
 or loading apron, and the four new yard layouts turn towards connected roads.
 
 [`/model-review.html?collection=workshops`](http://localhost:5232/model-review.html?collection=workshops)
 groups the revised mine, smithy, sawmill and town hall. The three workshops have
-open yards and road-facing layouts. `src/asset-lab/workshops.ts` owns their
+open yards and road-facing layouts. `src/render/three/assets/workshops.ts` owns their
 geometry, construction frames and smoke origins. The live renderer and catalogue
 use the same models; simulation footprints and building costs are unchanged.
 
@@ -310,13 +310,13 @@ the actual basin. Park rendering in the game, catalogue, map and preview shares
 the same emitter metadata and water renderer. `pnpm check:park` verifies the
 rendered animation, pause, camera controls and phone layout, and captures stills
 and a five-second MP4 in `output/inkline-3d/park-review/`.
-- `src/townsfolk.ts`: residents out walking, for looking at only: not simulated, not saved.
-- `src/icons.ts`: the page's line-drawn icons.
-- `src/gallery.ts`: the dev-only art gallery (see above).
-- `src/sim/headless.ts`: a town with no page, stepped from code: what the tests, `check`, and `balance` play.
-- `src/save.ts`: saving and loading as [Effect](https://effect.website) programs: a versioned file in a slot
+- `src/render/three/townsfolk.ts`: residents out walking, for looking at only: not simulated, not saved.
+- `src/ui/dom/kit/icons.ts`: the page's line-drawn icons.
+- `src/labs/gallery/main.ts`: the dev-only art gallery (see above).
+- `src/game/headless.ts`: a town with no page, stepped from code: what the tests, `check`, and `balance` play.
+- `src/platform/save.ts`: saving and loading as [Effect](https://effect.website) programs: a versioned file in a slot
   (the mayor's own, or the autosave), typed errors for each way a load can fail.
-- `src/ui.ts`, `src/host.ts`, `src/main.ts`: the page bridge, camera, input, panels, and start-up.
+- `src/view/contracts.ts`, `src/ui/dom/host.ts`, `src/app/browser.ts`: the page bridge, camera, input, panels, and start-up.
 
 The simulation runs on Ritmo's `FixedLoop` at 60 steps a second (times the
 chosen speed), with integer state and a seeded random resource: `Town/Rng`,
@@ -403,7 +403,7 @@ share sheet instead. **Make a link** uploads the town (its save file, gzipped,
 with the camera) and a JPEG of the card; `/t/<id>` then opens the game on that
 town, running, with the building tools put away until the visitor chooses
 **Play from here** (the town becomes theirs and autosaves) or founds their own.
-A shared town loads through `loadText` in `src/save.ts`, so it is checked and
+A shared town loads through `loadText` in `src/platform/save.ts`, so it is checked and
 carried forward between save versions exactly as a save is.
 
 The server (`src/server/handler.ts`) keeps each share as two files in an R2
@@ -429,11 +429,11 @@ works locally and `pnpm check:browser` checks it end to end.
 
 ## Testing
 
-The simulation has no renderer in it: it runs headless (`src/sim/headless.ts`),
+The simulation has no renderer in it: it runs headless (`src/game/headless.ts`),
 about 60 to 80 times faster than real time, so the tests play real towns.
 
 `pnpm test` also runs `test/legibility.test.ts`: when a home is stuck, the
-panel's reasons (`src/rules/explain.ts`) must name the cause in words,
+panel's reasons (`src/game/rules/explain.ts`) must name the cause in words,
 checked against the usual dead ends and a real town with cottages beside a
 quarry. The bots know the thresholds; the player only has the panel.
 

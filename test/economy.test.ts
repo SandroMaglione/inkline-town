@@ -2,7 +2,7 @@
  * The economy's rules that must hold however the numbers are tuned: no
  * piece a mayor can lay down gives back far more than its kind usually
  * does for what it costs, and nothing comes for free. The figures come
- * from `src/rules/worth.ts`; the bands are the design's, so a change to
+ * from `src/game/rules/worth.ts`; the bands are the design's, so a change to
  * one number that opens a hole a player could play over and over fails
  * here.
  *
@@ -13,11 +13,11 @@
  */
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { amounts, type GoodId, type GroundId, type KindId, type Need, type PropId } from "../src/content.ts"
-import { appealGrid, parkSources, parksOf, type ParkCell } from "../src/appeal.ts"
-import { shippedRules } from "../src/rules/config.ts"
-import { moreAdmin, tierFor } from "../src/rules/households.ts"
-import { chainWorth, crownMargin, dominates, homes, median, openingKit, producers, producerWorth, services, upgradeWorths } from "../src/rules/worth.ts"
+import { amounts, type GoodId, type GroundId, type KindId, type Need, type PropId } from "../src/game/content/index.ts"
+import { appealGrid, parkSources, parksOf, type ParkCell } from "../src/game/world/appeal.ts"
+import { shippedRules } from "../src/game/rules/config.ts"
+import { moreAdmin, tierFor } from "../src/game/rules/households.ts"
+import { chainWorth, crownMargin, dominates, homes, median, openingKit, producers, producerWorth, services, upgradeWorths } from "../src/game/rules/worth.ts"
 import { district } from "../tools/balance/scenario.ts"
 import { component, fixture } from "../tools/balance/verify/fixture.ts"
 

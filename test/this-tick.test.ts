@@ -7,10 +7,10 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { Game } from "../src/schema.ts"
-import { headless } from "../src/sim/headless.ts"
-import { Households } from "../src/sim/town.ts"
-import { IndexGrid } from "../src/sim/work.ts"
+import { Game } from "../src/game/schema.ts"
+import { headless } from "../src/game/headless.ts"
+import { Households } from "../src/game/systems/town/index.ts"
+import { IndexGrid } from "../src/game/systems/work/index.ts"
 
 test("a Grid writer placed after Households fails to compile and tryTick rejects it", () => {
   const town = headless({ size: "small", term: 45, land: "fair", seed: 7 })

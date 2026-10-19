@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { resolveRules, type RulePatch } from "../../src/rules/config.ts"
+import { resolveRules, type RulePatch } from "../../src/game/rules/config.ts"
 import { analyze } from "./model/analyze.ts"
 import { project } from "./model/project.ts"
 import { searchDistricts, searchParameters } from "./model/search.ts"

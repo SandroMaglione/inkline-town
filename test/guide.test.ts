@@ -1,5 +1,5 @@
 /**
- * The mayor's guide (`src/rules/guide.ts`): it teaches a course in order,
+ * The mayor's guide (`src/game/rules/guide.ts`): it teaches a course in order,
  * chapter by chapter, and never falls silent before the town is complete;
  * signs from the town go ahead of the course once it is founded; it puts
  * away what the town has already done (shown or not); it says what opens a
@@ -9,8 +9,8 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { amounts, kinds, type KindId } from "../src/content.ts"
-import { courseCount, courseSteps, guideDone, guideStep, guideSteps, lockedNote, PLANKS_LOW, STONE_LOW, upcoming, type GuideFacts } from "../src/rules/guide.ts"
+import { amounts, kinds, type KindId } from "../src/game/content/index.ts"
+import { courseCount, courseSteps, guideDone, guideStep, guideSteps, lockedNote, PLANKS_LOW, STONE_LOW, upcoming, type GuideFacts } from "../src/game/rules/guide.ts"
 
 const fresh: GuideFacts = {
   homes: 0,

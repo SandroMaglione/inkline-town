@@ -1,5 +1,5 @@
 /**
- * Saving and loading (`src/save.ts`) against a real headless town and
+ * Saving and loading (`src/platform/save.ts`) against a real headless town and
  * storage in a map: every way a load can go, and that a failed one leaves
  * the town as it was.
  */
@@ -8,8 +8,8 @@ import { test } from "node:test"
 
 import { Effect } from "effect"
 
-import { load, loadLatest, memoryStorage, read, save, SAVE_FORMAT, SAVE_VERSION, Storage, World, type LoadError } from "../src/save.ts"
-import { headless, type Headless } from "../src/sim/headless.ts"
+import { load, loadLatest, memoryStorage, read, save, SAVE_FORMAT, SAVE_VERSION, Storage, World, type LoadError } from "../src/platform/save.ts"
+import { headless, type Headless } from "../src/game/headless.ts"
 
 const worldOf = (town: Headless): World["Service"] => ({
   snapshot: () => town.snapshot(),

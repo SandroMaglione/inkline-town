@@ -1,13 +1,13 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import * as THREE from "three"
-import { makeBuilding, buildingDimensions } from "../src/asset-lab/buildings.ts"
-import { ruralDoorIds } from "../src/asset-lab/rural.ts"
-import { sides, type InkAsset } from "../src/asset-lab/primitives.ts"
-import { vertex3 } from "../src/asset-lab/renderer.ts"
-import { noDoors } from "../src/render3d/models.ts"
-import { kinds } from "../src/content.ts"
-import { U } from "../src/iso.ts"
+import { makeBuilding, buildingDimensions } from "../src/render/three/assets/buildings.ts"
+import { ruralDoorIds } from "../src/render/three/assets/rural.ts"
+import { sides, type InkAsset } from "../src/render/three/assets/primitives.ts"
+import { vertex3 } from "../src/render/three/assets/renderer.ts"
+import { noDoors } from "../src/render/three/models.ts"
+import { kinds } from "../src/game/content/index.ts"
+import { U } from "../src/game/world/iso.ts"
 
 test("rural timber doors stay within their plots when opened on any road face", () => {
   for (const id of ruralDoorIds) for (const side of sides) for (const open of [0, 0.5, 1]) {

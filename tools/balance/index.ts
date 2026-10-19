@@ -8,4 +8,4 @@ export { searchParameters, searchDistricts } from "./model/search.ts"
 export { fromSnapshot, scenarioGrid, validateScenario, district } from "./scenario.ts"
 export type { Scenario, Inputs, Finding, Confidence, BuildAction, ProjectionOptions } from "./types.ts"
 
-export { parkValue, parksOf, parkSources, parkUpkeep, type ParkCell } from "../../src/appeal.ts"
+export { parkValue, parksOf, parkSources, parkUpkeep, type ParkCell } from "../../src/game/world/appeal.ts"

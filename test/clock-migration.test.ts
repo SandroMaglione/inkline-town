@@ -3,9 +3,9 @@ import { test } from "node:test"
 import { Effect } from "effect"
 import { HostClock } from "@typeonce/ritmo"
 import { Determinism } from "@typeonce/ritmo-devtools"
-import { load, memoryStorage, SAVE_FORMAT, SAVE_VERSION, Storage, World } from "../src/save.ts"
-import { headless } from "../src/sim/headless.ts"
-import { simulate } from "../src/sim/index.ts"
+import { load, memoryStorage, SAVE_FORMAT, SAVE_VERSION, Storage, World } from "../src/platform/save.ts"
+import { headless } from "../src/game/headless.ts"
+import { simulate } from "../src/game/schedule.ts"
 
 test("version 9 saves retain the exact 60 Hz step count and load as snapshot format 2", () => {
   const town = headless({ size: "small", term: 45, land: "fair", seed: 7 })

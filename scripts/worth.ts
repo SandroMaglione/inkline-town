@@ -1,14 +1,14 @@
 /**
  * The economy's ledger, as tables: what every producer, food, home,
- * service, and the opening cost and give back (see `src/rules/worth.ts`),
+ * service, and the opening cost and give back (see `src/game/rules/worth.ts`),
  * and what answering the crown with bought goods leaves the town.
  *
  *   node scripts/worth.ts
  *   node scripts/worth.ts --set kinds.fishery.upkeep=5   with candidate rules
  */
-import { resolveRules, type RulePatch } from "../src/rules/config.ts"
-import { chainWorth, crownMargin, homes, median, openingKit, producers, services } from "../src/rules/worth.ts"
-import type { GoodId } from "../src/content.ts"
+import { resolveRules, type RulePatch } from "../src/game/rules/config.ts"
+import { chainWorth, crownMargin, homes, median, openingKit, producers, services } from "../src/game/rules/worth.ts"
+import type { GoodId } from "../src/game/content/index.ts"
 
 const patches: Array<RulePatch> = []
 for (let i = 2; i < process.argv.length; i++)

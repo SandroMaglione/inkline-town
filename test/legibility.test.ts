@@ -10,14 +10,14 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { COMMUTE, home, kinds, type CharterValue } from "../src/content.ts"
-import { appealAt } from "../src/appeal.ts"
-import { canPlace, GridBuilder, type Use } from "../src/grid.ts"
-import type { Snapshot } from "../src/sim/headless.ts"
-import { blockers, streetShort, whyUnmet, type InTown, type Served, type Street } from "../src/rules/explain.ts"
-import { capacity, streetRoom, streetTax, taxOf } from "../src/rules/households.ts"
-import { approvalTarget, grudgeAfter } from "../src/rules/approval.ts"
-import { headless } from "../src/sim/headless.ts"
+import { COMMUTE, home, kinds, type CharterValue } from "../src/game/content/index.ts"
+import { appealAt } from "../src/game/world/appeal.ts"
+import { canPlace, GridBuilder, type Use } from "../src/game/world/grid.ts"
+import type { Snapshot } from "../src/game/headless.ts"
+import { blockers, streetShort, whyUnmet, type InTown, type Served, type Street } from "../src/game/rules/explain.ts"
+import { capacity, streetRoom, streetTax, taxOf } from "../src/game/rules/households.ts"
+import { approvalTarget, grudgeAfter } from "../src/game/rules/approval.ts"
+import { headless } from "../src/game/headless.ts"
 
 const settlers = { tier: 1 as const, residents: 4, food: 100, bread: 100, cloth: 0, faith: 100, furniture: 0, clock: 0 }
 const plenty: InTown = { fish: 20, smoked: 0, bread: 30, cloth: 188, furniture: 0 }

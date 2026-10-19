@@ -1,14 +1,14 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import * as THREE from "three"
-import { makeBuilding, buildingSmokeOrigin } from "../src/asset-lab/buildings.ts"
-import { tradeYardIds } from "../src/asset-lab/trades.ts"
-import { workshopPoint } from "../src/asset-lab/workshops.ts"
-import { type InkAsset, sides } from "../src/asset-lab/primitives.ts"
-import { buildingAsset, noDoors } from "../src/render3d/models.ts"
-import { vertex3 } from "../src/asset-lab/renderer.ts"
-import { kinds } from "../src/content.ts"
-import { U } from "../src/iso.ts"
+import { makeBuilding, buildingSmokeOrigin } from "../src/render/three/assets/buildings.ts"
+import { tradeYardIds } from "../src/render/three/assets/trades.ts"
+import { workshopPoint } from "../src/render/three/assets/workshops.ts"
+import { type InkAsset, sides } from "../src/render/three/assets/primitives.ts"
+import { buildingAsset, noDoors } from "../src/render/three/models.ts"
+import { vertex3 } from "../src/render/three/assets/renderer.ts"
+import { kinds } from "../src/game/content/index.ts"
+import { U } from "../src/game/world/iso.ts"
 
 function hits(asset: InkAsset, start: THREE.Vector3, end: THREE.Vector3) {
   const ray = new THREE.Ray(start, end.clone().sub(start).normalize())

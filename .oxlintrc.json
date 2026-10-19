@@ -13,18 +13,7 @@
   },
   "overrides": [
     {
-      "files": [
-        "src/sim/**",
-        "src/rules/**",
-        "src/grid.ts",
-        "src/mapgen.ts",
-        "src/places.ts",
-        "src/appeal.ts",
-        "src/content.ts",
-        "src/schema.ts",
-        "src/archetypes.ts",
-        "src/iso.ts"
-      ],
+      "files": ["src/game/**"],
       "rules": {
         "ritmo/use-clock-for-time": "error",
         "ritmo/use-random-for-randomness": "error",

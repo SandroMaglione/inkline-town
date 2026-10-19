@@ -4,8 +4,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { spawnSync } from "node:child_process"
-import { resolveRules } from "../src/rules/config.ts"
-import { TOWN_RANK } from "../src/content.ts"
+import { resolveRules } from "../src/game/rules/config.ts"
+import { TOWN_RANK } from "../src/game/content/index.ts"
 import { fingerprint } from "../tools/balance/provenance.ts"
 
 /** The sensible mayor's 60-minute term on a generated charter, played once and shared by the tests below. */

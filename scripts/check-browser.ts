@@ -7,9 +7,9 @@ import { existsSync } from "node:fs"
 import { mkdir,readFile,writeFile } from "node:fs/promises"
 import { execFileSync } from "node:child_process"
 import { chromium } from "playwright"
-import type { UiValue } from "../src/ui.ts"
-import type { GameScene } from "../src/render3d/scene.ts"
-import type { Snapshot } from "../src/sim/headless.ts"
+import type { UiValue } from "../src/view/contracts.ts"
+import type { GameScene } from "../src/render/three/scene.ts"
+import type { Snapshot } from "../src/game/headless.ts"
 
 declare global {
   interface Window {
