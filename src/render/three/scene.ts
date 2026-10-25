@@ -185,9 +185,11 @@ export class GameScene {
   }
   registry<T extends SceneNode>(): NodeRegistry.NodeRegistry<T> {
     return NodeRegistry.make<T>({
-      attach: (node) => {
+      // `parent` is the parent entity's node under a `RenderSync` hierarchy (none is given today): every node is on the root.
+      attach: (node, parent) => {
+        const into = parent?.group ?? this.objects
         this.nodes.add(node)
-        this.objects.add(node.group)
+        into.add(node.group)
       },
       detach: (node) => {
         this.nodes.delete(node)
