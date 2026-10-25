@@ -3,7 +3,7 @@
  * renderer, so it runs headless too.
  */
 import { Clock } from "@typeonce/ritmo"
-import * as Random from "@typeonce/ritmo-math/Random"
+import * as Random from "@typeonce/ritmo/Random"
 import { amounts, defaultCharter, goodIds, step, TRADE_LOAD } from "./content/index.ts"
 import { Game, Time } from "./schema.ts"
 import { ApplyEdits } from "./systems/edits/index.ts"

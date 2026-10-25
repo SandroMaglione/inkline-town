@@ -1,6 +1,6 @@
 import { shippedRules } from "../../rules/config.ts"
 import { stepsOf, type GoodId } from "../../content/index.ts"
-import * as Random from "@typeonce/ritmo-math/Random"
+import * as Random from "@typeonce/ritmo/Random"
 import { Building, Charter, Chronicle, Crown, Fate, Game, Rules, Inventory, Recipe, Rising, Rng, Site, Storage, Time, Treasury } from "../../schema.ts"
 import { elapsed, termTicks, write } from "../shared.ts"
 

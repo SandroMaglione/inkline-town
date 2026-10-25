@@ -1,6 +1,6 @@
 import { every } from "../../content/index.ts"
 import { wildTreeSpots, canSeedTree } from "../../rules/land.ts"
-import * as Random from "@typeonce/ritmo-math/Random"
+import * as Random from "@typeonce/ritmo/Random"
 import { treeDraft } from "../../world/archetypes.ts"
 import { Game, Rules, Grid, Rng, Tile, Time, Tree } from "../../schema.ts"
 

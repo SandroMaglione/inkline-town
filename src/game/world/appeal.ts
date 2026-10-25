@@ -1,4 +1,4 @@
-import { Ops } from "@typeonce/ritmo-math"
+import { Ops } from "@typeonce/ritmo"
 import { shippedRules, type Rules } from "../rules/config.ts"
 /**
  * Desirability: how pleasant each cell is to live on. Buildings and the land
