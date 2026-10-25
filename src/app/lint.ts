@@ -4,7 +4,9 @@
  * `project` and the renderer's `draw` schedules described without running
  * (they need a page). It lives with the app because it is the one place that
  * knows every layer; the simulation's headless entry stays free of the view
- * and the renderer.
+ * and the renderer. Those two load inside `lintTarget`, so the lint treats
+ * them as host code and checks only what the simulation loads against the
+ * simulation rules in `.oxlintrc.json`.
  */
 import { HostClock } from "@typeonce/ritmo"
 
@@ -13,12 +15,11 @@ import { founding } from "../game/headless.ts"
 import { resolveRules } from "../game/rules/config.ts"
 import { blankResources, simulate } from "../game/schedule.ts"
 import { Edits, Game, Rules } from "../game/schema.ts"
-import { draw } from "../render/three/schedule.ts"
-import { project } from "../view/schedule.ts"
 
 const lintCharter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }
 
-export const lintTarget = () => {
+export const lintTarget = async () => {
+  const [{ draw }, { project }] = await Promise.all([import("../render/three/schedule.ts"), import("../view/schedule.ts")])
   const made = Game.Runtime.make({
     services: Game.Runtime.services(Game.Runtime.service(Edits, founding(lintCharter)), Game.Runtime.service(Rules, resolveRules())),
     resources: blankResources(),
