@@ -114,7 +114,7 @@ const start = async () => {
       Game.Runtime.service(RuinNodes, ruinNodes)
     ),
     resources: blankResources(),
-    // Dev builds carry the debug handle, for the monitor and the replay recorder.
+    // Dev builds carry the debug handle, for the replay recorder.
     debug: import.meta.env.DEV ? { hostClock } : undefined
   })
   if (!made.ok) {
@@ -124,7 +124,7 @@ const start = async () => {
   }
   const runtime = made.value
   // In development, the page's console can reach the town: `town.edits.push(...)`, `town.interaction`, `town.shown`,
-  // `town.runtime.snapshot()`, and `town.advance(seconds)` to fast-forward the simulation.
+  // `town.snapshot()` (the world as plain data), and `town.advance(seconds)` to fast-forward the simulation.
   if (import.meta.env.DEV) {
     const advance = (seconds: number) => {
       for (let i = 0; i < Math.round(seconds / step.dt); i++) {
@@ -132,11 +132,16 @@ const start = async () => {
         if (!stepped.ok) throw new Error(`A step failed: ${JSON.stringify(stepped.error)}`)
       }
     }
-    Object.assign(window, { town: { interaction, shown, edits, runtime, advance, view: stage } })
+    const snapshot = () => {
+      const saved = runtime.snapshot()
+      if (!saved.ok) throw new Error(`The town could not be saved: ${JSON.stringify(saved.error)}`)
+      return saved.value
+    }
+    Object.assign(window, { town: { interaction, shown, edits, runtime, snapshot, advance, view: stage } })
     if (runtime.debug !== undefined) {
       // Loaded in dev only: the production bundle never includes devtools.
       const { attachDevtools } = await import("./devtools.ts")
-      attachDevtools({ runtime: { ...runtime, debug: runtime.debug }, mount: document.body, fetch: (url, init) => fetch(url, init), wallClock: HostClock.standard, host: window, demo: new URLSearchParams(location.search).has("replay-demo") })
+      attachDevtools({ runtime: { ...runtime, debug: runtime.debug }, fetch: (url, init) => fetch(url, init), wallClock: HostClock.standard, host: window, demo: new URLSearchParams(location.search).has("replay-demo") })
     }
   }
 

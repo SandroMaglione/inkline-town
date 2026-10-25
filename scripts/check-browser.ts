@@ -14,7 +14,7 @@ import type { Snapshot } from "../src/game/headless.ts"
 
 declare global {
   interface Window {
-    town:{interaction:Interaction;shown:Shown;edits:EditQueue;view:GameScene;advance:(seconds:number)=>void;runtime:{snapshot:()=>Snapshot}}
+    town:{interaction:Interaction;shown:Shown;edits:EditQueue;view:GameScene;advance:(seconds:number)=>void;snapshot:()=>Snapshot}
   }
 }
 const executable=process.env.BROWSER_EXECUTABLE_PATH??["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser","/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(existsSync)
@@ -27,7 +27,7 @@ const output="output/inkline-3d/game-check"
 await mkdir(output,{recursive:true})
 const facts:Record<string,unknown>={}
 const frames=async()=>page.waitForFunction(()=>window.town?.view.stats().frames>3)
-const snapshot=()=>page.evaluate(()=>window.town.runtime.snapshot())
+const snapshot=()=>page.evaluate(()=>window.town.snapshot())
 const entities=async(kind:string)=>(await snapshot()).entities.filter(e=>kind in e.components)
 const point=async(x:number,y:number,z=0)=>page.evaluate(([x,y,z])=>window.town.view.project(x!,y!,z!),[x,y,z])
 const clickGrid=async(x:number,y:number,z=0)=>{const p=await point(x,y,z);await page.mouse.click(p.x,p.y)}
@@ -55,16 +55,16 @@ try {
   facts.rotatedSelection=true
   await tool("road")
   await dragGrid([tile.x+4.5,tile.y+1.5],[tile.x+8.5,tile.y+1.5])
-  await page.waitForFunction(([x,y])=>[4,5,6,7,8].every(dx=>window.town.runtime.snapshot().entities.some(e=>e.components["Town/Road"]&&e.components["Town/Tile"].x===x!+dx&&e.components["Town/Tile"].y===y!+1)),[tile.x,tile.y])
+  await page.waitForFunction(([x,y])=>[4,5,6,7,8].every(dx=>window.town.snapshot().entities.some(e=>e.components["Town/Road"]&&e.components["Town/Tile"].x===x!+dx&&e.components["Town/Tile"].y===y!+1)),[tile.x,tile.y])
   facts.rotatedRoadDrag=true
   await tool("homes")
   await dragGrid([tile.x+5.5,tile.y+2.5],[tile.x+8.5,tile.y+2.5])
-  await page.waitForFunction(()=>window.town.runtime.snapshot().entities.filter(e=>e.components["Town/House"]).length===4)
+  await page.waitForFunction(()=>window.town.snapshot().entities.filter(e=>e.components["Town/House"]).length===4)
   facts.rotatedHomeDrag=true
   await tool("build")
   await page.locator(".panel .option").filter({has:page.locator(".name",{hasText:"lumberjack"})}).click()
   await clickGrid(tile.x+7,tile.y)
-  await page.waitForFunction(()=>window.town.runtime.snapshot().entities.some(e=>e.components["Town/Building"]?.kind==="lumberjack"))
+  await page.waitForFunction(()=>window.town.snapshot().entities.some(e=>e.components["Town/Building"]?.kind==="lumberjack"))
   const lumber=(await entities("Town/Building")).find(e=>e.components["Town/Building"].kind==="lumberjack")!
   assert.deepEqual(lumber.components["Town/Tile"],{x:tile.x+6,y:tile.y-1,size:2})
   facts.rotatedBuildingPlacement=true
@@ -80,20 +80,20 @@ try {
   await page.waitForFunction(id=>window.town.interaction.selected===id,lumber.id)
   const pauseWork=page.getByRole("button",{name:"Pause work",exact:true})
   await pauseWork.click()
-  await page.waitForFunction(id=>!!window.town.runtime.snapshot().entities.find(e=>e.id===id)?.components["Town/Paused"],lumber.id)
+  await page.waitForFunction(id=>!!window.town.snapshot().entities.find(e=>e.id===id)?.components["Town/Paused"],lumber.id)
   await page.getByRole("button",{name:"Resume work",exact:true}).click()
-  await page.waitForFunction(id=>!("Town/Paused" in window.town.runtime.snapshot().entities.find(e=>e.id===id)!.components),lumber.id)
+  await page.waitForFunction(id=>!("Town/Paused" in window.town.snapshot().entities.find(e=>e.id===id)!.components),lumber.id)
   facts.buildingPauseResume=true
   await page.locator(".panel .close").click()
   await page.getByRole("button",{name:"save",exact:true}).click()
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem("inkline-town/save/manual")!))
   await tool("bulldoze")
   await clickGrid(lt.x+1,lt.y+1,16)
-  await page.waitForFunction(id=>!window.town.runtime.snapshot().entities.some(e=>e.id===id),lumber.id)
+  await page.waitForFunction(id=>!window.town.snapshot().entities.some(e=>e.id===id),lumber.id)
   facts.rotatedBulldozing=true
   await page.getByRole("button",{name:"load",exact:true}).click()
   await page.getByRole("button",{name:"Load without saving",exact:true}).click()
-  await page.waitForFunction(id=>window.town.runtime.snapshot().entities.some(e=>e.id===id),lumber.id)
+  await page.waitForFunction(id=>window.town.snapshot().entities.some(e=>e.id===id),lumber.id)
   await page.waitForFunction(()=>window.town.view.stats().nodes>0)
   assert.deepEqual(await snapshot(),saved.world)
   facts.saveLoadUnchangedFormat=true
@@ -127,7 +127,7 @@ try {
   await page.waitForFunction(()=>window.town.shown.town.stats!.settlers>100)
   // The guide puts away what the bot's town has already done (as edits, kept on the next frame without a step of time); the rest loads exactly as saved.
   const withoutGuide=(w:Snapshot)=>({...w,resources:{...w.resources,"Town/Guide":null}})
-  await page.waitForFunction(()=>window.town.runtime.snapshot().resources["Town/Guide"].done.length>0)
+  await page.waitForFunction(()=>window.town.snapshot().resources["Town/Guide"].done.length>0)
   const loaded=await snapshot()
   assert.deepEqual(withoutGuide(loaded),withoutGuide(grown.world))
   assert.ok(["homes","fishery","market"].every(id=>loaded.resources["Town/Guide"].done.includes(id)),"The guide puts away what the town has done")
@@ -151,7 +151,7 @@ try {
   await page.getByRole("button",{name:"4×",exact:true}).click()
   const before=await snapshot()
   const positions=await page.evaluate(()=>[...window.town.view.nodes].filter(n=>n.constructor.name==="WalkerView").map(n=>n.group.position.toArray()))
-  await page.waitForFunction(t=>window.town.runtime.snapshot().resources["Town/Time"].step>t+30,before.resources["Town/Time"].step)
+  await page.waitForFunction(t=>window.town.snapshot().resources["Town/Time"].step>t+30,before.resources["Town/Time"].step)
   await page.locator(".toolbar .pause").click()
   const paused=await snapshot(),pf=await page.evaluate(()=>window.town.view.stats().frames)
   await page.waitForFunction(f=>window.town.view.stats().frames>f+10,pf)
@@ -214,7 +214,7 @@ try {
   visitor.on("pageerror",e=>errors.push(`visitor: ${e.message}`))
   await visitor.goto(url)
   await visitor.waitForFunction(()=>document.body.classList.contains("visiting"),undefined,{timeout:60000})
-  const visited=await visitor.evaluate(()=>window.town.runtime.snapshot())
+  const visited=await visitor.evaluate(()=>window.town.snapshot())
   assert.deepEqual(visited.entities,sharedWorld.entities,"The visitor sees the town as it was shared")
   assert.deepEqual(visited.resources,sharedWorld.resources)
   assert.ok(await visitor.locator(".toolbar").isHidden(),"A visitor's building tools are put away")

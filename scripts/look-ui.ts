@@ -23,7 +23,7 @@ const save = await readFile(process.env.SAVE, "utf8")
 const errors: Array<string> = []
 
 type Tile = { x: number; y: number; size: number }
-const town = (page: Page) => page.evaluate(() => (window as any).town.runtime.snapshot()) as Promise<any>
+const town = (page: Page) => page.evaluate(() => (window as any).town.snapshot()) as Promise<any>
 const find = async (page: Page, test: (e: any) => boolean) => (await town(page)).entities.find(test) as any
 
 for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["phone", 390, 844, true]] as const) {
@@ -71,7 +71,7 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
     const f: Tile = fishery.components["Town/Tile"]
     await page.evaluate((f) => {
       const { runtime } = (window as any).town
-      const s = runtime.snapshot(), tick = s.resources["Town/Time"].step
+      const s = (window as any).town.snapshot(), tick = s.resources["Town/Time"].step
       for (const e of s.entities) {
         const t = e.components["Town/Tile"], w = e.components["Town/Water"]
         if (w && Math.abs(t.x - f.x) <= 3 && Math.abs(t.y - f.y) <= 3) e.components["Town/Water"] = { fished: tick }
@@ -100,7 +100,7 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
   // 3. The upgrades the town can begin now, as gold arrows over the buildings; then the town hall's panel.
   await page.evaluate(() => {
     const { runtime } = (window as any).town
-    const s = runtime.snapshot()
+    const s = (window as any).town.snapshot()
     s.resources["Town/Fate"].rank = Math.max(s.resources["Town/Fate"].rank, 2)
     s.resources["Town/Treasury"].coins = 5000
     const restored = runtime.restore(s)
@@ -120,7 +120,7 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
   if (!phone) {
     await page.evaluate(() => {
       const { runtime } = (window as any).town
-      const s = runtime.snapshot()
+      const s = (window as any).town.snapshot()
       s.resources["Town/Treasury"].coins = 20000
       for (const e of s.entities) {
         const inv = e.components["Town/Inventory"]

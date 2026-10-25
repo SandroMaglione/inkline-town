@@ -277,7 +277,7 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
 - `src/server/`: the only server code: the routes behind shared towns (`handler.ts`), the Cloudflare Worker that
   runs them (`worker.ts`), and the same routes under `pnpm dev`, over a bucket in memory (`dev.ts`).
 - `src/app/`: `browser.ts` (start-up: the runtime, the scene, the map input, the page, the loop, saves),
-  `lint.ts` (what `pnpm lint:game` checks), and `devtools.ts` (the dev monitor and replay recorder).
+  `lint.ts` (what `pnpm lint:game` checks), and `devtools.ts` (the dev replay recorder).
 - `src/labs/`: the dev-only pages: the art gallery, the asset lab, the map, park, effects and model reviews,
   the service study, and the UI kit.
 
@@ -396,13 +396,18 @@ time from the `Town/Time` clock and randomness from `Town/Rng` or a seeded
 page, host I/O or the renderer; they keep `Infinity` and `NaN` out of data,
 which would save but not load; and they do engine-approximated math
 (`sin`, `cos`, `atan2`, `exp`, `hypot`, `a ** b`) with `Ops` from
-`@typeonce/ritmo-math`, which returns the same bits on every engine.
+`@typeonce/ritmo`, which returns the same bits on every engine. They count
+time in whole steps, never by subtracting `dt` from a timer, and never cast
+a value to a branded type (such as `Random.State`): the schema or Ritmo's
+constructor makes it.
 `Math.sqrt`, `min`, `max`, `floor`, `abs` and `x ** 2` are exact everywhere
 and stay. A module the simulation runs belongs under `src/game/`, which is
 all the lint needs. The same file keeps each layer to its imports (see
 **Code**): the view, for one, imports no UI and no renderer, and is linted
 headless too. `pnpm lint:game` then checks the schedules themselves with
 Ritmo's devtools lints (`src/app/lint.ts`).
+The Ritmo skill an agent follows for every change is linked from the
+installed package at `.agents/skills/ritmo`, so it updates with Ritmo.
 
 ## Balancing
 

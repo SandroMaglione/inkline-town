@@ -9,7 +9,8 @@
     "town/no-cast-escape": "error",
     "ritmo/handle-tick-result": "error",
     "ritmo/prefix-descriptor-and-system-names": "error",
-    "ritmo/use-cell-value": "error"
+    "ritmo/use-cell-value": "error",
+    "ritmo/no-state-spread": "error"
   },
   "overrides": [
     {
@@ -20,6 +21,8 @@
         "ritmo/use-ops-for-math": "error",
         "ritmo/keep-simulation-headless": "error",
         "ritmo/no-infinity-in-simulation-data": "error",
+        "ritmo/no-float-timers": "error",
+        "ritmo/no-brand-cast": "error",
         "no-restricted-imports": ["error", {"patterns": [{"regex": "^(\\.\\./)+(view|ui|render|platform|app|labs)/", "message": "The simulation imports only itself: hand the page and the renderer what they need through edits, events, and the view."}]}]
       }
     },

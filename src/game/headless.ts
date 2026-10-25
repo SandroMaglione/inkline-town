@@ -16,11 +16,12 @@ import { blankResources, simulate } from "./schedule.ts"
 /** A saved world, as plain data. */
 export interface Snapshot {
   version: number
+  gameVersion: number
   nextEntity: number
   entities: Array<{ id: number; components: Record<string, any> }>
   relations: Record<string, Array<[number, Array<number>]>>
   resources: Record<string, any>
-  machines: Record<string, string>
+  machines: Record<string, unknown>
 }
 
 /** The edit queue of a town about to be founded: one edit founds it on the first step. */
@@ -75,7 +76,11 @@ export const headless = (charter: CharterValue, options: { readonly toast?: (mes
       edits.push(...queued)
     },
     /** The world as plain data (a copy: changing it changes nothing until it is restored). */
-    snapshot: (): Snapshot => JSON.parse(JSON.stringify(runtime.snapshot())),
+    snapshot: (): Snapshot => {
+      const saved = runtime.snapshot()
+      if (!saved.ok) throw new Error(`The town could not be saved: ${JSON.stringify(saved.error)}`)
+      return JSON.parse(JSON.stringify(saved.value))
+    },
     /** Loads a world, validating everything in it. */
     restore: (snapshot: unknown) => {
       const restored = runtime.restore(snapshot)

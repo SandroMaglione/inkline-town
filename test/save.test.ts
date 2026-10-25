@@ -4,15 +4,17 @@
  * the town as it was.
  */
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
+import { readFileSync } from "node:fs"
 import { test } from "node:test"
 
 import { Effect } from "effect"
 
-import { load, loadLatest, memoryStorage, read, save, SAVE_FORMAT, SAVE_VERSION, Storage, World, type LoadError } from "../src/platform/save.ts"
+import { describe, load, loadLatest, loadText, memoryStorage, read, save, SAVE_FORMAT, SAVE_VERSION, Storage, World, type LoadError } from "../src/platform/save.ts"
 import { headless, type Headless } from "../src/game/headless.ts"
 
 const worldOf = (town: Headless): World["Service"] => ({
-  snapshot: () => town.snapshot(),
+  snapshot: () => ({ ok: true, value: town.snapshot() }),
   restore: (data) => {
     try {
       town.restore(data)
@@ -26,8 +28,7 @@ const worldOf = (town: Headless): World["Service"] => ({
 
 /**
  * The world as it plays: everything but the counter new entity ids come
- * from, which bevy-ts never moves backwards on a load (so ids are never
- * reused), and which nothing in the town reads.
+ * from, which a load sets to the save's, and which nothing in the town reads.
  */
 const playing = (town: Headless) => {
   const { nextEntity: _, ...world } = town.snapshot()
@@ -104,6 +105,38 @@ test("a storage that will not take the save says so", () => {
   const result = Effect.runSync(Effect.result(save("auto").pipe(Effect.provideService(Storage, full), Effect.provideService(World, worldOf(town)))))
   assert.equal(result._tag, "Failure")
   assert.equal((result as { failure: { _tag: string } }).failure._tag, "StorageFailed")
+})
+
+test("a world that cannot be saved says so, and writes nothing", () => {
+  const { storage } = setup()
+  const unsaveable: World["Service"] = { snapshot: () => ({ ok: false, error: { _tag: "UnencodableResource", name: "Town/Treasury" } }), restore: () => null, title: () => "" }
+  const result = Effect.runSync(Effect.result(save("manual").pipe(Effect.provideService(Storage, storage), Effect.provideService(World, unsaveable))))
+  assert.equal(result._tag, "Failure")
+  const error = (result as { failure: Parameters<typeof describe>[0] }).failure
+  assert.equal(error._tag, "Unsaveable")
+  assert.match(describe(error), /Could not save the town/)
+  assert.equal(storage.files.size, 0)
+})
+
+/** A snapshot's world, keys sorted, without its format and game versions: what plays. */
+const fingerprint = (world: object) => {
+  const canonical = (value: unknown): unknown =>
+    Array.isArray(value) ? value.map(canonical)
+    : value !== null && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, canonical((value as Record<string, unknown>)[k])]))
+    : value
+  const { version: _, gameVersion: __, ...rest } = world as { version: unknown; gameVersion: unknown }
+  return createHash("sha1").update(JSON.stringify(canonical(rest))).digest("hex")
+}
+
+test("a save the game wrote on Ritmo 0.9 (save version 10, snapshot format 2) loads and plays on as it did", () => {
+  // Saved after 90 s of a small, fair town (seed 5); the fingerprint is that town 30 s later, played on Ritmo 0.9.
+  const text = readFileSync(new URL("./fixtures/save-v10-ritmo-0.9.json", import.meta.url), "utf8")
+  assert.equal(JSON.parse(text).version, 10)
+  const { town } = setup()
+  const loaded = Effect.runSync(Effect.result(loadText(text).pipe(Effect.provideService(World, worldOf(town)))))
+  assert.equal(loaded._tag, "Success")
+  town.run(30)
+  assert.equal(fingerprint(town.snapshot()), "b62c15241f26b2e4b2a5ef5bf4cd72969f966351")
 })
 
 test("a save from before files had envelopes still loads", () => {

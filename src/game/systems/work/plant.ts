@@ -1,4 +1,4 @@
-import * as Random from "@typeonce/ritmo-math/Random"
+import * as Random from "@typeonce/ritmo/Random"
 import { fieldDraft, treeDraft } from "../../world/archetypes.ts"
 import { around, key, useAt } from "../../world/grid.ts"
 import { Field, FieldOf, Game, Rules, Grid, Paused, Planter, Recipe, Rising, Rng, Site, Staff, Status, Tile, Time, Tree, type Status as StatusValue } from "../../schema.ts"

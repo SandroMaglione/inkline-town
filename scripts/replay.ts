@@ -11,7 +11,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs"
 
-import { Replay } from "@typeonce/ritmo-devtools"
+import { Replay, Verify } from "@typeonce/ritmo-devtools"
 
 import { replayTarget } from "../src/game/headless.ts"
 
@@ -54,8 +54,9 @@ if (flag === "--extract") {
     console.log(opened.value.session.journal({ frames: [first, opened.value.session.frame()] }).text)
   } else {
     console.log(opened.value.play().text)
-    const verified = Replay.verify(replayTarget, file)
-    console.log(verified.ok ? verified.value.text : JSON.stringify(verified.error))
+    // Twice in this process and against the recording's checkpoints (`ritmo-devtools verify` adds browsers).
+    const verified = await Verify.acrossEngines(replayTarget, file)
+    console.log(verified.ok ? verified.value.text : verified.error.text)
     console.log(opened.value.session.report().text)
   }
 }

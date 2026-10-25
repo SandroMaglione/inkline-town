@@ -1,5 +1,5 @@
 import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, RoleParts, rolesOf, StartParts, startOf, treeDraft, waterDraft } from "../../world/archetypes.ts"
-import * as Random from "@typeonce/ritmo-math/Random"
+import * as Random from "@typeonce/ritmo/Random"
 import { amounts, anA, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, stepsOf, total, upgradeAt, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../../content/index.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../../world/grid.ts"
 import { inside } from "../../world/iso.ts"

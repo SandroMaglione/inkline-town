@@ -1,5 +1,5 @@
 import { near, riskIncrements } from "../../rules/risks.ts"
-import * as Random from "@typeonce/ritmo-math/Random"
+import * as Random from "@typeonce/ritmo/Random"
 import { appealAt } from "../../world/appeal.ts"
 import { ruinDraft } from "../../world/archetypes.ts"
 import { goodIds, risk, upgradeAt, type GoodId } from "../../content/index.ts"

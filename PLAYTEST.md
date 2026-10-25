@@ -22,9 +22,9 @@ Open the address it prints (usually http://localhost:5173). Replays work in
 
 Any of these saves the last minute of play:
 
-- **The button.** Press `\` (backslash) or the "◉ monitor" button in the
-  corner to open the Ritmo monitor, then **Save replay**. Do it right after
-  you see the problem: the replay holds the last 60 seconds before the press.
+- **The key.** Press `\` (backslash) anywhere on the page but in a text
+  field. Do it right after you see the problem: the replay holds the last 60
+  seconds before the press.
 - **By itself, when a step fails.** If the simulation fails, a replay is
   saved without you doing anything.
 - **By itself, when a rule breaks.** The dev build checks rules after every
@@ -41,7 +41,7 @@ replay is saved.
 In the terminal running `pnpm dev` you see a line like:
 
 ```
-[bevy-ts] replay saved: .replays/2026-10-17T12-04-09.512Z-tick-1412.json (1800 ticks): invariant fewer than ten buildings broke at tick 1412: ...
+[ritmo] replay saved: .replays/2026-10-17T12-04-09.512Z-tick-1412.json (1800 ticks): invariant fewer than ten buildings broke at tick 1412: ...
 ```
 
 The file is in `.replays/` in this folder. It is ignored by git: it is a
@@ -64,7 +64,9 @@ steps that show it into a test, fixes it, and deletes the replay.
 ## For the agent
 
 - `pnpm replay <file>`: replays it, compares the recorded checkpoints, replays
-  twice for determinism, and prints the session report.
+  twice for determinism (`Verify.acrossEngines`), and prints the session report.
+  `pnpm exec ritmo-devtools verify src/game/headless.ts <file> --engines node,chromium`
+  plays it in a real browser too, for a bug only one engine shows.
 - `pnpm replay <file> --journal <from>-<to>`: what happened in those ticks.
 - `pnpm replay <file> --extract <from>-<to> <out.json>`: a small replay with
   its own start, for building a test. Prefer an ordinary `headless` test when

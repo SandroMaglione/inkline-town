@@ -56,7 +56,7 @@ const camera = (c: Camera) => page.evaluate((c) => {
   v.camera.zoom = c.zoom; v.camera.updateProjectionMatrix()
   v.focus(c.x, c.y)
 }, c)
-const town = () => page.evaluate(() => (window as any).town.runtime.snapshot()) as Promise<any>
+const town = () => page.evaluate(() => (window as any).town.snapshot()) as Promise<any>
 const hall = (await town()).entities.find((e: any) => e.components["Town/TownHall"]).components["Town/Tile"]
 console.log(JSON.stringify({ hall }))
 
@@ -143,7 +143,7 @@ if (mode === "stills") {
   if (process.env.RECKON) {
     await page.evaluate(() => {
       const { runtime } = (window as any).town
-      const s = runtime.snapshot()
+      const s = (window as any).town.snapshot()
       return s.resources["Town/Time"]
     }).then((t) => console.log(JSON.stringify({ time: t })))
     for (let i = 0; i < 40 && !(await page.locator(".dialog.open").count()); i++) {

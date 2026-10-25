@@ -11,8 +11,10 @@
  * Saved components and resources are constructed with a validator, so the
  * whole world snapshots to plain data and loads back checked.
  */
-import { Clock as SimulationClock, Decode, Descriptor, Schema } from "@typeonce/ritmo"
-import * as Random from "@typeonce/ritmo-math/Random"
+import { Clock as SimulationClock, Descriptor, Entity, Schema } from "@typeonce/ritmo"
+import * as Random from "@typeonce/ritmo/Random"
+import { Schema as S } from "effect"
+import { codec } from "./codec.ts"
 import { step } from "./content/index.ts"
 
 import { goodIds, groundIds, kindIds, landIds, propIds, serviceIds, sizeIds, type Amounts, type GoodId } from "./content/index.ts"
@@ -21,12 +23,12 @@ import type { Edit } from "./edits.ts"
 
 export const Root = Schema.defineRoot("Town")
 
-const integer = Decode.integer
-const cell = Decode.struct({ x: integer, y: integer })
-const good = Decode.literal(...goodIds)
-const service = Decode.literal(...serviceIds)
+const integer = S.Int
+const cell = S.Struct({ x: integer, y: integer })
+const good = S.Literals(goodIds)
+const service = S.Literals(serviceIds)
 /** A count of every good. */
-const amounts = Decode.struct({
+const amounts = S.Struct({
   wood: integer, planks: integer, stone: integer, ore: integer, tools: integer, fish: integer, smoked: integer,
   wheat: integer, flour: integer, bread: integer, wool: integer, cloth: integer, furniture: integer
 })
@@ -37,32 +39,32 @@ export type Status = (typeof statuses)[number]
 // ── On the grid ───────────────────────────────────────────────────────────
 
 /** A square of cells on the grid, by its top cell, `size` cells a side. */
-export const Tile = Descriptor.ConstructedComponent(Decode.struct({ x: integer, y: integer, size: integer }))("Town/Tile", { immutable: true })
+export const Tile = Descriptor.ConstructedComponent(codec(S.Struct({ x: integer, y: integer, size: integer })))("Town/Tile", { immutable: true })
 export const Road = Descriptor.Tag("Town/Road")
 /** A road paved with stone: a little nicer to live on (see `appeal.ts`). */
 export const Paved = Descriptor.Tag("Town/Paved")
 /** A cell of park: its ground, and what stands on it (see `parks` in content). */
-export const Park = Descriptor.ConstructedComponent(Decode.struct({ ground: Decode.literal(...groundIds), prop: Decode.literal("none", ...propIds) }))("Town/Park")
+export const Park = Descriptor.ConstructedComponent(codec(S.Struct({ ground: S.Literals(groundIds), prop: S.Literals(["none", ...propIds]) })))("Town/Park")
 /** What is left of a home or building that burned, fell down, or was left derelict, until it is cleared. */
-export const Ruin = Descriptor.ConstructedComponent(Decode.struct({ cause: Decode.literal("burnt", "collapsed", "derelict") }))("Town/Ruin", { immutable: true })
+export const Ruin = Descriptor.ConstructedComponent(codec(S.Struct({ cause: S.Literals(["burnt", "collapsed", "derelict"]) })))("Town/Ruin", { immutable: true })
 /** Materials still owed before it can go up, out of `total`. */
-export const Site = Descriptor.ConstructedComponent(Decode.struct({ owed: amounts, total: integer }))("Town/Site")
+export const Site = Descriptor.ConstructedComponent(codec(S.Struct({ owed: amounts, total: integer })))("Town/Site")
 /** Going up: steps since its materials were all in (see `BUILD_TICKS`). Removed once it stands. */
-export const Rising = Descriptor.ConstructedComponent(Decode.struct({ ticks: integer }))("Town/Rising")
+export const Rising = Descriptor.ConstructedComponent(codec(S.Struct({ ticks: integer })))("Town/Rising")
 
 // ── The land ──────────────────────────────────────────────────────────────
 
-export const Tree = Descriptor.ConstructedComponent(Decode.struct({ growth: integer }))("Town/Tree")
-export const Rock = Descriptor.ConstructedComponent(Decode.struct({ ore: Decode.boolean, amount: integer }))("Town/Rock")
+export const Tree = Descriptor.ConstructedComponent(codec(S.Struct({ growth: integer })))("Town/Tree")
+export const Rock = Descriptor.ConstructedComponent(codec(S.Struct({ ore: S.Boolean, amount: integer })))("Town/Rock")
 /** A cell of water: the step it was last fished (see `RESTOCK_TICKS`). */
-export const Water = Descriptor.ConstructedComponent(Decode.struct({ fished: integer }))("Town/Water")
-export const Field = Descriptor.ConstructedComponent(Decode.struct({ growth: integer }))("Town/Field")
+export const Water = Descriptor.ConstructedComponent(codec(S.Struct({ fished: integer })))("Town/Water")
+export const Field = Descriptor.ConstructedComponent(codec(S.Struct({ growth: integer })))("Town/Field")
 
 // ── Homes ─────────────────────────────────────────────────────────────────
 
 /** A home: its tier, residents, and steps left of each need a walker last met. */
-export const House = Descriptor.ConstructedComponent(Decode.struct({
-  tier: Decode.literal(1, 2, 3),
+export const House = Descriptor.ConstructedComponent(codec(S.Struct({
+  tier: S.Literals([1, 2, 3]),
   residents: integer,
   food: integer,
   bread: integer,
@@ -70,10 +72,10 @@ export const House = Descriptor.ConstructedComponent(Decode.struct({
   faith: integer,
   furniture: integer,
   clock: integer
-}))("Town/House")
+})))("Town/House")
 
 /** The finest tier a home has been rebuilt for and paid (see `home.tiers`): rising to it again costs nothing. Absent: a cottage. */
-export const Rebuilt = Descriptor.ConstructedComponent(Decode.struct({ tier: Decode.literal(2, 3) }))("Town/Rebuilt", { immutable: true })
+export const Rebuilt = Descriptor.ConstructedComponent(codec(S.Struct({ tier: S.Literals([2, 3]) })))("Town/Rebuilt", { immutable: true })
 
 // ── Risks and wear (homes and buildings) ──────────────────────────────────
 
@@ -82,23 +84,23 @@ export const Rebuilt = Descriptor.ConstructedComponent(Decode.struct({ tier: Dec
  * disorder (a building only has the first), and thefts since a constable last
  * passed.
  */
-export const Risk = Descriptor.ConstructedComponent(Decode.struct({ fire: integer, health: integer, order: integer, thefts: integer }))("Town/Risk")
+export const Risk = Descriptor.ConstructedComponent(codec(S.Struct({ fire: integer, health: integer, order: integer, thefts: integer })))("Town/Risk")
 /** How well kept it is, 0 → `CONDITION_MAX`; it falls into ruin at nothing. */
-export const Condition = Descriptor.ConstructedComponent(Decode.struct({ value: integer }))("Town/Condition")
+export const Condition = Descriptor.ConstructedComponent(codec(S.Struct({ value: integer })))("Town/Condition")
 /** On fire: steps until it is lost, and which fire (see `Fires`) it belongs to. */
-export const Burning = Descriptor.ConstructedComponent(Decode.struct({ left: integer, fire: integer }))("Town/Burning")
+export const Burning = Descriptor.ConstructedComponent(codec(S.Struct({ left: integer, fire: integer })))("Town/Burning")
 /** A sick household: steps until it passes on its own. */
-export const Sick = Descriptor.ConstructedComponent(Decode.struct({ left: integer }))("Town/Sick")
+export const Sick = Descriptor.ConstructedComponent(codec(S.Struct({ left: integer })))("Town/Sick")
 
 // ── Buildings and their roles ─────────────────────────────────────────────
 
-export const Building = Descriptor.ConstructedComponent(Decode.struct({ kind: Decode.literal(...kindIds) }))("Town/Building", { immutable: true })
+export const Building = Descriptor.ConstructedComponent(codec(S.Struct({ kind: S.Literals(kindIds) })))("Town/Building", { immutable: true })
 export const TownHall = Descriptor.Tag("Town/TownHall")
-export const Status = Descriptor.ConstructedComponent(Decode.literal(...statuses))("Town/Status")
+export const Status = Descriptor.ConstructedComponent(codec(S.Literals(statuses)))("Town/Status")
 /** Stopped by the town: no workers, a quarter of its upkeep. */
 export const Paused = Descriptor.Tag("Town/Paused")
 /** Upgraded where it stands, `level` times (see `Kind.upgrade`): it works as `asUpgraded` says. */
-export const Upgraded = Descriptor.ConstructedComponent(Decode.struct({ level: Decode.literal(1, 2) }))("Town/Upgraded", { immutable: true })
+export const Upgraded = Descriptor.ConstructedComponent(codec(S.Struct({ level: S.Literals([1, 2]) })))("Town/Upgraded", { immutable: true })
 /**
  * Being upgraded to `level` where it stands: its coins are paid, and these
  * materials are still owed, out of `total`; carriers bring them while it
@@ -106,22 +108,22 @@ export const Upgraded = Descriptor.ConstructedComponent(Decode.struct({ level: D
  * never ahead of what is in (see `WORKS_TICKS`). Once everything is in and
  * worked, it stands upgraded.
  */
-export const Works = Descriptor.ConstructedComponent(Decode.struct({ owed: amounts, total: integer, done: integer, level: Decode.literal(1, 2) }))("Town/Works")
+export const Works = Descriptor.ConstructedComponent(codec(S.Struct({ owed: amounts, total: integer, done: integer, level: S.Literals([1, 2]) })))("Town/Works")
 
 /**
  * Workers it needs, how many came (`apprentices` of them settlers standing
  * in for citizens), and how many of its crew live within a commute.
  */
-export const Staff = Descriptor.ConstructedComponent(Decode.struct({ needed: integer, assigned: integer, apprentices: integer, nearby: integer }))("Town/Staff")
+export const Staff = Descriptor.ConstructedComponent(codec(S.Struct({ needed: integer, assigned: integer, apprentices: integer, nearby: integer })))("Town/Staff")
 
 /** Goods on hand: only the ones it `accepts`, up to `cap` of each. */
-export const Inventory = Descriptor.ConstructedComponent(Decode.struct({ stock: amounts, accepts: Decode.array(good), cap: integer }))("Town/Inventory")
+export const Inventory = Descriptor.ConstructedComponent(codec(S.Struct({ stock: amounts, accepts: S.Array(good), cap: integer })))("Town/Inventory")
 /** Takes any good in, and sends goods out to whoever needs them. */
 export const Storage = Descriptor.Tag("Town/Storage")
 
 /** Turns inputs (or nothing) into outputs: a job takes `period` steps of a full crew. */
-export const Recipe = Descriptor.ConstructedComponent(Decode.struct({
-  input: Decode.nullable(good),
+export const Recipe = Descriptor.ConstructedComponent(codec(S.Struct({
+  input: S.NullOr(good),
   inputs: integer,
   output: good,
   batch: integer,
@@ -129,56 +131,56 @@ export const Recipe = Descriptor.ConstructedComponent(Decode.struct({
   /** Worker-steps put into the current job (0: none started). */
   progress: integer,
   made: integer
-}))("Town/Recipe")
+})))("Town/Recipe")
 
 /** Its recipe needs this within `radius` cells of its footprint. */
-export const Gatherer = Descriptor.ConstructedComponent(Decode.struct({
-  source: Decode.literal("tree", "stone", "ore", "field", "water"),
+export const Gatherer = Descriptor.ConstructedComponent(codec(S.Struct({
+  source: S.Literals(["tree", "stone", "ore", "field", "water"]),
   radius: integer
-}))("Town/Gatherer", { immutable: true })
+})))("Town/Gatherer", { immutable: true })
 
 /** Plants trees or fields within `radius`, one every `interval` steps, up to `max`. */
-export const Planter = Descriptor.ConstructedComponent(Decode.struct({
-  what: Decode.literal("tree", "field"),
+export const Planter = Descriptor.ConstructedComponent(codec(S.Struct({
+  what: S.Literals(["tree", "field"]),
   radius: integer,
   interval: integer,
   cooldown: integer,
   max: integer
-}))("Town/Planter")
+})))("Town/Planter")
 
 /** Carriers it may have out at once. */
-export const Carriers = Descriptor.ConstructedComponent(Decode.struct({ count: integer }))("Town/Carriers", { immutable: true })
+export const Carriers = Descriptor.ConstructedComponent(codec(S.Struct({ count: integer })))("Town/Carriers", { immutable: true })
 
 /** Sends a walker out every `interval` steps. */
-export const Service = Descriptor.ConstructedComponent(Decode.struct({ service, interval: integer, cooldown: integer, range: integer }))("Town/Service")
+export const Service = Descriptor.ConstructedComponent(codec(S.Struct({ service, interval: integer, cooldown: integer, range: integer })))("Town/Service")
 /** The next tour of a service's district. Optional in older saved worlds. */
-export const Patrol = Descriptor.ConstructedComponent(Decode.struct({ next: integer }))("Town/Patrol")
+export const Patrol = Descriptor.ConstructedComponent(codec(S.Struct({ next: integer })))("Town/Patrol")
 
 // ── Walkers ───────────────────────────────────────────────────────────────
 
 /** How a walker looks: a carrier, or a walker in its building's colour. */
-export const Figure = Descriptor.ConstructedComponent(Decode.struct({ role: Decode.literal("carrier", "walker"), color: integer }))("Town/Figure", { immutable: true })
+export const Figure = Descriptor.ConstructedComponent(codec(S.Struct({ role: S.Literals(["carrier", "walker"]), color: integer })))("Town/Figure", { immutable: true })
 
 /**
  * Where a walker is going: road cells in order, the one it last reached, and
  * how far on to the next (in steps of `CELL_STEPS`). At the last cell it has
  * arrived, and waits for its errand or roam to give it somewhere new.
  */
-export const Route = Descriptor.ConstructedComponent(Decode.struct({ cells: Decode.array(cell), index: integer, step: integer }))("Town/Route")
+export const Route = Descriptor.ConstructedComponent(codec(S.Struct({ cells: S.Array(cell), index: integer, step: integer })))("Town/Route")
 
 /** Carrying `count` of a good to a building, then walking back (still carrying it, if it could not be handed over). */
-export const Errand = Descriptor.ConstructedComponent(Decode.struct({
-  target: Decode.handle(Root, Tile),
+export const Errand = Descriptor.ConstructedComponent(codec(S.Struct({
+  target: S.declare(Entity.isHandle(Root, Tile)),
   good,
   count: integer,
-  back: Decode.boolean
-}))("Town/Errand")
+  back: S.Boolean
+})))("Town/Errand")
 
 /** A firefighter running to a blaze, then walking back. */
-export const Rescue = Descriptor.ConstructedComponent(Decode.struct({ target: Decode.handle(Root, Tile), back: Decode.boolean }))("Town/Rescue")
+export const Rescue = Descriptor.ConstructedComponent(codec(S.Struct({ target: S.declare(Entity.isHandle(Root, Tile)), back: S.Boolean })))("Town/Rescue")
 
 /** Wandering the roads serving homes, `left` cells more, then walking back with what is left in its basket. */
-export const Roam = Descriptor.ConstructedComponent(Decode.struct({ service, left: integer, basket: amounts, back: Decode.boolean }))("Town/Roam")
+export const Roam = Descriptor.ConstructedComponent(codec(S.Struct({ service, left: integer, basket: amounts, back: S.Boolean })))("Town/Roam")
 
 /** A walker belongs to the building that sent it, and goes when it goes. */
 export const { relation: WalkerOf } = Descriptor.Hierarchy("Town/WalkerOf", "Town/Walkers")
@@ -188,12 +190,12 @@ export const { relation: FieldOf } = Descriptor.Hierarchy("Town/FieldOf", "Town/
 // ── Resources ─────────────────────────────────────────────────────────────
 
 export const Time = SimulationClock.resource("Town/Time", step)
-/** The world's seeded random state: systems draw with `Random.draw(resources.rng)` (see `@typeonce/ritmo-math/Random`). */
-export const Rng = Descriptor.ConstructedResource(Random)("Town/Rng")
-export const Treasury = Descriptor.ConstructedResource(Decode.struct({ coins: integer }))("Town/Treasury")
+/** The world's seeded random state: systems draw with `Random.draw(resources.rng)` (see `@typeonce/ritmo/Random`). */
+export const Rng = Descriptor.ConstructedResource(Random.codec)("Town/Rng")
+export const Treasury = Descriptor.ConstructedResource(codec(S.Struct({ coins: integer })))("Town/Treasury")
 /** The last collection's taxes, trade (sold less bought), upkeep, and administration, per minute. */
-export const Ledger = Descriptor.ConstructedResource(Decode.struct({ taxes: integer, trade: integer, upkeep: integer, admin: integer }))("Town/Ledger")
-export const Census = Descriptor.ConstructedResource(Decode.struct({
+export const Ledger = Descriptor.ConstructedResource(codec(S.Struct({ taxes: integer, trade: integer, upkeep: integer, admin: integer })))("Town/Ledger")
+export const Census = Descriptor.ConstructedResource(codec(S.Struct({
   homes: integer,
   settlers: integer,
   /** Residents of citizens' homes and townhouses together: the citizens the goals count. */
@@ -211,42 +213,42 @@ export const Census = Descriptor.ConstructedResource(Decode.struct({
   /** Homes sick, and homes and buildings on fire, right now. */
   sick: integer,
   burning: integer
-}))("Town/Census")
+})))("Town/Census")
 /**
  * The town's tax rates (in percent of the usual, for each tier), what it
  * sells to traders beyond the reserve it keeps, and what it buys up to it;
  * `loads` is how much of each good may change hands at a collection.
  */
-export const Policy = Descriptor.ConstructedResource(Decode.struct({
+export const Policy = Descriptor.ConstructedResource(codec(S.Struct({
   settlers: integer,
   citizens: integer,
-  sells: Decode.array(good),
-  buys: Decode.array(good),
+  sells: S.Array(good),
+  buys: S.Array(good),
   reserve: integer,
   loads: amounts
-}))("Town/Policy")
+})))("Town/Policy")
 
 /**
  * What the town was founded on: the size of its land, its term in minutes,
  * how rich the land is, its seed, and the step it was founded on.
  */
-export const Charter = Descriptor.ConstructedResource(Decode.struct({
-  size: Decode.literal(...sizeIds),
+export const Charter = Descriptor.ConstructedResource(codec(S.Struct({
+  size: S.Literals(sizeIds),
   term: integer,
-  land: Decode.literal(...landIds),
+  land: S.Literals(landIds),
   seed: integer,
   founded: integer,
   /** Each year's winter, rolled when the town is founded: "none" for the first, then mild, normal, or hard. */
-  winters: Decode.array(Decode.literal("none", "mild", "normal", "hard"))
-}))("Town/Charter")
+  winters: S.Array(S.Literals(["none", "mild", "normal", "hard"]))
+})))("Town/Charter")
 /** Which cells are land ("1") and which open water beyond the coast ("0"), by `key`; and how many are land. */
-export const Land = Descriptor.ConstructedResource(Decode.struct({ mask: Decode.string, cells: integer }))("Town/Land")
+export const Land = Descriptor.ConstructedResource(codec(S.Struct({ mask: S.String, cells: integer })))("Town/Land")
 
 /** Each good's price with traders, in percent of the usual (see `market`). */
-export const Market = Descriptor.ConstructedResource(Decode.struct({ prices: amounts }))("Town/Market")
+export const Market = Descriptor.ConstructedResource(codec(S.Struct({ prices: amounts })))("Town/Market")
 
 /** The town's approval, -100 → 100, where it is heading, and why: each part of the target. */
-export const Mood = Descriptor.ConstructedResource(Decode.struct({
+export const Mood = Descriptor.ConstructedResource(codec(S.Struct({
   approval: integer,
   target: integer,
   base: integer,
@@ -258,15 +260,15 @@ export const Mood = Descriptor.ConstructedResource(Decode.struct({
   /** The grudge over taxes past: points off the target now, and the town's memory of them in tenths (see `mood.grudge`). */
   grudge: integer,
   memory: integer
-}))("Town/Mood")
+})))("Town/Mood")
 
 /**
  * The crown's requests: the one open now (if `open`), when the next comes,
  * how many were met and missed (and missed in a row), and when the misses
  * the crown still remembers were.
  */
-export const Crown = Descriptor.ConstructedResource(Decode.struct({
-  open: Decode.boolean,
+export const Crown = Descriptor.ConstructedResource(codec(S.Struct({
+  open: S.Boolean,
   good,
   amount: integer,
   issued: integer,
@@ -277,8 +279,8 @@ export const Crown = Descriptor.ConstructedResource(Decode.struct({
   missed: integer,
   /** Requests missed since one was last met. */
   streak: integer,
-  snubs: Decode.array(integer)
-}))("Town/Crown")
+  snubs: S.Array(integer)
+})))("Town/Crown")
 
 export const fateStates = ["playing", "lost", "over"] as const
 /**
@@ -289,9 +291,9 @@ export const fateStates = ["playing", "lost", "over"] as const
  * `rank` the highest the town has reached (see `ranks`). The `since`
  * fields are when each danger (or the next rank's goals) began, or -1.
  */
-export const Fate = Descriptor.ConstructedResource(Decode.struct({
-  state: Decode.literal(...fateStates),
-  reason: Decode.string,
+export const Fate = Descriptor.ConstructedResource(codec(S.Struct({
+  state: S.Literals(fateStates),
+  reason: S.String,
   at: integer,
   term: integer,
   began: integer,
@@ -301,37 +303,37 @@ export const Fate = Descriptor.ConstructedResource(Decode.struct({
   goalSince: integer,
   peak: integer,
   score: integer
-}))("Town/Fate")
+})))("Town/Fate")
 
 /** The town over its term: a sample every `HISTORY_TICKS`. */
-export const History = Descriptor.ConstructedResource(Decode.struct({
-  samples: Decode.array(Decode.struct({ tick: integer, coins: integer, residents: integer, citizens: integer, approval: integer, net: integer }))
-}))("Town/History")
+export const History = Descriptor.ConstructedResource(codec(S.Struct({
+  samples: S.Array(S.Struct({ tick: integer, coins: integer, residents: integer, citizens: integer, approval: integer, net: integer }))
+})))("Town/History")
 /** What happened, in a line each; an `alarm` is news the page announces (a fire, a theft, winter coming); `at` is where, when it was somewhere. */
-export const Chronicle = Descriptor.ConstructedResource(Decode.struct({
-  lines: Decode.array(Decode.struct({ tick: integer, text: Decode.string, alarm: Decode.boolean, at: Decode.nullable(cell) }))
-}))("Town/Chronicle")
+export const Chronicle = Descriptor.ConstructedResource(codec(S.Struct({
+  lines: S.Array(S.Struct({ tick: integer, text: S.String, alarm: S.Boolean, at: S.NullOr(cell) }))
+})))("Town/Chronicle")
 
 /**
  * The mayor's guide (see `rules/guide.ts`): the steps it has put away, done or
  * dismissed, and whether the mayor turned it off. Written by the page, not the
  * simulation; saved with the town.
  */
-export const Guide = Descriptor.ConstructedResource(Decode.struct({ done: Decode.array(Decode.string), off: Decode.boolean }))("Town/Guide")
+export const Guide = Descriptor.ConstructedResource(codec(S.Struct({ done: S.Array(S.String), off: S.Boolean })))("Town/Guide")
 /** How desirable each cell is to live on (by `key`), reckoned every `appeal.every` steps; empty before the first. */
-export const Appeal = Descriptor.ConstructedResource(Decode.struct({ cells: Decode.array(integer) }))("Town/Appeal")
+export const Appeal = Descriptor.ConstructedResource(codec(S.Struct({ cells: S.Array(integer) })))("Town/Appeal")
 
 /**
  * The town's food over the last minute: what walkers handed out and what
  * rotted, counting now, and the last full minute's totals.
  */
-export const Pantry = Descriptor.ConstructedResource(Decode.struct({ eaten: integer, rotted: integer, eatenLast: integer, rottedLast: integer, warned: integer }))("Town/Pantry")
+export const Pantry = Descriptor.ConstructedResource(codec(S.Struct({ eaten: integer, rotted: integer, eatenLast: integer, rottedLast: integer, warned: integer })))("Town/Pantry")
 
 /** Fires burning now (each started at a cell, the homes and buildings it took so far), and the next fire's number. */
-export const Fires = Descriptor.ConstructedResource(Decode.struct({
-  fires: Decode.array(Decode.struct({ id: integer, x: integer, y: integer, homes: integer, buildings: integer })),
+export const Fires = Descriptor.ConstructedResource(codec(S.Struct({
+  fires: S.Array(S.Struct({ id: integer, x: integer, y: integer, homes: integer, buildings: integer })),
   next: integer
-}))("Town/Fires")
+})))("Town/Fires")
 
 /** What stands on each cell, rebuilt every step from the tiles (see `grid.ts`). */
 /** `void`: off the land, past the coast. */

@@ -7,7 +7,7 @@ import { load, memoryStorage, SAVE_FORMAT, SAVE_VERSION, Storage, World } from "
 import { headless } from "../src/game/headless.ts"
 import { simulate } from "../src/game/schedule.ts"
 
-test("version 9 saves retain the exact 60 Hz step count and load as snapshot format 2", () => {
+test("version 9 saves retain the exact 60 Hz step count and load as the current snapshot format", () => {
   const town = headless({ size: "small", term: 45, land: "fair", seed: 7 })
   town.run(1)
   const current = town.snapshot()
@@ -17,14 +17,14 @@ test("version 9 saves retain the exact 60 Hz step count and load as snapshot for
   town.run(1)
   const result = Effect.runSync(Effect.result(load("manual").pipe(
     Effect.provideService(Storage, storage),
-    Effect.provideService(World, { snapshot: () => town.snapshot(), title: () => "town", restore: (value) => {
+    Effect.provideService(World, { snapshot: () => ({ ok: true, value: town.snapshot() }), title: () => "town", restore: (value) => {
       try { town.restore(value); return null } catch (error) { return String(error) }
     } })
   )))
   assert.equal(result._tag, "Success")
   if (result._tag === "Success") assert.equal(result.success.version, SAVE_VERSION)
   assert.deepEqual(town.snapshot().resources["Town/Time"], { step: count, hz: 60, dt: 1 / 60 })
-  assert.equal(town.snapshot().version, 2)
+  assert.equal(town.snapshot().version, 3)
 })
 
 test("the full town simulation repeats from fresh scripted input", () => {

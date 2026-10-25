@@ -1,5 +1,5 @@
 import { spoilExpectation } from "../../rules/decay.ts"
-import * as Random from "@typeonce/ritmo-math/Random"
+import * as Random from "@typeonce/ritmo/Random"
 import { ruinDraft } from "../../world/archetypes.ts"
 import { foods, goodIds, stepsOf } from "../../content/index.ts"
 import { counted, placeName } from "../../world/places.ts"
