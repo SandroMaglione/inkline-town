@@ -8,8 +8,9 @@ import { shippedRules, type Rules } from "../rules/config.ts"
  * the rest).
  * Pure: the same charter always makes the same land.
  */
-import { Ops } from "@typeonce/ritmo-math"
-import * as Random from "@typeonce/ritmo-math/Random"
+import { Ops } from "@typeonce/ritmo"
+import * as Random from "@typeonce/ritmo/Random"
+import { Angle } from "@typeonce/ritmo-math"
 
 import { GROWN, type CharterValue } from "../content/index.ts"
 import { DIRS, key } from "./grid.ts"
@@ -29,8 +30,6 @@ export interface Land {
 /** The clearing around the town hall that nothing natural grows in. */
 const CLEARING = 7
 
-/** The angle from `a` to `b`, -π → π. */
-const turn = (a: number, b: number) => Ops.atan2(Ops.sin(b - a), Ops.cos(b - a))
 
 /**
  * The shape of the land: a circle of the size's radius whose edge swells
@@ -50,7 +49,7 @@ const shape = (random: Random.Random, radius: number): Array<boolean> => {
     radius *
     (1 +
       waves.reduce((sum, w) => sum + w.size * Ops.sin(w.k * angle + w.phase), 0) +
-      capes.reduce((sum, c) => sum + c.size * Ops.exp(-((turn(c.at, angle) / c.width) ** 2)), 0))
+      capes.reduce((sum, c) => sum + c.size * Ops.exp(-((Angle.wrap(angle - c.at) / c.width) ** 2)), 0))
 
   let land = new Array<boolean>(GRID * GRID).fill(false)
   for (let y = 1; y < GRID - 1; y++) {
