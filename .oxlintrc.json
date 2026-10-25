@@ -7,7 +7,7 @@
   },
   "rules": {
     "town/no-cast-escape": "error",
-    "ritmo/handle-tick-result": "error",
+    "ritmo/handle-runtime-result": "error",
     "ritmo/prefix-descriptor-and-system-names": "error",
     "ritmo/use-cell-value": "error",
     "ritmo/no-state-spread": "error"
