@@ -219,7 +219,7 @@ const apply = (town: Headless, command: Command): string | null => {
     case "SaveAndLoad": {
       // Through the page's own saving and loading: a save loads back to exactly what was saved.
       const world: World["Service"] = {
-        snapshot: () => town.snapshot(),
+        snapshot: () => ({ ok: true, value: town.snapshot() }),
         restore: (data) => {
           town.restore(data as Snapshot)
           return null

@@ -137,7 +137,7 @@ test("ids, lines, and picture kinds", () => {
 })
 
 const worldOf = (town: Headless): World["Service"] => ({
-  snapshot: () => town.snapshot(),
+  snapshot: () => ({ ok: true, value: town.snapshot() }),
   restore: (data) => {
     try {
       town.restore(data)

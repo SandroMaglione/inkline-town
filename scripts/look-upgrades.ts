@@ -28,7 +28,7 @@ try {
   // A town that has reached the town rank, with coins and materials to spare.
   await page.evaluate(() => {
     const { runtime } = (window as any).town
-    const s = runtime.snapshot()
+    const s = (window as any).town.snapshot()
     s.resources["Town/Fate"].rank = 2
     s.resources["Town/Treasury"].coins = 5000
     const hall = s.entities.find((e: any) => e.components["Town/TownHall"])
@@ -37,7 +37,7 @@ try {
     if (!restored.ok) throw new Error(`The changed town did not load: ${JSON.stringify(restored.error)}`)
   })
   await page.evaluate(() => (window as any).town.advance(1))
-  const hall = await page.evaluate(() => (window as any).town.runtime.snapshot().entities.find((e: any) => e.components["Town/TownHall"]).components["Town/Tile"])
+  const hall = await page.evaluate(() => (window as any).town.snapshot().entities.find((e: any) => e.components["Town/TownHall"]).components["Town/Tile"])
   await page.evaluate(([x, y]) => { const v = (window as any).town.view; v.focus(x, y); v.camera.zoom = 2.2; v.camera.updateProjectionMatrix() }, [hall.x + 1.5, hall.y + 1.5])
   // The gold arrow over the town hall; then its panel, the upgrade first under its status, begun from its button.
   await page.waitForTimeout(600)
@@ -56,10 +56,10 @@ try {
   await page.evaluate(() => (window as any).town.advance(90))
   await page.waitForTimeout(300)
   await page.screenshot({ path: `${out}/4-guildhall.png` })
-  assert.equal(await page.evaluate(() => (window as any).town.runtime.snapshot().entities.find((e: any) => e.components["Town/TownHall"]).components["Town/Upgraded"]?.level), 1)
+  assert.equal(await page.evaluate(() => (window as any).town.snapshot().entities.find((e: any) => e.components["Town/TownHall"]).components["Town/Upgraded"]?.level), 1)
   // Complete the next civic milestone through the actual upgrade command too.
   await page.evaluate(() => {
-    const t=(window as any).town,s=t.runtime.snapshot()
+    const t=(window as any).town,s=t.snapshot()
     const hall=s.entities.find((e:any)=>e.components["Town/TownHall"])
     Object.assign(hall.components["Town/Inventory"].stock,{planks:120,stone:120,tools:40,cloth:40})
     s.resources["Town/Treasury"].coins=5000
@@ -72,7 +72,7 @@ try {
   await page.screenshot({path:`${out}/5-cityhall-works.png`})
   await page.evaluate(()=>(window as any).town.advance(240))
   await page.waitForTimeout(300)
-  assert.equal(await page.evaluate(()=>(window as any).town.runtime.snapshot().entities.find((e:any)=>e.components["Town/TownHall"]).components["Town/Upgraded"]?.level),2)
+  assert.equal(await page.evaluate(()=>(window as any).town.snapshot().entities.find((e:any)=>e.components["Town/TownHall"]).components["Town/Upgraded"]?.level),2)
   await page.screenshot({path:`${out}/5-cityhall.png`})
   // The new workshop's actual model portrait and upgrade choices must fit a phone.
   await page.setViewportSize({ width: 390, height: 844 })
@@ -85,7 +85,7 @@ try {
   assert.equal(await page.locator(".panel h3").filter({ hasText: /^upgrades$/i }).count(), 0, "upgrades are begun from a building's panel, not the build menu")
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "The build menu fits the phone")
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ errors, upgraded: await page.evaluate(() => (window as any).town.runtime.snapshot().entities.find((e: any) => e.components["Town/TownHall"]).components["Town/Upgraded"] ?? null) }))
+  console.log(JSON.stringify({ errors, upgraded: await page.evaluate(() => (window as any).town.snapshot().entities.find((e: any) => e.components["Town/TownHall"]).components["Town/Upgraded"] ?? null) }))
 } finally {
   await browser.close()
 }

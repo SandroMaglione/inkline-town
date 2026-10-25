@@ -18,14 +18,15 @@ export const SAVE_FORMAT = "inkline-town/save"
  * winters). 4: parks and patrols. 5: the grudge over taxes, and where each piece of news happened.
  * 6: how much of each good may be traded at a collection. 7: the mayor's guide. 8: terms that follow one
  * another, the town's rank, and upgraded buildings.
- * 10: fixed-step Clock values and runtime snapshot format 2.
- * Version 4 to 9 saves are carried forward (see `carry`); older ones cannot be loaded.
+ * 10: fixed-step Clock values and runtime snapshot format 2. 11: runtime snapshot format 3 (Ritmo 0.13).
+ * Version 4 to 10 saves are carried forward (see `carry`); older ones cannot be loaded.
  */
-export const SAVE_VERSION = 10
+export const SAVE_VERSION = 11
 
 /**
  * Fills in what a save from an earlier version lacks, so a town in progress
- * survives an update: from 4, the mood's grudge (none yet) and the news's
+ * survives an update: from 10, the runtime's snapshot format 3, which
+ * changed only how state machines are saved, and the town has none; from 4, the mood's grudge (none yet) and the news's
  * places (unknown); from 5, trade at full loads, as it was; from 6, the
  * guide from its start (it puts away at once what the town has already
  * done); from 7, its first term, and its rank: a town that was complete
@@ -36,18 +37,20 @@ export const SAVE_VERSION = 10
  * Anything else is left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
-  if (version < 4 || version > 9 || typeof world !== "object" || world === null) return null
+  if (version < 4 || version > 10 || typeof world !== "object" || world === null) return null
   const w = world as { version?: number; scopes?: Record<string, unknown>; resources?: Record<string, unknown>; entities?: Array<{ components?: Record<string, unknown> }> }
   const r = w.resources
   if (!r || typeof r !== "object") return null
   // Town never used entity scopes before this format. Its old clock counted
   // the same 60 Hz steps under `tick`; preserve that count exactly.
   if (w.version === 1) { w.version = 2; w.scopes = {} }
+  // Format 3 saves a state machine with its fields; the town has no machines, so a format 2 world is the same.
+  if (w.version === 2) w.version = 3
   const time = r["Town/Time"]
   if (typeof time === "object" && time !== null && "tick" in time && typeof time.tick === "number") {
     r["Town/Time"] = { step: time.tick, hz: 60, dt: time.tick > 0 ? 1 / 60 : 0 }
   }
-  if (version === 9) return w
+  if (version === 9 || version === 10) return w
   // From 8, water that was never fished, and an upgraded building upgraded once.
   for (const e of Array.isArray(w.entities) ? w.entities : []) {
     const water = e.components?.["Town/Water"]
@@ -135,11 +138,13 @@ export class Unreadable extends Schema.TaggedError<Unreadable>()("Unreadable", {
 export class WrongVersion extends Schema.TaggedError<WrongVersion>()("WrongVersion", { slot: Schema.String, version: Schema.Number }) {}
 export class Rejected extends Schema.TaggedError<Rejected>()("Rejected", { slot: Schema.String, reason: Schema.String }) {}
 export class StorageFailed extends Schema.TaggedError<StorageFailed>()("StorageFailed", { slot: Schema.String, reason: Schema.String }) {}
+/** The world refused to be saved: a value its schema could not encode. */
+export class Unsaveable extends Schema.TaggedError<Unsaveable>()("Unsaveable", { slot: Schema.String, reason: Schema.String }) {}
 
 export type LoadError = NothingSaved | Unreadable | WrongVersion | Rejected | StorageFailed
 
 /** What to tell the mayor. */
-export const describe = (error: LoadError | StorageFailed): string => {
+export const describe = (error: LoadError | StorageFailed | Unsaveable): string => {
   switch (error._tag) {
     case "NothingSaved":
       return error.slot === "auto" ? "No autosave yet" : "Nothing saved yet"
@@ -151,6 +156,8 @@ export const describe = (error: LoadError | StorageFailed): string => {
       return `The save does not fit this game: ${error.reason}`
     case "StorageFailed":
       return `Could not save: ${error.reason}`
+    case "Unsaveable":
+      return `Could not save the town: ${error.reason}`
   }
 }
 
@@ -164,7 +171,8 @@ export class Storage extends Context.Service<Storage, {
 
 /** The town being saved and loaded. */
 export class World extends Context.Service<World, {
-  readonly snapshot: () => unknown
+  /** The world as plain data, or why it could not be saved (Ritmo's `runtime.snapshot()` result). */
+  readonly snapshot: () => { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: unknown }
   /** Restores a world, or says why it will not. */
   readonly restore: (world: unknown) => string | null
   /** The town in a line, for a save's title. */
@@ -192,13 +200,15 @@ export const memoryStorage = (files = new Map<string, string>()): Storage["Servi
 export const fileOf = (slot: Slot) =>
   Effect.gen(function* () {
     const world = yield* World
+    const snapshot = world.snapshot()
+    if (!snapshot.ok) return yield* new Unsaveable({ slot, reason: JSON.stringify(snapshot.error) })
     const file: SaveFile = {
       format: SAVE_FORMAT,
       version: SAVE_VERSION,
       slot,
       savedAt: yield* Clock.currentTimeMillis,
       title: world.title(),
-      world: world.snapshot()
+      world: snapshot.value
     }
     return file
   })
