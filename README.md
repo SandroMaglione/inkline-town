@@ -6,7 +6,7 @@ stands. Lay the roads, house the settlers, build the chains that feed and
 clothe them, and raise a hamlet to a village, a town, and a city of
 burghers. Or watch it go bankrupt, revolt, or empty out.
 
-<p align="center"><a href="https://inkline.typeonce.dev"><b>▶ Play Inkline Town in your browser</b></a> · free, nothing to install, saves stay on your device</p>
+<p align="center"><a href="https://inkline.typeonce.games"><b>▶ Play Inkline Town in your browser</b></a> · free, nothing to install, saves stay on your device</p>
 
 <a href="docs/media/inkline-town.mp4">
   <picture>
@@ -151,7 +151,7 @@ filling as the carts bring the materials.
 
 ## Play
 
-**[Play Inkline Town at inkline.typeonce.dev](https://inkline.typeonce.dev).**
+**[Play Inkline Town at inkline.typeonce.games](https://inkline.typeonce.games).**
 It runs in the browser, on a computer or a phone. Saves stay in your browser,
 and the town autosaves every two minutes of play. Share a picture of your
 town, or a link that opens it running for anyone, who can then play on from

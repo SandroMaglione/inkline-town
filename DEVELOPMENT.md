@@ -549,9 +549,10 @@ pnpm release --profile admin --yes --no-input
 
 Release from an up-to-date `main`. The release command checks the game's
 types and simulation and the deployment config, then Alchemy builds and
-deploys the game to <https://inkline.typeonce.dev>. Alchemy attaches that
+deploys the game to <https://inkline.typeonce.games>. Alchemy attaches that
 custom domain to the `prod` Worker and creates its DNS record and certificate
-in the `typeonce.dev` Cloudflare zone. Check that the game opens, save/load
+in the `typeonce.games` Cloudflare zone (the old <https://inkline.typeonce.dev>
+301s to it). Check that the game opens, save/load
 works, and a shared link opens and unfurls there after each release.
 
 `admin` is the existing local Alchemy Cloudflare profile. On another
