@@ -8,7 +8,10 @@ import * as Effect from "effect/Effect"
 const rootDir = fileURLToPath(new URL("..", import.meta.url))
 
 // Only production claims the custom domain; previews stay on workers.dev.
-const productionDomain = "inkline.typeonce.dev"
+const productionDomain = "inkline.typeonce.games"
+
+// The old address (inkline.typeonce.dev) 301s here from a redirect
+// Worker in the typeonce-dev repository, so existing links keep working.
 
 /** Shared towns are kept this long, so the bucket stays within the free 10 GB. */
 const SHARE_DAYS = 180
