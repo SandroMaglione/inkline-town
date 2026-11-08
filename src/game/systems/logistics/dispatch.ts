@@ -58,13 +58,14 @@ export const Dispatch = Game.System(
     const incoming = new Map<string, number>()
     const inbound = (target: number, good: GoodId) => incoming.get(`${target}:${good}`) ?? 0
     const expect = (target: number, good: GoodId, count: number) => incoming.set(`${target}:${good}`, inbound(target, good) + count)
-    for (const { data } of queries.errands.each()) {
-      const errand = data.errand.get()
-      out.set(data.home.get(), (out.get(data.home.get()) ?? 0) + 1)
+    const errands = queries.errands.data
+    for (const entity of queries.errands.each()) {
+      const errand = errands.errand.get(entity)
+      out.set(errands.home.get(entity), (out.get(errands.home.get(entity)) ?? 0) + 1)
       if (!errand.back) expect(errand.target, errand.good, errand.count)
     }
 
-    type Id = ReturnType<typeof queries.sites.each>[number]["entity"]["id"]
+    type Id = ReturnType<typeof queries.sites.each>[number]["id"]
     // Outstanding demand and shelf fill, including goods already in transit.
     interface Want {
       readonly id: Id
@@ -75,28 +76,32 @@ export const Dispatch = Game.System(
       readonly fill?: () => number
     }
     const wants: Array<Want> = []
-    for (const { entity, data } of queries.sites.each()) {
-      const site = data.site.get()
-      const ds = doors(grid, data.tile.get())
+    const sites = queries.sites.data
+    for (const entity of queries.sites.each()) {
+      const site = sites.site.get(entity)
+      const ds = doors(grid, sites.tile.get(entity))
       for (const g of goodIds) if (site.owed[g] > 0) wants.push({ id: entity.id, doors: ds, good: g, site: true, want: () => site.owed[g] - inbound(entity.id, g) })
     }
     // An upgrade under way is building work too: its materials go before anyone's shelves.
-    for (const { entity, data } of queries.works.each()) {
-      const works = data.works.get()
-      const ds = doors(grid, data.tile.get())
+    const upgrades = queries.works.data
+    for (const entity of queries.works.each()) {
+      const works = upgrades.works.get(entity)
+      const ds = doors(grid, upgrades.tile.get(entity))
       for (const g of goodIds) if (works.owed[g] > 0) wants.push({ id: entity.id, doors: ds, good: g, site: true, want: () => works.owed[g] - inbound(entity.id, g) })
     }
     const sitesWant = new Set(wants.filter((w) => w.want() > 0).map((w) => w.good))
     const rooms: Array<{ readonly id: Id; readonly doors: ReadonlyArray<Point>; readonly room: (g: GoodId) => number; readonly keeps: boolean }> = []
-    for (const { entity, data } of queries.wanting.each()) {
-      const inventory = data.inventory.value()
+    const wanting = queries.wanting.data
+    const homes = queries.homes.data
+    for (const entity of queries.wanting.each()) {
+      const inventory = wanting.inventory.get(entity)
       if (!inventory) continue
-      const ds = doors(grid, data.tile.get())
+      const ds = doors(grid, wanting.tile.get(entity))
       if (ds.length === 0) continue
-      const recipe = data.recipe.value()
+      const recipe = wanting.recipe.get(entity)
       const space = (g: GoodId) => (inventory.accepts.includes(g) ? inventory.cap - inventory.stock[g] - inbound(entity.id, g) : 0)
-      const kind = data.building.value()?.kind
-      if (data.storage.present) {
+      const kind = wanting.building.get(entity)?.kind
+      if (wanting.storage.has(entity)) {
         rooms.push({ id: entity.id, doors: ds, room: space, keeps: kind !== undefined && (kinds[kind].keeps ?? 0) > 1 })
       }
       if (recipe && recipe.input !== null) {
@@ -105,16 +110,16 @@ export const Dispatch = Game.System(
       }
       // A workshop that wears out tools keeps a couple on hand.
       if (kind !== undefined && kinds[kind].wear) wants.push({ id: entity.id, doors: ds, good: "tools", site: false, want: () => TOOL_STOCK - inventory.stock.tools - inbound(entity.id, "tools"), fill: () => (inventory.stock.tools + inbound(entity.id, "tools")) / TOOL_STOCK })
-      const service = data.service.value()?.service
+      const service = wanting.service.get(entity)?.service
       if (service === "goods") {
-        const roads = reach(grid, [ds[0]!]), range = data.service.value()!.range
+        const roads = reach(grid, [ds[0]!]), range = wanting.service.get(entity)!.range
         let citizenDistrict = false, burgherDistrict = false
-        for (const { data: h } of queries.homes.each()) {
-          const tile = h.tile.get(), found = nearest(roads, doors(grid, tile))
+        for (const home of queries.homes.each()) {
+          const tile = homes.tile.get(home), found = nearest(roads, doors(grid, tile))
           if (found === null || found.distance >= range) continue
           const desirability = appealAt(resources.appeal.get().cells, tile.x, tile.y)
-          citizenDistrict ||= wantsCitizenGoods(h.house.get(), desirability, rules)
-          burgherDistrict ||= wantsBurgherGoods(h.house.get(), desirability, rules)
+          citizenDistrict ||= wantsCitizenGoods(homes.house.get(home), desirability, rules)
+          burgherDistrict ||= wantsBurgherGoods(homes.house.get(home), desirability, rules)
           if (burgherDistrict) break
         }
         for (const g of provisions) {
@@ -139,21 +144,22 @@ export const Dispatch = Game.System(
       expect(to.id, good, count)
     }
 
-    for (const { entity, data } of queries.senders.each()) {
-      const carriers = data.carriers.get().count
+    const { data } = queries.senders
+    for (const entity of queries.senders.each()) {
+      const carriers = data.carriers.get(entity).count
       if ((out.get(entity.id) ?? 0) >= carriers) continue
-      const starts = doors(grid, data.tile.get())
+      const starts = doors(grid, data.tile.get(entity))
       if (starts.length === 0) continue
       const roads = reach(grid, starts)
-      const inventory = data.inventory.get()
+      const inventory = data.inventory.get(entity)
       let stock = inventory.stock
-      const recipe = data.recipe.value()
+      const recipe = data.recipe.get(entity)
 
       // A storage meets demands with what it holds; anyone else sends on what it made.
       // A producer waits for a full load (or a full shelf) so its carriers do not walk with one crate.
       const ready = recipe ? stock[recipe.output] >= Math.min(LOAD, inventory.cap - recipe.batch) : false
       // What sites are waiting for goes first: otherwise steady demand for one good keeps every carrier busy.
-      const offers: ReadonlyArray<GoodId> = data.storage.present
+      const offers: ReadonlyArray<GoodId> = data.storage.has(entity)
         ? goodIds.filter((g) => stock[g] > 0).sort((a, b) => Number(!sitesWant.has(a)) - Number(!sitesWant.has(b)))
         : recipe && ready ? [recipe.output] : []
       for (const good of offers) {
@@ -170,11 +176,11 @@ export const Dispatch = Game.System(
         // Food that spoils goes to a granary if there is one in reach, before the nearest storage; a
         // storage that does not keep food sends it on to a granary that does.
         const perishable = spoils[good] !== undefined
-        const senderKeeps = (kinds[data.building.value()?.kind ?? "townhall"].keeps ?? 0) > 1
-        if (best === null && (!data.storage.present || (perishable && !senderKeeps))) {
+        const senderKeeps = (kinds[data.building.get(entity)?.kind ?? "townhall"].keeps ?? 0) > 1
+        if (best === null && (!data.storage.has(entity) || (perishable && !senderKeeps))) {
           let kept = false
           for (const r of rooms) {
-            if (r.id === entity.id || (data.storage.present && !r.keeps)) continue
+            if (r.id === entity.id || (data.storage.has(entity) && !r.keeps)) continue
             const count = Math.min(LOAD, stock[good], r.room(good))
             if (count <= 0) continue
             const found = nearest(roads, r.doors)
@@ -189,7 +195,7 @@ export const Dispatch = Game.System(
         send({ id: entity.id, roads }, best, good, best.count)
         stock = { ...stock, [good]: stock[good] - best.count }
       }
-      if (stock !== inventory.stock) data.inventory.set({ ...inventory, stock })
+      if (stock !== inventory.stock) data.inventory.set(entity, { ...inventory, stock })
     }
   }
 )

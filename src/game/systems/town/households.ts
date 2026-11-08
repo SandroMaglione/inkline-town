@@ -48,7 +48,7 @@ export const Households = Game.System(
     const { home, risk } = rules
     // What the store holds, reckoned only once some home is ready to rise this step.
     let stock: Record<GoodId, number> | null = null
-    const held = () => (stock ??= Object.fromEntries(goodIds.map((g) => [g, queries.stores.each().reduce((n, { data }) => n + data.inventory.get().stock[g], 0)])) as Record<GoodId, number>)
+    const held = () => (stock ??= Object.fromEntries(goodIds.map((g) => [g, queries.stores.each().reduce((n, entity) => n + queries.stores.data.inventory.get(entity).stock[g], 0)])) as Record<GoodId, number>)
     /** Pays a home's rise from the treasury and the store, fullest first; or says it cannot. */
     const pay = (cost: { readonly coins: number; readonly materials: Partial<Record<GoodId, number>> }): boolean => {
       if (shortOf(cost, resources.treasury.get().coins, held())) return false
@@ -56,10 +56,11 @@ export const Households = Game.System(
       for (const [g, n] of Object.entries(cost.materials) as Array<[GoodId, number]>) {
         let owed = n
         held()[g] -= n
-        for (const { data } of [...queries.stores.each()].sort((a, b) => b.data.inventory.get().stock[g] - a.data.inventory.get().stock[g])) {
+        const { data } = queries.stores
+        for (const entity of [...queries.stores.each()].sort((a, b) => data.inventory.get(b).stock[g] - data.inventory.get(a).stock[g])) {
           if (owed <= 0) break
-          const inv = data.inventory.get(), k = Math.min(owed, inv.stock[g])
-          data.inventory.set({ ...inv, stock: { ...inv.stock, [g]: inv.stock[g] - k } })
+          const inv = data.inventory.get(entity), k = Math.min(owed, inv.stock[g])
+          data.inventory.set(entity, { ...inv, stock: { ...inv.stock, [g]: inv.stock[g] - k } })
           owed -= k
         }
       }
@@ -73,29 +74,30 @@ export const Households = Game.System(
     const t = elapsed(resources.time.get(), resources.charter.get())
     // In winter a meal lasts two thirds as long.
     const eat = mealDecay(t, seasonAt(t, resources.charter.get(), rules).winter)
-    for (const { entity, data } of queries.homes.each()) {
-      const h = data.house.get()
+    const { data } = queries.homes
+    for (const entity of queries.homes.each()) {
+      const h = data.house.get(entity)
       const next = ageNeeds(h, eat)
       // A home on fire, or closed by the town, stands empty.
-      if (data.burning.present || data.closed.present) next.residents = 0
+      if (data.burning.has(entity) || data.closed.has(entity)) next.residents = 0
       else if (next.clock % home.settle === 0) {
-        const tile = data.tile.get()
+        const tile = data.tile.get(entity)
         const desirability = appealAt(cells, tile.x, tile.y)
-        const tier = tierFor(next, desirability, data.risk.value() ?? { fire: 0, health: 0, order: 0 }, rules)
+        const tier = tierFor(next, desirability, data.risk.get(entity) ?? { fire: 0, health: 0, order: 0 }, rules)
         // Rising a tier is a rebuilding, paid for at once, once: a home that cannot be paid for waits, and one
         // that stepped down moves back up into what it was rebuilt as.
-        const built = data.rebuilt.value()?.tier ?? 1
+        const built = data.rebuilt.get(entity)?.tier ?? 1
         if (tier <= h.tier || tier <= built) next.tier = tier
         else if (pay(home.tiers[tier].rise)) {
           next.tier = tier
           commands.insert(entity, Game.Command.entry(Rebuilt, { tier: tier as 2 | 3 }))
         }
         const well = connected(grid, tile) ? capacity(next, approval, desirability, rules, rateOf(policy, next.tier)) : 0
-        const cap = data.sick.present ? Math.floor(well * risk.health.sickly) : well
+        const cap = data.sick.has(entity) ? Math.floor(well * risk.health.sickly) : well
         next.residents = Math.min(next.residents, home.tiers[next.tier].residents)
         next.residents += Math.sign(cap - next.residents)
       }
-      data.house.set(next)
+      data.house.set(entity, next)
     }
   }
 )

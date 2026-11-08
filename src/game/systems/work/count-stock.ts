@@ -29,23 +29,23 @@ export const CountStock = Game.System(
   },
   ({ queries, resources }) => {
     const sum: Record<string, number> = { ...amounts({}) }
-    for (const { data } of queries.stores.each()) {
-      const s = data.inventory.get().stock
+    for (const entity of queries.stores.each()) {
+      const s = queries.stores.data.inventory.get(entity).stock
       for (const g of goodIds) sum[g] = (sum[g] ?? 0) + s[g]
     }
     resources.stock.set(sum as Amounts)
 
     const held: Record<string, number> = { ...amounts({}) }
-    for (const { data } of queries.shelves.each()) {
-      const s = data.inventory.get().stock
+    for (const entity of queries.shelves.each()) {
+      const s = queries.shelves.data.inventory.get(entity).stock
       for (const g of goodIds) held[g] = held[g]! + s[g]
     }
-    for (const { data } of queries.baskets.each()) {
-      const b = data.roam.get().basket
+    for (const entity of queries.baskets.each()) {
+      const b = queries.baskets.data.roam.get(entity).basket
       for (const g of goodIds) held[g] = held[g]! + b[g]
     }
-    for (const { data } of queries.crates.each()) {
-      const e = data.errand.get()
+    for (const entity of queries.crates.each()) {
+      const e = queries.crates.data.errand.get(entity)
       held[e.good] = held[e.good]! + e.count
     }
     const tick = resources.time.get().step

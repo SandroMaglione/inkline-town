@@ -24,7 +24,7 @@ import { counted, signed } from "./text.ts"
 const homesWorth = (frame: Frame, at: ReadonlyArray<Point>) => {
   const { houses, cells, approval, rates } = frame
   if (at.length === 0) return ""
-  const standing = houses.filter((row) => !row.data.closed.present).reduce((n, row) => n + row.data.house.get().residents, 0)
+  const standing = houses.filter((row) => row.data.closed === undefined).reduce((n, row) => n + row.data.house.residents, 0)
   const fed = { tier: 1 as Tier, food: 1, bread: 0, cloth: 0, faith: 0, furniture: 0, residents: home.tiers[1].residents }
   let people = 0
   const pays = at.reduce((sum, c) => {
@@ -48,7 +48,7 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
     const r = reachOf(kind)
     if (r !== null) preview.plots.push({ x: tile.x - r, y: tile.y - r, size: tile.size + 2 * r, look: "reach" })
   }
-  const pavedCells = new Set(frame.paved.map(({ data }) => key(data.tile.get().x, data.tile.get().y)))
+  const pavedCells = new Set(frame.paved.map(({ data }) => key(data.tile.x, data.tile.y)))
   /** The road cells within `limit` of a tile's doors: what a service's walkers, or a commute, would reach from here. */
   const rangeFrom = (tile: TileLike, limit: number, note: string) => {
     const ds = doors(grid, tile)
@@ -114,7 +114,7 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
     const laid: Array<ParkCell> = []
     for (const c of ui.dragFrom ? rectangle(ui.dragFrom, cell) : [cell]) {
       if (!inside(c.x, c.y)) continue
-      const there = frame.parkAt.get(key(c.x, c.y))?.data.park.get()
+      const there = frame.parkAt.get(key(c.x, c.y))?.data.park
       if (there ? there.ground !== ui.ground : canPlace(grid, { ...c, size: 1 })) laid.push({ ...c, ground: ui.ground, prop: there?.prop ?? "none" })
       else if (!there) preview.plots.push({ ...c, size: 1, look: "blocked" })
     }
@@ -125,7 +125,7 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
     preview.tooltip = `${grounds[ui.ground].title.toLowerCase()} · ${cost}${after ? ` · park ${signed(after.value)} desirability` : ""}`
     if (after) preview.plots.push(...frame.reachPlots(after))
   } else if (ui.tool === "prop" && cell && inside(cell.x, cell.y)) {
-    const there = frame.parkAt.get(key(cell.x, cell.y))?.data.park.get()
+    const there = frame.parkAt.get(key(cell.x, cell.y))?.data.park
     if (there) {
       const placed = { ...cell, ground: there.ground, prop: ui.prop }
       preview.parks.push(placed)
@@ -155,16 +155,16 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
     const rank = frame.world.fate.rank, coins = frame.world.treasury.coins
     for (const row of buildings) {
       const { data } = row
-      if (data.building.get().kind !== ui.upgrading || data.site.present || data.rising.present) continue
-      const kind = kinds[ui.upgrading], level = data.upgraded.value()?.level ?? 0, up = nextUpgrade(kind, level)
-      const tile = data.tile.get()
+      if (data.building.kind !== ui.upgrading || data.site !== undefined || data.rising !== undefined) continue
+      const kind = kinds[ui.upgrading], level = data.upgraded?.level ?? 0, up = nextUpgrade(kind, level)
+      const tile = data.tile
       if (!up) continue
       const blocked = upgradeBlock(up, rank, { ranks })
       const hovered = preview.hover === row.entity.id
-      preview.plots.push({ ...tile, look: data.works.present || blocked ? "blocked" : hovered ? "picked" : "reach" })
+      preview.plots.push({ ...tile, look: data.works !== undefined || blocked ? "blocked" : hovered ? "picked" : "reach" })
       if (!hovered) continue
       const from = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
-      preview.tooltip = data.works.present
+      preview.tooltip = data.works !== undefined
         ? `${from} → ${up.title.toLowerCase()} · under way: carriers are bringing its materials`
         : [`${from} → ${up.title.toLowerCase()}`, upgradePrice(up), ...upgradeChanges(kind, level).map((c) => `· ${c}`),
             blocked ?? (coins < up.cost.coins ? `${up.cost.coins - coins} coins short` : "click to begin: it goes on working meanwhile")].join("\n")
@@ -174,7 +174,7 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
     preview.danger = true
     if ((preview.hover === null || useAt(grid, cell?.x ?? -1, cell?.y ?? -1) === "park") && cell && ["road", "tree", "field", "park"].includes(useAt(grid, cell.x, cell.y)))
       preview.plots.push({ ...cell, size: 1, look: "blocked" })
-    const there = cell ? frame.parkAt.get(key(cell.x, cell.y))?.data.park.get() : undefined
+    const there = cell ? frame.parkAt.get(key(cell.x, cell.y))?.data.park : undefined
     if (there) preview.tooltip = there.prop !== "none" ? `remove the ${props[there.prop].title.toLowerCase()}` : `remove the ${grounds[there.ground].title.toLowerCase()}`
     const rock = cell ? frame.rockAt.get(key(cell.x, cell.y)) : undefined
     if (rock && cell) {
@@ -193,8 +193,8 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
       preview.plots.push(...frame.reachPlots(whole))
     } else if (tile) preview.plots.push({ ...tile, look: "picked" })
     if (row && tile) {
-      showReach(tile, kinds[row.data.building.get().kind])
-      rangeOfKind(tile, kinds[row.data.building.get().kind], row.data.service.value()?.range)
+      showReach(tile, kinds[row.data.building.kind])
+      rangeOfKind(tile, kinds[row.data.building.kind], row.data.service?.range)
     }
   }
   return { preview, dropping }

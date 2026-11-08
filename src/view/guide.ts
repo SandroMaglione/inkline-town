@@ -43,14 +43,14 @@ export const guideOf = (frame: Frame, ui: Interaction, send: (edit: Edit) => voi
       send({ type: "guideOff", off: pending.off })
     }
   }
-  const placedKinds = new Set(buildings.map(({ data }) => data.building.get().kind))
-  const standingKinds = new Set(buildings.filter(({ data }) => !data.site.present && !data.rising.present).map(({ data }) => data.building.get().kind))
-  const wornRow = buildings.find((row) => frame.finished(row) && !row.data.hall.present && (row.data.condition.value()?.value ?? CONDITION_MAX) < wear.mend)
+  const placedKinds = new Set(buildings.map(({ data }) => data.building.kind))
+  const standingKinds = new Set(buildings.filter(({ data }) => data.site === undefined && data.rising === undefined).map(({ data }) => data.building.kind))
+  const wornRow = buildings.find((row) => frame.finished(row) && row.data.hall === undefined && (row.data.condition?.value ?? CONDITION_MAX) < wear.mend)
   // A settlers' home with bread, cloth, and faith, kept from citizens only by its street.
   const poorRow = houses.find((row) => {
-    const h = row.data.house.get()
+    const h = row.data.house
     if (h.tier !== 1 || !frame.finished(row)) return false
-    const tile = row.data.tile.get()
+    const tile = row.data.tile
     return met(h, "bread") && met(h, "cloth") && met(h, "faith") && appealAt(cells, tile.x, tile.y) < home.tiers[2].appeal
   })
   const saved = frame.world.guide
@@ -73,7 +73,7 @@ export const guideOf = (frame: Frame, ui: Interaction, send: (edit: Edit) => voi
     builtHomes: houses.filter(frame.finished).length,
     residents: census.settlers + census.citizens,
     citizens: census.citizens,
-    finerHomes: houses.filter((row) => row.data.house.get().tier > 1).length,
+    finerHomes: houses.filter((row) => row.data.house.tier > 1).length,
     placed: placedKinds,
     standing: standingKinds,
     stock,
@@ -92,22 +92,22 @@ export const guideOf = (frame: Frame, ui: Interaction, send: (edit: Edit) => voi
     most: Math.max(...goodIds.map((g) => stock[g])),
     sawTown: ui.menu === "town",
     sawHome: houses.some((row) => row.entity.id === ui.selected),
-    sawBuilding: buildings.some((row) => row.entity.id === ui.selected && !row.data.hall.present),
+    sawBuilding: buildings.some((row) => row.entity.id === ui.selected && row.data.hall === undefined),
     roadToWater: put.has("road") || roadNearWater(),
     coins,
     unreached: put.has("market") || standingKinds.has("market") ? 0 : frame.unreachedHomes(),
     rank: f.rank,
-    upgraded: new Set(buildings.filter((row) => row.data.upgraded.present).map((row) => row.data.building.get().kind)),
+    upgraded: new Set(buildings.filter((row) => row.data.upgraded !== undefined).map((row) => row.data.building.kind)),
     risk: {
-      fire: houses.some((row) => (row.data.risk.value()?.fire ?? 0) >= RISK_MAX * 0.35),
-      health: houses.some((row) => (row.data.risk.value()?.health ?? 0) >= RISK_MAX * 0.35),
-      order: houses.some((row) => (row.data.risk.value()?.order ?? 0) >= RISK_MAX * 0.35)
+      fire: houses.some((row) => (row.data.risk?.fire ?? 0) >= RISK_MAX * 0.35),
+      health: houses.some((row) => (row.data.risk?.health ?? 0) >= RISK_MAX * 0.35),
+      order: houses.some((row) => (row.data.risk?.order ?? 0) >= RISK_MAX * 0.35)
     },
     fewTrees: buildings.some((row) => {
-      if (row.data.building.get().kind !== "lumberjack" || !frame.finished(row)) return false
-      const tile = row.data.tile.get()
+      if (row.data.building.kind !== "lumberjack" || !frame.finished(row)) return false
+      const tile = row.data.tile
       const reach = kinds.lumberjack.gathers!.radius
-      return frame.trees.map(({ data }) => data.tile.get()).filter((t) => t.x >= tile.x - reach && t.x < tile.x + tile.size + reach && t.y >= tile.y - reach && t.y < tile.y + tile.size + reach).length < 6
+      return frame.trees.map(({ data }) => data.tile).filter((t) => t.x >= tile.x - reach && t.x < tile.x + tile.size + reach && t.y >= tile.y - reach && t.y < tile.y + tile.size + reach).length < 6
     })
   }
   const playing = f.state === "playing" && !ui.founding
@@ -125,7 +125,7 @@ export const guideOf = (frame: Frame, ui: Interaction, send: (edit: Edit) => voi
   const step = guide.off || !playing ? null : guideStep(facts, put, { shown: pace.shown, quiet: t < pace.quietUntil })
   if (step && !step.urgent?.(facts)) pace.shown = step.id
   pace.since = t
-  const hallTile = hallRow?.data.tile.get()
+  const hallTile = hallRow?.data.tile
   /** Of some tiles, the one nearest the town hall. */
   const nearestHall = (tiles: ReadonlyArray<TileLike>): TileLike | undefined => {
     if (!hallTile) return tiles[0]
@@ -140,14 +140,14 @@ export const guideOf = (frame: Frame, ui: Interaction, send: (edit: Edit) => voi
   const focusOf = (focus: GuideFocus | null): { at: TileLike | null; id: number | null } => {
     if (focus === null) return { at: null, id: null }
     if (focus === "hall") return { at: hallTile ?? null, id: null }
-    if (focus === "water") return { at: nearestHall(frame.water.map(({ data }) => data.tile.get())) ?? null, id: null }
-    if (focus === "trees") return { at: nearestHall(frame.trees.map(({ data }) => data.tile.get())) ?? null, id: null }
+    if (focus === "water") return { at: nearestHall(frame.water.map(({ data }) => data.tile)) ?? null, id: null }
+    if (focus === "trees") return { at: nearestHall(frame.trees.map(({ data }) => data.tile)) ?? null, id: null }
     if (focus === "stone" || focus === "ore") {
       const ore = focus === "ore"
-      return { at: nearestHall(frame.rocks.filter(({ data }) => data.rock.get().ore === ore).map(({ data }) => data.tile.get())) ?? null, id: null }
+      return { at: nearestHall(frame.rocks.filter(({ data }) => data.rock.ore === ore).map(({ data }) => data.tile)) ?? null, id: null }
     }
-    const row = focus === "worn" ? wornRow : focus === "poorStreet" ? poorRow : buildings.find(({ data }) => data.building.get().kind === focus.kind)
-    return row ? { at: row.data.tile.get(), id: row.entity.id } : { at: null, id: null }
+    const row = focus === "worn" ? wornRow : focus === "poorStreet" ? poorRow : buildings.find(({ data }) => data.building.kind === focus.kind)
+    return row ? { at: row.data.tile, id: row.entity.id } : { at: null, id: null }
   }
   const shown = step ? focusOf(step.focus) : null
   return {

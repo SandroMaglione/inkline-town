@@ -25,10 +25,11 @@ export const Spread = Game.System(
     if (!every(resources.time.get(), SPREAD_TICKS)) return
     const grid = resources.grid.get()
     const random = Random.draw(resources.rng)
-    const grown = queries.trees.each().filter(({ data }) => data.tree.get().growth >= GROWN.tree)
+    const { data } = queries.trees
+    const grown = queries.trees.each().filter((entity) => data.tree.get(entity).growth >= GROWN.tree)
     const parent = random.pick(grown)
     if (parent) {
-      const t = parent.data.tile.get()
+      const t = data.tile.get(parent)
       const spot = random.pick(wildTreeSpots(grid, t))
       if (spot && canSeedTree(grid, spot)) commands.spawn(treeDraft(spot, 0))
     }

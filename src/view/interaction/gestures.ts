@@ -59,17 +59,17 @@ export const applyGestures = (frame: Frame, ui: Interaction, send: (edit: Edit) 
         if (gesture.panned) break
         const hit = frame.pickAt(gesture.at, gesture.hit)
         const row = hit !== null ? buildings.find((b) => b.entity.id === hit) : undefined
-        const kind = row ? kinds[row.data.building.get().kind] : undefined
+        const kind = row ? kinds[row.data.building.kind] : undefined
         if (!row || !kind || (ui.upgrading && kind.id !== ui.upgrading)) {
           const wanted = ui.upgrading ? (upgradeAt(kinds[ui.upgrading], 0) ? kinds[ui.upgrading].title.toLowerCase() : "building") : "building"
           toast(`Pick a ${wanted} to upgrade`)
           break
         }
-        if (row.data.works.present) {
+        if (row.data.works !== undefined) {
           toast(`The ${kind.title.toLowerCase()} is already being upgraded`)
           break
         }
-        send({ type: "upgrade", cell: row.data.tile.get() })
+        send({ type: "upgrade", cell: row.data.tile })
         break
       }
       case "bulldoze": {

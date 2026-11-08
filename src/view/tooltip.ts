@@ -30,25 +30,25 @@ export const tooltipOf = (frame: Frame, ui: Interaction, preview: Preview, dropp
   if (ui.tool === "upgrade") {
   } else if (hoveredBuilding) {
     const { kind, status, problem } = describeBuilding(frame, hoveredBuilding)
-    const level = hoveredBuilding.data.upgraded.value()?.level ?? 0, works = hoveredBuilding.data.works.value()
+    const level = hoveredBuilding.data.upgraded?.level ?? 0, works = hoveredBuilding.data.works
     const title = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
     preview.tooltip = ui.tool === "bulldoze"
-      ? `${title} · ${hoveredBuilding.data.hall.present ? "the town hall stays" : salvageFor(builtCost(kind, level), hoveredBuilding.data.site.value(), works && { kind, ...works })}`
+      ? `${title} · ${hoveredBuilding.data.hall !== undefined ? "the town hall stays" : salvageFor(builtCost(kind, level), hoveredBuilding.data.site, works && { kind, ...works })}`
       : `${title} · ${problem ?? status}${works ? ` · becoming ${anA(upgradeAt(kind, works.level)!.title.toLowerCase())}, ${Math.round(worksShare(works)! * 100)}% built` : ""}`
   } else if (hoveredHouse) {
-    const h = hoveredHouse.data.house.get()
-    const t = hoveredHouse.data.tile.get()
+    const h = hoveredHouse.data.house
+    const t = hoveredHouse.data.tile
     preview.tooltip = ui.tool === "bulldoze"
-      ? `${tierHome[h.tier]} · ${salvageFor(home.cost, hoveredHouse.data.site.value())}`
-      : hoveredHouse.data.closed.present
+      ? `${tierHome[h.tier]} · ${salvageFor(home.cost, hoveredHouse.data.site)}`
+      : hoveredHouse.data.closed !== undefined
       ? `${tierHome[h.tier]} · closed`
-      : `${tierHome[h.tier]} · ${h.residents} resident${h.residents === 1 ? "" : "s"} · desirability ${appealAt(cells, t.x, t.y)}${hoveredHouse.data.burning.present ? " · on fire!" : hoveredHouse.data.sick.present ? " · sick" : ""}`
+      : `${tierHome[h.tier]} · ${h.residents} resident${h.residents === 1 ? "" : "s"} · desirability ${appealAt(cells, t.x, t.y)}${hoveredHouse.data.burning !== undefined ? " · on fire!" : hoveredHouse.data.sick !== undefined ? " · sick" : ""}`
   } else if (hoveredRuin) {
-    preview.tooltip = `ruin · ${hoveredRuin.data.ruin.get().cause} · bulldoze to clear`
+    preview.tooltip = `ruin · ${hoveredRuin.data.ruin.cause} · bulldoze to clear`
   } else if (hovered !== null && ui.tool === "select" && parkRows.some((row) => row.entity.id === hovered)) {
     const row = parkRows.find((r) => r.entity.id === hovered)!
-    const p = frame.parkOf(row.data.tile.get())
-    const here = row.data.park.get()
+    const p = frame.parkOf(row.data.tile)
+    const here = row.data.park
     preview.tooltip = `park · ${here.prop !== "none" ? props[here.prop].title.toLowerCase() : grounds[here.ground].title.toLowerCase()}${p ? ` · ${p.cells.length} cells · ${parkText(p)}` : ""}`
   } else if (ui.tool === "place" && ui.placing) {
     const kind = kinds[ui.placing]

@@ -46,35 +46,38 @@ export const Collect = Game.System(
     const grid = resources.grid.get()
     const policy = resources.policy.get()
     const hall = queries.halls.each()[0]
-    const roads = hall ? reach(grid, doors(grid, hall.data.tile.get())) : null
+    const roads = hall ? reach(grid, doors(grid, queries.halls.data.tile.get(hall))) : null
     const share = LEDGER_TICKS / (60 * 60)
     const cells = resources.appeal.get().cells
     let taxes = 0
     let residents = 0
-    for (const { data } of queries.homes.each()) {
-      residents += data.house.get().residents
-      const tile = data.tile.get()
+    const home = queries.homes.data
+    for (const entity of queries.homes.each()) {
+      residents += home.house.get(entity).residents
+      const tile = home.tile.get(entity)
       const reached = roads !== null && doors(grid, tile).some((c) => roads.distance[key(c.x, c.y)]! >= 0)
-      if (reached) taxes += taxOf(data.house.get(), policy, rules, appealAt(cells, tile.x, tile.y))
+      if (reached) taxes += taxOf(home.house.get(entity), policy, rules, appealAt(cells, tile.x, tile.y))
     }
     let upkeep = 0
-    for (const { data } of queries.buildings.each()) upkeep += upkeepOf(kinds[data.building.get().kind], data.upgraded.value()?.level ?? 0) * (data.paused.present ? PAUSED_UPKEEP : 1)
-    for (const { data } of queries.parks.each()) upkeep += parkUpkeep(data.park.get(), rules)
+    const building = queries.buildings.data
+    for (const entity of queries.buildings.each()) upkeep += upkeepOf(kinds[building.building.get(entity).kind], building.upgraded.get(entity)?.level ?? 0) * (building.paused.has(entity) ? PAUSED_UPKEEP : 1)
+    for (const entity of queries.parks.each()) upkeep += parkUpkeep(queries.parks.data.park.get(entity), rules)
     // A guildhall or a city hall runs the town for less (see `Upgrade.admin`).
-    const saves = (hall ? upgradeAt(kinds.townhall, hall.data.upgraded.value()?.level ?? 0)?.admin : undefined) ?? 0
+    const saves = (hall ? upgradeAt(kinds.townhall, queries.halls.data.upgraded.get(hall)?.level ?? 0)?.admin : undefined) ?? 0
     const admin = adminOf(residents, rules, saves)
 
     const stores = queries.stores.each()
+    const store = queries.stores.data
     const before = resources.treasury.get().coins
-    const traded = tradeCollection(stores.map(({ data }) => data.inventory.get()), policy, resources.market.get().prices,
+    const traded = tradeCollection(stores.map((entity) => store.inventory.get(entity)), policy, resources.market.get().prices,
       before + baseCollection(taxes, upkeep, residents, rules, saves).delta, rules)
     // What changed hands, for the minute's flow of goods: bought less sold.
     const moved: Partial<Record<GoodId, number>> = {}
-    for (const [i, row] of stores.entries()) {
-      const before = row.data.inventory.get().stock
+    for (const [i, entity] of stores.entries()) {
+      const before = store.inventory.get(entity).stock
       const after = traded.stores[i]!.stock
       for (const g of goodIds) if (after[g] !== before[g]) moved[g] = (moved[g] ?? 0) + after[g] - before[g]
-      row.data.inventory.set(traded.stores[i]!)
+      store.inventory.set(entity, traded.stores[i]!)
     }
     if (Object.keys(moved).length > 0) resources.flow.update((f) => ({ ...f, traded: amounts(Object.fromEntries(goodIds.map((g) => [g, f.traded[g] + (moved[g] ?? 0)]))) }))
     // And the treasury's: the taxes came in, trade changed hands; upkeep and administration are left over as used.

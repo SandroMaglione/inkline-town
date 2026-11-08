@@ -408,6 +408,8 @@ headless too. `pnpm lint:game` then checks the schedules themselves with
 Ritmo's devtools lints (`src/app/lint.ts`).
 The Ritmo skill an agent follows for every change is linked from the
 installed package at `.agents/skills/ritmo`, so it updates with Ritmo.
+Its companions for prototyping, a stranger's first minute, and polish are
+linked beside it (`ritmo-prototype`, `ritmo-onboarding`, `ritmo-polish`).
 
 ## Balancing
 

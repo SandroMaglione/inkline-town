@@ -3,11 +3,11 @@ import type { Panel } from "../contracts.ts"
 import type { RuinRow } from "../frame.ts"
 
 export const ruinPanel = (row: RuinRow): Panel => {
-  const r = row.data.ruin.get()
+  const r = row.data.ruin
   return {
     type: "ruin",
     id: row.entity.id,
-    cell: row.data.tile.get(),
+    cell: row.data.tile,
     cause: r.cause,
     lines: [
       { icon: "condition", label: "what happened", value: r.cause === "burnt" ? "it burned down" : r.cause === "collapsed" ? "it fell down for want of mending" : "it was left derelict after its thefts", tone: "bad" },

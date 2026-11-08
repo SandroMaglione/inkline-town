@@ -26,8 +26,9 @@ export const Walk = Game.System(
     const grid = resources.grid.get()
     const tick = resources.time.get().step
     const quicker = services.rules.pavedPace - 1
-    for (const { entity, data } of queries.walkers.each()) {
-      const route = data.route.get()
+    const { data } = queries.walkers
+    for (const entity of queries.walkers.each()) {
+      const route = data.route.get(entity)
       const last = route.cells.length - 1
       if (route.index >= last) continue
       const next = route.cells[route.index + 1]!
@@ -35,13 +36,14 @@ export const Walk = Game.System(
         commands.despawn(entity)
         continue
       }
-      const running = data.rescue.present && !data.rescue.get().back
+      const rescue = data.rescue.get(entity)
+      const running = rescue !== undefined && !rescue.back
       const paved = !running && quicker > 0 && (grid.paved?.has(key(next.x, next.y)) ?? false) && paced(quicker, tick)
       const step = route.step + (running ? RUN : WALK) + (paved ? 1 : 0)
-      if (step < CELL_STEPS) data.route.set({ ...route, step })
+      if (step < CELL_STEPS) data.route.set(entity, { ...route, step })
       else {
         const index = route.index + 1
-        data.route.set({ ...route, index, step: index >= last ? 0 : step - CELL_STEPS })
+        data.route.set(entity, { ...route, index, step: index >= last ? 0 : step - CELL_STEPS })
       }
     }
   }

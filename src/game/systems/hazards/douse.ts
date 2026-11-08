@@ -15,9 +15,10 @@ export const Douse = Game.System(
     commands: Game.System.commands(Game.System.spawns(Ruin), Game.System.despawns(Rescue, Burning))
   },
   ({ queries, resources, commands }) => {
-    for (const { entity, data } of queries.crews.each()) {
-      const route = data.route.get()
-      const rescue = data.rescue.get()
+    const { data } = queries.crews
+    for (const entity of queries.crews.each()) {
+      const route = data.route.get(entity)
+      const rescue = data.rescue.get(entity)
       const arrived = route.index >= route.cells.length - 1
       if (!arrived) continue
       if (rescue.back) {
@@ -26,17 +27,18 @@ export const Douse = Game.System(
       }
       const target = queries.burning.getHandle(rescue.target)
       if (target.ok) {
-        const b = target.value.data.burning.get()
-        commands.despawn(target.value.entity)
-        commands.spawn(ruinDraft(target.value.data.tile.get(), "burnt"))
-        const house = target.value.data.house.present
+        const burning = queries.burning.data
+        const b = burning.burning.get(target.value)
+        commands.despawn(target.value)
+        commands.spawn(ruinDraft(burning.tile.get(target.value), "burnt"))
+        const house = burning.house.has(target.value)
         resources.fires.update((f) => ({
           ...f,
           fires: f.fires.map((x) => (x.id === b.fire ? { ...x, homes: x.homes + (house ? 1 : 0), buildings: x.buildings + (house ? 0 : 1) } : x))
         }))
       }
-      data.route.set({ cells: [...route.cells].reverse(), index: 0, step: 0 })
-      data.rescue.set({ ...rescue, back: true })
+      data.route.set(entity, { cells: [...route.cells].reverse(), index: 0, step: 0 })
+      data.rescue.set(entity, { ...rescue, back: true })
     }
   }
 )

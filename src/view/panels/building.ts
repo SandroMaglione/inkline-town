@@ -19,9 +19,9 @@ export const told = (frame: Frame, c: Cause | null) => (c ? { note: c.why, fix: 
  */
 export const describeBuilding = (frame: Frame, row: BuildingRow) => {
   const grid = frame.grid
-  const kind = kinds[row.data.building.get().kind]
-  const status = row.data.status.get()
-  const site = row.data.site.value()
+  const kind = kinds[row.data.building.kind]
+  const status = row.data.status
+  const site = row.data.site
   if (site) {
     const owed = (Object.entries(site.owed) as Array<[GoodId, number]>).filter(([, n]) => n > 0)
     const line: Line =
@@ -30,7 +30,7 @@ export const describeBuilding = (frame: Frame, row: BuildingRow) => {
         : { icon: "build", label: "builders", value: "at work", tone: "ok" }
     return { kind, status, problem: null, state: { icon: "build", label: "being built", tone: "warn" } as Line, groups: [{ title: "being built", icon: "build", lines: [line] }] as Array<Group> }
   }
-  const staff = row.data.staff.get()
+  const staff = row.data.staff
   const work: Array<Line> = []
   if (staff.needed > 0) {
     const crew = kind.crew
@@ -49,15 +49,15 @@ export const describeBuilding = (frame: Frame, row: BuildingRow) => {
           : undefined
     })
   }
-  const recipe = row.data.recipe.value()
+  const recipe = row.data.recipe
   if (recipe)
     work.push({ icon: recipe.output, label: "makes", value: recipe.input ? `${goods[recipe.input].title} → ${goods[recipe.output].title}` : goods[recipe.output].title })
-  const service = row.data.service.value()
+  const service = row.data.service
   if (service)
     work.push({
       icon: service.service === "goods" ? "trade" : service.service === "faith" ? "faith" : service.service === "repair" ? "repair" : service.service,
       label: "walkers out",
-      value: `${row.data.walkers.value()?.length ?? 0}`
+      value: `${row.data.walkers?.length ?? 0}`
     })
   // A provisions walker's building: what its walkers handed to homes over the last minute, which its shelf
   // alone cannot say (food leaves in the basket as soon as it comes; furniture mostly comes back).
@@ -73,7 +73,7 @@ export const describeBuilding = (frame: Frame, row: BuildingRow) => {
         : { icon: "people", label: "handed out, last minute", value: "nothing", tone: "dim", note: "no home on its walks needed what it had" }
     )
   }
-  const inventory = row.data.inventory.value()
+  const inventory = row.data.inventory
   if (inventory) {
     const held = inventory.accepts.filter((g) => inventory.stock[g] > 0).map((g) => ({ good: g, count: inventory.stock[g] }))
     // A market's shelf is only what waits for the next walker.
@@ -87,10 +87,10 @@ export const describeBuilding = (frame: Frame, row: BuildingRow) => {
         : { icon: "tools", label: "tools", value: "none", tone: "bad", note: "half pace until one comes: a smithy makes them, or buy them in the town panel" }
     )
   const running: Array<Line> = []
-  const level = row.data.upgraded.value()?.level ?? 0
+  const level = row.data.upgraded?.level ?? 0
   const upkeep = upkeepOf(kind, level)
   if (upkeep > 0) running.push({ icon: "upkeep", label: "upkeep", value: `${upkeep} coins a minute` })
-  const condition = row.data.condition.value()
+  const condition = row.data.condition
   if (condition)
     running.push({
       icon: "condition",
@@ -99,7 +99,7 @@ export const describeBuilding = (frame: Frame, row: BuildingRow) => {
       tone: condition.value < wear.worn ? "bad" : condition.value < wear.mend ? "warn" : "ok",
       note: condition.value < wear.worn ? "half pace, and it may fall: a builder's yard mends it" : condition.value < wear.mend ? "a builder's yard mends it as its builder passes" : undefined
     })
-  const r = row.data.risk.value()
+  const r = row.data.risk
   if (r)
     running.push({
       icon: "fire",
@@ -122,8 +122,8 @@ export const describeBuilding = (frame: Frame, row: BuildingRow) => {
     ...(work.length > 0 ? [{ title: "at work", icon: "jobs", lines: work } as Group] : []),
     ...(running.length > 0 ? [{ title: "running it", icon: "coins", help, lines: running } as Group] : [])
   ]
-  const growing = status === "starved" && growingNear(grid, row.data.tile.get(), kind, frame.rockAt)
-  const trouble: Problem | null = row.data.burning.present
+  const growing = status === "starved" && growingNear(grid, row.data.tile, kind, frame.rockAt)
+  const trouble: Problem | null = row.data.burning !== undefined
     ? { label: "on fire!", why: "its crew has fled", fix: { text: "a fire watch's watchmen put fires out", build: ["firewatch"] } }
     : problemOf(kind, status, growing, { nearby: staff.nearby, crew: kind.crew })
   const state: Line = trouble
@@ -135,11 +135,11 @@ export const describeBuilding = (frame: Frame, row: BuildingRow) => {
 /** The panel of a building that is picked; `needed`: why the town needs its upgrade now, if it does. */
 export const buildingPanel = (frame: Frame, row: BuildingRow, needed: string | null): Panel => {
   const { kind, status, problem, state, groups } = describeBuilding(frame, row)
-  const standing = !row.data.site.present && !row.data.rising.present
+  const standing = row.data.site === undefined && row.data.rising === undefined
   const pausable = kind.id !== "townhall" && standing
-  const level = row.data.upgraded.value()?.level ?? 0
+  const level = row.data.upgraded?.level ?? 0
   const now = upgradeAt(kind, level)
-  const works = row.data.works.value()
+  const works = row.data.works
   const up = works ? undefined : nextUpgrade(kind, level)
   const coins = frame.world.treasury.coins
   const upgradeOffer = up && standing
@@ -161,7 +161,7 @@ export const buildingPanel = (frame: Frame, row: BuildingRow, needed: string | n
   return {
     type: "building",
     id: row.entity.id,
-    cell: row.data.tile.get(),
+    cell: row.data.tile,
     kind: kind.id,
     title: now?.title ?? kind.title,
     blurb: now?.blurb ?? kind.blurb,
@@ -170,8 +170,8 @@ export const buildingPanel = (frame: Frame, row: BuildingRow, needed: string | n
     state,
     groups,
     pausable,
-    paused: row.data.paused.present,
-    salvage: salvageFor(builtCost(kind, level), row.data.site.value(), works && { kind, ...works }),
+    paused: row.data.paused !== undefined,
+    salvage: salvageFor(builtCost(kind, level), row.data.site, works && { kind, ...works }),
     level,
     upgraded: level > 0,
     upgrade: upgradeOffer,

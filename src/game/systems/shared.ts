@@ -1,4 +1,6 @@
 /** Queries and small helpers the simulation's systems share. */
+import type { EntityProving } from "@typeonce/ritmo/Query"
+
 import { doors, type TileLike, type Use } from "../world/grid.ts"
 import { Field, Game, House, Park, Paved, Road, Rock, Ruin, Tile, Tree, Water, type GridValue } from "../schema.ts"
 import type { Point } from "../world/iso.ts"
@@ -19,24 +21,15 @@ export const TileRead = Game.Query({
   }
 })
 
-export const useOf = (data: {
-  readonly road: { readonly present: boolean }
-  readonly park: { readonly present: boolean }
-  readonly house: { readonly present: boolean }
-  readonly tree: { readonly present: boolean }
-  readonly rock: { readonly present: boolean }
-  readonly water: { readonly present: boolean }
-  readonly field: { readonly present: boolean }
-  readonly ruin: { readonly present: boolean }
-}): Use =>
-  data.road.present ? "road"
-  : data.park.present ? "park"
-  : data.house.present ? "house"
-  : data.tree.present ? "tree"
-  : data.rock.present ? "rock"
-  : data.water.present ? "water"
-  : data.field.present ? "field"
-  : data.ruin.present ? "ruin"
+export const useOf = (entity: EntityProving<never>, data: { readonly [K in "road" | "park" | "house" | "tree" | "rock" | "water" | "field" | "ruin"]: { has(entity: EntityProving<never>): boolean } }): Use =>
+  data.road.has(entity) ? "road"
+  : data.park.has(entity) ? "park"
+  : data.house.has(entity) ? "house"
+  : data.tree.has(entity) ? "tree"
+  : data.rock.has(entity) ? "rock"
+  : data.water.has(entity) ? "water"
+  : data.field.has(entity) ? "field"
+  : data.ruin.has(entity) ? "ruin"
   : "building"
 
 export const connected = (grid: GridValue, tile: TileLike): boolean => doors(grid, tile).length > 0

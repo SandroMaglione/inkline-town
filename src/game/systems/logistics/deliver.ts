@@ -37,16 +37,18 @@ export const Deliver = Game.System(
     const rules = services.rules
     const {  } = rules
 
-    for (const { entity, data } of queries.carriers.each()) {
-      const route = data.route.get()
-      const errand = data.errand.get()
+    const { data } = queries.carriers
+    const shelves = queries.inventories.data.inventory
+    for (const entity of queries.carriers.each()) {
+      const route = data.route.get(entity)
+      const errand = data.errand.get(entity)
       if (errand.back) {
         if (!arrived(route)) continue
-        const home = queries.inventories.get(data.home.get())
+        const home = queries.inventories.get(data.home.get(entity))
         if (home.ok && errand.count > 0) {
-          const inv = home.value.data.inventory.get()
+          const inv = shelves.get(home.value)
           const room = inv.cap - inv.stock[errand.good]
-          home.value.data.inventory.set({ ...inv, stock: { ...inv.stock, [errand.good]: inv.stock[errand.good] + Math.min(room, errand.count) } })
+          shelves.set(home.value, { ...inv, stock: { ...inv.stock, [errand.good]: inv.stock[errand.good] + Math.min(room, errand.count) } })
         }
         commands.despawn(entity)
         continue
@@ -54,32 +56,32 @@ export const Deliver = Game.System(
       const target = queries.targets.getHandle(errand.target)
       if (!target.ok) {
         // Nowhere to take it: carry it home.
-        data.route.set(turnAround(route))
-        data.errand.set({ ...errand, back: true })
+        data.route.set(entity, turnAround(route))
+        data.errand.set(entity, { ...errand, back: true })
         continue
       }
       if (!arrived(route)) continue
       let handed = 0
-      const site = queries.sites.get(target.value.entity.id)
-      const works = queries.works.get(target.value.entity.id)
-      const inventory = queries.inventories.get(target.value.entity.id)
-      if (works.ok && works.value.data.works.get().owed[errand.good] > 0) {
-        const w = works.value.data.works.get()
+      const site = queries.sites.get(target.value.id)
+      const works = queries.works.get(target.value.id)
+      const inventory = queries.inventories.get(target.value.id)
+      if (works.ok && queries.works.data.works.get(works.value).owed[errand.good] > 0) {
+        const w = queries.works.data.works.get(works.value)
         handed = Math.min(errand.count, w.owed[errand.good])
-        works.value.data.works.set({ ...w, owed: { ...w.owed, [errand.good]: w.owed[errand.good] - handed } })
+        queries.works.data.works.set(works.value, { ...w, owed: { ...w.owed, [errand.good]: w.owed[errand.good] - handed } })
       } else if (site.ok) {
-        const s = site.value.data.site.get()
+        const s = queries.sites.data.site.get(site.value)
         handed = Math.min(errand.count, s.owed[errand.good])
-        site.value.data.site.set({ ...s, owed: { ...s.owed, [errand.good]: s.owed[errand.good] - handed } })
+        queries.sites.data.site.set(site.value, { ...s, owed: { ...s.owed, [errand.good]: s.owed[errand.good] - handed } })
       } else if (inventory.ok) {
-        const inv = inventory.value.data.inventory.get()
+        const inv = shelves.get(inventory.value)
         if (inv.accepts.includes(errand.good)) {
           handed = Math.min(errand.count, inv.cap - inv.stock[errand.good])
-          inventory.value.data.inventory.set({ ...inv, stock: { ...inv.stock, [errand.good]: inv.stock[errand.good] + handed } })
+          shelves.set(inventory.value, { ...inv, stock: { ...inv.stock, [errand.good]: inv.stock[errand.good] + handed } })
         }
       }
-      data.route.set({ cells: [...route.cells].reverse(), index: 0, step: 0 })
-      data.errand.set({ ...errand, count: errand.count - handed, back: true })
+      data.route.set(entity, { cells: [...route.cells].reverse(), index: 0, step: 0 })
+      data.errand.set(entity, { ...errand, count: errand.count - handed, back: true })
     }
   }
 )

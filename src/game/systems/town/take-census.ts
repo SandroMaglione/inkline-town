@@ -18,19 +18,21 @@ export const TakeCensus = Game.System(
     let burghers = 0
     let sick = 0
     const needs = { food: 0, bread: 0, cloth: 0, faith: 0, furniture: 0 }
-    for (const { data } of queries.homes.each()) {
-      const h = data.house.get()
+    const home = queries.homes.data
+    for (const entity of queries.homes.each()) {
+      const h = home.house.get(entity)
       homes += 1
       if (h.tier === 1) settlers += h.residents
       else citizens += h.residents
       if (h.tier === 3) burghers += h.residents
-      if (data.sick.present) sick += 1
+      if (home.sick.has(entity)) sick += 1
       for (const n of ["food", "bread", "cloth", "faith", "furniture"] as const) if (met(h, n)) needs[n] += 1
     }
     let jobs = 0
     let employed = 0
-    for (const { data } of queries.workplaces.each()) {
-      const s = data.staff.get()
+    const workplace = queries.workplaces.data
+    for (const entity of queries.workplaces.each()) {
+      const s = workplace.staff.get(entity)
       jobs += s.needed
       employed += s.assigned
     }

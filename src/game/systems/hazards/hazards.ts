@@ -74,48 +74,48 @@ export const Hazards = Game.System(
     const heating = season.severity !== null && winters[season.severity].heating
     const random = Random.draw(resources.rng)
     const news = (text: string, at: Point | null = null) => write(resources.chronicle, t, text, true, at)
-    const landmarks: Array<Landmark> = queries.landmarks.each().map(({ data }) => ({ kind: data.building.get().kind, ...data.tile.get() }))
+    const landmarks: Array<Landmark> = queries.landmarks.each().map((entity) => ({ kind: queries.landmarks.data.building.get(entity).kind, ...queries.landmarks.data.tile.get(entity) }))
     const where = (cell: Point) => placeName(landmarks, cell)
     const fires = { ...resources.fires.get(), fires: resources.fires.get().fires.map((f) => ({ ...f })) }
 
     const rows = queries.cared.each()
-    const hot = rows.filter(({ data }) => {
-      const b = data.building.value()
-      return b !== undefined && kinds[b.kind].hot === true && !data.burning.present
-    }).map(({ data }) => data.tile.get())
+    const { data: cared } = queries.cared
+    const hot = rows.filter((row) => {
+      const b = cared.building.get(row)
+      return b !== undefined && kinds[b.kind].hot === true && !cared.burning.has(row)
+    }).map((row) => cared.tile.get(row))
     const dusty = landmarks.filter((l) => kinds[l.kind].dusty)
     const waterNear = (tile: { readonly x: number; readonly y: number }) => {
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (useAt(grid, tile.x + dx, tile.y + dy) === "water") return true
       return false
     }
-    const sickNow = rows.filter(({ data }) => data.sick.present).length
+    const sickNow = rows.filter((row) => cared.sick.has(row)).length
 
     /** Turns a home or building into a ruin. */
     const ruin = (row: (typeof rows)[number], cause: "burnt" | "collapsed" | "derelict") => {
-      commands.despawn(row.entity)
-      commands.spawn(ruinDraft(row.data.tile.get(), cause))
+      commands.despawn(row)
+      commands.spawn(ruinDraft(cared.tile.get(row), cause))
     }
     const lost = new Set<number>()
     const ignited = new Map<number, number>()
 
     // Rising risks, and what comes of them.
     for (const row of rows) {
-      const { data } = row
-      if (data.burning.present) continue
-      const tile = data.tile.get()
-      const h = data.house.value()
+      if (cared.burning.has(row)) continue
+      const tile = cared.tile.get(row)
+      const h = cared.house.get(row)
       // A closed home has nobody in it to fall sick, steal, or knock over a lamp.
-      if (h && data.paused.present) continue
-      const b = data.building.value()
-      const r = { ...data.risk.get() }
+      if (h && cared.paused.has(row)) continue
+      const b = cared.building.get(row)
+      const r = { ...cared.risk.get(row) }
       const increments = riskIncrements({
-        tile, condition: data.condition.get().value, desirability: appealAt(cells, tile.x, tile.y), approval, heating,
+        tile, condition: cared.condition.get(row).value, desirability: appealAt(cells, tile.x, tile.y), approval, heating,
         hotNearby: hot.filter((source) => near(source, tile, risk.fire.reach)).length,
         dusty: dusty.some((d) => near(d, tile, risk.health.reach)), water: waterNear(tile),
         ...(h ? { house: h } : {}), ...(b ? { kind: b.kind } : {})
       }, rules)
       if (h) {
-        if (!data.sick.present) r.health = Math.min(RISK_MAX, r.health + increments.health)
+        if (!cared.sick.has(row)) r.health = Math.min(RISK_MAX, r.health + increments.health)
         r.order = Math.min(RISK_MAX, r.order + increments.order)
       }
       r.fire = Math.min(RISK_MAX, r.fire + increments.fire)
@@ -125,13 +125,13 @@ export const Hazards = Game.System(
         const id = fires.next
         fires.next += 1
         fires.fires.push({ id, x: tile.x, y: tile.y, homes: 0, buildings: 0 })
-        commands.insert(row.entity, Game.Command.entry(Burning, { left: risk.fire.burns, fire: id }))
-        ignited.set(row.entity.id, id)
+        commands.insert(row, Game.Command.entry(Burning, { left: risk.fire.burns, fire: id }))
+        ignited.set(row.id, id)
         r.fire = 0
         news(`Fire on ${where(tile)}!`, tile)
       }
-      if (h && r.health >= RISK_MAX && !data.sick.present) {
-        commands.insert(row.entity, Game.Command.entry(Sick, { left: risk.health.lasts }))
+      if (h && r.health >= RISK_MAX && !cared.sick.has(row)) {
+        commands.insert(row, Game.Command.entry(Sick, { left: risk.health.lasts }))
         r.health = 0
         if (sickNow === 0) news(`Sickness on ${where(tile)}: a physician can cure it.`, tile)
       }
@@ -145,14 +145,15 @@ export const Hazards = Game.System(
             news(`Thieves on ${where(tile)} made off with ${take} coins.`, tile)
           } else {
             const stores = queries.stores.each()
-            const held = (g: GoodId) => stores.reduce((n, s) => n + s.data.inventory.get().stock[g], 0)
+            const { data: store } = queries.stores
+            const held = (g: GoodId) => stores.reduce((n, s) => n + store.inventory.get(s).stock[g], 0)
             const good = [...goodIds].sort((a, b) => held(b) * goods[b].price - held(a) * goods[a].price)[0]!
             let owed = Math.min(risk.order.goods, held(good))
-            for (const { data: s } of stores) {
+            for (const s of stores) {
               if (owed <= 0) break
-              const inv = s.inventory.get()
+              const inv = store.inventory.get(s)
               const n = Math.min(owed, inv.stock[good])
-              s.inventory.set({ ...inv, stock: { ...inv.stock, [good]: inv.stock[good] - n } })
+              store.inventory.set(s, { ...inv, stock: { ...inv.stock, [good]: inv.stock[good] - n } })
               owed -= n
             }
             if (held(good) > 0) news(`Thieves on ${where(tile)} made off with ${goods[good].title}.`, tile)
@@ -162,38 +163,40 @@ export const Hazards = Game.System(
         } else {
           news(`A home on ${where(tile)} stood empty after its thefts, and is left derelict.`, tile)
           ruin(row, "derelict")
-          lost.add(row.entity.id)
+          lost.add(row.id)
           continue
         }
       }
-      data.risk.set(r)
+      cared.risk.set(row, r)
     }
 
     // Sickness runs its course, and spreads to homes close by.
-    const homeRows = rows.filter(({ entity, data }) => data.house.present && !data.burning.present && !lost.has(entity.id))
-    for (const { entity, data } of queries.sickness.each()) {
-      const s = data.sick.get()
+    const homeRows = rows.filter((row) => cared.house.has(row) && !cared.burning.has(row) && !lost.has(row.id))
+    const { data: sickness } = queries.sickness
+    for (const entity of queries.sickness.each()) {
+      const s = sickness.sick.get(entity)
       const left = s.left - RISK_TICKS
       if (left <= 0) {
         commands.remove(entity, Sick)
         continue
       }
-      data.sick.set({ left })
+      sickness.sick.set(entity, { left })
       if (random.next() >= risk.health.spreads) continue
-      const me = rows.find((row) => row.entity.id === entity.id)
+      const me = rows.find((row) => row.id === entity.id)
       if (!me) continue
-      const at = me.data.tile.get()
-      const target = random.pick(homeRows.filter(({ entity: e, data: d }) => e.id !== entity.id && !d.sick.present && near(d.tile.get(), at, 2)))
+      const at = cared.tile.get(me)
+      const target = random.pick(homeRows.filter((e) => e.id !== entity.id && !cared.sick.has(e) && near(cared.tile.get(e), at, 2)))
       if (target) {
-        const r = target.data.risk.get()
-        target.data.risk.set({ ...r, health: Math.min(RISK_MAX, r.health + risk.health.contagion) })
+        const r = cared.risk.get(target)
+        cared.risk.set(target, { ...r, health: Math.min(RISK_MAX, r.health + risk.health.contagion) })
       }
     }
 
     // Fires burn down what they hold, and catch what stands beside them.
-    const byId = new Map(rows.map((row) => [row.entity.id as number, row]))
-    for (const { entity, data } of queries.blazes.each()) {
-      const b = data.burning.get()
+    const byId = new Map(rows.map((row) => [row.id as number, row]))
+    const { data: blazes } = queries.blazes
+    for (const entity of queries.blazes.each()) {
+      const b = blazes.burning.get(entity)
       const row = byId.get(entity.id)
       if (!row) continue
       const fire = fires.fires.find((f) => f.id === b.fire)
@@ -202,60 +205,62 @@ export const Hazards = Game.System(
         ruin(row, "burnt")
         lost.add(entity.id)
         if (fire) {
-          if (row.data.house.present) fire.homes += 1
+          if (cared.house.has(row)) fire.homes += 1
           else fire.buildings += 1
         }
         continue
       }
-      data.burning.set({ ...b, left })
-      const tile = row.data.tile.get()
-      const neighbour = random.pick(rows.filter(({ entity: e, data: d }) => e.id !== entity.id && !d.burning.present && !ignited.has(e.id) && !lost.has(e.id) && near(d.tile.get(), tile, 1)))
+      blazes.burning.set(entity, { ...b, left })
+      const tile = cared.tile.get(row)
+      const neighbour = random.pick(rows.filter((e) => e.id !== entity.id && !cared.burning.has(e) && !ignited.has(e.id) && !lost.has(e.id) && near(cared.tile.get(e), tile, 1)))
       if (!neighbour) continue
-      const chance = risk.fire.catches + (risk.fire.spread * neighbour.data.risk.get().fire) / RISK_MAX
+      const chance = risk.fire.catches + (risk.fire.spread * cared.risk.get(neighbour).fire) / RISK_MAX
       if (random.next() < chance) {
-        commands.insert(neighbour.entity, Game.Command.entry(Burning, { left: risk.fire.burns, fire: b.fire }))
-        ignited.set(neighbour.entity.id, b.fire)
+        commands.insert(neighbour, Game.Command.entry(Burning, { left: risk.fire.burns, fire: b.fire }))
+        ignited.set(neighbour.id, b.fire)
       }
     }
 
     // Firefighters run from the nearest fire watch to every blaze no one is running to.
     const out = new Map<number, number>()
     const crewed = new Set<number>()
-    for (const { data } of queries.crews.each()) {
-      out.set(data.home.get(), (out.get(data.home.get()) ?? 0) + 1)
-      if (!data.rescue.get().back) crewed.add(data.rescue.get().target)
+    const { data: crews } = queries.crews
+    for (const entity of queries.crews.each()) {
+      out.set(crews.home.get(entity), (out.get(crews.home.get(entity)) ?? 0) + 1)
+      if (!crews.rescue.get(entity).back) crewed.add(crews.rescue.get(entity).target)
     }
-    const watches = queries.watches.each().filter(({ data }) => data.service.get().service === "fire" && data.staff.get().assigned > 0)
-    const burningNow = [...queries.blazes.each().map(({ entity }) => entity.id as number), ...ignited.keys()].filter((id) => !lost.has(id))
+    const { data: watch } = queries.watches
+    const watches = queries.watches.each().filter((entity) => watch.service.get(entity).service === "fire" && watch.staff.get(entity).assigned > 0)
+    const burningNow = [...queries.blazes.each().map((entity) => entity.id as number), ...ignited.keys()].filter((id) => !lost.has(id))
     for (const id of burningNow) {
       if (crewed.has(id)) continue
       const target = byId.get(id)
       if (!target) continue
-      const goal = doors(grid, target.data.tile.get())
+      const goal = doors(grid, cared.tile.get(target))
       let best: { readonly watch: (typeof watches)[number]; readonly roads: ReturnType<typeof reach>; readonly cell: Point; readonly distance: number } | null = null
-      for (const watch of watches) {
+      for (const station of watches) {
         // A fire brigade sends more (see `Upgrade.crews`).
-        const crews = upgradeAt(kinds.firewatch, watch.data.upgraded.value()?.level ?? 0)?.crews ?? risk.fire.crews
-        if ((out.get(watch.entity.id) ?? 0) >= crews) continue
-        const starts = doors(grid, watch.data.tile.get())
+        const sends = upgradeAt(kinds.firewatch, watch.upgraded.get(station)?.level ?? 0)?.crews ?? risk.fire.crews
+        if ((out.get(station.id) ?? 0) >= sends) continue
+        const starts = doors(grid, watch.tile.get(station))
         if (starts.length === 0) continue
         const roads = reach(grid, starts)
         const found = nearest(roads, goal)
-        if (found && (best === null || found.distance < best.distance)) best = { watch, roads, ...found }
+        if (found && (best === null || found.distance < best.distance)) best = { watch: station, roads, ...found }
       }
       if (!best) continue
       const draft = Game.Command.spawn(
         [Figure, { role: "walker", color: 0xc4523f }],
         [Route, { cells: pathTo(best.roads, best.cell), index: 0, step: 0 }],
-        [Rescue, { target: Game.Entity.handle(target.entity.id, Tile), back: false }]
+        [Rescue, { target: Game.Entity.handle(target.id, Tile), back: false }]
       )
-      commands.spawn(Game.Command.relate(draft, WalkerOf, best.watch.entity.id))
-      out.set(best.watch.entity.id, (out.get(best.watch.entity.id) ?? 0) + 1)
+      commands.spawn(Game.Command.relate(draft, WalkerOf, best.watch.id))
+      out.set(best.watch.id, (out.get(best.watch.id) ?? 0) + 1)
     }
 
     // A fire with nothing left burning is over: the news says what it took.
     const stillBurning = new Set<number>()
-    for (const { entity, data } of queries.blazes.each()) if (!lost.has(entity.id)) stillBurning.add(data.burning.get().fire)
+    for (const entity of queries.blazes.each()) if (!lost.has(entity.id)) stillBurning.add(blazes.burning.get(entity).fire)
     for (const f of ignited.values()) stillBurning.add(f)
     const over = fires.fires.filter((f) => !stillBurning.has(f.id))
     for (const f of over) {

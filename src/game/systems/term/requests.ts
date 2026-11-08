@@ -55,8 +55,9 @@ export const Requests = Game.System(
     // what it can make in the time given, early in the term, to most of it.
     // The crown waits until the town makes anything.
     const rates = new Map<GoodId, number>()
-    for (const { data } of queries.makers.each()) {
-      const r = data.recipe.get()
+    const { data } = queries.makers
+    for (const entity of queries.makers.each()) {
+      const r = data.recipe.get(entity)
       rates.set(r.output, (rates.get(r.output) ?? 0) + (r.batch * 3600) / r.period)
     }
     // Only what keeps: fish and bread would rot on the way.
@@ -68,7 +69,7 @@ export const Requests = Game.System(
     const window = (crownGap(charter, rules) * crown.window) / 3600
     const share = crown.share[0] + (crown.share[1] - crown.share[0]) * progress
     // Never more than the town could keep in store.
-    const room = queries.stores.each().reduce((sum, { data }) => sum + data.inventory.get().cap, 0)
+    const room = queries.stores.each().reduce((sum, entity) => sum + queries.stores.data.inventory.get(entity).cap, 0)
     const amount = Math.max(4, Math.min(Math.round(room * crown.room), Math.round(rates.get(good)! * window * share)))
     const reward = Math.round(amount * goods[good].price * crown.reward) + crown.bonus
     const gap = crownGap(charter, rules)
