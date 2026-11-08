@@ -105,78 +105,82 @@ export const Animate = Game.System(
     const dt = services.clock.deltaSeconds
     // Fish where the water would give a catch now; none where it rests after one.
     const tick = resources.time.get().step
-    services.stage.setFish(queries.water.each().filter(({ data }) => tick - data.water.get().fished >= RESTOCK_TICKS).map(({ data }) => data.tile.get()))
+    const water = queries.water.data
+    services.stage.setFish(queries.water.each().filter((entity) => tick - water.water.get(entity).fished >= RESTOCK_TICKS).map((entity) => water.tile.get(entity)))
 
-    for (const { entity, data } of queries.buildings.each()) {
-      const kind = kinds[data.building.get().kind]
-      const status = data.status.get()
+    const building = queries.buildings.data
+    for (const entity of queries.buildings.each()) {
+      const kind = kinds[building.building.get(entity).kind]
+      const status = building.status.get(entity)
       // An upgrade the town needs now, and can make (see `upgradesWanted`).
       const upgradable = services.shown.scene.wanted.has(entity.id)
-      const recipe = data.recipe.value()
-      const walkers = data.walkers.value()?.length ?? 0
-      const worn = (data.condition.value()?.value ?? CONDITION_MAX) < wear.worn
-      const r = data.risk.value()
+      const recipe = building.recipe.get(entity)
+      const walkers = building.walkers.get(entity)?.length ?? 0
+      const worn = (building.condition.get(entity)?.value ?? CONDITION_MAX) < wear.worn
+      const r = building.risk.get(entity)
       services.buildingNodes.get(entity.id)?.update(
         {
           alert: alertOf(r ? { fire: r.fire, health: 0, order: 0 } : undefined, false, worn),
-          burning: data.burning.present,
+          burning: building.burning.has(entity),
           worn,
           effects: {
-            wear: 1-(data.condition.value()?.value??CONDITION_MAX)/CONDITION_MAX,
+            wear: 1-(building.condition.get(entity)?.value??CONDITION_MAX)/CONDITION_MAX,
             fireRisk: hazardStrength(r?.fire??0,risk.warn,RISK_MAX)
           },
           working: status === "working",
           tint: services.shown.scene.tints.get(entity.id),
           problem: problemOf(kind, status) !== null,
-          build: buildOf(data.site.value(), data.rising.value()),
-          beat: recipe ? recipe.made : data.service.value() ? walkers : 0,
-          doors: doorsOf(grid, data.tile.get()),
-          site: siteShare(data.site.value()),
-          level: data.upgraded.value()?.level ?? 0,
-          works: worksShare(data.works.value()),
+          build: buildOf(building.site.get(entity), building.rising.get(entity)),
+          beat: recipe ? recipe.made : building.service.get(entity) ? walkers : 0,
+          doors: doorsOf(grid, building.tile.get(entity)),
+          site: siteShare(building.site.get(entity)),
+          level: building.upgraded.get(entity)?.level ?? 0,
+          works: worksShare(building.works.get(entity)),
           upgradable
         },
         dt,
         emphasis(entity.id)
       )
     }
-    for (const { entity, data } of queries.houses.each()) {
-      const tile = data.tile.get()
-      const worn = (data.condition.value()?.value ?? CONDITION_MAX) < wear.worn
+    const house = queries.houses.data
+    for (const entity of queries.houses.each()) {
+      const tile = house.tile.get(entity)
+      const worn = (house.condition.get(entity)?.value ?? CONDITION_MAX) < wear.worn
       const desirability = appealAt(cells, tile.x, tile.y)
       services.houseNodes
         .get(entity.id)
         ?.update(
           {
-            tier: data.house.get().tier,
-            build: buildOf(data.site.value(), data.rising.value()),
+            tier: house.house.get(entity).tier,
+            build: buildOf(house.site.get(entity), house.rising.get(entity)),
             doors: doorsOf(grid, tile),
-            site: siteShare(data.site.value()),
-            alert: data.site.present ? null : alertOf(data.risk.value(), data.sick.present, worn),
-            burning: data.burning.present,
+            site: siteShare(house.site.get(entity)),
+            alert: house.site.has(entity) ? null : alertOf(house.risk.get(entity), house.sick.has(entity), worn),
+            burning: house.burning.has(entity),
             worn,
             effects: {
-              wear: Math.max(desirability<0?0.55:0,1-(data.condition.value()?.value??CONDITION_MAX)/CONDITION_MAX),
-              fireRisk: hazardStrength(data.risk.value()?.fire??0,risk.warn,RISK_MAX),
-              health: hazardStrength(data.risk.value()?.health??0,risk.warn,RISK_MAX),
-              order: hazardStrength(data.risk.value()?.order??0,risk.warn,RISK_MAX),
-              sick: Number(data.sick.present)
+              wear: Math.max(desirability<0?0.55:0,1-(house.condition.get(entity)?.value??CONDITION_MAX)/CONDITION_MAX),
+              fireRisk: hazardStrength(house.risk.get(entity)?.fire??0,risk.warn,RISK_MAX),
+              health: hazardStrength(house.risk.get(entity)?.health??0,risk.warn,RISK_MAX),
+              order: hazardStrength(house.risk.get(entity)?.order??0,risk.warn,RISK_MAX),
+              sick: Number(house.sick.has(entity))
             },
             band: desirability < 0 ? "poor" : desirability >= home.tiers[2].appeal ? "fine" : "plain",
-            closed: data.closed.present,
+            closed: house.closed.has(entity),
             tint: services.shown.scene.tints.get(entity.id)
           },
           emphasis(entity.id)
         )
     }
-    for (const { entity } of queries.ruins.each()) services.ruinNodes.get(entity.id)?.update(emphasis(entity.id))
-    for (const { entity, data } of queries.walkers.each()) {
-      const p = walkerAt(data.route.get())
-      const errand = data.errand.value()
-      const roam = data.roam.value()
+    for (const entity of queries.ruins.each()) services.ruinNodes.get(entity.id)?.update(emphasis(entity.id))
+    const walker = queries.walkers.data
+    for (const entity of queries.walkers.each()) {
+      const p = walkerAt(walker.route.get(entity))
+      const errand = walker.errand.get(entity)
+      const roam = walker.roam.get(entity)
       const load: Load = errand
         ? { kind: "cart", good: errand.good, count: !errand.back || errand.count > 0 ? errand.count : 0 }
-        : data.rescue.value()
+        : walker.rescue.get(entity)
           ? { kind: "service", role: "firefighter" }
         : roam?.service === "fire"
           ? { kind: "service", role: "watchman" }
@@ -193,22 +197,25 @@ export const Animate = Game.System(
             : { kind: "none" }
       services.walkerNodes.get(entity.id)?.update(p.x, p.y, p.dir, p.phase, load)
     }
-    for (const { entity, data } of queries.trees.each())
-      services.treeNodes.get(entity.id)?.update(data.tree.get().growth, emphasis(entity.id))
+    const tree = queries.trees.data
+    for (const entity of queries.trees.each())
+      services.treeNodes.get(entity.id)?.update(tree.tree.get(entity).growth, emphasis(entity.id))
     // Neighbouring rocks are drawn as one big outcrop; the blocks are formed again only when a rock runs out (or the land changes).
     const rocks = queries.rocks.each()
-    const rockKey = `${rocks.length}:${rocks.reduce((n, { entity }) => n + entity.id, 0)}`
+    const rock = queries.rocks.data
+    const rockKey = `${rocks.length}:${rocks.reduce((n, entity) => n + entity.id, 0)}`
     if (rockKey !== rockShapes.key) {
       rockShapes.key = rockKey
-      rockShapes.parts = rockBlocks(rocks.map(({ entity, data }) => ({ id: entity.id, ...data.tile.get(), ore: data.rock.get().ore })))
+      rockShapes.parts = rockBlocks(rocks.map((entity) => ({ id: entity.id, ...rock.tile.get(entity), ore: rock.rock.get(entity).ore })))
     }
-    const amounts = new Map<number, number>(rocks.map(({ entity, data }) => [entity.id, data.rock.get().amount]))
-    for (const { entity, data } of rocks) {
-      const r = data.rock.get()
+    const amounts = new Map<number, number>(rocks.map((entity) => [entity.id, rock.rock.get(entity).amount]))
+    for (const entity of rocks) {
+      const r = rock.rock.get(entity)
       const part = rockShapes.parts.get(entity.id)
       if (!part || !part.draws) services.rockNodes.get(entity.id)?.update(r.ore, r.amount, part ? 0 : 1, part ? 0 : 1)
       else services.rockNodes.get(entity.id)?.update(r.ore, part.members.reduce((n, id) => n + (amounts.get(id) ?? 0), 0) / part.members.length, part.w, part.h)
     }
-    for (const { entity, data } of queries.fields.each()) services.fieldNodes.get(entity.id)?.update(data.field.get().growth)
+    const field = queries.fields.data
+    for (const entity of queries.fields.each()) services.fieldNodes.get(entity.id)?.update(field.field.get(entity).growth)
   }
 )

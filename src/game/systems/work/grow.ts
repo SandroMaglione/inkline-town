@@ -18,14 +18,16 @@ export const Grow = Game.System(
     const { grown: GROWN, growTicks: GROW_TICKS } = rules
 
     if (!every(resources.time.get(), GROW_TICKS)) return
-    for (const { data } of queries.trees.each()) {
-      const growth = data.tree.get().growth
-      if (growth < GROWN.tree) data.tree.set({ growth: Math.min(GROWN.tree, growth + GROW_TICKS) })
+    const trees = queries.trees.data
+    for (const entity of queries.trees.each()) {
+      const growth = trees.tree.get(entity).growth
+      if (growth < GROWN.tree) trees.tree.set(entity, { growth: Math.min(GROWN.tree, growth + GROW_TICKS) })
     }
     if (seasonAt(elapsed(resources.time.get(), resources.charter.get()), resources.charter.get(), rules).winter) return
-    for (const { data } of queries.fields.each()) {
-      const growth = data.field.get().growth
-      if (growth < GROWN.field) data.field.set({ growth: Math.min(GROWN.field, growth + GROW_TICKS) })
+    const fields = queries.fields.data
+    for (const entity of queries.fields.each()) {
+      const growth = fields.field.get(entity).growth
+      if (growth < GROWN.field) fields.field.set(entity, { growth: Math.min(GROWN.field, growth + GROW_TICKS) })
     }
   }
 )

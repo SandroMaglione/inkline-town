@@ -22,10 +22,10 @@ const workOf = (frame: Frame, tile: TileLike, tier: Tier) => {
   const roads = reach(grid, ds)
   let best: { title: string; distance: number } | null = null
   for (const { data } of buildings) {
-    const kind = kinds[data.building.get().kind]
-    const staff = data.staff.get()
+    const kind = kinds[data.building.kind]
+    const staff = data.staff
     if (staff.needed === 0 || staff.assigned === 0 || (kind.crew !== crewOf(tier) && !(tier === 1 && staff.apprentices > 0))) continue
-    for (const d of doors(grid, data.tile.get())) {
+    for (const d of doors(grid, data.tile)) {
       const n = roads.distance[key(d.x, d.y)]!
       if (n >= 0 && n <= COMMUTE && (best === null || n < best.distance)) best = { title: kind.title.toLowerCase(), distance: n }
     }
@@ -37,8 +37,8 @@ const inTown = (frame: Frame): InTown => {
   const stock = frame.world.stock
   const sum = { fish: stock.fish, smoked: stock.smoked, bread: stock.bread, cloth: stock.cloth, furniture: stock.furniture }
   for (const { data } of frame.buildings) {
-    const inv = data.inventory.value()
-    if (!inv || data.service.value()?.service !== "goods" || data.site.present || data.rising.present) continue
+    const inv = data.inventory
+    if (!inv || data.service?.service !== "goods" || data.site !== undefined || data.rising !== undefined) continue
     sum.fish += inv.stock.fish
     sum.smoked += inv.stock.smoked
     sum.bread += inv.stock.bread
@@ -55,11 +55,11 @@ const servedAt = (frame: Frame, tile: TileLike): Served => {
   const way = reach(grid, ds)
   const served = { goods: false, faith: false }
   for (const { data } of buildings) {
-    const service = data.service.value()
-    if (!service || data.site.present || data.rising.present || data.burning.present) continue
+    const service = data.service
+    if (!service || data.site !== undefined || data.rising !== undefined || data.burning !== undefined) continue
     if (service.service !== "goods" && service.service !== "faith") continue
     if (served[service.service]) continue
-    const found = nearest(way, doors(grid, data.tile.get()))
+    const found = nearest(way, doors(grid, data.tile))
     if (found && found.distance < service.range) served[service.service] = true
   }
   return served
@@ -71,21 +71,21 @@ const servedAt = (frame: Frame, tile: TileLike): Served => {
  */
 export const describeHouse = (frame: Frame, row: HouseRow) => {
   const { cells, approval, rates } = frame
-  const h = row.data.house.get()
-  const site = row.data.site.value()
+  const h = row.data.house
+  const site = row.data.site
   const quiet = (summary: string, line: Line) => ({ h, summary, trouble: false, groups: [{ title: "household", icon: "homes", lines: [line] }] as Array<Group> })
   if (site) return quiet("being built", { icon: "planks", label: "builders", value: "waiting for its plank", tone: "warn" })
-  if (row.data.closed.present)
+  if (row.data.closed !== undefined)
     return quiet("closed", { icon: "settlers", label: "closed", value: "empty", tone: "warn", note: "it pays no taxes and costs the town hall nothing: reopen it and settlers move back in" })
-  const tile = row.data.tile.get()
+  const tile = row.data.tile
   const tier = home.tiers[h.tier]
   const nextTier = h.tier < 3 ? ((h.tier + 1) as Tier) : null
   const there = appealParts(frame.appealSources(), tile)
   const desirability = appealAt(cells, tile.x, tile.y)
   const street: Street = { desirability, parts: there.parts }
-  const r = row.data.risk.value()
+  const r = row.data.risk
   const work = workOf(frame, tile, h.tier)
-  const condition = row.data.condition.value()
+  const condition = row.data.condition
   const town = inTown(frame)
   const served = servedAt(frame, tile)
   const rate = h.tier === 1 ? rates.settlers : rates.citizens
@@ -93,7 +93,7 @@ export const describeHouse = (frame: Frame, row: HouseRow) => {
   const whyFewer =
     cap >= tier.residents
       ? undefined
-      : row.data.sick.present
+      : row.data.sick !== undefined
         ? "half as many while it is sick"
         : approval < 0
           ? "fewer while the town disapproves of its mayor"
@@ -106,8 +106,8 @@ export const describeHouse = (frame: Frame, row: HouseRow) => {
   const pays = Math.round(taxOf(h, rates, undefined, desirability))
   const could = Math.round(suppliedTaxOf(h, rates, undefined, desirability))
   const household: Array<Line> = [
-    ...(row.data.burning.present ? [{ icon: "fire", label: "on fire", value: "everyone fled", tone: "bad" } as Line] : []),
-    ...(row.data.sick.present ? [{ icon: "health", label: "sick", value: "half as many", tone: "bad", note: "it passes in a minute, or when a healer's physician calls" } as Line] : []),
+    ...(row.data.burning !== undefined ? [{ icon: "fire", label: "on fire", value: "everyone fled", tone: "bad" } as Line] : []),
+    ...(row.data.sick !== undefined ? [{ icon: "health", label: "sick", value: "half as many", tone: "bad", note: "it passes in a minute, or when a healer's physician calls" } as Line] : []),
     { icon: "people", label: "residents", value: `${h.residents} of ${cap}`, tone: whyFewer ? "warn" : "ok", note: whyFewer },
     {
       icon: "coins",
@@ -150,7 +150,7 @@ export const describeHouse = (frame: Frame, row: HouseRow) => {
   else needs.push({ icon: "appeal", label: "street", value: signed(desirability), tone: "ok" })
   if (blocks.some((b) => b.what === "services")) needs.push({ icon: "order", label: "services", value: `for ${home.tiers[3].title}`, tone: "warn", ...told(frame, servicesCause(r)) })
   // Rising is a rebuilding, paid at once from the treasury and the store, once.
-  const rebuilt = nextTier !== null && (row.data.rebuilt.value()?.tier ?? 1) >= nextTier
+  const rebuilt = nextTier !== null && (row.data.rebuilt?.tier ?? 1) >= nextTier
   const short = nextTier && !rebuilt ? shortOf(home.tiers[nextTier].rise, frame.world.treasury.coins, frame.world.stock) : null
   if (nextTier)
     needs.push({
@@ -191,11 +191,11 @@ export const describeHouse = (frame: Frame, row: HouseRow) => {
       : h.tier === 2
         ? `Red: it needs this now, or goes back to settlers. Amber: it needs this to become a townhouse of burghers, on a street of ${home.tiers[3].appeal} with a fire watch, a healer, and a watch house all calling.`
         : "Red: it needs this now, or goes back to citizens."
-  const summary = row.data.burning.present ? "on fire" : row.data.sick.present ? "sick" : hungry ? "hungry" : `${h.residents} resident${h.residents === 1 ? "" : "s"}`
+  const summary = row.data.burning !== undefined ? "on fire" : row.data.sick !== undefined ? "sick" : hungry ? "hungry" : `${h.residents} resident${h.residents === 1 ? "" : "s"}`
   return {
     h,
     summary,
-    trouble: row.data.burning.present || row.data.sick.present || hungry,
+    trouble: row.data.burning !== undefined || row.data.sick !== undefined || hungry,
     groups: [
       { title: "household", icon: "homes", lines: household },
       { title: "needs", icon: "citizens", help: needHelp, lines: needs },
@@ -208,9 +208,9 @@ export const describeHouse = (frame: Frame, row: HouseRow) => {
 export const housePanel = (frame: Frame, row: HouseRow): Panel => {
   const { h, summary, trouble, groups } = describeHouse(frame, row)
   return {
-    type: "house", id: row.entity.id, cell: row.data.tile.get(), tier: h.tier, summary, trouble, groups,
-    closable: !row.data.site.present && !row.data.rising.present && !row.data.burning.present,
-    closed: row.data.closed.present,
-    salvage: salvageFor(home.cost, row.data.site.value())
+    type: "house", id: row.entity.id, cell: row.data.tile, tier: h.tier, summary, trouble, groups,
+    closable: row.data.site === undefined && row.data.rising === undefined && row.data.burning === undefined,
+    closed: row.data.closed !== undefined,
+    salvage: salvageFor(home.cost, row.data.site)
   }
 }

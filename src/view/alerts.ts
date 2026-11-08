@@ -31,24 +31,24 @@ export const alertsOf = (frame: Frame, patience: Patience) => {
   const census = frame.world.census
   const stock = frame.world.stock
   /** A building of this kind stands (built, not a site). */
-  const stands = (k: KindId) => buildings.some(({ data }) => data.building.get().kind === k && !data.site.present && !data.rising.present)
+  const stands = (k: KindId) => buildings.some(({ data }) => data.building.kind === k && data.site === undefined && data.rising === undefined)
   // Each line says what is wrong, then what to do about it.
-  const burningRow = [...buildings, ...houses].find(({ data }) => data.burning.present)
+  const burningRow = [...buildings, ...houses].find(({ data }) => data.burning !== undefined)
   const fireText = `${census.burning} on fire: ${stands("firewatch") ? "the fire watch's firefighters are on their way" : "build a fire watch nearby, whose firefighters put fires out"}`
-  if (census.burning > 0) alerts.push({ tone: "bad", text: fireText, at: burningRow?.data.tile.get() ?? null, size: burningRow?.data.tile.get().size ?? 1, id: burningRow?.entity.id ?? null })
-  const sickRow = houses.find(({ data }) => data.sick.present)
+  if (census.burning > 0) alerts.push({ tone: "bad", text: fireText, at: burningRow?.data.tile ?? null, size: burningRow?.data.tile.size ?? 1, id: burningRow?.entity.id ?? null })
+  const sickRow = houses.find(({ data }) => data.sick !== undefined)
   const sickText = `${census.sick} home${census.sick > 1 ? "s" : ""} sick, holding half as many people: ${stands("healer") || stands("hospital") ? "a healer within reach of its road cures it" : "build a healer among the homes"}`
-  if (census.sick > 0) alerts.push({ tone: "warn", text: sickText, at: sickRow?.data.tile.get() ?? null, size: 1, id: sickRow?.entity.id ?? null })
+  if (census.sick > 0) alerts.push({ tone: "warn", text: sickText, at: sickRow?.data.tile ?? null, size: 1, id: sickRow?.entity.id ?? null })
   const waiting = new Map<string, { n: number; at: TileLike; id: number; kind: KindId }>()
   const remote = new Map<string, { n: number; at: TileLike; id: number; kind: KindId }>()
   const shortStaffed: Array<{ id: number; title: string; cell: Point; size: number; assigned: number; needed: number; nobodyNear: boolean }> = []
   const seen = new Set<number>()
   for (const { entity, data } of buildings) {
-    if (data.site.present || data.rising.present || data.paused.present) continue
-    const kind = kinds[data.building.get().kind]
-    const status = data.status.get()
-    const staff = data.staff.get()
-    const tile = data.tile.get()
+    if (data.site !== undefined || data.rising !== undefined || data.paused !== undefined) continue
+    const kind = kinds[data.building.kind]
+    const status = data.status
+    const staff = data.staff
+    const tile = data.tile
     if (status === "starved" && kind.recipe?.input) {
       seen.add(entity.id)
       const since = patience.starvedSince.get(entity.id) ?? tick
@@ -73,12 +73,12 @@ export const alertsOf = (frame: Frame, patience: Patience) => {
     Object.fromEntries([...m.values()].map((v) => [v.kind, { at: v.at, size: v.at.size, id: v.id }]))
   if (waiting.size > 0) alerts.push({ tone: "warn", text: `idle: the ${list(waiting)}. Build more of what makes it, or buy it in the [town] panel`, at: first(waiting)?.at ?? null, size: first(waiting)?.at.size ?? 1, id: first(waiting)?.id ?? null, places: placesOf(waiting) })
   if (remote.size > 0) alerts.push({ tone: "warn", text: `no workers for the ${list(remote)}: lay [homes] within ${COMMUTE} road cells of it, or a road to homes nearby`, at: first(remote)?.at ?? null, size: first(remote)?.at.size ?? 1, id: first(remote)?.id ?? null, places: placesOf(remote) })
-  const hallRow = buildings.find(({ data }) => data.hall.present)
+  const hallRow = buildings.find(({ data }) => data.hall !== undefined)
   const empty = census.homes > 0 && larder(stock) === 0
   if (!empty || (patience.emptySince !== null && patience.emptySince > tick)) patience.emptySince = null
   if (empty && patience.emptySince === null) patience.emptySince = tick
   if (empty && tick - patience.emptySince! >= HUNGER_PATIENCE) patience.hungryUntil = tick + HUNGER_PATIENCE
   if (patience.hungryUntil > tick + HUNGER_PATIENCE) patience.hungryUntil = 0
-  if (census.homes > 0 && tick < patience.hungryUntil) alerts.push({ tone: "bad", text: "no food in store, so homes go hungry and pay no taxes: build another fishery, or buy fish in the [town] panel", at: hallRow?.data.tile.get() ?? null, size: hallRow?.data.tile.get().size ?? 1, id: hallRow?.entity.id ?? null })
+  if (census.homes > 0 && tick < patience.hungryUntil) alerts.push({ tone: "bad", text: "no food in store, so homes go hungry and pay no taxes: build another fishery, or buy fish in the [town] panel", at: hallRow?.data.tile ?? null, size: hallRow?.data.tile.size ?? 1, id: hallRow?.entity.id ?? null })
   return { alerts, shortStaffed, hallRow }
 }

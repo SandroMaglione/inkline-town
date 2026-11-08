@@ -24,10 +24,11 @@ export const Stroll = Game.System(
       townsfolk.land = mask
       townsfolk.folk.clear()
     }
+    const { data } = queries.houses
     const homes = queries.houses
       .each()
-      .filter(({ data }) => !data.site.value() && !data.rising.value())
-      .map(({ data }) => ({ ...data.tile.get(), tier: data.house.get().tier, residents: data.house.get().residents }))
+      .filter((entity) => !data.site.get(entity) && !data.rising.get(entity))
+      .map((entity) => ({ ...data.tile.get(entity), tier: data.house.get(entity).tier, residents: data.house.get(entity).residents }))
     townsfolk.folk.step(services.clock.deltaSeconds * services.shown.scene.pace, homes, resources.grid.get())
   }
 )

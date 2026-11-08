@@ -21,10 +21,11 @@ export const DrawGround = Game.System(
   ({ queries, despawned, services }) => {
     const dirty = services.stage.groundDirty
     if (!dirty && queries.laid.each().length === 0 && despawned.entities.all().length === 0) return
-    const cellsOf = (rows: ReadonlyArray<{ readonly data: { readonly tile: { get(): TileLike } } }>) =>
-      new Set(rows.map(({ data }) => key(data.tile.get().x, data.tile.get().y)))
-    const roads = cellsOf(queries.roads.each())
-    services.stage.setGround(roads, cellsOf(queries.water.each()), cellsOf(queries.paved.each()))
-    services.stage.setParks(new Map(queries.parks.each().map(({ data }) => [key(data.tile.get().x, data.tile.get().y), { ...data.tile.get(), ...data.park.get() }])), roads)
+    const cellsOf = <E>(query: { each(): ReadonlyArray<E>; readonly data: { readonly tile: { get(entity: E): TileLike } } }) =>
+      new Set(query.each().map((entity) => key(query.data.tile.get(entity).x, query.data.tile.get(entity).y)))
+    const roads = cellsOf(queries.roads)
+    services.stage.setGround(roads, cellsOf(queries.water), cellsOf(queries.paved))
+    const parks = queries.parks.data
+    services.stage.setParks(new Map(queries.parks.each().map((entity) => [key(parks.tile.get(entity).x, parks.tile.get(entity).y), { ...parks.tile.get(entity), ...parks.park.get(entity) }])), roads)
   }
 )

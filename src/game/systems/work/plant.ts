@@ -33,13 +33,14 @@ export const Plant = Game.System(
     const random = Random.draw(resources.rng)
     const sown = new Set<number>()
     const tick = resources.time.get().step
-    for (const { entity, data } of queries.planters.each()) {
-      const tile = data.tile.get()
-      const staff = data.staff.get()
-      const planter = data.planter.get()
+    const { data } = queries.planters
+    for (const entity of queries.planters.each()) {
+      const tile = data.tile.get(entity)
+      const staff = data.staff.get(entity)
+      const planter = data.planter.get(entity)
       // While it waits to plant again, it only counts down (and looks around twice a second for its status).
       if (planter.cooldown > 1 && tick % STAFF_TICKS !== 0) {
-        data.planter.set({ ...planter, cooldown: planter.cooldown - 1 })
+        data.planter.set(entity, { ...planter, cooldown: planter.cooldown - 1 })
         continue
       }
       const open = connected(grid, tile)
@@ -47,20 +48,20 @@ export const Plant = Game.System(
       const grown = reach.filter((c) => useAt(grid, c.x, c.y) === planter.what).length
       const spots = reach.filter((c) => useAt(grid, c.x, c.y) === "empty" && !sown.has(key(c.x, c.y)))
       // A forester has no recipe of its own: its status is its planting.
-      if (!data.recipe.value()) {
-        const status: StatusValue = data.paused.present ? "paused" : !open ? "unconnected" : staff.assigned === 0 ? "unstaffed" : grown < planter.max && spots.length > 0 ? "working" : "idle"
-        if (data.status.get() !== status) data.status.set(status)
+      if (!data.recipe.get(entity)) {
+        const status: StatusValue = data.paused.has(entity) ? "paused" : !open ? "unconnected" : staff.assigned === 0 ? "unstaffed" : grown < planter.max && spots.length > 0 ? "working" : "idle"
+        if (data.status.get(entity) !== status) data.status.set(entity, status)
       }
       const cooldown = Math.max(0, planter.cooldown - 1)
       if (cooldown > 0 || !open || staff.assigned === 0 || grown >= planter.max || spots.length === 0) {
-        if (cooldown !== planter.cooldown) data.planter.set({ ...planter, cooldown })
+        if (cooldown !== planter.cooldown) data.planter.set(entity, { ...planter, cooldown })
         continue
       }
       const spot = random.pick(spots)!
       sown.add(key(spot.x, spot.y))
       if (planter.what === "tree") commands.spawn(treeDraft(spot, 0))
       else commands.spawn(Game.Command.relate(fieldDraft(spot), FieldOf, entity.id))
-      data.planter.set({ ...planter, cooldown: planter.interval })
+      data.planter.set(entity, { ...planter, cooldown: planter.interval })
     }
   }
 )

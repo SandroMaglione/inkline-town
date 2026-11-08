@@ -26,11 +26,12 @@ export const IndexGrid = Game.System(
     const grid = new GridBuilder(resources.land.get().mask)
     const tiles = new Set<number>()
     const paved = new Set<number>()
-    for (const { entity, data } of queries.tiles.each()) {
-      const t = data.tile.get()
-      grid.claim(t, entity.id, useOf(data))
+    const { data } = queries.tiles
+    for (const entity of queries.tiles.each()) {
+      const t = data.tile.get(entity)
+      grid.claim(t, entity.id, useOf(entity, data))
       tiles.add(entity.id)
-      if (data.road.present && data.paved.present) paved.add(key(t.x, t.y))
+      if (data.road.has(entity) && data.paved.has(entity)) paved.add(key(t.x, t.y))
     }
     const value = grid.value()
     resources.grid.set({ ...value, roads: roadPrint(value), tiles, paved })

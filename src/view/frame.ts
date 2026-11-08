@@ -7,7 +7,7 @@
  * first asked.
  */
 import type { Descriptor } from "@typeonce/ritmo"
-import type { Query, QueryMatch } from "@typeonce/ritmo/Query"
+import type { Query, QueryData, QueryEntity } from "@typeonce/ritmo/Query"
 
 import { buildingSource, homeSource, landSource, parkSources, parksOf, type AppealSource, type ParkCell, type ParkValue } from "../game/world/appeal.ts"
 import { condition as wear, CONDITION_MAX, type KindId } from "../game/content/index.ts"
@@ -63,7 +63,25 @@ const WaterRead = Game.Query({ selection: { tile: Game.Query.read(Tile) }, with:
 const RockRead = Game.Query({ selection: { tile: Game.Query.read(Tile), rock: Game.Query.read(Rock) } })
 const PavedRead = Game.Query({ selection: { tile: Game.Query.read(Tile) }, with: [Road, Paved] })
 
-type Row<Q extends Query.Any> = QueryMatch<typeof Game.schema, Q>
+/**
+ * One entity of a frame query, its values read once when the frame is taken:
+ * an optional slot is `undefined` when the entity lacks the component. Plain
+ * values, so a row stays readable after the run (a query's `data` does not).
+ */
+type Row<Q extends Query.Any> = {
+  readonly entity: QueryEntity<typeof Game.schema, Q>
+  readonly data: { readonly [K in keyof QueryData<Q>]: ReturnType<QueryData<Q>[K]["get"]> }
+}
+type FrameQuery<Q extends Query.Any> = { each(): ReadonlyArray<QueryEntity<typeof Game.schema, Q>>; readonly data: QueryData<Q> }
+const rowsOf = <Q extends Query.Any>(query: FrameQuery<Q>): Array<Row<Q>> => {
+  const slots: QueryData<Q> = query.data
+  const names = Object.keys(slots) as Array<keyof QueryData<Q>>
+  return query.each().map((entity) => {
+    const data = {} as { -readonly [K in keyof QueryData<Q>]: ReturnType<QueryData<Q>[K]["get"]> }
+    for (const name of names) data[name] = slots[name].get(entity) as ReturnType<QueryData<Q>[typeof name]["get"]>
+    return { entity, data }
+  })
+}
 export type BuildingRow = Row<typeof BuildingRead>
 export type HouseRow = Row<typeof HouseRead>
 export type RuinRow = Row<typeof RuinRead>
@@ -102,7 +120,7 @@ const worldResources = {
 }
 /** Every resource the view reads, as its value this frame. */
 export type World = { readonly [K in keyof typeof worldResources]: Descriptor.Descriptor.Value<(typeof worldResources)[K]> }
-type FrameRows = { readonly [K in keyof typeof frameAccess.queries]: Row<(typeof frameAccess.queries)[K]> }
+type FrameQueries = typeof frameAccess.queries
 
 /** A thing's hit area for the pointer, nearest first. */
 interface HitBox {
@@ -121,14 +139,14 @@ const hitAt = (hits: ReadonlyArray<HitBox>, at: Point, entity?: number | null) =
   entity === undefined ? (hits.find((h) => h.contains(at))?.id ?? null) : entity
 
 /** Rows with a site's plate down or still rising are not built yet. */
-type Raised = { readonly data: { readonly site: { readonly present: boolean }; readonly rising: { readonly present: boolean } } }
+type Raised = { readonly data: { readonly site: unknown; readonly rising: unknown } }
 
 /**
  * Reads the frame: `queries` and `resources` as `Project`'s callback receives
  * them (see `frameAccess`).
  */
 export const frameOf = (
-  queries: { readonly [K in keyof FrameRows]: { each(): ReadonlyArray<FrameRows[K]> } },
+  queries: { readonly [K in keyof FrameQueries]: FrameQuery<FrameQueries[K]> },
   resources: { readonly [K in keyof World]: { get(): World[K] } }
 ) => {
   const world: World = {
@@ -138,23 +156,26 @@ export const frameOf = (
     chronicle: resources.chronicle.get(), appeal: resources.appeal.get(), pantry: resources.pantry.get(), guide: resources.guide.get()
   }
   const grid = world.grid
-  const buildings = queries.buildings.each()
-  const houses = queries.houses.each()
-  const ruins = queries.ruins.each()
-  const parkRows = queries.parks.each()
-  const rocks = queries.rocks.each()
-  const parkCells: Array<ParkCell> = parkRows.map(({ data }) => ({ ...data.tile.get(), ...data.park.get() }))
-  const parkAt = new Map(parkRows.map((row) => [key(row.data.tile.get().x, row.data.tile.get().y), row] as const))
+  const buildings = rowsOf(queries.buildings)
+  const houses = rowsOf(queries.houses)
+  const ruins = rowsOf(queries.ruins)
+  const parkRows = rowsOf(queries.parks)
+  const rocks = rowsOf(queries.rocks)
+  const trees = rowsOf(queries.trees)
+  const water = rowsOf(queries.water)
+  const paved = rowsOf(queries.paved)
+  const parkCells: Array<ParkCell> = parkRows.map(({ data }) => ({ ...data.tile, ...data.park }))
+  const parkAt = new Map(parkRows.map((row) => [key(row.data.tile.x, row.data.tile.y), row] as const))
   const road = (x: number, y: number) => isRoad(grid, x, y)
   const hits: Array<HitBox> = [
-    ...buildings.map(({ entity, data }) => hitBox(entity.id, data.tile.get())),
-    ...houses.map(({ entity, data }) => hitBox(entity.id, data.tile.get())),
-    ...ruins.map(({ entity, data }) => hitBox(entity.id, data.tile.get())),
-    ...parkRows.map(({ entity, data }) => hitBox(entity.id, data.tile.get()))
+    ...buildings.map(({ entity, data }) => hitBox(entity.id, data.tile)),
+    ...houses.map(({ entity, data }) => hitBox(entity.id, data.tile)),
+    ...ruins.map(({ entity, data }) => hitBox(entity.id, data.tile)),
+    ...parkRows.map(({ entity, data }) => hitBox(entity.id, data.tile))
   ].sort((l, r) => r.depth - l.depth)
   // What stands, for a fix that builds something: it offers the first link of the chain the town lacks, else the last.
-  const standing = new Set<KindId>(buildings.filter((r) => !r.data.site.present).map((r) => r.data.building.get().kind))
-  const finished = (row: Raised) => !row.data.site.present && !row.data.rising.present
+  const standing = new Set<KindId>(buildings.filter((r) => r.data.site === undefined).map((r) => r.data.building.kind))
+  const finished = (row: Raised) => row.data.site === undefined && row.data.rising === undefined
   let unreached: number | null = null
   let sources: Array<AppealSource> | null = null
   const frame = {
@@ -169,11 +190,11 @@ export const frameOf = (
     ruins,
     parkRows,
     rocks,
-    trees: queries.trees.each(),
-    water: queries.water.each(),
-    paved: queries.paved.each(),
+    trees,
+    water,
+    paved,
     /** The rocks by cell: which are ore, and which are worked down to their faces. */
-    rockAt: new Map(rocks.map(({ data }) => [key(data.tile.get().x, data.tile.get().y), data.rock.get()])),
+    rockAt: new Map(rocks.map(({ data }) => [key(data.tile.x, data.tile.y), data.rock])),
     parkCells,
     parkAt,
     road,
@@ -197,7 +218,7 @@ export const frameOf = (
       const hit = hitAt(hits, at, entity)
       return hit ?? parkAt.get(key(Math.floor(at.x), Math.floor(at.y)))?.entity.id ?? null
     },
-    tileOf: (id: number) => [...buildings, ...houses, ...ruins, ...parkRows].find((row) => row.entity.id === id)?.data.tile.get(),
+    tileOf: (id: number) => [...buildings, ...houses, ...ruins, ...parkRows].find((row) => row.entity.id === id)?.data.tile,
     standing,
     finished,
     fixOf: (f: Fix | undefined): Line["fix"] => f && { text: f.text, build: f.build?.find((k) => !standing.has(k)) ?? f.build?.at(-1) },
@@ -205,11 +226,11 @@ export const frameOf = (
     unreachedHomes: () => {
       if (unreached !== null) return unreached
       const walks = buildings
-        .filter((row) => row.data.service.value()?.service === "goods" && finished(row))
-        .map((row) => ({ way: reach(grid, doors(grid, row.data.tile.get())), range: row.data.service.value()!.range }))
+        .filter((row) => row.data.service?.service === "goods" && finished(row))
+        .map((row) => ({ way: reach(grid, doors(grid, row.data.tile)), range: row.data.service!.range }))
       unreached = houses.filter((row) => {
         if (!finished(row)) return false
-        const ds = doors(grid, row.data.tile.get())
+        const ds = doors(grid, row.data.tile)
         return ds.length > 0 && !walks.some((w) => (nearest(w.way, ds)?.distance ?? Infinity) < w.range)
       }).length
       return unreached
@@ -219,19 +240,19 @@ export const frameOf = (
       if (sources) return sources
       sources = []
       for (const { data } of buildings) {
-        if (data.site.present || data.rising.present) continue
-        const s = buildingSource(data.building.get().kind, data.tile.get(), undefined, data.upgraded.value()?.level ?? 0)
+        if (data.site !== undefined || data.rising !== undefined) continue
+        const s = buildingSource(data.building.kind, data.tile, undefined, data.upgraded?.level ?? 0)
         if (s) sources.push(s)
       }
-      for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get()))
-      for (const { data } of queries.water.each()) sources.push(landSource("water", data.tile.get()))
-      for (const { data } of queries.paved.each()) sources.push(landSource("paved", data.tile.get()))
+      for (const { data } of trees) sources.push(landSource("forest", data.tile))
+      for (const { data } of water) sources.push(landSource("water", data.tile))
+      for (const { data } of paved) sources.push(landSource("paved", data.tile))
       sources.push(...parkSources(parkCells, road))
-      for (const { data } of ruins) sources.push(landSource("ruin", data.tile.get()))
+      for (const { data } of ruins) sources.push(landSource("ruin", data.tile))
       for (const { data } of houses) {
-        if (data.site.present || data.rising.present) continue
-        if ((data.condition.value()?.value ?? CONDITION_MAX) < wear.worn) sources.push(landSource("worn", data.tile.get()))
-        const fine = data.closed.present ? null : homeSource(data.house.get().tier, data.tile.get())
+        if (data.site !== undefined || data.rising !== undefined) continue
+        if ((data.condition?.value ?? CONDITION_MAX) < wear.worn) sources.push(landSource("worn", data.tile))
+        const fine = data.closed !== undefined ? null : homeSource(data.house.tier, data.tile)
         if (fine) sources.push(fine)
       }
       return sources

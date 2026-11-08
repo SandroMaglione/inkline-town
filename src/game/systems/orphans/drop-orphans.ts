@@ -17,12 +17,12 @@ export const DropOrphans = Game.System(
     for (const failure of relationFailures.walkers.all()) {
       if (failure.operation !== "relate") continue
       const walker = queries.walkers.get(failure.source)
-      if (walker.ok) commands.despawn(walker.value.entity)
+      if (walker.ok) commands.despawn(walker.value)
     }
     for (const failure of relationFailures.fields.all()) {
       if (failure.operation !== "relate") continue
       const field = queries.fields.get(failure.source)
-      if (field.ok) commands.despawn(field.value.entity)
+      if (field.ok) commands.despawn(field.value)
     }
   }
 )

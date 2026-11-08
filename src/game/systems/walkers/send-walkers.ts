@@ -48,20 +48,23 @@ export const SendWalkers = Game.System(
     const grid = resources.grid.get()
     const tick = resources.time.get().step
     const out = new Map<number, number>()
-    for (const { data } of queries.walkers.each()) out.set(data.home.get(), (out.get(data.home.get()) ?? 0) + 1)
+    const walkers = queries.walkers.data
+    for (const entity of queries.walkers.each()) out.set(walkers.home.get(entity), (out.get(walkers.home.get(entity)) ?? 0) + 1)
 
-    for (const { entity, data } of queries.services.each()) {
-      const service = data.service.get()
-      const staff = data.staff.get()
-      const starts = doors(grid, data.tile.get())
-      const stock = data.inventory.value()?.stock
-      const staffed = !data.paused.present && (staff.needed === 0 || staff.assigned > 0)
+    const { data } = queries.services
+    const targetData = queries.targets.data
+    for (const entity of queries.services.each()) {
+      const service = data.service.get(entity)
+      const staff = data.staff.get(entity)
+      const starts = doors(grid, data.tile.get(entity))
+      const stock = data.inventory.get(entity)?.stock
+      const staffed = !data.paused.has(entity) && (staff.needed === 0 || staff.assigned > 0)
       const carries = (g: (typeof provisions)[number]) =>
         service.service === "goods" ? provisions.includes(g) : service.service === "repair" ? g === "planks" || g === "stone" : false
       const basket: Amounts = each((g) => (stock && carries(g) ? Math.min(BASKET, stock[g]) : 0))
       const goes = service.service === "goods" ? total(basket) > 0 : service.service === "repair" ? basket.planks > 0 : true
-      if (!data.recipe.value()) {
-        const status: StatusValue = data.paused.present
+      if (!data.recipe.get(entity)) {
+        const status: StatusValue = data.paused.has(entity)
           ? "paused"
           : starts.length === 0
           ? "unconnected"
@@ -72,23 +75,23 @@ export const SendWalkers = Game.System(
           : goes
           ? "idle"
           : "starved"
-        if (data.status.get() !== status) data.status.set(status)
+        if (data.status.get(entity) !== status) data.status.set(entity, status)
       }
 
       // A crew of apprentices sends walkers less often.
       const learning = staff.assigned > 0 && staff.assigned === staff.apprentices && !paced(APPRENTICE, tick)
       const cooldown = learning ? service.cooldown : Math.max(0, service.cooldown - 1)
       if (cooldown === 0 && (out.get(entity.id) ?? 0) < OUT && starts.length > 0 && staffed && goes) {
-        const targets = queries.targets.each().filter(({ data }) => service.service === "fire" || service.service === "repair" || data.house.present)
-          .map(({ entity, data }) => ({ id: entity.id as number, tile: data.tile.get() }))
-        const plan = planPatrols(grid, data.tile.get(), service.range, targets)
+        const targets = queries.targets.each().filter((target) => service.service === "fire" || service.service === "repair" || targetData.house.has(target))
+          .map((target) => ({ id: target.id as number, tile: targetData.tile.get(target) }))
+        const plan = planPatrols(grid, data.tile.get(entity), service.range, targets)
         if (plan.tours.length === 0) continue
         const patrol = queries.patrols.get(entity.id)
-        const cursor = patrol.ok ? patrol.value.data.patrol.get().next : 0
+        const cursor = patrol.ok ? queries.patrols.data.patrol.get(patrol.value).next : 0
         const tour = plan.tours[cursor % plan.tours.length]!
-        if (patrol.ok) patrol.value.data.patrol.set({ next: (cursor + 1) % plan.tours.length })
+        if (patrol.ok) queries.patrols.data.patrol.set(patrol.value, { next: (cursor + 1) % plan.tours.length })
         else commands.insert(entity, Game.Command.entry(Patrol, { next: 1 % plan.tours.length }))
-        const color = categoryColor[kinds[data.building.get().kind].category]
+        const color = categoryColor[kinds[data.building.get(entity).kind].category]
         const draft = Game.Command.spawn(
           [Figure, { role: "walker", color }],
           [Route, { cells: [...tour], index: 0, step: 0 }],
@@ -97,11 +100,11 @@ export const SendWalkers = Game.System(
         commands.spawn(Game.Command.relate(draft, WalkerOf, entity.id))
         const inv = queries.inventories.get(entity.id)
         if (inv.ok && total(basket) > 0) {
-          const i = inv.value.data.inventory.get()
-          inv.value.data.inventory.set({ ...i, stock: each((g) => i.stock[g] - basket[g]) })
+          const i = queries.inventories.data.inventory.get(inv.value)
+          queries.inventories.data.inventory.set(inv.value, { ...i, stock: each((g) => i.stock[g] - basket[g]) })
         }
-        data.service.set({ ...service, cooldown: service.interval })
-      } else if (cooldown !== service.cooldown) data.service.set({ ...service, cooldown })
+        data.service.set(entity, { ...service, cooldown: service.interval })
+      } else if (cooldown !== service.cooldown) data.service.set(entity, { ...service, cooldown })
     }
   }
 )

@@ -46,28 +46,31 @@ export const Wander = Game.System(
     const grid = resources.grid.get()
     const walkers = queries.walkers.each()
     const homes = new Map<number, ReturnType<typeof queries.homes.each>[number]>()
-    for (const row of queries.homes.each()) homes.set(row.entity.id, row)
+    for (const entity of queries.homes.each()) homes.set(entity.id, entity)
     const cared = new Map<number, ReturnType<typeof queries.cared.each>[number]>()
-    for (const row of queries.cared.each()) cared.set(row.entity.id, row)
+    for (const entity of queries.cared.each()) cared.set(entity.id, entity)
+    const house = queries.homes.data.house
+    const care = queries.cared.data
     let eaten = 0
     // What each walker hands each home, for its building's last minute (see `Handed`).
     const tick = resources.time.get().step
     const handed: Array<HandedValue["log"][number]> = []
 
-    for (const { entity, data } of walkers) {
-      const route = data.route.get()
-      const roam = data.roam.get()
+    const { data } = queries.walkers
+    for (const entity of walkers) {
+      const route = data.route.get(entity)
+      const roam = data.roam.get(entity)
       // left counts cells still to serve. Older saves can finish their current short segment.
       if (roam.back ? !arrived(route) : roam.left > route.cells.length ? !arrived(route) : route.index < route.cells.length - roam.left) continue
-      const from = data.home.get()
+      const from = data.home.get(entity)
 
       if (roam.back) {
         const inv = queries.inventories.get(from)
         if (inv.ok && total(roam.basket) > 0) {
-          const i = inv.value.data.inventory.get()
+          const i = queries.inventories.data.inventory.get(inv.value)
           // What it did not hand out goes back on the shelf, even past its room (the shelf filled again meanwhile):
           // the building asks for no more until it is down again, and nothing is lost.
-          inv.value.data.inventory.set({ ...i, stock: each((g) => i.stock[g] + roam.basket[g]) })
+          queries.inventories.data.inventory.set(inv.value, { ...i, stock: each((g) => i.stock[g] + roam.basket[g]) })
         }
         commands.despawn(entity)
         continue
@@ -87,35 +90,35 @@ export const Wander = Game.System(
         if (served.has(id)) continue
         served.add(id)
         const row = use === "house" ? homes.get(id) : undefined
-        const care = cared.get(id)
+        const cares = cared.get(id)
         if (row) {
-          const h = { ...row.data.house.get() }
+          const h = { ...house.get(row) }
           if (roam.service === "faith") h.faith = home.lasts.faith
           else if (roam.service === "goods") {
             const served = serveGoods(h, amounts(basket), rules, appealAt(resources.appeal.get().cells, x, y))
             const given = Object.fromEntries(Object.entries(served.basket).filter(([g, n]) => (basket[g] ?? 0) > n).map(([g, n]) => [g, (basket[g] ?? 0) - n]))
-            if (Object.keys(given).length > 0) handed.push({ at: tick, from: data.home.get(), to: id, goods: given })
+            if (Object.keys(given).length > 0) handed.push({ at: tick, from: data.home.get(entity), to: id, goods: given })
             Object.assign(h, served.house)
             Object.assign(basket, served.basket)
             eaten += served.eaten
           }
-          row.data.house.set(h)
+          house.set(row, h)
         }
-        if (!care) continue
-        const r = care.data.risk.get()
-        if (roam.service === "fire" && r.fire > 0) care.data.risk.set({ ...r, fire: 0 })
+        if (!cares) continue
+        const r = care.risk.get(cares)
+        if (roam.service === "fire" && r.fire > 0) care.risk.set(cares, { ...r, fire: 0 })
         if (row && roam.service === "health") {
-          if (r.health > 0) care.data.risk.set({ ...r, health: 0 })
-          if (care.data.sick.present) commands.remove(care.entity, Sick)
+          if (r.health > 0) care.risk.set(cares, { ...r, health: 0 })
+          if (care.sick.has(cares)) commands.remove(cares, Sick)
         }
-        if (row && roam.service === "order" && (r.order > 0 || r.thefts > 0)) care.data.risk.set({ ...r, order: 0, thefts: 0 })
+        if (row && roam.service === "order" && (r.order > 0 || r.thefts > 0)) care.risk.set(cares, { ...r, order: 0, thefts: 0 })
         if (roam.service === "repair") {
-          const c = care.data.condition.get().value
+          const c = care.condition.get(cares).value
           if (c < wear.mend && (basket.planks ?? 0) > 0) {
             basket.planks = (basket.planks ?? 0) - 1
             const stone = !row && (basket.stone ?? 0) > 0
             if (stone) basket.stone = (basket.stone ?? 0) - 1
-            care.data.condition.set({ value: row || stone ? CONDITION_MAX : Math.min(CONDITION_MAX, c + 300) })
+            care.condition.set(cares, { value: row || stone ? CONDITION_MAX : Math.min(CONDITION_MAX, c + 300) })
           }
         }
       }
@@ -123,20 +126,20 @@ export const Wander = Game.System(
       const carrying = amounts(basket)
       const keepsGoing = roam.service === "goods" ? total(carrying) > 0 : roam.service === "repair" ? carrying.planks > 0 : true
       if (left > 0 && keepsGoing && !arrived(route)) {
-        data.roam.set({ ...roam, left, basket: carrying })
+        data.roam.set(entity, { ...roam, left, basket: carrying })
         continue
       }
 
       // Head home.
       const building = queries.buildings.get(from)
       const way = reach(grid, [cell])
-      const door = building.ok ? nearest(way, doors(grid, building.value.data.tile.get())) : null
+      const door = building.ok ? nearest(way, doors(grid, queries.buildings.data.tile.get(building.value))) : null
       if (!door) {
         commands.despawn(entity)
         continue
       }
-      data.route.set({ cells: pathTo(way, door.cell), index: 0, step: 0 })
-      data.roam.set({ ...roam, left: 0, basket: carrying, back: true })
+      data.route.set(entity, { cells: pathTo(way, door.cell), index: 0, step: 0 })
+      data.roam.set(entity, { ...roam, left: 0, basket: carrying, back: true })
     }
     if (eaten > 0) resources.pantry.update((p) => ({ ...p, eaten: p.eaten + eaten }))
     // The last minute only; a log from another town (its clock behind this one's) is dropped.

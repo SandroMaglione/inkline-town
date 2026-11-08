@@ -29,7 +29,7 @@ export const Approve = Game.System(
     if (t % stepsOf(10) !== 0) return
     const policy = resources.policy.get()
     const m = resources.mood.get()
-    const parts = approvalTarget(queries.homes.each().map(({ data }) => data.house.get()), policy,
+    const parts = approvalTarget(queries.homes.each().map((entity) => queries.homes.data.house.get(entity)), policy,
       resources.treasury.get().coins, resources.crown.get().snubs.length, seasonAt(t, resources.charter.get(), rules).winter, rules, m.memory)
     resources.mood.set({ approval: nextApproval(m.approval, parts.target, rules), ...parts })
 

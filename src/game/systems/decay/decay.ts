@@ -42,15 +42,17 @@ export const Decay = Game.System(
 
     // Wear: a point every `wear.every` steps; at nothing it falls down.
     if (tick % wear.every === 0) {
-      const landmarks = queries.landmarks.each().map(({ data }) => ({ kind: data.building.get().kind, ...data.tile.get() }))
-      for (const { entity, data } of queries.worn.each()) {
-        const value = data.condition.get().value - 1
+      const landmark = queries.landmarks.data
+      const landmarks = queries.landmarks.each().map((entity) => ({ kind: landmark.building.get(entity).kind, ...landmark.tile.get(entity) }))
+      const worn = queries.worn.data
+      for (const entity of queries.worn.each()) {
+        const value = worn.condition.get(entity).value - 1
         if (value > 0) {
-          data.condition.set({ value })
+          worn.condition.set(entity, { value })
           continue
         }
-        const tile = data.tile.get()
-        const b = data.building.value()
+        const tile = worn.tile.get(entity)
+        const b = worn.building.get(entity)
         commands.despawn(entity)
         commands.spawn(ruinDraft(tile, "collapsed"))
         write(
@@ -67,9 +69,10 @@ export const Decay = Game.System(
     if (tick % SPOIL_TICKS === 0) {
       const random = Random.draw(resources.rng)
       let rotted = 0
-      for (const { data } of queries.shelves.each()) {
-        const inv = data.inventory.get()
-        const keeps = kinds[data.building.value()?.kind ?? "townhall"].keeps ?? 1
+      const { data } = queries.shelves
+      for (const entity of queries.shelves.each()) {
+        const inv = data.inventory.get(entity)
+        const keeps = kinds[data.building.get(entity)?.kind ?? "townhall"].keeps ?? 1
         let stock = inv.stock
         for (const g of goodIds) {
           const life = spoils[g]
@@ -80,7 +83,7 @@ export const Decay = Game.System(
           stock = { ...stock, [g]: stock[g] - lose }
           rotted += lose
         }
-        if (stock !== inv.stock) data.inventory.set({ ...inv, stock })
+        if (stock !== inv.stock) data.inventory.set(entity, { ...inv, stock })
       }
       if (rotted > 0) resources.pantry.update((p) => ({ ...p, rotted: p.rotted + rotted }))
     }
@@ -92,9 +95,10 @@ export const Decay = Game.System(
       if (warn) {
         // What the town could make of food a minute with the crews it has, against what it ate: rot is the difference, not a want of granaries.
         let made = 0
-        for (const { data } of queries.makers.each()) {
-          const r = data.recipe.get()
-          if (data.staff.get().assigned > 0 && (foods as ReadonlyArray<string>).includes(r.output)) made += (r.batch * 3600) / r.period
+        const { data } = queries.makers
+        for (const entity of queries.makers.each()) {
+          const r = data.recipe.get(entity)
+          if (data.staff.get(entity).assigned > 0 && (foods as ReadonlyArray<string>).includes(r.output)) made += (r.batch * 3600) / r.period
         }
         const cause = made > p.eaten * 1.5
           ? `the town makes about ${Math.round(made)} food a minute and eats ${p.eaten}: fewer fisheries, a smokehouse, or selling fish would stop the waste`

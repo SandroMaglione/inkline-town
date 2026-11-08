@@ -49,8 +49,8 @@ export const Judge = Game.System(
     const rules = services.rules
     const { crown, fate, ranks } = rules
     // The town hall's upgrades: a city asks for a guildhall.
-    const hallRow = queries.halls.each()[0]
-    const hall = hallRow ? hallRow.data.upgraded.value()?.level ?? 0 : 0
+    const townHall = queries.halls.each()[0]
+    const hall = townHall ? queries.halls.data.upgraded.get(townHall)?.level ?? 0 : 0
 
     const charter = resources.charter.get()
     const t = elapsed(resources.time.get(), charter)

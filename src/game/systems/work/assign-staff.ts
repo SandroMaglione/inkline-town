@@ -43,15 +43,16 @@ export const AssignStaff = Game.System(
     if (!every(resources.time.get(), STAFF_TICKS)) return
     const grid = resources.grid.get()
     const homes: Array<{ readonly id: number; readonly crew: Crew; left: number; readonly doors: ReadonlyArray<{ readonly x: number; readonly y: number }> }> = []
-    for (const { entity, data } of queries.homes.each()) {
-      const h = data.house.get()
-      const ds = doors(grid, data.tile.get())
+    const home = queries.homes.data
+    for (const entity of queries.homes.each()) {
+      const h = home.house.get(entity)
+      const ds = doors(grid, home.tile.get(entity))
       if (h.residents > 0 && ds.length > 0) homes.push({ id: entity.id, crew: crewOf(h.tier), left: h.residents, doors: ds })
     }
     type Row = ReturnType<typeof queries.workplaces.each>[number]
     const places: Array<{
       readonly id: number;
-      readonly data: Row["data"]
+      readonly entity: Row
       readonly staff: { readonly needed: number; readonly assigned: number; readonly apprentices: number; readonly nearby: number }
       readonly crew: Crew
       readonly within: ReadonlyArray<{ readonly home: (typeof homes)[number]; readonly distance: number }>
@@ -59,13 +60,14 @@ export const AssignStaff = Game.System(
       apprentices: number
       readonly nearby: number
     }> = []
-    for (const { entity, data } of queries.workplaces.each()) {
-      const staff = data.staff.get()
+    const { data } = queries.workplaces
+    for (const entity of queries.workplaces.each()) {
+      const staff = data.staff.get(entity)
       if (staff.needed === 0) continue
-      const crew = kinds[data.building.get().kind].crew
-      const starts = doors(grid, data.tile.get())
+      const crew = kinds[data.building.get(entity).kind].crew
+      const starts = doors(grid, data.tile.get(entity))
       const within: Array<{ readonly home: (typeof homes)[number]; readonly distance: number }> = []
-      if (starts.length > 0 && !data.paused.present && !data.burning.present) {
+      if (starts.length > 0 && !data.paused.has(entity) && !data.burning.has(entity)) {
         const roads = reach(grid, starts)
         for (const home of homes) {
           let distance = -1
@@ -78,16 +80,16 @@ export const AssignStaff = Game.System(
         within.sort((a, b) => a.distance - b.distance)
       }
       const nearby = within.reduce((n, w) => n + (w.home.crew === crew ? w.home.left : 0), 0)
-      places.push({ id: entity.id, data, staff, crew, within, assigned: 0, apprentices: 0, nearby })
+      places.push({ id: entity.id, entity, staff, crew, within, assigned: 0, apprentices: 0, nearby })
     }
     const assigned = assignWorkers(
       homes.map((h) => ({ id: h.id, crew: h.crew, residents: h.left })),
       places.map((p) => ({ id: p.id, crew: p.crew, needed: p.staff.needed,
         within: p.within.map((w) => ({ home: w.home.id, distance: w.distance })) }))
     )
-    for (const { id, data, staff } of places) {
+    for (const { id, entity, staff } of places) {
       const next = assigned.get(id)!
-      if (staff.assigned !== next.assigned || staff.apprentices !== next.apprentices || staff.nearby !== next.nearby) data.staff.set({ ...staff, ...next })
+      if (staff.assigned !== next.assigned || staff.apprentices !== next.apprentices || staff.nearby !== next.nearby) data.staff.set(entity, { ...staff, ...next })
     }
   }
 )

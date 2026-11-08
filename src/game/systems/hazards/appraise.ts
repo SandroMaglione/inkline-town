@@ -25,19 +25,22 @@ export const Appraise = Game.System(
 
     if (!every(resources.time.get(), appeal.every) && resources.appeal.get().cells.length > 0) return
     const sources: Array<AppealSource> = []
-    for (const { data } of queries.buildings.each()) {
-      const s = buildingSource(data.building.get().kind, data.tile.get(), rules, data.upgraded.value()?.level ?? 0)
+    const { data: buildings } = queries.buildings
+    for (const entity of queries.buildings.each()) {
+      const s = buildingSource(buildings.building.get(entity).kind, buildings.tile.get(entity), rules, buildings.upgraded.get(entity)?.level ?? 0)
       if (s) sources.push(s)
     }
-    for (const { data } of queries.trees.each()) sources.push(landSource("forest", data.tile.get(), rules))
-    for (const { data } of queries.water.each()) sources.push(landSource("water", data.tile.get(), rules))
-    for (const { data } of queries.paved.each()) sources.push(landSource("paved", data.tile.get(), rules))
-    const roads = new Set(queries.roads.each().map(({ data }) => `${data.tile.get().x},${data.tile.get().y}`))
-    sources.push(...parkSources(queries.parks.each().map(({ data }) => ({ ...data.tile.get(), ...data.park.get() })), (x, y) => roads.has(`${x},${y}`), rules))
-    for (const { data } of queries.ruins.each()) sources.push(landSource("ruin", data.tile.get(), rules))
-    for (const { data } of queries.homes.each()) {
-      if (data.condition.get().value < wear.worn) sources.push(landSource("worn", data.tile.get(), rules))
-      const fine = data.closed.present ? null : homeSource(data.house.get().tier, data.tile.get(), rules)
+    for (const entity of queries.trees.each()) sources.push(landSource("forest", queries.trees.data.tile.get(entity), rules))
+    for (const entity of queries.water.each()) sources.push(landSource("water", queries.water.data.tile.get(entity), rules))
+    for (const entity of queries.paved.each()) sources.push(landSource("paved", queries.paved.data.tile.get(entity), rules))
+    const roads = new Set(queries.roads.each().map((entity) => `${queries.roads.data.tile.get(entity).x},${queries.roads.data.tile.get(entity).y}`))
+    const { data: parks } = queries.parks
+    sources.push(...parkSources(queries.parks.each().map((entity) => ({ ...parks.tile.get(entity), ...parks.park.get(entity) })), (x, y) => roads.has(`${x},${y}`), rules))
+    for (const entity of queries.ruins.each()) sources.push(landSource("ruin", queries.ruins.data.tile.get(entity), rules))
+    const { data: homes } = queries.homes
+    for (const entity of queries.homes.each()) {
+      if (homes.condition.get(entity).value < wear.worn) sources.push(landSource("worn", homes.tile.get(entity), rules))
+      const fine = homes.closed.has(entity) ? null : homeSource(homes.house.get(entity).tier, homes.tile.get(entity), rules)
       if (fine) sources.push(fine)
     }
     resources.appeal.set({ cells: appealGrid(sources, rules) })

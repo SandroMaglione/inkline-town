@@ -29,12 +29,12 @@ const describePark = (p: ParkValue): Array<Line> => {
 
 /** The panel of a park that is picked: the whole park the cell belongs to, or `null` if it is not one. */
 export const parkPanel = (frame: Frame, row: ParkRow): Panel | null => {
-  const picked = frame.parkOf(row.data.tile.get())
+  const picked = frame.parkOf(row.data.tile)
   if (!picked) return null
   return {
     type: "park",
     id: row.entity.id,
-    cell: row.data.tile.get(),
+    cell: row.data.tile,
     cells: picked.cells.length,
     value: picked.value,
     reach: picked.reach,

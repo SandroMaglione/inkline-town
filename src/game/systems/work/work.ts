@@ -64,16 +64,17 @@ export const Work = Game.System(
       let value: T | undefined
       return () => (value ??= make())
     }
-    const trees = lazy(() => new Map(queries.trees.each().map((row) => [row.entity.id as number, row])))
-    const rocks = lazy(() => new Map(queries.rocks.each().map((row) => [row.entity.id as number, row])))
-    const fields = lazy(() => new Map(queries.fields.each().map((row) => [row.entity.id as number, row])))
-    const waters = lazy(() => new Map(queries.waters.each().map((row) => [row.entity.id as number, row])))
+    const trees = lazy(() => new Map(queries.trees.each().map((entity) => [entity.id as number, entity])))
+    const rocks = lazy(() => new Map(queries.rocks.each().map((entity) => [entity.id as number, entity])))
+    const fields = lazy(() => new Map(queries.fields.each().map((entity) => [entity.id as number, entity])))
+    const waters = lazy(() => new Map(queries.waters.each().map((entity) => [entity.id as number, entity])))
+    const land = { tree: queries.trees.data.tree, rock: queries.rocks.data.rock, field: queries.fields.data.field, water: queries.waters.data.water }
     const used = new Set<number>()
     // A worked face gives one more now and then.
     if (tick % rules.faceTicks === 0)
-      for (const { data } of queries.rocks.each()) {
-        const r = data.rock.get()
-        if (r.amount <= 0) data.rock.set({ ...r, amount: 1 })
+      for (const entity of queries.rocks.each()) {
+        const r = land.rock.get(entity)
+        if (r.amount <= 0) land.rock.set(entity, { ...r, amount: 1 })
       }
 
     /** Takes what a gatherer needs from the land within reach, or says there is none. */
@@ -85,22 +86,22 @@ export const Work = Game.System(
         if (source === "water" && use === "water") {
           // A cell fished rests a while before it gives another catch.
           const water = waters().get(id)
-          if (!water || tick - water.data.water.get().fished < rules.restockTicks) continue
-          water.data.water.set({ fished: tick })
+          if (!water || tick - land.water.get(water).fished < rules.restockTicks) continue
+          land.water.set(water, { fished: tick })
           used.add(id)
           return true
         }
         if (source === "tree" && use === "tree") {
           const tree = trees().get(id)
-          if (!tree || tree.data.tree.get().growth < GROWN.tree) continue
-          commands.despawn(tree.entity)
+          if (!tree || land.tree.get(tree).growth < GROWN.tree) continue
+          commands.despawn(tree)
           used.add(id)
           return true
         }
         if ((source === "stone" || source === "ore") && use === "rock") {
           const rock = rocks().get(id)
           if (!rock) continue
-          const r = rock.data.rock.get()
+          const r = land.rock.get(rock)
           if (r.ore !== (source === "ore")) continue
           // A masonry cuts a worked face at full pace (see `Upgrade.deep`); anyone else waits for it.
           if (r.amount <= 0) {
@@ -109,8 +110,8 @@ export const Work = Game.System(
             return true
           }
           // Quarried down, a rock stays as a worked face (see `FACE_TICKS`).
-          rock.data.rock.set({ ...r, amount: r.amount - 1 })
-          if (r.amount === 2 && ![...rocks().values()].some((o) => o !== rock && o.data.rock.get().ore === r.ore && o.data.rock.get().amount >= 2))
+          land.rock.set(rock, { ...r, amount: r.amount - 1 })
+          if (r.amount === 2 && ![...rocks().values()].some((o) => o !== rock && land.rock.get(o).ore === r.ore && land.rock.get(o).amount >= 2))
             write(
               resources.chronicle,
               t,
@@ -124,8 +125,8 @@ export const Work = Game.System(
         }
         if (source === "field" && use === "field") {
           const field = fields().get(id)
-          if (!field || field.data.field.get().growth < GROWN.field) continue
-          field.data.field.set({ growth: 0 })
+          if (!field || land.field.get(field).growth < GROWN.field) continue
+          land.field.set(field, { growth: 0 })
           used.add(id)
           return true
         }
@@ -133,13 +134,14 @@ export const Work = Game.System(
       return false
     }
 
-    for (const { data } of queries.workshops.each()) {
-      const tile = data.tile.get()
-      const kind = kinds[data.building.get().kind]
-      const staff = data.staff.get()
-      const gatherer = data.gatherer.value()
-      let recipe = data.recipe.get()
-      const inventory = data.inventory.get()
+    const { data } = queries.workshops
+    for (const entity of queries.workshops.each()) {
+      const tile = data.tile.get(entity)
+      const kind = kinds[data.building.get(entity).kind]
+      const staff = data.staff.get(entity)
+      const gatherer = data.gatherer.get(entity)
+      let recipe = data.recipe.get(entity)
+      const inventory = data.inventory.get(entity)
       let stock = inventory.stock
       const open = connected(grid, tile)
       const room = stock[recipe.output] + recipe.batch <= inventory.cap
@@ -147,7 +149,7 @@ export const Work = Game.System(
       let short = !fed
 
       if (open && staff.assigned > 0 && recipe.progress === 0 && room && fed) {
-        const deep = upgradeAt(kind, data.upgraded.value()?.level ?? 0)?.deep ?? false
+        const deep = upgradeAt(kind, data.upgraded.get(entity)?.level ?? 0)?.deep ?? false
         if (gatherer && !gather(gatherer.source, tile, gatherer.radius, deep)) short = true
         else {
           if (recipe.input !== null) stock = { ...stock, [recipe.input]: stock[recipe.input] - recipe.inputs }
@@ -155,7 +157,7 @@ export const Work = Game.System(
         }
       }
 
-      const pace = equipmentPace(kind, stock.tools, data.condition.value()?.value ?? Infinity, fishing, rules)
+      const pace = equipmentPace(kind, stock.tools, data.condition.get(entity)?.value ?? Infinity, fishing, rules)
       const put = effort(staff, tick, rules)
       if (open && recipe.progress > 0 && put > 0 && paced(pace, tick)) {
         const progress = recipe.progress + put
@@ -167,7 +169,7 @@ export const Work = Game.System(
           if (kind.wear && recipe.made % kind.wear === 0 && stock.tools > 0) stock = { ...stock, tools: stock.tools - 1 }
         } else recipe = { ...recipe, progress }
       }
-      const status: StatusValue = data.paused.present
+      const status: StatusValue = data.paused.has(entity)
         ? "paused"
         : !open
         ? "unconnected"
@@ -180,9 +182,9 @@ export const Work = Game.System(
         : short
         ? "starved"
         : "idle"
-      data.recipe.set(recipe)
-      if (stock !== inventory.stock) data.inventory.set({ ...inventory, stock })
-      if (data.status.get() !== status) data.status.set(status)
+      data.recipe.set(entity, recipe)
+      if (stock !== inventory.stock) data.inventory.set(entity, { ...inventory, stock })
+      if (data.status.get(entity) !== status) data.status.set(entity, status)
     }
     if (Object.keys(made).length > 0) resources.flow.update((f) => ({ ...f, made: each((g) => f.made[g] + (made[g] ?? 0)) }))
   }

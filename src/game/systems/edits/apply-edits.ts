@@ -91,13 +91,14 @@ export const ApplyEdits = Game.System(
     if (queued.length === 0) return
     const grid = new GridBuilder(resources.land.get().mask)
     const rows = queries.tiles.each()
-    type Id = (typeof rows)[number]["entity"]["id"]
+    type Id = (typeof rows)[number]["id"]
     const entities = new Map<number, Id>()
-    for (const { entity, data } of rows) {
-      grid.claim(data.tile.get(), entity.id, useOf(data))
+    const { data: tiles } = queries.tiles
+    for (const entity of rows) {
+      grid.claim(tiles.tile.get(entity), entity.id, useOf(entity, tiles))
       entities.set(entity.id, entity.id)
     }
-    const halls = new Set<number>(queries.halls.each().map((row) => row.entity.id))
+    const halls = new Set<number>(queries.halls.each().map((row) => row.id))
     let coins = resources.treasury.get().coins
     // Works begun in this step: they are in the world only once it ends, so a second click on the same building is refused here.
     const begun = new Set<number>()
@@ -113,15 +114,16 @@ export const ApplyEdits = Game.System(
       coins -= cost.coins
       for (const [g, n] of Object.entries(cost.materials)) left[g] = (left[g] ?? 0) - (n ?? 0)
     }
+    const { data: stores } = queries.stores
     /** Takes goods out of storage at once, fullest first. */
     const take = (materials: Partial<Record<string, number>>) => {
       for (const [g, n] of Object.entries(materials) as Array<[keyof Amounts, number]>) {
         let owed = n
-        for (const { data } of [...queries.stores.each()].sort((a, b) => b.data.inventory.get().stock[g] - a.data.inventory.get().stock[g])) {
+        for (const store of [...queries.stores.each()].sort((a, b) => stores.inventory.get(b).stock[g] - stores.inventory.get(a).stock[g])) {
           if (owed <= 0) break
-          const inv = data.inventory.get()
+          const inv = stores.inventory.get(store)
           const n = Math.min(owed, inv.stock[g])
-          data.inventory.set({ ...inv, stock: { ...inv.stock, [g]: inv.stock[g] - n } })
+          stores.inventory.set(store, { ...inv, stock: { ...inv.stock, [g]: inv.stock[g] - n } })
           owed -= n
         }
       }
@@ -131,11 +133,11 @@ export const ApplyEdits = Game.System(
       let lost = 0
       for (const [g, n] of Object.entries(materials) as Array<[keyof Amounts, number]>) {
         let owed = n
-        for (const { data } of [...queries.stores.each()].sort((a, b) => a.data.inventory.get().stock[g] - b.data.inventory.get().stock[g])) {
+        for (const store of [...queries.stores.each()].sort((a, b) => stores.inventory.get(a).stock[g] - stores.inventory.get(b).stock[g])) {
           if (owed <= 0) break
-          const inv = data.inventory.get()
+          const inv = stores.inventory.get(store)
           const k = Math.max(0, Math.min(owed, inv.cap - inv.stock[g]))
-          if (k > 0) data.inventory.set({ ...inv, stock: { ...inv.stock, [g]: inv.stock[g] + k } })
+          if (k > 0) stores.inventory.set(store, { ...inv, stock: { ...inv.stock, [g]: inv.stock[g] + k } })
           left[g] = (left[g] ?? 0) + k
           owed -= k
         }
@@ -149,7 +151,7 @@ export const ApplyEdits = Game.System(
         if (useAt(grid.value(), c.x, c.y) !== "tree") continue
         const tree = entities.get(ownerAt(grid.value(), c.x, c.y))
         const row = tree === undefined ? undefined : queries.tiles.get(tree)
-        if (row?.ok) commands.despawn(row.value.entity)
+        if (row?.ok) commands.despawn(row.value)
       }
     }
     /**
@@ -230,7 +232,7 @@ export const ApplyEdits = Game.System(
         }
         case "pave": {
           // Stone comes out of storage at once, fullest first.
-          const paved = new Set<number>(queries.paved.each().map((row) => row.entity.id))
+          const paved = new Set<number>(queries.paved.each().map((row) => row.id))
           let short: string | null = null
           let stone = 0
           for (const cell of edit.cells) {
@@ -252,18 +254,19 @@ export const ApplyEdits = Game.System(
         case "ground": {
           // Park needs no road: it is laid at once, its materials straight out of storage.
           const piece = grounds[edit.ground]
-          const parks = new Map(queries.parks.each().map((row) => [row.entity.id as number, row] as const))
+          const { data: park } = queries.parks
+          const parks = new Map(queries.parks.each().map((row) => [row.id as number, row] as const))
           let short: string | null = null
           const spent: Record<string, number> = {}
           for (const cell of edit.cells) {
             const tile = { ...cell, size: 1 }
             const relay = useAt(grid.value(), cell.x, cell.y) === "park" ? parks.get(ownerAt(grid.value(), cell.x, cell.y)) : undefined
-            if (relay ? relay.data.park.get().ground === edit.ground : !canPlace(grid.value(), tile)) continue
+            if (relay ? park.park.get(relay).ground === edit.ground : !canPlace(grid.value(), tile)) continue
             short = afford(piece.cost)
             if (short) break
             pay(piece.cost)
             for (const [g, n] of Object.entries(piece.cost.materials)) spent[g] = (spent[g] ?? 0) + (n ?? 0)
-            if (relay) relay.data.park.set({ ...relay.data.park.get(), ground: edit.ground })
+            if (relay) park.park.set(relay, { ...park.park.get(relay), ground: edit.ground })
             else {
               const id = place(tile, "park", () => commands.spawn(parkDraft(cell, edit.ground)))
               queuedHere.set(id, () => commands.despawn(id))
@@ -280,13 +283,14 @@ export const ApplyEdits = Game.System(
             break
           }
           const row = useAt(grid.value(), edit.cell.x, edit.cell.y) === "park"
-            ? queries.parks.each().find((r) => r.entity.id === ownerAt(grid.value(), edit.cell.x, edit.cell.y))
+            ? queries.parks.each().find((r) => r.id === ownerAt(grid.value(), edit.cell.x, edit.cell.y))
             : undefined
           if (!row) {
             events.toast.emit("Lay park ground first")
             break
           }
-          if (row.data.park.get().prop === edit.prop) break
+          const { data: park } = queries.parks
+          if (park.park.get(row).prop === edit.prop) break
           const short = afford(piece.cost)
           if (short) {
             events.toast.emit(short)
@@ -294,7 +298,7 @@ export const ApplyEdits = Game.System(
           }
           pay(piece.cost)
           take(piece.cost.materials)
-          row.data.park.set({ ...row.data.park.get(), prop: edit.prop })
+          park.park.set(row, { ...park.park.get(row), prop: edit.prop })
           break
         }
         case "remove": {
@@ -305,7 +309,7 @@ export const ApplyEdits = Game.System(
           // A rock goes only once it is quarried down to a worked face, and gives nothing more after.
           if (use === "rock") {
             const rock = queries.rocks.get(owner)
-            if (!rock.ok || rock.value.data.rock.get().amount > 1) {
+            if (!rock.ok || queries.rocks.data.rock.get(rock.value).amount > 1) {
               events.toast.emit("Quarry it down first: only a worked face can be cleared")
               break
             }
@@ -315,17 +319,19 @@ export const ApplyEdits = Game.System(
             break
           }
           // A park's furnishing goes before its ground.
-          const furnished = use === "park" ? queries.parks.each().find((r) => r.entity.id === owner && r.data.park.get().prop !== "none") : undefined
+          const { data: park } = queries.parks
+          const furnished = use === "park" ? queries.parks.each().find((r) => r.id === owner && park.park.get(r).prop !== "none") : undefined
           if (furnished) {
-            furnished.data.park.set({ ...furnished.data.park.get(), prop: "none" })
+            park.park.set(furnished, { ...park.park.get(furnished), prop: "none" })
             break
           }
           // A building or a home: a fee, and part of its materials back (a site's, all of it).
           const built = queries.built.get(owner)
-          if (built.ok && (built.value.data.building.present || built.value.data.house.present)) {
-            const b = built.value.data.building.value()
-            const own = salvageOf(b ? builtCost(kinds[b.kind], built.value.data.upgraded.value()?.level ?? 0) : home.cost, built.value.data.site.value()?.owed ?? null, rules)
-            const s = b ? withWorks(own, kinds[b.kind], built.value.data.works.value(), rules) : own
+          const { data: was } = queries.built
+          if (built.ok && (was.building.has(built.value) || was.house.has(built.value))) {
+            const b = was.building.get(built.value)
+            const own = salvageOf(b ? builtCost(kinds[b.kind], was.upgraded.get(built.value)?.level ?? 0) : home.cost, was.site.get(built.value)?.owed ?? null, rules)
+            const s = b ? withWorks(own, kinds[b.kind], was.works.get(built.value), rules) : own
             if (s.fee > 0 && coins < s.fee) {
               events.toast.emit(`Pulling it down costs ${s.fee} coins`)
               break
@@ -333,11 +339,11 @@ export const ApplyEdits = Game.System(
             coins -= s.fee
             const lost = stash(s.back)
             const said = salvageText(s)
-            if (said !== "") events.toast.emit(`${built.value.data.site.present ? "Cancelled" : "Pulled down"} · ${said}${lost > 0 ? ` (${lost} found no room in storage)` : ""}`)
+            if (said !== "") events.toast.emit(`${was.site.has(built.value) ? "Cancelled" : "Pulled down"} · ${said}${lost > 0 ? ` (${lost} found no room in storage)` : ""}`)
           }
           // A building's walkers and a farm's fields are its children, and go with it.
           const gone = queries.tiles.get(owner)
-          if (gone.ok) commands.despawn(gone.value.entity)
+          if (gone.ok) commands.despawn(gone.value)
           else queuedHere.get(owner)?.()
           queuedHere.delete(owner)
           entities.delete(owner)
@@ -366,10 +372,11 @@ export const ApplyEdits = Game.System(
           // A building stops work; a home is closed, and stands empty (see `Households`).
           const id = entities.get(owner)
           const row = id === undefined ? undefined : queries.built.get(id)
-          if (!row?.ok || halls.has(owner) || row.value.data.site.present || row.value.data.paused.present === edit.on) break
-          if (!row.value.data.building.present && !row.value.data.house.present) break
-          if (edit.on) commands.insert(row.value.entity, Game.Command.entry(Paused, {}))
-          else commands.remove(row.value.entity, Paused)
+          const { data: built } = queries.built
+          if (!row?.ok || halls.has(owner) || built.site.has(row.value) || built.paused.has(row.value) === edit.on) break
+          if (!built.building.has(row.value) && !built.house.has(row.value)) break
+          if (edit.on) commands.insert(row.value, Game.Command.entry(Paused, {}))
+          else commands.remove(row.value, Paused)
           break
         }
         case "deliver": {
@@ -380,11 +387,11 @@ export const ApplyEdits = Game.System(
             break
           }
           let owed = c.amount
-          for (const { data } of [...queries.stores.each()].sort((a, b) => b.data.inventory.get().stock[c.good] - a.data.inventory.get().stock[c.good])) {
+          for (const store of [...queries.stores.each()].sort((a, b) => stores.inventory.get(b).stock[c.good] - stores.inventory.get(a).stock[c.good])) {
             if (owed <= 0) break
-            const inv = data.inventory.get()
+            const inv = stores.inventory.get(store)
             const take = Math.min(owed, inv.stock[c.good])
-            data.inventory.set({ ...inv, stock: { ...inv.stock, [c.good]: inv.stock[c.good] - take } })
+            stores.inventory.set(store, { ...inv, stock: { ...inv.stock, [c.good]: inv.stock[c.good] - take } })
             owed -= take
           }
           left[c.good] = (left[c.good] ?? 0) - c.amount
@@ -423,11 +430,11 @@ export const ApplyEdits = Game.System(
           const id = entities.get(ownerAt(grid.value(), edit.cell.x, edit.cell.y))
           const row = id === undefined ? undefined : queries.upgradable.get(id)
           if (!row?.ok) break
-          const { data } = row.value
-          const kind = kinds[data.building.get().kind]
-          const level = data.upgraded.value()?.level ?? 0
+          const { data } = queries.upgradable
+          const kind = kinds[data.building.get(row.value).kind]
+          const level = data.upgraded.get(row.value)?.level ?? 0
           const up = nextUpgrade(kind, level)
-          if (!up || data.works.present || begun.has(row.value.entity.id) || data.site.present || data.rising.present) break
+          if (!up || data.works.has(row.value) || begun.has(row.value.id) || data.site.has(row.value) || data.rising.has(row.value)) break
           const blocked = upgradeBlock(up, resources.fate.get().rank, rules)
           if (blocked) {
             events.toast.emit(`${up.title} ${blocked}`)
@@ -438,9 +445,9 @@ export const ApplyEdits = Game.System(
             break
           }
           coins -= up.cost.coins
-          begun.add(row.value.entity.id)
+          begun.add(row.value.id)
           const owed = amounts(up.cost.materials)
-          commands.insert(row.value.entity, Game.Command.entry(Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }))
+          commands.insert(row.value, Game.Command.entry(Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }))
           const was = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
           write(resources.chronicle, t, `Works begin on the ${was}: it is to be ${anA(up.title.toLowerCase())}.`)
           events.toast.emit(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)
@@ -459,7 +466,7 @@ export const ApplyEdits = Game.System(
           resources.policy.update((p) => ({ ...p, reserve: Math.max(0, Math.min(RESERVE_MAX, Math.round(edit.amount))) }))
           break
         case "newTown": {
-          for (const { entity } of rows) commands.despawn(entity)
+          for (const entity of rows) commands.despawn(entity)
           for (const drop of queuedHere.values()) drop()
           queuedHere.clear()
           entities.clear()

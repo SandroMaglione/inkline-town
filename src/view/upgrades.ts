@@ -30,33 +30,33 @@ export const upgradesWanted = (frame: Frame, wanted: Wanted): ReadonlyMap<number
   const tick = frame.world.time.step
   if (Math.floor(tick / 60) === wanted.at) return wanted.why
   const why = new Map<number, string>()
-  const standingRows = buildings.filter((r) => !r.data.site.present && !r.data.rising.present && !r.data.works.value())
-  const homes = houses.filter((r) => !r.data.site.present && !r.data.rising.present && !r.data.closed.present)
+  const standingRows = buildings.filter((r) => r.data.site === undefined && r.data.rising === undefined && !r.data.works)
+  const homes = houses.filter((r) => r.data.site === undefined && r.data.rising === undefined && r.data.closed === undefined)
   const full = (r: BuildingRow) => {
-    const inv = r.data.inventory.value()
+    const inv = r.data.inventory
     return !!inv && goodIds.some((g) => inv.accepts.includes(g) && inv.stock[g] >= inv.cap * 0.9)
   }
   const near = (r: BuildingRow, tile: TileLike, range: number) => {
-    const t = r.data.tile.get()
+    const t = r.data.tile
     return Math.abs(tile.x - (t.x + t.size / 2)) + Math.abs(tile.y - (t.y + t.size / 2)) <= range
   }
-  const fishy = (r: HouseRow, need: "bread" | "faith") => r.data.house.get().tier >= 2 && !met(r.data.house.get(), need)
+  const fishy = (r: HouseRow, need: "bread" | "faith") => r.data.house.tier >= 2 && !met(r.data.house, need)
   const nextHall = ranks[Math.min(frame.world.fate.rank + 1, ranks.length - 1)]!.hall
-  const millsWait = standingRows.some((r) => r.data.building.get().kind === "mill" && r.data.status.get() === "starved")
+  const millsWait = standingRows.some((r) => r.data.building.kind === "mill" && r.data.status === "starved")
   const breadShort = frame.world.stock.bread < 5 && homes.some((r) => fishy(r, "bread"))
   for (const r of standingRows) {
-    const kind = kinds[r.data.building.get().kind], level = r.data.upgraded.value()?.level ?? 0, status = r.data.status.get()
+    const kind = kinds[r.data.building.kind], level = r.data.upgraded?.level ?? 0, status = r.data.status
     if (!nextUpgrade(kind, level)) continue
-    const reach = r.data.service.value()?.range ?? 0
+    const reach = r.data.service?.range ?? 0
     const reason =
       kind.id === "townhall" ? (nextHall > level ? "the next rank asks for it" : full(r) ? "its shelves are full" : null)
       : kind.id === "warehouse" ? (full(r) ? "its shelves are full" : null)
-      : kind.id === "quarry" ? (status === "starved" && growingNear(grid, r.data.tile.get(), kind, frame.rockAt) ? "it has worked its rock down" : null)
+      : kind.id === "quarry" ? (status === "starved" && growingNear(grid, r.data.tile, kind, frame.rockAt) ? "it has worked its rock down" : null)
       : kind.id === "farm" ? (millsWait ? "the mills wait on wheat" : null)
       : kind.id === "bakery" ? (status === "working" && breadShort ? "homes go without bread while it works flat out" : null)
       : kind.id === "market" ? (frame.unreachedHomes() > 0 ? "homes lie beyond every food walker" : null)
-      : kind.id === "chapel" ? (homes.some((h) => fishy(h, "faith") && !near(r, h.data.tile.get(), reach)) ? "homes lie beyond its priest" : null)
-      : kind.id === "firewatch" ? (homes.some((h) => (h.data.risk.value()?.fire ?? 0) >= risk.warn && near(r, h.data.tile.get(), reach + 6)) ? "homes on its streets are at high fire risk" : null)
+      : kind.id === "chapel" ? (homes.some((h) => fishy(h, "faith") && !near(r, h.data.tile, reach)) ? "homes lie beyond its priest" : null)
+      : kind.id === "firewatch" ? (homes.some((h) => (h.data.risk?.fire ?? 0) >= risk.warn && near(r, h.data.tile, reach + 6)) ? "homes on its streets are at high fire risk" : null)
       : null
     if (reason) why.set(r.entity.id, reason)
   }
@@ -75,10 +75,10 @@ export const upgradesOf = (frame: Frame, needed: ReadonlyMap<number, string>) =>
   for (const id of kindOrder) if (kinds[id].upgrade) upgradeRows.set(`${id}:0`, { kind: id, level: 0, ready: 0, underway: 0, first: null })
   for (const row of buildings) {
     const { data } = row
-    if (data.site.present || data.rising.present) continue
-    const kind = kinds[data.building.get().kind]
-    const level = data.upgraded.value()?.level ?? 0
-    const works = data.works.value()
+    if (data.site !== undefined || data.rising !== undefined) continue
+    const kind = kinds[data.building.kind]
+    const level = data.upgraded?.level ?? 0
+    const works = data.works
     const from = works ? works.level - 1 : level
     if (!nextUpgrade(kind, from)) continue
     const k = `${kind.id}:${from}`
@@ -105,8 +105,8 @@ export const upgradesOf = (frame: Frame, needed: ReadonlyMap<number, string>) =>
   const arrowed = new Set<KindId>()
   const due = new Map([...needed].filter(([id]) => {
     const row = buildings.find((b) => b.entity.id === id)
-    const kind = row && kinds[row.data.building.get().kind]
-    const up = row && kind && nextUpgrade(kind, row.data.upgraded.value()?.level ?? 0)
+    const kind = row && kinds[row.data.building.kind]
+    const up = row && kind && nextUpgrade(kind, row.data.upgraded?.level ?? 0)
     if (!up || !kind || arrowed.has(kind.id) || upgradeBlock(up, rank, { ranks }) !== null || coinsNow < up.cost.coins) return false
     arrowed.add(kind.id)
     return true
@@ -114,9 +114,9 @@ export const upgradesOf = (frame: Frame, needed: ReadonlyMap<number, string>) =>
   const [firstId, firstWhy] = [...due][0] ?? []
   const dueFirst = firstId === undefined ? undefined : buildings.find((b) => b.entity.id === firstId)
   if (dueFirst && !upgrades.some((u) => u.underway > 0)) {
-    const kind = kinds[dueFirst.data.building.get().kind], level = dueFirst.data.upgraded.value()?.level ?? 0
+    const kind = kinds[dueFirst.data.building.kind], level = dueFirst.data.upgraded?.level ?? 0
     const from = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase(), to = nextUpgrade(kind, level)!.title.toLowerCase()
-    hint = { tone: "hint", text: `${firstWhy}: the ${from} can become ${anA(to)}. {Tap|Click} it, under its gold arrow, to begin`, at: dueFirst.data.tile.get(), size: dueFirst.data.tile.get().size, id: dueFirst.entity.id }
+    hint = { tone: "hint", text: `${firstWhy}: the ${from} can become ${anA(to)}. {Tap|Click} it, under its gold arrow, to begin`, at: dueFirst.data.tile, size: dueFirst.data.tile.size, id: dueFirst.entity.id }
   }
   return { upgrades: upgrades.map(({ first: _first, ...u }) => u), due, hint }
 }

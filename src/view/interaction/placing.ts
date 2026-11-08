@@ -18,8 +18,8 @@ export const placeProblem = (frame: Frame, kind: Kind, tile: TileLike): { readon
   const found =
     source === "stone" || source === "ore"
       ? frame.rocks.some(({ data }) => {
-          const t = data.tile.get()
-          return data.rock.get().ore === (source === "ore") && reachCells.some((c) => c.x >= t.x && c.x < t.x + t.size && c.y >= t.y && c.y < t.y + t.size)
+          const t = data.tile
+          return data.rock.ore === (source === "ore") && reachCells.some((c) => c.x >= t.x && c.x < t.x + t.size && c.y >= t.y && c.y < t.y + t.size)
         })
       : reachCells.some((c) => useAt(grid, c.x, c.y) === source)
   const what = { tree: "trees", stone: "pale stone rocks", ore: "dark ore rocks", water: "water" }[source]

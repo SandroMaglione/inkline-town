@@ -19,9 +19,9 @@ export const numbersOf = (frame: Frame) => {
   const t = elapsed(frame.world.time, charter)
   let suppliedTaxes = 0
   for (const { data } of houses) {
-    if (data.site.present || data.rising.present || data.burning.present) continue
-    const tile = data.tile.get()
-    suppliedTaxes += suppliedTaxOf(data.house.get(), rates, undefined, appealAt(cells, tile.x, tile.y))
+    if (data.site !== undefined || data.rising !== undefined || data.burning !== undefined) continue
+    const tile = data.tile
+    suppliedTaxes += suppliedTaxOf(data.house, rates, undefined, appealAt(cells, tile.x, tile.y))
   }
   const coins = frame.world.treasury.coins
   const net = ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin
@@ -30,9 +30,9 @@ export const numbersOf = (frame: Frame) => {
   // What the homes would pay at each step of each tier's rate, once settled there (see `taxOutlook`).
   const taxed: Array<TaxedHome> = []
   for (const { data } of houses) {
-    if (data.site.present || data.rising.present || data.burning.present || data.closed.present) continue
-    const tile = data.tile.get()
-    taxed.push({ ...data.house.get(), desirability: appealAt(cells, tile.x, tile.y), paying: true })
+    if (data.site !== undefined || data.rising !== undefined || data.burning !== undefined || data.closed !== undefined) continue
+    const tile = data.tile
+    taxed.push({ ...data.house, desirability: appealAt(cells, tile.x, tile.y), paying: true })
   }
   const f = frame.world.fate
   const pantry = frame.world.pantry
@@ -77,7 +77,7 @@ export const statsOf = (frame: Frame, numbers: Numbers, { alerts, shortStaffed, 
     net,
     homes: census.homes,
     needs: { food: census.food, bread: census.bread, cloth: census.cloth, faith: census.faith, furniture: census.furniture },
-    townhouses: houses.filter(({ data }) => data.house.get().tier === 3).length,
+    townhouses: houses.filter(({ data }) => data.house.tier === 3).length,
     policy: rates,
     stock,
     prices: frame.world.market.prices,
@@ -140,7 +140,7 @@ export const statsOf = (frame: Frame, numbers: Numbers, { alerts, shortStaffed, 
     goals: goalsOf(
       charter,
       { settlers: census.settlers, citizens: census.citizens, burghers: census.burghers, coins, net: steadyNet(frame.world.history.samples, net), approval: mood.approval,
-        hall: hallRow ? hallRow.data.upgraded.value()?.level ?? 0 : 0 },
+        hall: hallRow ? hallRow.data.upgraded?.level ?? 0 : 0 },
       undefined,
       f.rank
     ),
