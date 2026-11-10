@@ -90,7 +90,7 @@ export const SendWalkers = Game.System(
         const cursor = patrol.ok ? queries.patrols.data.patrol.get(patrol.value).next : 0
         const tour = plan.tours[cursor % plan.tours.length]!
         if (patrol.ok) queries.patrols.data.patrol.set(patrol.value, { next: (cursor + 1) % plan.tours.length })
-        else commands.insert(entity, Game.Command.entry(Patrol, { next: 1 % plan.tours.length }))
+        else commands.insert(entity, [Patrol, { next: 1 % plan.tours.length }])
         const color = categoryColor[kinds[data.building.get(entity).kind].category]
         const draft = Game.Command.spawn(
           [Figure, { role: "walker", color }],

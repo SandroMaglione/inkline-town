@@ -7,7 +7,7 @@
 export { effort, paced } from "../../rules/production.ts"
 
 export { IndexGrid } from "./index-grid.ts"
-export { CountStock } from "./count-stock.ts"
+export { CountStock, SumStock } from "./count-stock.ts"
 
 // ── Going up ──────────────────────────────────────────────────────────────
 

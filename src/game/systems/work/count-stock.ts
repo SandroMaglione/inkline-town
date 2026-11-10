@@ -6,6 +6,28 @@ import { each } from "./per-good.ts"
 const FLOW_SLICE = 10
 const FLOW_SLICES = 6
 
+/** The goods in every storage, summed. */
+const StoresRead = Game.Query({ selection: { inventory: Game.Query.read(Inventory) }, with: [Storage], without: [Site, Rising] })
+
+/**
+ * The goods in every storage, summed, before anything reads them in a step.
+ * `Stock` is not saved, and a load gives it its empty start (Ritmo 0.23):
+ * this fills it from the loaded world, so edits and the seasons see the
+ * town's stock in the first step after a load as in any other.
+ */
+export const SumStock = Game.System(
+  "Town/SumStock",
+  { queries: { stores: StoresRead }, resources: { stock: Game.System.writeResource(Stock) } },
+  ({ queries, resources }) => {
+    const sum: Record<string, number> = { ...amounts({}) }
+    for (const entity of queries.stores.each()) {
+      const s = queries.stores.data.inventory.get(entity).stock
+      for (const g of goodIds) sum[g] = (sum[g] ?? 0) + s[g]
+    }
+    resources.stock.set(sum as Amounts)
+  }
+)
+
 /**
  * The goods in every storage, summed; and everything the town holds,
  * anywhere, for the minute's `Flow`, which closes every minute.
@@ -14,7 +36,7 @@ export const CountStock = Game.System(
   "Town/CountStock",
   {
     queries: {
-      stores: Game.Query({ selection: { inventory: Game.Query.read(Inventory) }, with: [Storage], without: [Site, Rising] }),
+      stores: StoresRead,
       shelves: Game.Query({ selection: { inventory: Game.Query.read(Inventory) }, without: [Site, Rising] }),
       baskets: Game.Query({ selection: { roam: Game.Query.read(Roam) } }),
       crates: Game.Query({ selection: { errand: Game.Query.read(Errand) } })
