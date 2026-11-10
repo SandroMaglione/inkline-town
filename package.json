@@ -32,18 +32,18 @@
     "engine:prepare": "node scripts/use-ritmo.ts"
   },
   "dependencies": {
-    "@typeonce/ritmo": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-0.23.0.tgz",
-    "@typeonce/ritmo-browser": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-browser-0.23.0.tgz",
-    "@typeonce/ritmo-math": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-math-0.23.0.tgz",
-    "@typeonce/ritmo-pixi": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-pixi-0.23.0.tgz",
-    "@typeonce/ritmo-render": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-render-0.23.0.tgz",
+    "@typeonce/ritmo": "0.23.0",
+    "@typeonce/ritmo-browser": "0.23.0",
+    "@typeonce/ritmo-math": "0.23.0",
+    "@typeonce/ritmo-pixi": "0.23.0",
+    "@typeonce/ritmo-render": "0.23.0",
     "effect": "4.0.3",
     "pixi.js": "^8.22.0",
     "three": "^0.186.1"
   },
   "devDependencies": {
-    "@typeonce/oxlint-plugin-ritmo": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-oxlint-plugin-ritmo-0.23.0.tgz",
-    "@typeonce/ritmo-devtools": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-devtools-0.23.0.tgz",
+    "@typeonce/oxlint-plugin-ritmo": "0.23.0",
+    "@typeonce/ritmo-devtools": "0.23.0",
     "@types/node": "25.5.0",
     "@types/three": "^0.186.0",
     "oxlint": "1.92.0",
@@ -51,18 +51,5 @@
     "typescript": "7.0.2",
     "vite": "8.3.1"
   },
-  "ritmoRelease": "0.23.0",
-  "pnpm": {
-    "overrides": {
-      "@typeonce/ritmo": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-0.23.0.tgz",
-      "@typeonce/ritmo-browser": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-browser-0.23.0.tgz",
-      "@typeonce/ritmo-math": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-math-0.23.0.tgz",
-      "@typeonce/ritmo-pixi": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-pixi-0.23.0.tgz",
-      "@typeonce/ritmo-render": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-render-0.23.0.tgz",
-      "@typeonce/oxlint-plugin-ritmo": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-oxlint-plugin-ritmo-0.23.0.tgz",
-      "@typeonce/ritmo-devtools": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-devtools-0.23.0.tgz",
-      "@typeonce/ritmo-netcode": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-netcode-0.23.0.tgz",
-      "@typeonce/ritmo-tools": "file:/private/tmp/claude-501/-Users-sandromaglione-Development-projects-gamedev-ritmo/27247023-fa92-42d6-9bd8-ecd25bf20b20/scratchpad/tarballs/typeonce-ritmo-tools-0.23.0.tgz"
-    }
-  }
+  "ritmoRelease": "0.23.0"
 }
