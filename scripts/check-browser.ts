@@ -126,7 +126,8 @@ try {
   await page.getByRole("button",{name:"Load without saving",exact:true}).click()
   await page.waitForFunction(()=>window.town.shown.town.stats!.settlers>100)
   // The guide puts away what the bot's town has already done (as edits, kept on the next frame without a step of time); the rest loads exactly as saved.
-  const withoutGuide=(w:Snapshot)=>({...w,resources:{...w.resources,"Town/Guide":null}})
+  // A save written before Ritmo 0.23 has no `nextStates`; it loads with none queued.
+  const withoutGuide=(w:Snapshot)=>({...w,nextStates:w.nextStates??{},resources:{...w.resources,"Town/Guide":null}})
   await page.waitForFunction(()=>window.town.snapshot().resources["Town/Guide"].done.length>0)
   const loaded=await snapshot()
   assert.deepEqual(withoutGuide(loaded),withoutGuide(grown.world))

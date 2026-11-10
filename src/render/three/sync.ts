@@ -2,6 +2,11 @@
  * The world's entities mirrored into the Three.js scene: a view for each
  * building, home, walker, tree, rock, ruin, and field, made when it appears,
  * placed on its tile, and removed when it goes (see `@typeonce/ritmo-render`).
+ *
+ * A node is made again whenever its renderable takes a new value, so homes,
+ * trees, rocks, and fields (whose components change as they fill, grow, and
+ * are worked) are keyed by their `Tile`, which never changes, and selected
+ * by their own component; `Animate` draws what changes on them each frame.
  */
 import { RenderSync } from "@typeonce/ritmo-render"
 
@@ -21,7 +26,8 @@ export const RenderBuildings = RenderSync.system(Game, {
 
 export const RenderHouses = RenderSync.system(Game, {
   name: "Town/RenderHouses",
-  renderable: House,
+  renderable: Tile,
+  select: { house: Game.Query.read(House) },
   transform: Tile,
   registry: HouseNodes,
   services: { stage: StageService },
@@ -40,7 +46,8 @@ export const RenderWalkers = RenderSync.system(Game, {
 
 export const RenderTrees = RenderSync.system(Game, {
   name: "Town/RenderTrees",
-  renderable: Tree,
+  renderable: Tile,
+  select: { tree: Game.Query.read(Tree) },
   transform: Tile,
   registry: TreeNodes,
   services: { stage: StageService },
@@ -50,7 +57,8 @@ export const RenderTrees = RenderSync.system(Game, {
 
 export const RenderRocks = RenderSync.system(Game, {
   name: "Town/RenderRocks",
-  renderable: Rock,
+  renderable: Tile,
+  select: { rock: Game.Query.read(Rock) },
   transform: Tile,
   registry: RockNodes,
   services: { stage: StageService },
@@ -70,7 +78,8 @@ export const RenderRuins = RenderSync.system(Game, {
 
 export const RenderFields = RenderSync.system(Game, {
   name: "Town/RenderFields",
-  renderable: Field,
+  renderable: Tile,
+  select: { field: Game.Query.read(Field) },
   transform: Tile,
   registry: FieldNodes,
   services: { stage: StageService },

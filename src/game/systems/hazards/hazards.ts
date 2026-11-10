@@ -125,13 +125,13 @@ export const Hazards = Game.System(
         const id = fires.next
         fires.next += 1
         fires.fires.push({ id, x: tile.x, y: tile.y, homes: 0, buildings: 0 })
-        commands.insert(row, Game.Command.entry(Burning, { left: risk.fire.burns, fire: id }))
+        commands.insert(row, [Burning, { left: risk.fire.burns, fire: id }])
         ignited.set(row.id, id)
         r.fire = 0
         news(`Fire on ${where(tile)}!`, tile)
       }
       if (h && r.health >= RISK_MAX && !cared.sick.has(row)) {
-        commands.insert(row, Game.Command.entry(Sick, { left: risk.health.lasts }))
+        commands.insert(row, [Sick, { left: risk.health.lasts }])
         r.health = 0
         if (sickNow === 0) news(`Sickness on ${where(tile)}: a physician can cure it.`, tile)
       }
@@ -216,7 +216,7 @@ export const Hazards = Game.System(
       if (!neighbour) continue
       const chance = risk.fire.catches + (risk.fire.spread * cared.risk.get(neighbour).fire) / RISK_MAX
       if (random.next() < chance) {
-        commands.insert(neighbour, Game.Command.entry(Burning, { left: risk.fire.burns, fire: b.fire }))
+        commands.insert(neighbour, [Burning, { left: risk.fire.burns, fire: b.fire }])
         ignited.set(neighbour.id, b.fire)
       }
     }

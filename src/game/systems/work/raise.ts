@@ -67,13 +67,13 @@ export const Raise = Game.System(
       if (total(works.owed) > 0 || works.done < needed) continue
       const base = rules.kinds[data.building.get(entity).kind], kind = asUpgraded(base, works.level)
       commands.remove(entity, Works)
-      commands.insert(entity, Game.Command.entry(Upgraded, { level: works.level }))
+      commands.insert(entity, [Upgraded, { level: works.level }])
       data.staff.set(entity, { ...data.staff.get(entity), needed: kind.workers })
       const recipe = data.recipe.get(entity), carriers = data.carriers.get(entity), service = data.service.get(entity)
-      if (recipe && kind.recipe) commands.insert(entity, Game.Command.entry(Recipe, { ...recipe, period: stepsOf(kind.recipe.seconds) }))
+      if (recipe && kind.recipe) commands.insert(entity, [Recipe, { ...recipe, period: stepsOf(kind.recipe.seconds) }])
       if (shelves.ok && kind.holds) stocked.inventory.set(shelves.value, { ...stocked.inventory.get(shelves.value), cap: kind.holds.cap })
-      if (carriers && kind.carriers) commands.insert(entity, Game.Command.entry(Carriers, { count: kind.carriers }))
-      if (service && kind.service) commands.insert(entity, Game.Command.entry(Service, { ...service, interval: stepsOf(kind.service.seconds), range: kind.service.range }))
+      if (carriers && kind.carriers) commands.insert(entity, [Carriers, { count: kind.carriers }])
+      if (service && kind.service) commands.insert(entity, [Service, { ...service, interval: stepsOf(kind.service.seconds), range: kind.service.range }])
       const was = (upgradeAt(base, works.level - 1)?.title ?? base.title).toLowerCase()
       write(resources.chronicle, elapsed(resources.time.get(), resources.charter.get()), `The ${was} is now ${anA(upgradeAt(base, works.level)!.title.toLowerCase())}.`, true)
     }
@@ -82,7 +82,7 @@ export const Raise = Game.System(
     for (const entity of queries.sites.each()) {
       if (total(sites.site.get(entity).owed) > 0) continue
       commands.remove(entity, Site)
-      commands.insert(entity, Game.Command.entry(Rising, { ticks: Math.round(BUILD_TICKS * SITE_SHARE) }))
+      commands.insert(entity, [Rising, { ticks: Math.round(BUILD_TICKS * SITE_SHARE) }])
     }
     const rising = queries.rising.data
     for (const entity of queries.rising.each()) {
@@ -90,7 +90,7 @@ export const Raise = Game.System(
       if (ticks >= BUILD_TICKS) {
         commands.remove(entity, Rising)
         // Up and standing; its work (if it has any) says otherwise from here on.
-        if (rising.status.has(entity)) commands.insert(entity, Game.Command.entry(Status, "idle"))
+        if (rising.status.has(entity)) commands.insert(entity, [Status, "idle"])
       } else rising.rising.set(entity, { ticks })
     }
   }

@@ -245,7 +245,7 @@ export const ApplyEdits = Game.System(
             left.stone = (left.stone ?? 0) - PAVE_COST.stone
             stone += PAVE_COST.stone
             paved.add(road)
-            commands.insert(road, Game.Command.entry(Paved, {}))
+            commands.insert(road, [Paved, {}])
           }
           take({ stone })
           if (short) events.toast.emit(short)
@@ -375,7 +375,7 @@ export const ApplyEdits = Game.System(
           const { data: built } = queries.built
           if (!row?.ok || halls.has(owner) || built.site.has(row.value) || built.paused.has(row.value) === edit.on) break
           if (!built.building.has(row.value) && !built.house.has(row.value)) break
-          if (edit.on) commands.insert(row.value, Game.Command.entry(Paused, {}))
+          if (edit.on) commands.insert(row.value, [Paused, {}])
           else commands.remove(row.value, Paused)
           break
         }
@@ -447,7 +447,7 @@ export const ApplyEdits = Game.System(
           coins -= up.cost.coins
           begun.add(row.value.id)
           const owed = amounts(up.cost.materials)
-          commands.insert(row.value, Game.Command.entry(Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }))
+          commands.insert(row.value, [Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }])
           const was = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
           write(resources.chronicle, t, `Works begin on the ${was}: it is to be ${anA(up.title.toLowerCase())}.`)
           events.toast.emit(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)
@@ -481,7 +481,7 @@ export const ApplyEdits = Game.System(
           const id = commands.spawn(buildingDraft(hall, land.hall))
           commands.insert(id, ...rolesOf(hall, rules))
           const stock: Amounts = amounts(richness.stock)
-          commands.insert(id, Game.Command.entry(TownHall, {}), Game.Command.entry(Status, "idle"), Game.Command.entry(Inventory, { stock, accepts: goodIds, cap: hall.holds?.cap ?? 60 }))
+          commands.insert(id, [TownHall, {}], [Status, "idle"], [Inventory, { stock, accepts: goodIds, cap: hall.holds?.cap ?? 60 }])
           coins = richness.coins
           const founded = resources.time.get().step
           // The almanac: each year's winter, from the seed (on its own stream, so the land's randomness is untouched).

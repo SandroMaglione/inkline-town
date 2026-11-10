@@ -13,7 +13,7 @@ import { stepsOf } from "../content/index.ts"
 
 const site = (cost: Kind["cost"]) => {
   const owed = amounts(cost.materials)
-  return total(owed) > 0 ? Game.Command.entry(Site, { owed, total: total(owed) }) : Game.Command.entry(Rising, { ticks: 0 })
+  return total(owed) > 0 ? [Site, { owed, total: total(owed) }] as const : [Rising, { ticks: 0 }] as const
 }
 
 /** A building of `kind` on `cell`: a site waiting for materials, or (`standing`) already up. */
@@ -29,8 +29,8 @@ export const buildingDraft = (kind: Kind, cell: Point) =>
 export const WearParts = [Risk, Condition] as const
 /** What every home and every working building carries: its risks, and how well kept it is. */
 export const wearOf = (rules: Rules = shippedRules) => [
-  Game.Command.entry(Risk, { fire: 0, health: 0, order: 0, thefts: 0 }),
-  Game.Command.entry(Condition, { value: rules.conditionMax })
+  [Risk, { fire: 0, health: 0, order: 0, thefts: 0 }] as const,
+  [Condition, { value: rules.conditionMax }] as const
 ]
 
 /** The components `startOf` (and `houseStart`) may insert: owed materials, or rising. */
@@ -45,29 +45,29 @@ export const rolesOf = (kind: Kind, rules: Rules = shippedRules) => {
   const roles = []
   if (kind.recipe) {
     const r = kind.recipe
-    roles.push(Game.Command.entry(Recipe, { input: r.input, inputs: r.inputs, output: r.output, batch: r.batch, period: stepsOf(r.seconds), progress: 0, made: 0 }))
+    roles.push([Recipe, { input: r.input, inputs: r.inputs, output: r.output, batch: r.batch, period: stepsOf(r.seconds), progress: 0, made: 0 }] as const)
   }
-  if (kind.gathers) roles.push(Game.Command.entry(Gatherer, { source: kind.gathers.source, radius: kind.gathers.radius }))
+  if (kind.gathers) roles.push([Gatherer, { source: kind.gathers.source, radius: kind.gathers.radius }] as const)
   if (kind.plants) {
     const p = kind.plants
-    roles.push(Game.Command.entry(Planter, { what: p.what, radius: p.radius, interval: stepsOf(p.seconds), cooldown: 0, max: p.max }))
+    roles.push([Planter, { what: p.what, radius: p.radius, interval: stepsOf(p.seconds), cooldown: 0, max: p.max }] as const)
   }
   // A workshop that wears out tools keeps a few on its shelf too.
   const tools = kind.wear ? ["tools" as const] : []
   if (kind.holds) {
     const all = kind.holds.accepts === "all"
     const accepts = all ? goodIds : [...kind.holds.accepts, ...tools.filter((g) => !kind.holds!.accepts.includes(g))]
-    roles.push(Game.Command.entry(Inventory, { stock: amounts({}), accepts, cap: kind.holds.cap }))
+    roles.push([Inventory, { stock: amounts({}), accepts, cap: kind.holds.cap }] as const)
     // Storage takes in and sends out any good it accepts: everything, or (a granary) food.
-    if (all || kind.keeps) roles.push(Game.Command.entry(Storage, {}))
+    if (all || kind.keeps) roles.push([Storage, {}] as const)
   } else if (kind.recipe) {
     // A gatherer keeps what it makes until a carrier takes it.
-    roles.push(Game.Command.entry(Inventory, { stock: amounts({}), accepts: [kind.recipe.output, ...tools], cap: 8 }))
+    roles.push([Inventory, { stock: amounts({}), accepts: [kind.recipe.output, ...tools], cap: 8 }] as const)
   }
-  if (kind.carriers) roles.push(Game.Command.entry(Carriers, { count: kind.carriers }))
+  if (kind.carriers) roles.push([Carriers, { count: kind.carriers }] as const)
   if (kind.service) {
     const s = kind.service
-    roles.push(Game.Command.entry(Service, { service: s.service, interval: stepsOf(s.seconds), cooldown: 0, range: s.range }))
+    roles.push([Service, { service: s.service, interval: stepsOf(s.seconds), cooldown: 0, range: s.range }] as const)
   }
   // The town hall neither burns nor wears.
   if (kind.id !== "townhall") roles.push(...wearOf(rules))

@@ -118,13 +118,18 @@ test("a world that cannot be saved says so, and writes nothing", () => {
   assert.equal(storage.files.size, 0)
 })
 
-/** A snapshot's world, keys sorted, without its format and game versions: what plays. */
+/**
+ * A snapshot's world, keys sorted, without its format and game versions: what plays.
+ * Ritmo 0.23 saves the next states queued for the next marker (`nextStates`); with none
+ * queued it is `{}`, which the world played on 0.9 had no field for.
+ */
 const fingerprint = (world: object) => {
   const canonical = (value: unknown): unknown =>
     Array.isArray(value) ? value.map(canonical)
     : value !== null && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, canonical((value as Record<string, unknown>)[k])]))
     : value
-  const { version: _, gameVersion: __, ...rest } = world as { version: unknown; gameVersion: unknown }
+  const { version: _, gameVersion: __, ...rest } = world as { version: unknown; gameVersion: unknown; nextStates?: object }
+  if (rest.nextStates !== undefined && Object.keys(rest.nextStates).length === 0) delete rest.nextStates
   return createHash("sha1").update(JSON.stringify(canonical(rest))).digest("hex")
 }
 
