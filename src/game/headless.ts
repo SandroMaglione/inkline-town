@@ -22,6 +22,8 @@ export interface Snapshot {
   relations: Record<string, Array<[number, Array<number>]>>
   resources: Record<string, any>
   machines: Record<string, unknown>
+  /** The next states queued for the next marker, by machine (Ritmo 0.23 saves them; a save from before has none). */
+  nextStates?: Record<string, unknown>
 }
 
 /** The edit queue of a town about to be founded: one edit founds it on the first step. */
