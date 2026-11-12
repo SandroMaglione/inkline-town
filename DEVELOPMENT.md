@@ -4,7 +4,7 @@
 
 Inkline Town is a TypeScript game. The simulation runs on the
 [Ritmo](https://github.com/typeonce-dev/ritmo) ECS at a fixed step and
-knows nothing of the page; [Three.js](https://threejs.org) draws the 3D world;
+knows nothing of the page; [PixiJS 3D](https://github.com/pixijs/3d) (`@pixi/3d`, on WebGL) draws the 3D world;
 Pixi renders the original menu thumbnails; saving is
 written with [Effect](https://effect.website).
 
@@ -137,14 +137,17 @@ in the editable geometry descriptions, rather than baked into duplicate meshes.
   and reusable modelling operations in the game's cell units and pixel heights.
 - `buildings.ts`, `land.ts`, `people.ts`, `construction.ts`: procedural
   models; `assets.ts` collects them and retains the approved house/prop models.
-- `renderer.ts`: Three.js adapter, material batching, depth-tested ink,
-  continuous curved outlines and silhouette hulls. GLB uses ordinary meshes
-  and unlit materials so the ink survives import into another renderer.
+- `ink-mesh.ts`: a model as mesh data with no renderer in it: faces batched by
+  colour, ink rods and tubes, silhouette hulls, and silhouette contour edges.
+  The shapes (`../mesh/`) are ports of the three.js algorithms the models were
+  approved with, so every vertex lands where it did.
+- `renderer.ts`: the Pixi 3D adapter for one model (the ground layers, labs and
+  pictures); `glb.ts` writes and reads the GLB, with ordinary meshes and unlit
+  materials so the ink survives import into another renderer.
 - `main.ts`: original drawing comparisons, collection/search UI and downloads.
 
 The art viewer uses fixed poses; the playable game animates them from live
-state. The Three.js adapter does not establish compatibility with the private
-PixiJS 3D beta. Rear facades and rounded volumes interpret surfaces the original
+state. Rear facades and rounded volumes interpret surfaces the original
 drawing does not show. GLB edge antialiasing can differ from the live viewer.
 
 ### The complete 3D review map
@@ -204,7 +207,7 @@ import only the layers below it (`.oxlintrc.json` enforces it):
 
 ```
 app/        start-up: the one module that knows every layer
-ui/dom/     the page's UI          render/pixi3d/   the Three.js renderer
+ui/dom/     the page's UI          render/pixi3d/   the PixiJS 3D renderer
          \                        /
           view/   the world as plain data for any UI and any renderer
             |
@@ -264,7 +267,11 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
 - `src/render/pixi3d/`: the live renderer: `services.ts` (its scene and view registries), `sync.ts` (a view
   for each entity), `draw/` (the land, the ground, the map view, the preview, animation, the townsfolk),
   `schedule.ts` (`draw`), `scene.ts` (camera and frame source), `input.ts` (map input), `views.ts`,
-  `pool.ts`, `thumbnails.ts` (the pictures the page's menus show), effects and shaders.
+  `pool.ts` (shared models: one `BatchedMesh3D` a model, per-copy colour and surface state, picking against
+  each copy's triangles), `thumbnails.ts` and `portrait.ts` (the pictures the page's menus show, drawn offscreen
+  by the same renderer), the effects, `bits.ts` (the shader bits: instances, silhouettes, ink ribbons, the
+  surface shading, and the faces' depth offset) and `materials.ts`. It runs on WebGL, so each bit carries GLSL
+  only. `mesh/` is geometry and maths with no renderer in it, which the tests use in Node.
   - `assets/`: the models, drawn in code: buildings, homes, people, the land, parks (`town-props.ts`),
     services (`services.ts`: grain hoist, fish racks, watch tower, herbs, medical signs, noticeboard, builder's
     equipment), and `appearance.ts` (material state metadata for catalogue presets; wear, neighbourhood,
@@ -279,7 +286,8 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
 - `src/app/`: `browser.ts` (start-up: the runtime, the scene, the map input, the page, the loop, saves),
   `lint.ts` (what `pnpm lint:game` checks), and `devtools.ts` (the dev replay recorder).
 - `src/labs/`: the dev-only pages: the art gallery, the asset lab, the map, park, effects and model reviews,
-  the service study, and the UI kit.
+  the service study, and the UI kit. `viewer.ts` is their shared Pixi 3D view; a page of many pictures draws
+  the one view into each card's viewport.
 
 ### Reviewing the new town models
 

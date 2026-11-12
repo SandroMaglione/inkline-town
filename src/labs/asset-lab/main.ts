@@ -50,7 +50,8 @@ const elevation = document.querySelector<HTMLInputElement>("#elevation")!
 const lab = await labViewer(viewer, { width: viewer.clientWidth || 1, height: viewer.clientHeight || 1 }), camera = lab.camera, scene = lab.view.root
 /** Shows only `node` in the view. */
 const show = (node: Container3D) => {
-  for (const child of [...scene.children]) if (child !== node) scene.removeChild(child)
+  // The camera lives in the scene too: only models come and go.
+  for (const child of [...scene.children]) if (child !== node && child !== camera) scene.removeChild(child)
   if (node.parent !== scene) scene.addChild(node)
 }
 const pixi = new Application()

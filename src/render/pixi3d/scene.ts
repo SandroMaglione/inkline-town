@@ -112,8 +112,9 @@ export class GameScene {
       preference: "webgl",
       antialias: true,
       backgroundColor: LAND,
+      // The page's stylesheet sizes the canvas; its buffer follows the pixel ratio.
       resolution: Math.min(devicePixelRatio || 1, 2),
-      autoDensity: true,
+      autoDensity: false,
       autoStart: false,
       preserveDrawingBuffer: import.meta.env.DEV,
       width: Math.max(1, mount.clientWidth),

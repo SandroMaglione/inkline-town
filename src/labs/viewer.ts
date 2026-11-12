@@ -16,7 +16,7 @@ export interface LabViewer {
   /** The view's size in CSS pixels. */
   readonly width: number
   readonly height: number
-  /** Sizes the canvas (CSS pixels; its buffer follows the device's pixel ratio) and the view. */
+  /** Sizes the canvas buffer (CSS pixels times the pixel ratio) and the view; the stylesheet sizes it on the page. */
   resize(width: number, height: number): void
   render(): void
   /**
@@ -35,8 +35,9 @@ export async function labViewer(mount: HTMLElement, options: { width: number; he
     antialias: true,
     backgroundColor: background ?? 0xffffff,
     backgroundAlpha: background === null ? 0 : 1,
+    // The page's stylesheet sizes the canvas (as it did for three.js); its buffer follows the pixel ratio.
     resolution: Math.min(devicePixelRatio || 1, 2),
-    autoDensity: true,
+    autoDensity: false,
     autoStart: false,
     preserveDrawingBuffer: true,
     width: Math.max(1, options.width),
