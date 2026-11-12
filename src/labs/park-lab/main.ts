@@ -1,6 +1,6 @@
 import * as THREE from "three"
-import { assetById } from "../../render/three/assets/assets.ts"
-import { buildAsset, type BuiltAsset } from "../../render/three/assets/renderer.ts"
+import { assetById } from "../../render/pixi3d/assets/assets.ts"
+import { buildAsset, type BuiltAsset } from "../../render/pixi3d/assets/renderer.ts"
 import { builtPark, parkCells, parkSummary } from "./park.ts"
 import "./style.css"
 

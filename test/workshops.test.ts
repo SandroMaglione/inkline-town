@@ -1,11 +1,11 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import * as THREE from "three"
-import { makeBuilding, buildingSmokeOrigin, buildingDimensions } from "../src/render/three/assets/buildings.ts"
-import { workshopIds, workshopPoint } from "../src/render/three/assets/workshops.ts"
-import { vertex3 } from "../src/render/three/assets/renderer.ts"
-import { buildingAsset, noDoors } from "../src/render/three/models.ts"
-import { sides } from "../src/render/three/assets/primitives.ts"
+import { makeBuilding, buildingSmokeOrigin, buildingDimensions } from "../src/render/pixi3d/assets/buildings.ts"
+import { workshopIds, workshopPoint } from "../src/render/pixi3d/assets/workshops.ts"
+import { vertex3 } from "../src/render/pixi3d/assets/space.ts"
+import { fan, segmentHits } from "../src/render/pixi3d/mesh/ray.ts"
+import { buildingAsset, noDoors } from "../src/render/pixi3d/models.ts"
+import { sides } from "../src/render/pixi3d/assets/primitives.ts"
 import { U } from "../src/game/world/iso.ts"
 
 test("open workshop forecourts retain air above the work floor on every road heading", () => {
@@ -13,11 +13,7 @@ test("open workshop forecourts retain air above the work floor on every road hea
     const doors = { ...noDoors, [side]: true }, asset = makeBuilding(id, { doors })
     const start = vertex3(workshopPoint([0, 12 * U, 14], doors))
     const end = vertex3(workshopPoint([0, 12 * U, 20], doors))
-    const ray = new THREE.Ray(start, end.clone().sub(start).normalize())
-    for (const face of asset.faces) for (let i = 1; i < face.points.length - 1; i++) {
-      const hit = ray.intersectTriangle(vertex3(face.points[0]!), vertex3(face.points[i]!), vertex3(face.points[i + 1]!), false, new THREE.Vector3())
-      assert.ok(!hit || hit.distanceTo(start) > end.distanceTo(start), `${id}/${side}: forecourt must stay open`)
-    }
+    assert.equal(segmentHits(start, end, asset.faces.flatMap(face => fan(face.points.map(vertex3)))).length, 0, `${id}/${side}: forecourt must stay open`)
     for (const p of [...asset.faces, ...asset.strokes].flatMap(part => part.points))
       assert.ok(Math.abs(p[0]) <= 15 * U && Math.abs(p[1]) <= 15 * U, `${id}/${side}: outside original plot`)
   }

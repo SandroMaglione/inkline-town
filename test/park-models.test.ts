@@ -2,12 +2,13 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { readFileSync } from "node:fs"
 import { gunzipSync } from "node:zlib"
-import * as THREE from "three"
-import { assetById } from "../src/render/three/assets/assets.ts"
-import { Drawing, type InkAsset } from "../src/render/three/assets/primitives.ts"
-import { parkAsset, parkProp } from "../src/render/three/assets/town-props.ts"
+import { fan, segmentHits } from "../src/render/pixi3d/mesh/ray.ts"
+import type { Vec3 } from "../src/render/pixi3d/mesh/vec3.ts"
+import { assetById } from "../src/render/pixi3d/assets/assets.ts"
+import { Drawing, type InkAsset } from "../src/render/pixi3d/assets/primitives.ts"
+import { parkAsset, parkProp } from "../src/render/pixi3d/assets/town-props.ts"
 import { parkReviewModels } from "../src/labs/model-review/park-models.ts"
-import { human } from "../src/render/three/assets/dimensions.ts"
+import { human } from "../src/render/pixi3d/assets/dimensions.ts"
 import { DIRS, key } from "../src/game/world/grid.ts"
 import { assertNear } from "./near.ts"
 
@@ -46,11 +47,8 @@ test("all path and square approaches leave a person-wide opening to every joined
   for(const ground of ["path","square"] as const){
     const a=parkAsset(new Map([[key(0,0),{x:0,y:0,ground,prop:"none"}]]),roads)
     for(const {x,y} of DIRS)for(const offset of [-.07,0,.07]){
-      const origin=new THREE.Vector3(.5-y*offset,.5+x*offset,1),ray=new THREE.Ray(origin,new THREE.Vector3(x,y,0))
-      for(const f of a.faces)for(let i=1;i<f.points.length-1;i++){
-        const hit=ray.intersectTriangle(new THREE.Vector3(...f.points[0]!),new THREE.Vector3(...f.points[i]!),new THREE.Vector3(...f.points[i+1]!),false,new THREE.Vector3())
-        assert.ok(!hit||hit.distanceTo(origin)>.65,`${ground}/${x},${y}: road approach blocked`)
-      }
+      const origin:Vec3=[.5-y*offset,.5+x*offset,1],reach:Vec3=[origin[0]+x*.65,origin[1]+y*.65,1]
+      assert.equal(segmentHits(origin,reach,a.faces.flatMap(f=>fan(f.points))).length,0,`${ground}/${x},${y}: road approach blocked`)
     }
   }
 })

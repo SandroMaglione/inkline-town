@@ -1,9 +1,9 @@
 import type { KindId } from "../../game/content/index.ts"
-import { assetById } from "../../render/three/assets/assets.ts"
-import { Drawing, type InkAsset } from "../../render/three/assets/primitives.ts"
-import { chair, chest } from "../../render/three/assets/furniture.ts"
-import { bench } from "../../render/three/assets/town-props.ts"
-import { scaffoldAsset } from "../../render/three/assets/scaffolding.ts"
+import { assetById } from "../../render/pixi3d/assets/assets.ts"
+import { Drawing, type InkAsset } from "../../render/pixi3d/assets/primitives.ts"
+import { chair, chest } from "../../render/pixi3d/assets/furniture.ts"
+import { bench } from "../../render/pixi3d/assets/town-props.ts"
+import { scaffoldAsset } from "../../render/pixi3d/assets/scaffolding.ts"
 
 // This review belongs to one approved revision. Future building kinds should
 // not silently join a comparison whose frozen originals cannot contain them.

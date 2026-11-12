@@ -1,6 +1,6 @@
 import * as THREE from "three"
-import { assetById } from "../../render/three/assets/assets.ts"
-import { buildAsset, exportAsset, floorScale, vertex3 } from "../../render/three/assets/renderer.ts"
+import { assetById } from "../../render/pixi3d/assets/assets.ts"
+import { buildAsset, exportAsset, floorScale, vertex3 } from "../../render/pixi3d/assets/renderer.ts"
 import "./style.css"
 
 const root = document.querySelector<HTMLElement>("#service-study")!

@@ -1,8 +1,8 @@
 import * as THREE from "three"
 import { OrbitControls } from "three/addons/controls/OrbitControls.js"
-import { buildAsset, floorScale } from "../../render/three/assets/renderer.ts"
-import { inkAssets } from "../../render/three/assets/assets.ts"
-import { makePerson } from "../../render/three/assets/people.ts"
+import { buildAsset, floorScale } from "../../render/pixi3d/assets/renderer.ts"
+import { inkAssets } from "../../render/pixi3d/assets/assets.ts"
+import { makePerson } from "../../render/pixi3d/assets/people.ts"
 import { testMap, districts } from "./map.ts"
 import "./style.css"
 

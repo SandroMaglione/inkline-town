@@ -1,6 +1,6 @@
 import * as THREE from "three"
-import { buildAsset, vertex3 } from "../../render/three/assets/renderer.ts"
-import type { InkAsset } from "../../render/three/assets/primitives.ts"
+import { buildAsset, vertex3 } from "../../render/pixi3d/assets/renderer.ts"
+import type { InkAsset } from "../../render/pixi3d/assets/primitives.ts"
 import { proportionModels, architectureIds } from "./proportion-models.ts"
 import { parkReviewModels } from "./park-models.ts"
 import "./proportions.css"

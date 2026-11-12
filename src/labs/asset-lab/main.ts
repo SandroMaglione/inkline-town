@@ -19,12 +19,12 @@ import {
 } from "../../render/art.ts"
 import { kinds, goods } from "../../game/content/index.ts"
 import { key } from "../../game/world/grid.ts"
-import { samplePark } from "../../render/three/assets/town-props.ts"
+import { samplePark } from "../../render/pixi3d/assets/town-props.ts"
 import type { PropId } from "../../game/content/index.ts"
 import { drawPlot } from "../../render/art.ts"
 import { U, toScreen } from "../../game/world/iso.ts"
-import { inkAssets, assetCategoryTitles, type InkAsset } from "../../render/three/assets/assets.ts"
-import { buildAsset, exportAsset, reloadExportedAsset } from "../../render/three/assets/renderer.ts"
+import { inkAssets, assetCategoryTitles, type InkAsset } from "../../render/pixi3d/assets/assets.ts"
+import { buildAsset, exportAsset, reloadExportedAsset } from "../../render/pixi3d/assets/renderer.ts"
 import "./style.css"
 
 const root = document.querySelector<HTMLDivElement>("#lab")!

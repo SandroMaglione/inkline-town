@@ -9,7 +9,7 @@ import { readdirSync, readFileSync } from "node:fs"
 import { test } from "node:test"
 
 import { groundIds, kindIds, kinds, propIds } from "../src/game/content/index.ts"
-import { buildingAsset, homeAsset, noDoors, pictureAsset } from "../src/render/three/models.ts"
+import { buildingAsset, homeAsset, noDoors, pictureAsset } from "../src/render/pixi3d/models.ts"
 
 test("every building's picture, at every level of upgrades, is the model the map draws", () => {
   for (const id of kindIds) {
@@ -35,7 +35,7 @@ test("every piece of park is pictured as the map draws it, a furnishing standing
 })
 
 test("the page pictures nothing any other way", () => {
-  const thumbnails = readFileSync(new URL("../src/render/three/thumbnails.ts", import.meta.url), "utf8")
+  const thumbnails = readFileSync(new URL("../src/render/pixi3d/thumbnails.ts", import.meta.url), "utf8")
   assert.match(thumbnails, /pictureAsset\(/)
   const page = new URL("../src/ui/dom/", import.meta.url)
   for (const file of readdirSync(page, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".ts"))) {

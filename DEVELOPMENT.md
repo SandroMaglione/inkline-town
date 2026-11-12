@@ -39,7 +39,7 @@ it, and two fingers move the camera under it. With any pointer, a stroke let
 go off the map (over the tool bar, say) is dropped and shows red while it
 would be, as are a right click or Esc mid-drag. On touch the tooltip shows
 only for what is about to be built, never while panning or picking, in a
-thin full-width strip under the top line. This lives entirely in `src/render/three/input.ts`
+thin full-width strip under the top line. This lives entirely in `src/render/pixi3d/input.ts`
 (and the bar in `src/ui/dom/index.ts`); the game still sees one ordinary press and
 release.
 
@@ -64,7 +64,7 @@ to the bottom. The camera bar is hidden: pinch zooms and turns. New UI needs
 nothing there unless it has to move on a phone; check it at 390×844, 360×640
 and 762×330, and run `pnpm check:phone`.
 
-`src/render/three/scene.ts` owns the orthographic camera, ground projection and
+`src/render/pixi3d/scene.ts` owns the orthographic camera, ground projection and
 frame source. `views.ts` follows live construction, upgrades, resources,
 production, problem markers and the simulation's walkers and cargo. Flags,
 mill sails and smoke animate in 3D. `pool.ts` instances repeated geometry,
@@ -133,7 +133,7 @@ Material effects render in the viewers and live game. Ordinary GLB viewers
 show the underlying mesh; effect parameters are preserved as GLB extras and
 in the editable geometry descriptions, rather than baked into duplicate meshes.
 
-- `src/render/three/assets/primitives.ts`: renderer-independent polygon/stroke schema
+- `src/render/pixi3d/assets/primitives.ts`: renderer-independent polygon/stroke schema
   and reusable modelling operations in the game's cell units and pixel heights.
 - `buildings.ts`, `land.ts`, `people.ts`, `construction.ts`: procedural
   models; `assets.ts` collects them and retains the approved house/prop models.
@@ -204,7 +204,7 @@ import only the layers below it (`.oxlintrc.json` enforces it):
 
 ```
 app/        start-up: the one module that knows every layer
-ui/dom/     the page's UI          render/three/   the Three.js renderer
+ui/dom/     the page's UI          render/pixi3d/   the Three.js renderer
          \                        /
           view/   the world as plain data for any UI and any renderer
             |
@@ -261,7 +261,7 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
   - `screens/`: the charter a town is founded from, sharing (and its card), a visit to a shared town, the
     reckoning at the end of a term, and the confirm dialog.
   - `styles/`: `factory.css`, and `phone.css` after it.
-- `src/render/three/`: the live renderer: `services.ts` (its scene and view registries), `sync.ts` (a view
+- `src/render/pixi3d/`: the live renderer: `services.ts` (its scene and view registries), `sync.ts` (a view
   for each entity), `draw/` (the land, the ground, the map view, the preview, animation, the townsfolk),
   `schedule.ts` (`draw`), `scene.ts` (camera and frame source), `input.ts` (map input), `views.ts`,
   `pool.ts`, `thumbnails.ts` (the pictures the page's menus show), effects and shaders.
@@ -285,20 +285,20 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
 
 [`/model-review.html?collection=town`](http://localhost:5232/model-review.html?collection=town)
 shows all 23 building kinds plus the market hall and church upgrades. The final
-nine refinements are grouped at `?collection=rural`. `src/render/three/assets/rural.ts`
+nine refinements are grouped at `?collection=rural`. `src/render/pixi3d/assets/rural.ts`
 owns timber entrances, nursery and farm fittings, chapel porches, granary louvres
 and the supported fire-watch access route. The same geometry is used in the game,
 catalogue, model sheets and GLB exports.
 
 [`/model-review.html?collection=trades`](http://localhost:5232/model-review.html?collection=trades)
 groups the mill, warehouse, fishery, bakery, weaver and watch house revisions.
-`src/render/three/assets/trades.ts` owns their equipment, loading doors, open yards and the
+`src/render/pixi3d/assets/trades.ts` owns their equipment, loading doors, open yards and the
 bakery smoke origin. The mill keeps its animated sails. Cargo sits on the ground
 or loading apron, and the four new yard layouts turn towards connected roads.
 
 [`/model-review.html?collection=workshops`](http://localhost:5232/model-review.html?collection=workshops)
 groups the revised mine, smithy, sawmill and town hall. The three workshops have
-open yards and road-facing layouts. `src/render/three/assets/workshops.ts` owns their
+open yards and road-facing layouts. `src/render/pixi3d/assets/workshops.ts` owns their
 geometry, construction frames and smoke origins. The live renderer and catalogue
 use the same models; simulation footprints and building costs are unchanged.
 
@@ -318,7 +318,7 @@ and house geometry is checked against its plate bounds. Natural rock deposits
 use six seeded silhouettes while retaining their simulation cell footprints.
 `pnpm check:revisions` renders every catalogue entry, checks the exclamation
 mark from both sides and verifies animated smoke through rendered pixels.
-The chimney plume uses `src/render/three/smoke-effects.ts` in both the catalogue and
+The chimney plume uses `src/render/pixi3d/smoke-effects.ts` in both the catalogue and
 working buildings. Smoke's GLB stores emitter metadata; particles run at runtime.
 
 Open [`/effects-lab.html`](http://localhost:5232/effects-lab.html) to inspect
@@ -359,7 +359,7 @@ road setts and the park simulation rules are unchanged.
 Open `/park-lab.html` for a park assembled from 25 cells using the current
 park layout system, with two street entrances. The three retained furnishings
 are framed lanterns, tiered fountains and simple stone busts;
-`src/render/three/fountain-effects.ts` supplies moving droplets and impact ripples in
+`src/render/pixi3d/fountain-effects.ts` supplies moving droplets and impact ripples in
 the actual basin. Park rendering in the game, catalogue, map and preview shares
 the same emitter metadata and water renderer. `pnpm check:park` verifies the
 rendered animation, pause, camera controls and phone layout, and captures stills

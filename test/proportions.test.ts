@@ -3,13 +3,14 @@ import { test } from "node:test"
 import { readFileSync } from "node:fs"
 import { gunzipSync } from "node:zlib"
 import { home, kindIds } from "../src/game/content/index.ts"
-import { assetById } from "../src/render/three/assets/assets.ts"
-import { house } from "../src/render/three/assets/homes.ts"
-import { human, residentialHeight } from "../src/render/three/assets/dimensions.ts"
-import { sides, type InkAsset } from "../src/render/three/assets/primitives.ts"
-import { buildingAsset, buildingTop, noDoors } from "../src/render/three/models.ts"
+import { assetById } from "../src/render/pixi3d/assets/assets.ts"
+import { house } from "../src/render/pixi3d/assets/homes.ts"
+import { human, residentialHeight } from "../src/render/pixi3d/assets/dimensions.ts"
+import { sides, type InkAsset } from "../src/render/pixi3d/assets/primitives.ts"
+import { buildingAsset, buildingTop, noDoors } from "../src/render/pixi3d/models.ts"
 import { architectureIds, proportionModels } from "../src/labs/model-review/proportion-models.ts"
-import { vertex3 } from "../src/render/three/assets/renderer.ts"
+import { vertex3 } from "../src/render/pixi3d/assets/space.ts"
+import { length, sub } from "../src/render/pixi3d/mesh/vec3.ts"
 import { assertNear } from "./near.ts"
 
 const baseline=JSON.parse(gunzipSync(readFileSync(new URL("../public/model-review/proportions-before.json.gz",import.meta.url))).toString()) as {revision:string;models:InkAsset[];walker:InkAsset}
@@ -38,7 +39,7 @@ test("all home tiers have door and floor clearance for a walker in every orienta
       assert.ok(door)
       const height=Math.max(...door.points.map(p=>p[2]))-Math.min(...door.points.map(p=>p[2]))
       assert.ok(height>=top(walker)+2,`${tier}/${side}: person cannot pass through the door`)
-      const width=vertex3(door.points[0]!).distanceTo(vertex3(door.points[1]!))
+      const width=length(sub(vertex3(door.points[0]!),vertex3(door.points[1]!)))
       assert.ok(width>6,`${tier}/${side}: door narrower than the walker`)
       assert.ok(top(a)>top(baseline.models.find(b=>b.id===({1:"cottage",2:"citizen",3:"townhouse"} as const)[tier])!))
     }
@@ -56,6 +57,6 @@ test("the generic goods crate is smaller than the person who handles it",()=>{
   const crate=assetById.get("crate-wood")!
   assert.ok(top(crate)<top(walker)/2)
   const world=points(crate).map(vertex3)
-  const width=Math.max(...world.map(p=>p.x))-Math.min(...world.map(p=>p.x))
+  const width=Math.max(...world.map(p=>p[0]))-Math.min(...world.map(p=>p[0]))
   assert.ok(width<top(walker)/Math.cos(Math.PI/6))
 })

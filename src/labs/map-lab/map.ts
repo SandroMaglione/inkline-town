@@ -1,4 +1,4 @@
-import { inkAssets, palette, type InkAsset, type Vertex } from "../../render/three/assets/assets.ts"
+import { inkAssets, palette, type InkAsset, type Vertex } from "../../render/pixi3d/assets/assets.ts"
 
 export interface MapBuilding {
   id: number

@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process"
 import { chromium } from "playwright"
 import type { EditQueue } from "../src/game/edits.ts"
 import type { Interaction, Shown } from "../src/view/contracts.ts"
-import type { GameScene } from "../src/render/three/scene.ts"
+import type { GameScene } from "../src/render/pixi3d/scene.ts"
 import type { Snapshot } from "../src/game/headless.ts"
 
 declare global {

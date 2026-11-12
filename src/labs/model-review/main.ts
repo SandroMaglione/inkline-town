@@ -1,8 +1,8 @@
 import * as THREE from "three"
-import { assetById } from "../../render/three/assets/assets.ts"
-import { buildAsset, exportAsset } from "../../render/three/assets/renderer.ts"
+import { assetById } from "../../render/pixi3d/assets/assets.ts"
+import { buildAsset, exportAsset } from "../../render/pixi3d/assets/renderer.ts"
 import { kindIds } from "../../game/content/index.ts"
-import { ruralIds } from "../../render/three/assets/rural.ts"
+import { ruralIds } from "../../render/pixi3d/assets/rural.ts"
 import "./style.css"
 import "./handoff.css"
 

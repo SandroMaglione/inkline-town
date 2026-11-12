@@ -1,11 +1,12 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { inkAssets, assetById } from "../src/render/three/assets/assets.ts"
+import { inkAssets, assetById } from "../src/render/pixi3d/assets/assets.ts"
 import { kindIds, goodIds, kinds } from "../src/game/content/index.ts"
 import { testMap } from "../src/labs/map-lab/map.ts"
 import { U } from "../src/game/world/iso.ts"
-import { makeRock } from "../src/render/three/assets/land.ts"
-import { church, marketHall, quartersFor } from "../src/render/three/assets/service-upgrades.ts"
+import { makeRock } from "../src/render/pixi3d/assets/land.ts"
+import { church, marketHall, quartersFor } from "../src/render/pixi3d/assets/service-upgrades.ts"
+import { readGlb, writeGlb } from "../src/render/pixi3d/assets/glb.ts"
 
 test("the portable catalogue covers all world object families", () => {
   assert.equal(assetById.size, inkAssets.length, "Asset IDs must be unique")
@@ -96,4 +97,21 @@ test("an upgraded market or church turns to face its road, keeping its plot and 
   // Lit faces stay lit: as many of the church's faces carry the lit wall colour whichever way it turns.
   const lit = (doors: Record<string, boolean>) => church({ plate: false, doors }).faces.filter((f) => f.color === 0xe9ebe5).length
   assert.equal(lit({ right: true }), lit({ left: true }))
+})
+
+test("every catalogue GLB reads back with unlit materials, finite geometry and its effect metadata", () => {
+  for (const asset of inkAssets) {
+    const glb = readGlb(writeGlb(asset))
+    const root = glb.nodes.find((n) => n.name === asset.id)
+    assert.ok(root, `${asset.id}: root node`)
+    if (asset.effects) assert.deepEqual(root.extras?.inklineSurfaceEffects, JSON.parse(JSON.stringify(asset.effects)), asset.id)
+    if (asset.smokeEffect) assert.ok(root.extras?.inklineSmokeEffect, asset.id)
+    if (asset.fountains?.length) assert.ok(root.extras?.inklineFountains, asset.id)
+    assert.ok(glb.meshes.length > 0, asset.id)
+    for (const mesh of glb.meshes) for (const primitive of mesh.primitives) {
+      const positions = glb.accessor(primitive.attributes.POSITION!)
+      assert.ok(positions.length > 0 && positions.every(Number.isFinite), `${asset.id}: geometry`)
+      assert.ok(glb.materials[primitive.material!]?.extensions?.KHR_materials_unlit, `${asset.id}: unlit`)
+    }
+  }
 })

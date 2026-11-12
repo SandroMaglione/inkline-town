@@ -32,13 +32,14 @@
     "engine:prepare": "node scripts/use-ritmo.ts"
   },
   "dependencies": {
+    "@pixi/3d": "0.1.0",
     "@typeonce/ritmo": "0.23.0",
     "@typeonce/ritmo-browser": "0.23.0",
     "@typeonce/ritmo-math": "0.23.0",
     "@typeonce/ritmo-pixi": "0.23.0",
     "@typeonce/ritmo-render": "0.23.0",
     "effect": "4.0.3",
-    "pixi.js": "^8.22.0",
+    "pixi.js": "^8.23.0",
     "three": "^0.186.1"
   },
   "devDependencies": {
@@ -46,6 +47,7 @@
     "@typeonce/ritmo-devtools": "0.23.0",
     "@types/node": "25.5.0",
     "@types/three": "^0.186.0",
+    "@types/web": "^0.0.365",
     "oxlint": "1.92.0",
     "playwright": "^1.64.0",
     "typescript": "7.0.2",

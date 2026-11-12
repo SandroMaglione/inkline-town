@@ -1,10 +1,10 @@
 import * as THREE from "three"
-import { house } from "../../render/three/assets/homes.ts"
+import { house } from "../../render/pixi3d/assets/homes.ts"
 import { home, type Tier } from "../../game/content/index.ts"
 import { U } from "../../game/world/iso.ts"
-import { ModelHandle,ModelPool } from "../../render/three/pool.ts"
-import { surfaceState,type SurfaceState } from "../../render/three/surface-state.ts"
-import { StructureEffects } from "../../render/three/structure-effects.ts"
+import { ModelHandle,ModelPool } from "../../render/pixi3d/pool.ts"
+import { surfaceState,type SurfaceState } from "../../render/pixi3d/surface-state.ts"
+import { StructureEffects } from "../../render/pixi3d/structure-effects.ts"
 import "./style.css"
 
 const cases: Array<{title:string;note:string;state:Partial<SurfaceState>}>=[
