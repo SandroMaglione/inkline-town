@@ -1,5 +1,5 @@
 import { Application, Graphics } from "pixi.js"
-import * as THREE from "three"
+import type { Container3D } from "@pixi/3d"
 import {
   drawBuilding,
   drawCrate,
@@ -25,6 +25,9 @@ import { drawPlot } from "../../render/art.ts"
 import { U, toScreen } from "../../game/world/iso.ts"
 import { inkAssets, assetCategoryTitles, type InkAsset } from "../../render/pixi3d/assets/assets.ts"
 import { buildAsset, exportAsset, reloadExportedAsset } from "../../render/pixi3d/assets/renderer.ts"
+import { triangleCount } from "../../render/pixi3d/mesh/geometry.ts"
+import type { Vec3 } from "../../render/pixi3d/mesh/vec3.ts"
+import { aim, frame, labViewer, toward } from "../viewer.ts"
 import "./style.css"
 
 const root = document.querySelector<HTMLDivElement>("#lab")!
@@ -44,14 +47,12 @@ const viewer = document.querySelector<HTMLDivElement>("#viewer")!
 const reference = document.querySelector<HTMLCanvasElement>("#reference")!
 const rotation = document.querySelector<HTMLInputElement>("#rotation")!
 const elevation = document.querySelector<HTMLInputElement>("#elevation")!
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true })
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
-renderer.setClearColor(0xf0f2ec, 0)
-renderer.outputColorSpace = THREE.SRGBColorSpace
-renderer.toneMapping = THREE.NoToneMapping
-viewer.append(renderer.domElement)
-const scene = new THREE.Scene()
-const camera = new THREE.OrthographicCamera(-100, 100, 100, -100, 0.1, 4000)
+const lab = await labViewer(viewer, { width: viewer.clientWidth || 1, height: viewer.clientHeight || 1 }), camera = lab.camera, scene = lab.view.root
+/** Shows only `node` in the view. */
+const show = (node: Container3D) => {
+  for (const child of [...scene.children]) if (child !== node) scene.removeChild(child)
+  if (node.parent !== scene) scene.addChild(node)
+}
 const pixi = new Application()
 await pixi.init({ width: 32, height: 32, antialias: true, resolution: 3, backgroundAlpha: 0 })
 
@@ -234,33 +235,19 @@ function render() {
   if (!width || !height) return
   const ref = references.get(selected.id)!
   const model = models.get(selected.id)!
-  const effectBounds=selected.smokeEffect||selected.fountains?.length?new THREE.Box3().setFromObject(model.group):null
-  const bounds = selected.reference?.type === "building" ? new THREE.Box3().setFromObject(model.group).getBoundingSphere(new THREE.Sphere()) : null
-  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds?effectBounds.getSize(new THREE.Vector3()).y*1.45:0, bounds ? bounds.radius * 2.6 * Math.max(1, height / width) : 0) / zoom
-  renderer.setSize(width, height, false)
-  camera.left = (-vertical * width) / height / 2
-  camera.right = -camera.left
-  camera.top = vertical / 2
-  camera.bottom = -camera.top
+  const [min, max] = model.bounds, centre: Vec3 = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2]
+  const effectBounds = selected.smokeEffect || selected.fountains?.length ? { centre, height: max[1] - min[1] } : null
+  // A building is framed by the sphere round its box.
+  const bounds = selected.reference?.type === "building" ? { centre, radius: Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2 } : null
+  const vertical = Math.max(40, ref.height * 1.45, ((ref.width * height) / width) * 1.3, effectBounds ? effectBounds.height * 1.45 : 0, bounds ? bounds.radius * 2.6 * Math.max(1, height / width) : 0) / zoom
+  lab.resize(width, height)
+  frame(camera, vertical / 2, width, height)
   const heading = ((45 + yaw) * Math.PI) / 180,
     altitude = (pitch * Math.PI) / 180
-  const target = bounds?.center ?? (effectBounds?effectBounds.getCenter(new THREE.Vector3()):new THREE.Vector3(0, -(ref.y + ref.height / 2) / Math.cos(Math.PI / 6), 0))
-  camera.position
-    .copy(target)
-    .add(
-      new THREE.Vector3(
-        Math.sin(heading) * Math.cos(altitude) * 1000,
-        Math.sin(altitude) * 1000,
-        Math.cos(heading) * Math.cos(altitude) * 1000
-      )
-    )
-  camera.lookAt(target)
-  camera.updateProjectionMatrix()
-  camera.updateMatrixWorld()
+  const target: Vec3 = bounds?.centre ?? effectBounds?.centre ?? [0, -(ref.y + ref.height / 2) / Math.cos(Math.PI / 6), 0]
+  aim(camera, target, toward(heading, altitude), 1000)
   model.updateEffects(effectTimeOverride??performance.now()/1000)
-  for (const { material, width: lineWidth } of model.lineMaterials) material.linewidth = lineWidth
-  model.updateContours(camera)
-  renderer.render(scene, camera)
+  lab.render()
   const dpr = Math.min(devicePixelRatio, 2),
     ctx = reference.getContext("2d")!
   reference.width = Math.round(width * dpr)
@@ -285,8 +272,7 @@ function select(id: string) {
     models.delete(oldest)
   }
   if (!models.has(id)) models.set(id, buildAsset(selected, { batchFaces: true }))
-  scene.clear()
-  scene.add(models.get(id)!.group)
+  show(models.get(id)!.group)
   category.value = selected.category ?? "buildings"
   search.value = ""
   filter()
@@ -363,7 +349,8 @@ root.querySelector<HTMLButtonElement>("#download-png")!.onclick = () => {
   ctx.fillStyle = "#f0f2ec"
   ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.drawImage(reference, 0, 60)
-  ctx.drawImage(renderer.domElement, w, 60, w, h)
+  render()
+  ctx.drawImage(lab.canvas, w, 60, w, h)
   ctx.fillStyle = "#3d4943"
   ctx.font = "24px monospace"
   ctx.fillText(`${selected.title} / original`, 24, 38)
@@ -375,7 +362,8 @@ root.querySelector<HTMLButtonElement>("#download-png")!.onclick = () => {
 
 // A local inspection/export bridge for reproducible visual checks and GLB delivery.
 const capture = (side: "reference" | "model", width = 480) => {
-  const input = side === "reference" ? reference : renderer.domElement
+  if (side === "model") render()
+  const input = side === "reference" ? reference : lab.canvas
   const output = document.createElement("canvas")
   output.width = width
   output.height = Math.round((width * input.height) / input.width)
@@ -407,12 +395,13 @@ Object.assign(window, {
     exportAsset,
     showExported: async () => {
       const model = await reloadExportedAsset(selected)
-      scene.clear()
-      scene.add(model)
-      render()
-      return { meshes: model.children.length }
+      show(model)
+      lab.render()
+      let meshes = 0
+      model.traverse((node) => { if ("geometry" in node) meshes++ })
+      return { meshes }
     },
-    stats: () => ({ selected: selected.id, yaw, pitch, drawCount, triangles: renderer.info.render.triangles }),
+    stats: () => ({ selected: selected.id, yaw, pitch, drawCount, triangles: models.get(selected.id)?.parts.reduce((n, p) => n + triangleCount(p.part.mesh), 0) ?? 0 }),
     capture,
     captureEffect: (time:number)=>{effectTimeOverride=time;render();const image=capture("model");effectTimeOverride=null;return image}
   }
@@ -426,5 +415,5 @@ if (import.meta.hot)
     cancelAnimationFrame(effectFrame)
     resize.disconnect()
     models.forEach((model) => model.dispose())
-    renderer.dispose()
+    lab.dispose()
   })

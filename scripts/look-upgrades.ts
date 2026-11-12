@@ -38,7 +38,7 @@ try {
   })
   await page.evaluate(() => (window as any).town.advance(1))
   const hall = await page.evaluate(() => (window as any).town.snapshot().entities.find((e: any) => e.components["Town/TownHall"]).components["Town/Tile"])
-  await page.evaluate(([x, y]) => { const v = (window as any).town.view; v.focus(x, y); v.camera.zoom = 2.2; v.camera.updateProjectionMatrix() }, [hall.x + 1.5, hall.y + 1.5])
+  await page.evaluate(([x, y]) => { const v = (window as any).town.view; v.setView({ ...v.view(), x, y, zoom: 2.2 }) }, [hall.x + 1.5, hall.y + 1.5])
   // The gold arrow over the town hall; then its panel, the upgrade first under its status, begun from its button.
   await page.waitForTimeout(600)
   await page.screenshot({ path: `${out}/1-arrow.png` })

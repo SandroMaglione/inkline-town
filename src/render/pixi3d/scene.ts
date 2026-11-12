@@ -39,7 +39,7 @@ const LAND = 0xe2e9e6, FROSTED = 0xe6edf1
  * Counts what the GPU is asked to draw each frame (Pixi has no `renderer.info`):
  * draw calls, and triangles, instances included.
  */
-function drawCounter(renderer: Renderer) {
+export function drawCounter(renderer: Renderer) {
   const counts = { calls: 0, triangles: 0 }
   const gl = "gl" in renderer ? renderer.gl : null
   if (gl) {

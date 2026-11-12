@@ -1,5 +1,7 @@
-import * as THREE from "three"
+import { Container3D } from "@pixi/3d"
 import { buildAsset, vertex3 } from "../../render/pixi3d/assets/renderer.ts"
+import { add, type Vec3 } from "../../render/pixi3d/mesh/vec3.ts"
+import { aim, frame, labViewer, toward } from "../viewer.ts"
 import type { InkAsset } from "../../render/pixi3d/assets/primitives.ts"
 import { proportionModels, architectureIds } from "./proportion-models.ts"
 import { parkReviewModels } from "./park-models.ts"
@@ -66,7 +68,6 @@ const notes: Record<string,string> = {
 
 const root=document.querySelector<HTMLElement>("#proportions")!
 root.innerHTML=`<header><div><div class="eyebrow">INKLINE TOWN / PROPORTION STUDY</div><h1>One town. One human scale.</h1><p>Every building and upgrade, plus shared furnishings and construction. The walker is unchanged. Both sides always use the same camera, ground position and zoom.</p></div><div><a href="/model-review.html?collection=handoff">Model catalogue ↗</a><p class="status" id="status">Loading the approved originals…</p></div></header><div class="layout"><aside><input aria-label="Find a model" type="search" placeholder="Find a model…"><select aria-label="Model group"><option value="all">All models</option><option value="architecture">Buildings & homes</option><option value="props">Props & construction</option></select><select aria-label="Choose model"></select><nav aria-label="All comparison models"></nav></aside><section><div class="row"><button id="previous" aria-label="Previous model">←</button><h2></h2><button id="next" aria-label="Next model">→</button></div><p class="meta" id="note"></p><div class="controls"><label>Turn <input aria-label="Model rotation" type="range" min="-180" max="180" value="0"><output>0°</output></label><label>Elevation <select aria-label="View elevation"><option value="30">Game angle</option><option value="0">Eye level</option><option value="50">From above</option></select></label><label>Zoom <input aria-label="Zoom" type="range" min=".7" max="2" step=".1" value="1"></label><label><input type="checkbox" id="town-scale"> One scale across all models</label><button id="reset">Reset view</button><button id="save">Save comparison</button></div><div class="view"><div class="captions"><span>Before · approved</span><span>After · revised</span></div><div class="divider"></div></div><div class="footer"><span id="dimensions"></span><br>Drag to turn both views together. Arrow buttons move through every model. Switch on one town scale to compare building sizes across the catalogue.<br>Before geometry is frozen at <code>a2845b4</code>. Changes are model geometry, not camera scaling.</div></section></div>`
-const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true})
 if(parksMode){
   document.title="Inkline Town · Park before / after"
   root.querySelector(".eyebrow")!.textContent="INKLINE TOWN / PARK STUDY"
@@ -77,48 +78,51 @@ if(parksMode){
   root.querySelector(".footer code")!.textContent="f4df9d5"
   root.querySelector(".footer")!.lastChild!.textContent=". Changes are native model geometry."
 }
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setClearColor(0xf0f2ec);renderer.setScissorTest(true)
-const view=root.querySelector<HTMLElement>(".view")!;view.append(renderer.domElement)
-const camera=new THREE.OrthographicCamera(-100,100,100,-100,.1,4000)
+const view=root.querySelector<HTMLElement>(".view")!
+const viewer=await labViewer(view,{width:view.clientWidth||1,height:view.clientHeight||1,background:0xf0f2ec}),camera=viewer.camera,canvas=viewer.canvas
 const search=root.querySelector<HTMLInputElement>("input[type=search]")!,group=root.querySelector<HTMLSelectElement>("select[aria-label='Model group']")!,picker=root.querySelector<HTMLSelectElement>("select[aria-label='Choose model']")!,nav=root.querySelector<HTMLElement>("nav")!
 const rotation=root.querySelector<HTMLInputElement>("input[aria-label='Model rotation']")!,elevation=root.querySelector<HTMLSelectElement>("select[aria-label='View elevation']")!,zoom=root.querySelector<HTMLInputElement>("input[aria-label='Zoom']")!,townScale=root.querySelector<HTMLInputElement>("#town-scale")!
-const geometryBounds=(a:InkAsset)=>new THREE.Box3().setFromPoints([...a.faces,...a.strokes].flatMap(f=>f.points.map(vertex3)))
+type Box=[Vec3,Vec3]
+const empty=():Box=>[[Infinity,Infinity,Infinity],[-Infinity,-Infinity,-Infinity]]
+const expand=(box:Box,p:Vec3):Box=>[[Math.min(box[0][0],p[0]),Math.min(box[0][1],p[1]),Math.min(box[0][2],p[2])],[Math.max(box[1][0],p[0]),Math.max(box[1][1],p[1]),Math.max(box[1][2],p[2])]]
+const geometryBounds=(a:InkAsset,at:Vec3=[0,0,0])=>[...a.faces,...a.strokes].flatMap(f=>f.points.map(p=>add(vertex3(p),at))).reduce(expand,empty())
 let before:Baseline,after=parksMode?parkReviewModels():proportionModels(),filtered=after,selected=0,yaw=0,pitch=30,drag:number|null=null
-let pair:Array<{scene:THREE.Scene;built:ReturnType<typeof buildAsset>;person:ReturnType<typeof buildAsset>}>=[],bounds=new THREE.Box3()
+let pair:Array<{scene:Container3D;built:ReturnType<typeof buildAsset>;person:ReturnType<typeof buildAsset>}>=[],bounds=empty()
 const clean=(a:InkAsset):InkAsset=>{const {smokeEffect,effects,...geometry}=a;if(!parksMode)delete geometry.fountains;return geometry}
 
 function render(){
   if(!pair.length)return
   const {width,height}=view.getBoundingClientRect(),w=width/2
-  renderer.setSize(width,height,false)
+  viewer.resize(width,height)
   const heading=(45+yaw)*Math.PI/180,angle=pitch*Math.PI/180
-  const box=townScale.checked?(parksMode?new THREE.Box3(new THREE.Vector3(-180,-1,-180),new THREE.Vector3(180,70,180)):new THREE.Box3(new THREE.Vector3(-85,-1,-75),new THREE.Vector3(85,170,85))):bounds
-  const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3())
-  const horizontal=Math.abs(Math.cos(heading))*size.x+Math.abs(Math.sin(heading))*size.z
-  const vertical=Math.cos(angle)*size.y+Math.abs(Math.sin(angle))*(Math.abs(Math.sin(heading))*size.x+Math.abs(Math.cos(heading))*size.z)
+  const box:Box=townScale.checked?(parksMode?[[-180,-1,-180],[180,70,180]]:[[-85,-1,-75],[85,170,85]]):bounds
+  const center:Vec3=[(box[0][0]+box[1][0])/2,(box[0][1]+box[1][1])/2,(box[0][2]+box[1][2])/2],size:Vec3=[box[1][0]-box[0][0],box[1][1]-box[0][1],box[1][2]-box[0][2]]
+  const horizontal=Math.abs(Math.cos(heading))*size[0]+Math.abs(Math.sin(heading))*size[2]
+  const vertical=Math.cos(angle)*size[1]+Math.abs(Math.sin(angle))*(Math.abs(Math.sin(heading))*size[0]+Math.abs(Math.cos(heading))*size[2])
   const extent=Math.max(vertical,horizontal/(w/height))*1.18/Number(zoom.value)
-  camera.top=extent/2;camera.bottom=-extent/2;camera.left=-extent*w/height/2;camera.right=-camera.left
-  camera.position.copy(center).add(new THREE.Vector3(Math.sin(heading)*Math.cos(angle),Math.sin(angle),Math.cos(heading)*Math.cos(angle)).multiplyScalar(1000))
-  camera.lookAt(center);camera.updateProjectionMatrix();camera.updateMatrixWorld()
+  aim(camera,center,toward(heading,angle),1000)
+  frame(camera,extent/2,w,height)
   pair.forEach(({scene,built,person},i)=>{
-    renderer.setViewport(i*w,0,w,height);renderer.setScissor(i*w,0,w,height)
-    for(const b of [built,person]){b.updateContours(camera);b.updateEffects(1.2)}
-    renderer.render(scene,camera)
+    pair.forEach((p,j)=>{p.scene.visible=i===j})
+    for(const b of [built,person])b.updateEffects(1.2)
+    camera.viewport.set(i/2,0,1/2,1)
+    viewer.app.renderer.render({container:viewer.view,clear:i===0})
   })
+  camera.viewport.set(0,0,1,1)
   root.querySelector("output")!.textContent=`${yaw}°`
 }
 function select(id:string){
   const a=after.find(m=>m.id===id)!,b=before.models.find(m=>m.id===id)!
   if(!a||!b)return
   selected=filtered.findIndex(m=>m.id===id)
-  pair.forEach(p=>{p.built.dispose();p.person.dispose()});pair=[];bounds=new THREE.Box3()
+  pair.forEach(p=>{p.built.dispose();p.person.dispose();p.scene.destroy()});pair=[];bounds=empty()
   const half=Math.max(a.footprint??1,b.footprint??1)/2*32*Math.SQRT2
-  const personPosition=new THREE.Vector3(-half-6,0,half+3)
+  const personPosition:Vec3=[-half-6,0,half+3]
   for(const asset of [b,a]){
-    const built=buildAsset(clean(asset),{batchFaces:true}),person=buildAsset(before.walker,{batchFaces:true}),scene=new THREE.Scene()
-    person.group.position.copy(personPosition);scene.add(built.group,person.group)
-    bounds.union(geometryBounds(asset));bounds.union(geometryBounds(before.walker).translate(personPosition))
-    for(const f of parksMode?asset.fountains??[]:[])bounds.expandByPoint(vertex3([f.origin[0],f.origin[1],f.origin[2]+f.nozzle+7]))
+    const built=buildAsset(clean(asset),{batchFaces:true}),person=buildAsset(before.walker,{batchFaces:true}),scene=new Container3D()
+    person.group.position.set(...personPosition);scene.addChild(built.group,person.group);viewer.view.root.addChild(scene)
+    for(const box of [geometryBounds(asset),geometryBounds(before.walker,personPosition)])bounds=expand(expand(bounds,box[0]),box[1])
+    for(const f of parksMode?asset.fountains??[]:[])bounds=expand(bounds,vertex3([f.origin[0],f.origin[1],f.origin[2]+f.nozzle+7]))
     pair.push({scene,built,person})
   }
   root.querySelector("h2")!.textContent=a.title
@@ -141,8 +145,8 @@ function filter(){
   picker.disabled=!filtered.length
   if(filtered.length)select(filtered[0]!.id)
   else{
-    pair.forEach(p=>{p.built.dispose();p.person.dispose()});pair=[]
-    renderer.setScissorTest(false);renderer.clear();renderer.setScissorTest(true)
+    pair.forEach(p=>{p.built.dispose();p.person.dispose();p.scene.destroy()});pair=[]
+    viewer.render()
     root.querySelector("h2")!.textContent="No matching models"
     root.querySelector("#note")!.textContent="Try a different name or model group."
     root.querySelector("#dimensions")!.textContent=""
@@ -153,10 +157,10 @@ search.oninput=filter;group.onchange=filter;picker.onchange=()=>select(picker.va
 root.querySelector<HTMLButtonElement>("#previous")!.onclick=()=>select(filtered[(selected-1+filtered.length)%filtered.length]!.id)
 root.querySelector<HTMLButtonElement>("#next")!.onclick=()=>select(filtered[(selected+1)%filtered.length]!.id)
 root.querySelector<HTMLButtonElement>("#reset")!.onclick=()=>{yaw=0;pitch=30;rotation.value="0";elevation.value="30";zoom.value="1";townScale.checked=false;render()}
-root.querySelector<HTMLButtonElement>("#save")!.onclick=()=>{const a=document.createElement("a");a.download=`inkline-${picker.value}-before-after.png`;a.href=renderer.domElement.toDataURL();a.click()}
-renderer.domElement.onpointerdown=e=>{drag=e.clientX;renderer.domElement.setPointerCapture(e.pointerId)}
-renderer.domElement.onpointermove=e=>{if(drag===null)return;yaw=Math.max(-180,Math.min(180,Math.round(yaw+(e.clientX-drag)*.5)));drag=e.clientX;rotation.value=String(yaw);render()}
-renderer.domElement.onpointerup=()=>drag=null
+root.querySelector<HTMLButtonElement>("#save")!.onclick=()=>{const a=document.createElement("a");a.download=`inkline-${picker.value}-before-after.png`;render();a.href=canvas.toDataURL();a.click()}
+canvas.onpointerdown=e=>{drag=e.clientX;canvas.setPointerCapture(e.pointerId)}
+canvas.onpointermove=e=>{if(drag===null)return;yaw=Math.max(-180,Math.min(180,Math.round(yaw+(e.clientX-drag)*.5)));drag=e.clientX;rotation.value=String(yaw);render()}
+canvas.onpointerup=()=>drag=null
 new ResizeObserver(render).observe(view)
 async function start(){
   const requested=new URLSearchParams(location.search).get("model")
@@ -169,6 +173,6 @@ async function start(){
   if(before.models.length!==after.length||after.some(a=>!before.models.some(b=>b.id===a.id)))throw new Error("Comparison catalogue does not match the frozen baseline")
   filter();if(requested&&after.some(a=>a.id===requested))select(requested)
   root.querySelector("#status")!.textContent=parksMode?"12 park comparisons · unchanged walker":`${architectureIds.length} building appearances · ${after.length-architectureIds.length} shared examples`
-  Object.assign(window,{proportionReview:{ids:after.map(a=>a.id),select,render,capture:()=>renderer.domElement.toDataURL(),stats:()=>({id:picker.value,before:before.revision,yaw,pitch,pairs:pair.length})}})
+  Object.assign(window,{proportionReview:{ids:after.map(a=>a.id),select,render,capture:()=>{render();return canvas.toDataURL()},stats:()=>({id:picker.value,before:before.revision,yaw,pitch,pairs:pair.length})}})
 }
 start().catch(error=>{root.querySelector("#status")!.textContent=String(error);root.querySelector("#status")!.classList.add("error");console.error(error)})

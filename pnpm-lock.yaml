@@ -32,9 +32,6 @@ importers:
       pixi.js:
         specifier: ^8.23.0
         version: 8.23.0
-      three:
-        specifier: ^0.186.1
-        version: 0.186.1
     devDependencies:
       '@typeonce/oxlint-plugin-ritmo':
         specifier: 0.23.0
@@ -45,9 +42,6 @@ importers:
       '@types/node':
         specifier: 25.5.0
         version: 25.5.0
-      '@types/three':
-        specifier: ^0.186.0
-        version: 0.186.0
       '@types/web':
         specifier: ^0.0.365
         version: 0.0.365
@@ -65,9 +59,6 @@ importers:
         version: 8.3.1(@types/node@25.5.0)
 
 packages:
-
-  '@dimforge/rapier3d-compat@0.12.0':
-    resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
 
   '@oxc-project/types@0.153.0':
     resolution: {integrity: sha512-jSNrRIyvPVLL5E1z/tS5zLAprosGz/FuI1PWwEOz59j3E4TTTzSpqKb/RDGqJhhW0QHYISGXxq582wGx6T11Tw==}
@@ -288,9 +279,6 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
-  '@tweenjs/tween.js@23.1.3':
-    resolution: {integrity: sha512-vJmvvwFxYuGnF2axRtPYocag6Clbb5YS7kLL+SO/TeVFzHqDIWrNKYtcsPMibjDx9O+bu+psAy9NKfWklassUA==}
-
   '@typeonce/oxlint-plugin-ritmo@0.23.0':
     resolution: {integrity: sha512-+yZ51kuYEO992kTYeIPJVY2HF7SQsYPQxFLtLbIds96xU2aW+xn/A1xAnqdnA3jO1DH2DgMV88J1H9busZBObQ==}
     engines: {node: '>=22.12'}
@@ -351,17 +339,8 @@ packages:
   '@types/node@25.5.0':
     resolution: {integrity: sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw==}
 
-  '@types/stats.js@0.17.4':
-    resolution: {integrity: sha512-jIBvWWShCvlBqBNIZt0KAshWpvSjhkwkEu4ZUcASoAvhmrgAUI2t1dXrjSL4xXVLB4FznPrIsX3nKXFl/Dt4vA==}
-
-  '@types/three@0.186.0':
-    resolution: {integrity: sha512-mxYSBpDC+D0pLfSP6sW4WZTcT+nrtmZcimMqnVmy36Hte3XpeYSrvgg4TRdaM1GemGog1AWzI5qL2VoIfMXbJQ==}
-
   '@types/web@0.0.365':
     resolution: {integrity: sha512-97pWkQo8Nh+1GtYclGmxqfG9VUBdb9qMS/bEfPFTR96GKeEKahPLc8n7S1Kqq1gCR2dTwanowOionwHNRgYvng==}
-
-  '@types/webxr@0.5.24':
-    resolution: {integrity: sha512-h8fgEd/DpoS9CBrjEQXR+dIDraopAEfu4wYVNY2tEPwk60stPWhvZMf4Foo5FakuQ7HFZoa8WceaWFervK2Ovg==}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
@@ -515,9 +494,6 @@ packages:
       picomatch:
         optional: true
 
-  fflate@0.8.3:
-    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
-
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -602,9 +578,6 @@ packages:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
 
-  meshoptimizer@1.1.1:
-    resolution: {integrity: sha512-oRFNWJRDA/WTrVj7NWvqa5HqE1t9MYDj2VaWirQCzCCrAd2GHrqR/sQezCxiWATPNlKTcRaPRHPJwIRoPBAp5g==}
-
   meshoptimizer@1.3.0:
     resolution: {integrity: sha512-2oZqMAcEEiCtXWUjIGtZ71oPx1B0ZxYGTqIKsXB1wzWFhleNsCFxQuUJzgCV706bRcwPWtMGf1odmQvAcqKkIw==}
 
@@ -661,9 +634,6 @@ packages:
   source-map-js@1.2.2:
     resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
     engines: {node: '>=0.10.0'}
-
-  three@0.186.1:
-    resolution: {integrity: sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==}
 
   tiny-lru@11.4.7:
     resolution: {integrity: sha512-w/Te7uMUVeH0CR8vZIjr+XiN41V+30lkDdK+NRIDCUYKKuL9VcmaUEmaPISuwGhLlrTGh5yu18lENtR9axSxYw==}
@@ -725,8 +695,6 @@ packages:
         optional: true
 
 snapshots:
-
-  '@dimforge/rapier3d-compat@0.12.0': {}
 
   '@oxc-project/types@0.153.0': {}
 
@@ -841,8 +809,6 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@tweenjs/tween.js@23.1.3': {}
-
   '@typeonce/oxlint-plugin-ritmo@0.23.0(oxlint@1.92.0)':
     dependencies:
       '@oxlint/plugins': 1.88.0
@@ -900,20 +866,7 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
 
-  '@types/stats.js@0.17.4': {}
-
-  '@types/three@0.186.0':
-    dependencies:
-      '@dimforge/rapier3d-compat': 0.12.0
-      '@tweenjs/tween.js': 23.1.3
-      '@types/stats.js': 0.17.4
-      '@types/webxr': 0.5.24
-      fflate: 0.8.3
-      meshoptimizer: 1.1.1
-
   '@types/web@0.0.365': {}
-
-  '@types/webxr@0.5.24': {}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true
@@ -993,8 +946,6 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.7
 
-  fflate@0.8.3: {}
-
   fsevents@2.3.3:
     optional: true
 
@@ -1054,8 +1005,6 @@ snapshots:
       lightningcss-linux-x64-musl: 1.33.0
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
-
-  meshoptimizer@1.1.1: {}
 
   meshoptimizer@1.3.0: {}
 
@@ -1136,8 +1085,6 @@ snapshots:
       '@rolldown/binding-win32-x64-msvc': 1.2.13
 
   source-map-js@1.2.2: {}
-
-  three@0.186.1: {}
 
   tiny-lru@11.4.7: {}
 
