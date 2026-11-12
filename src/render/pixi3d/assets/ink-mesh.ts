@@ -7,9 +7,10 @@
  * - hulls: smooth props' and foliage's inward hulls, which give curved
  *   contours a continuous ink silhouette at every zoom;
  * - ink: strokes as six-sided rods, and long curved strokes as tubes;
- * - contours: sharp contours' edges as rods carrying both faces' normals
+ * - contours: sharp contours' edges carrying both faces' normals
  *   (`aInkNormalA`, `aInkNormalB`), shown only where one face turns towards
- *   the camera and the other away (see `inkSilhouetteBit`);
+ *   the camera and the other away (see `inkSilhouetteBit`): as rods for the
+ *   town's shared models, or as ribbons (`edge`) for one model drawn alone;
  * - lines: strokes drawn as camera-facing ribbons a world width across
  *   (see `inkLineBit`), for the town's ground layers.
  */
@@ -18,14 +19,14 @@ import { vertex3 } from "./space.ts"
 import { merge, mergeVertices, polygon, rod, triangles, tube, unindexed, withConstant, type MeshData } from "../mesh/geometry.ts"
 import { add, cross, dot, mean, normalize, scale, sub, type Vec3 } from "../mesh/vec3.ts"
 
-export type PartRole = "fill" | "hull" | "ink" | "contour" | "line"
+export type PartRole = "fill" | "hull" | "ink" | "contour" | "line" | "edge"
 export interface InkPart {
   readonly role: PartRole
   readonly color: number
   readonly opacity: number
-  /** For `line`: two vertices per segment. */
+  /** For `line` and `edge`: two vertices per segment. */
   readonly mesh: MeshData
-  /** For `line`: the ribbon's width in world units. */
+  /** For `line` and `edge`: the ribbon's width in world units. */
   readonly width: number
 }
 export interface InkMeshOptions {
@@ -37,6 +38,8 @@ export interface InkMeshOptions {
   readonly hullContours?: boolean
   /** Sharp contours drawn as silhouette edges (default), or left to the faces. */
   readonly contours?: boolean
+  /** Silhouette edges as rods (the town's shared models), or as ribbons (default). */
+  readonly contourRods?: boolean
 }
 
 const fixed = (p: Vec3) => p.map((n) => n.toFixed(4)).join(",")
@@ -142,6 +145,20 @@ export function inkMesh(asset: InkAsset, options: InkMeshOptions = {}): Array<In
   }
   // GPU silhouette masks let sharp foliage share instances at every camera angle, without a wireframe or an
   // expanded hull crossing the canopy.
+  if (!options.contourRods) {
+    const ribbons = new Map<number, { positions: Array<number>; a: Array<number>; b: Array<number> }>()
+    for (const { a, b, normals, width } of edges.values()) {
+      if (width <= 0) continue
+      const n1 = normals[0]!, n2 = normals[1] ?? scale(n1, -1), batch = ribbons.get(width) ?? { positions: [], a: [], b: [] }
+      batch.positions.push(...a, ...b)
+      batch.a.push(...n1, ...n1)
+      batch.b.push(...n2, ...n2)
+      ribbons.set(width, batch)
+    }
+    for (const [width, { positions, a, b }] of ribbons)
+      parts.push({ role: "edge", color: palette.ink, opacity: 1, width, mesh: { positions: Float32Array.from(positions), normals: new Float32Array(positions.length), index: null, attributes: { aInkNormalA: { data: Float32Array.from(a), size: 3 }, aInkNormalB: { data: Float32Array.from(b), size: 3 } } } })
+    return parts
+  }
   const contourBatches = new Map<number, Array<MeshData>>()
   for (const { a, b, normals, width } of edges.values()) {
     if (width <= 0) continue

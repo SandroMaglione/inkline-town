@@ -38,13 +38,17 @@ export function toGeometry(mesh: MeshData, extent?: readonly [Vec3, Vec3]): Geom
 /**
  * Line segments (`positions`: two points a segment) as ribbons: four corners
  * a segment, each carrying both ends and which corner it is, for
- * `inkLineBit` to turn to the camera and widen.
+ * `inkLineBit` to turn to the camera and widen. Each point's `attributes`
+ * (two values a segment) go to its end's two corners.
  */
-export function lineGeometry(positions: Float32Array): Geometry3D {
+export function lineGeometry(positions: Float32Array, attributes: MeshData["attributes"] = {}): Geometry3D {
   const segments = positions.length / 6
   const at = new Float32Array(segments * 12), start = new Float32Array(segments * 12), end = new Float32Array(segments * 12), corner = new Float32Array(segments * 8)
   const index: Array<number> = []
+  const extra = Object.fromEntries(Object.entries(attributes).map(([name, a]) => [name, { data: new Float32Array(segments * 4 * a.size), size: a.size, source: a.data }]))
   for (let s = 0; s < segments; s++) {
+    for (const a of Object.values(extra))
+      for (let k = 0; k < 4; k++) a.data.set(a.source.subarray((s * 2 + (k >= 2 ? 1 : 0)) * a.size, (s * 2 + (k >= 2 ? 1 : 0) + 1) * a.size), (s * 4 + k) * a.size)
     const a = positions.subarray(s * 6, s * 6 + 3), b = positions.subarray(s * 6 + 3, s * 6 + 6)
     for (let k = 0; k < 4; k++) {
       const v = s * 4 + k, far = k >= 2
@@ -56,7 +60,7 @@ export function lineGeometry(positions: Float32Array): Geometry3D {
     const v = s * 4
     index.push(v, v + 2, v + 1, v + 1, v + 2, v + 3)
   }
-  const mesh: MeshData = { positions: at, normals: new Float32Array(at.length), index: Uint32Array.from(index), attributes: { aLineStart: { data: start, size: 3 }, aLineEnd: { data: end, size: 3 }, aLineCorner: { data: corner, size: 2 } } }
+  const mesh: MeshData = { positions: at, normals: new Float32Array(at.length), index: Uint32Array.from(index), attributes: { aLineStart: { data: start, size: 3 }, aLineEnd: { data: end, size: 3 }, aLineCorner: { data: corner, size: 2 }, ...Object.fromEntries(Object.entries(extra).map(([name, a]) => [name, { data: a.data, size: a.size }])) } }
   return toGeometry(mesh)
 }
 

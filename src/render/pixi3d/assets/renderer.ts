@@ -42,7 +42,7 @@ export function buildAsset(asset: InkAsset, options: InkMeshOptions & { surfaceE
       setSurface(material, effects.state, [effects.half * floorScale, effects.height / Math.cos(Math.PI / 6), 0.31, 1], 0)
       surfaces.push(material)
     }
-    const mesh = new Mesh3D({ geometry: part.role === "line" ? lineGeometry(part.mesh.positions) : toGeometry(part.mesh), material, castShadow: false })
+    const mesh = new Mesh3D({ geometry: part.role === "line" || part.role === "edge" ? lineGeometry(part.mesh.positions, part.mesh.attributes) : toGeometry(part.mesh), material, castShadow: false })
     group.addChild(mesh)
     return { part, mesh }
   })

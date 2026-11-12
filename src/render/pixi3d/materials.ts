@@ -13,8 +13,9 @@ import { faceBiasBit, GLASS, inkLineBit, inkSilhouetteBit, instanceBit, instance
 import type { InkPart, PartRole } from "./assets/ink-mesh.ts"
 import type { SurfaceState } from "./surface-state.ts"
 
-const roleBits: Record<PartRole, ReadonlyArray<ShaderBit>> = { fill: [faceBiasBit], hull: [], ink: [], contour: [inkSilhouetteBit], line: [inkLineBit] }
-const doubleSided = (role: PartRole) => role === "fill" || role === "line"
+const roleBits: Record<PartRole, ReadonlyArray<ShaderBit>> = { fill: [faceBiasBit], hull: [], ink: [], contour: [inkSilhouetteBit], line: [inkLineBit], edge: [inkLineBit, inkSilhouetteBit] }
+const ribbon = (role: PartRole) => role === "line" || role === "edge"
+const doubleSided = (role: PartRole) => role === "fill" || ribbon(role)
 
 /** A part of one model; `surface` gives its faces the structure shading, with its own state. */
 export function partMaterial(part: InkPart, surface: boolean): FlatMaterial {
@@ -22,11 +23,11 @@ export function partMaterial(part: InkPart, surface: boolean): FlatMaterial {
     baseColor: part.color,
     alpha: part.opacity,
     // A stroke's soft edge blends, as three.js's alpha-to-coverage lines did.
-    alphaMode: part.opacity < 1 || part.role === "line" ? "blend" : "opaque",
+    alphaMode: part.opacity < 1 || ribbon(part.role) ? "blend" : "opaque",
     doubleSided: doubleSided(part.role),
     extraBits: [...(surface && part.role === "fill" ? [materialSurfaceBit] : []), ...roleBits[part.role]]
   })
-  if (part.role === "line") {
+  if (ribbon(part.role)) {
     material.data.lineWidth = part.width
     material.data.lineAlpha = part.opacity
   }

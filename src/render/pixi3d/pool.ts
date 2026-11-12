@@ -83,7 +83,7 @@ export class ModelPool {
   acquire(key: string, create: () => InkAsset): Template {
     let entry = this.templates.get(key)
     if (!entry) {
-      const pieces = inkMesh(create(), { batchFaces: true, meshInk: true, contours: true })
+      const pieces = inkMesh(create(), { batchFaces: true, meshInk: true, contours: true, contourRods: true })
       for (const p of pieces) if (p.role === "line" && p.width > 0) throw new Error("Live model ink must be portable mesh geometry")
       const solid = pieces.filter((p) => p.role !== "line")
       const extents = solid.map((p) => bounds(p.mesh))
