@@ -8,6 +8,7 @@
 import { View3D } from "@pixi/3d"
 import { RenderTexture, type Renderer } from "pixi.js"
 import { buildAsset } from "./assets/renderer.ts"
+import { draw } from "./materials.ts"
 import type { InkAsset } from "./assets/primitives.ts"
 import { add, cross, dot, normalize, scale as times, sub, type Vec3 } from "./mesh/vec3.ts"
 
@@ -36,7 +37,7 @@ export function portrait(renderer: Renderer, asset: InkAsset, scale = 2, margin 
   view.camera.lookAt({ x: shift[0], y: shift[1], z: shift[2] })
   view.root.addChild(model.group)
   const target = RenderTexture.create({ width, height, resolution: scale, antialias: true })
-  renderer.render({ container: view, target, clearColor: [0, 0, 0, 0] })
+  draw(renderer, view, { target, clearColor: [0, 0, 0, 0] })
   const url = (renderer.extract.canvas(target) as HTMLCanvasElement).toDataURL("image/png")
   target.destroy(true)
   model.dispose()

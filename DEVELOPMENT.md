@@ -4,7 +4,7 @@
 
 Inkline Town is a TypeScript game. The simulation runs on the
 [Ritmo](https://github.com/typeonce-dev/ritmo) ECS at a fixed step and
-knows nothing of the page; [PixiJS 3D](https://github.com/pixijs/3d) (`@pixi/3d`, on WebGL) draws the 3D world;
+knows nothing of the page; [PixiJS 3D](https://github.com/pixijs/3d) (`@pixi/3d`, on WebGPU where the browser has it and WebGL elsewhere) draws the 3D world;
 Pixi renders the original menu thumbnails; saving is
 written with [Effect](https://effect.website).
 
@@ -267,11 +267,15 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
 - `src/render/pixi3d/`: the live renderer: `services.ts` (its scene and view registries), `sync.ts` (a view
   for each entity), `draw/` (the land, the ground, the map view, the preview, animation, the townsfolk),
   `schedule.ts` (`draw`), `scene.ts` (camera and frame source), `input.ts` (map input), `views.ts`,
-  `pool.ts` (shared models: one `BatchedMesh3D` a model, per-copy colour and surface state, picking against
-  each copy's triangles), `thumbnails.ts` and `portrait.ts` (the pictures the page's menus show, drawn offscreen
+  `pool.ts` (shared models: each copy is plain meshes that share the model's geometry, with materials of its
+  own for its colour and surface state, and picking against each copy's triangles), `thumbnails.ts` and `portrait.ts` (the pictures the page's menus show, drawn offscreen
   by the same renderer), the effects, `bits.ts` (the shader bits: instances, silhouettes, ink ribbons, the
-  surface shading, and the faces' depth offset) and `materials.ts`. It runs on WebGL, so each bit carries GLSL
-  only. `mesh/` is geometry and maths with no renderer in it, which the tests use in Node.
+  surface shading, and the faces' depth offset) and `materials.ts` (which also draws every picture, `draw`, so
+  the faces know its size in pixels). It runs on WebGPU where the browser has it and on WebGL elsewhere
+  (`?renderer=webgl` in the page's address asks for WebGL), so each bit carries its code twice: `gpu` in WGSL
+  and `gl` in GLSL. A bit without one half draws nothing of its own on that renderer, with no error, so change
+  both. `mesh/` is geometry and maths with
+  no renderer in it, which the tests use in Node.
   - `assets/`: the models, drawn in code: buildings, homes, people, the land, parks (`town-props.ts`),
     services (`services.ts`: grain hoist, fish racks, watch tower, herbs, medical signs, noticeboard, builder's
     equipment), and `appearance.ts` (material state metadata for catalogue presets; wear, neighbourhood,

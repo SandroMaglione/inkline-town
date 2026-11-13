@@ -13,7 +13,8 @@ import { ModelHandle, ModelPool } from "./pool.ts"
 import { groundAsset, landAsset, overlayAsset, previewAsset } from "./models.ts"
 import { parkAsset } from "./assets/town-props.ts"
 import { FishWater } from "./fish-effects.ts"
-import { channels } from "./gpu.ts"
+import { backend, channels } from "./gpu.ts"
+import { draw, sizeFaces } from "./materials.ts"
 import type { ParkCell } from "../../game/world/appeal.ts"
 
 /** Where the camera stands: the grid cell it looks at, its zoom, and its angles. */
@@ -37,7 +38,8 @@ const LAND = 0xe2e9e6, FROSTED = 0xe6edf1
 
 /**
  * Counts what the GPU is asked to draw each frame (Pixi has no `renderer.info`):
- * draw calls, and triangles, instances included.
+ * draw calls, and triangles, instances included. On WebGL only: on WebGPU the
+ * GPU culls the copies and decides the counts itself, so both stay 0.
  */
 export function drawCounter(renderer: Renderer) {
   const counts = { calls: 0, triangles: 0 }
@@ -109,7 +111,7 @@ export class GameScene {
   static async create(mount: HTMLElement) {
     const app = new Application()
     await app.init({
-      preference: "webgl",
+      preference: await backend(),
       antialias: true,
       backgroundColor: LAND,
       // The page's stylesheet sizes the canvas; its buffer follows the pixel ratio.
@@ -135,7 +137,7 @@ export class GameScene {
     canvas.setAttribute("aria-label", "Inkline Town 3D map. Drag to pan, right-drag to rotate, wheel to zoom.")
     canvas.tabIndex = 0
     mount.append(canvas)
-    this.world.root.addChild(this.objects, this.pool.root, this.fish.group)
+    this.world.root.addChild(this.objects, this.fish.group)
     this.observer = new ResizeObserver(() => this.resize())
     this.observer.observe(mount)
     this.camera.zoom = innerWidth >= 1000 ? 1 : 0.65
@@ -336,6 +338,7 @@ export class GameScene {
     this.pool.flush()
     this.counter.calls = 0
     this.counter.triangles = 0
+    sizeFaces(this.app.renderer, this.world)
     this.app.render()
     this.drawn = { ...this.counter }
   }
@@ -357,6 +360,7 @@ export class GameScene {
     const pool = this.pool.stats()
     return {
       renderer: "pixi3d",
+      backend: this.app.renderer.name,
       frames: this.frames,
       frameMS: this.frameMS,
       drawCalls: this.drawn.calls,
@@ -403,7 +407,7 @@ export class GameScene {
     this.camera.zoom = Math.max(0.3, zoom * fit)
     const target = RenderTexture.create({ width, height, resolution: scale, antialias: true })
     const [r, g, b] = channels(this.frost ? FROSTED : LAND)
-    this.app.renderer.render({ container: this.world, target, clearColor: [r, g, b, 1] })
+    draw(this.app.renderer, this.world, { target, clearColor: [r, g, b, 1] })
     const out = document.createElement("canvas")
     out.width = width * scale
     out.height = height * scale

@@ -71,9 +71,9 @@ function render() {
     if (r.bottom <= 0 || r.top >= innerHeight) continue
     place(model, r.width, r.height)
     camera.viewport.set(r.left / innerWidth, r.top / innerHeight, r.width / innerWidth, r.height / innerHeight)
-    viewer.app.renderer.render({ container: viewer.view, clear: first }); first = false
+    viewer.draw(first); first = false
   }
-  if (first) { for (const m of models) m.built.group.visible = false; viewer.app.renderer.render({ container: viewer.view, clear: true }) }
+  if (first) { for (const m of models) m.built.group.visible = false; viewer.draw(true) }
   camera.viewport.set(0, 0, 1, 1)
   root.querySelector("output")!.textContent = `${Math.round(yaw)}°`; rotation.value = String(yaw); renders++
 }

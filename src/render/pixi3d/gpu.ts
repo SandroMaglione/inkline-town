@@ -11,6 +11,17 @@ import { Buffer, BufferUsage, type Attribute, type VertexFormat } from "pixi.js"
 import { bounds, type MeshData } from "./mesh/geometry.ts"
 import type { Vec3 } from "./mesh/vec3.ts"
 
+/**
+ * The renderer to ask Pixi for: WebGPU where the browser's GPU can run Pixi 3D on it, WebGL elsewhere.
+ * `?renderer=webgl` in the page's address asks for WebGL outright.
+ */
+export async function backend(): Promise<"webgpu" | "webgl"> {
+  if (new URLSearchParams(location.search).get("renderer") === "webgl") return "webgl"
+  // Pixi 3D needs this feature on WebGPU, and Pixi would not fall back to WebGL by itself without it.
+  const adapter = await navigator.gpu?.requestAdapter().catch(() => null)
+  return adapter?.features.has("indirect-first-instance") ? "webgpu" : "webgl"
+}
+
 const formats: Record<number, VertexFormat> = { 1: "float32", 2: "float32x2", 3: "float32x3", 4: "float32x4" }
 const attribute = (data: Float32Array, size: number): Attribute => ({
   buffer: new Buffer({ data, usage: BufferUsage.VERTEX | BufferUsage.COPY_DST }),

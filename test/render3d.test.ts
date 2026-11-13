@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { BatchedMesh3D, Container3D } from "@pixi/3d"
+import { Container3D, Mesh3D } from "@pixi/3d"
 import { kindIds, kinds } from "../src/game/content/index.ts"
 import { U } from "../src/game/world/iso.ts"
 import { dressed } from "../src/render/pixi3d/assets/upgrade-dress.ts"
@@ -142,16 +142,15 @@ test("shared geometry retains independent colours, transforms and entity picking
   pool.flush()
   assert.equal(built, 1)
   assert.equal(pool.stats().models, 2)
-  // One batch for the box: a slot for each part of each copy, the fill first.
-  const batch = pool.root.children[0]
-  assert.ok(batch instanceof BatchedMesh3D)
-  const data = batch.instanceData, parts = batch.size / 4
-  const hex = (slot: number) => {
-    const o = data.offset + slot * data.stride + data.fields.tint!
-    return [0, 1, 2].reduce((n, k) => (n << 8) | Math.round(data.data[o + k]! * 255), 0)
+  // Each copy is meshes of its own under its root, the fill first: they share the box's geometry, and each has its own colour.
+  assert.ok(a.root.children[0] instanceof Mesh3D)
+  assert.equal(a.pieces[0]!.mesh.geometry, b.pieces[0]!.mesh.geometry)
+  const hex = (handle: ModelHandle) => {
+    const color = handle.pieces[0]!.opaque.data.color as ArrayLike<number>
+    return [0, 1, 2].reduce((n, k) => (n << 8) | Math.round(color[k]! * 255), 0)
   }
-  assert.equal(hex(0), 0x89aabb)
-  assert.equal(hex(parts), 0x663311)
+  assert.equal(hex(a), 0x89aabb)
+  assert.equal(hex(b), 0x663311)
   const hit = pool.pick({ origin: [30, 10, 0], direction: [0, -1, 0] })
   assert.ok(hit)
   assert.equal(hit.handle.entity, 29)
@@ -211,12 +210,10 @@ test("different surface states share geometry and remain independent per instanc
   a.effectBounds=[12,30,0.1,1];b.effectBounds=[...a.effectBounds]
   a.effects=surfaceState({snow:1});b.effects=surfaceState({wear:0.9,burning:1})
   pool.flush()
-  // Non-pickable effects use the same pool; inspect the render batch directly: slot 0 is a's first part, and b's
-  // first part follows a's parts.
-  const batch=pool.root.children[0]
-  assert.ok(batch instanceof BatchedMesh3D)
-  const data=batch.instanceData,parts=batch.size/4,state=(slot:number,k:number)=>data.data[data.offset+slot*data.stride+data.fields.state!+k]
-  assert.equal(state(0,2),1);assert.equal(state(parts,0),Math.fround(0.9));assert.equal(state(parts,3),1)
+  // Non-pickable effects use the same pool; inspect each copy's face material directly.
+  const state=(handle:ModelHandle,k:number)=>(handle.pieces.find(p=>p.part.role==="fill")!.opaque.data.surfaceState as ArrayLike<number>)[k]
+  assert.equal(a.pieces[0]!.mesh.geometry,b.pieces[0]!.mesh.geometry)
+  assert.equal(state(a,2),1);assert.equal(state(b,0),Math.fround(0.9));assert.equal(state(b,3),1)
   for(let i=0;i<100;i++){a.effects=surfaceState({wear:i/100});pool.flush()}
   assert.equal(built,1);assert.equal(pool.stats().templates,1)
   const particles=new StructureEffects(create(),26)

@@ -14,6 +14,24 @@ const dropsBit: ShaderBit = {
   attributes: { aWaterPhase: "float32", aJetAngle: "float32" },
   interStage: { vDropAge: "f32", vDropPhase: "f32" },
   bindings: { material: { time: "f32", radius: "f32", level: "f32", nozzle: "f32" } },
+  gpu: {
+    vertex: {
+      beforeTransform: `{
+        let age = fract(material.time * 0.85 + input.aWaterPhase);
+        let reach = material.radius * 0.84 * age;
+        let h = mix(material.nozzle, material.level, age) + 4.0 * age * (1.0 - age) * 6.9282;
+        let centre = vec3<f32>(cos(input.aJetAngle) * reach, h, sin(input.aJetAngle) * reach);
+        position = vec4<f32>(position.xyz * vec3<f32>(0.8, 1.7, 0.8) + centre, 1.0);
+        output.vDropAge = age; output.vDropPhase = input.aWaterPhase;
+      }`
+    },
+    fragment: {
+      material: `{
+        alpha = smoothstep(0.0, 0.07, input.vDropAge) * (1.0 - smoothstep(0.94, 1.0, input.vDropAge)) * 0.68;
+        albedo = inkToDisplay(inkRGB(mix(vec3<f32>(0.65, 0.78, 0.82), vec3<f32>(0.96, 0.99, 0.96), fract(input.vDropPhase * 13.0))));
+      }`
+    }
+  },
   gl: {
     vertex: {
       beforeTransform: `{
@@ -39,6 +57,23 @@ const poolBit: ShaderBit = {
   requires: [inkCommonBit],
   interStage: { vPoolPoint: "vec2<f32>" },
   bindings: { material: { time: "f32", radius: "f32" } },
+  gpu: {
+    vertex: { beforeTransform: `{ output.vPoolPoint = position.xz / material.radius; }` },
+    fragment: {
+      material: `{
+        var waves = 0.0;
+        for (var i = 0; i < 4; i++) {
+          let a = f32(i) * 1.5707963 + 0.7853982;
+          let d = length(input.vPoolPoint - vec2<f32>(cos(a), sin(a)) * 0.84);
+          waves += pow(max(0.0, sin(d * 28.0 - material.time * 6.0)), 14.0) * exp(-d * 7.0);
+        }
+        let edge = 1.0 - smoothstep(0.96, 1.0, length(input.vPoolPoint));
+        let shimmer = sin(input.vPoolPoint.x * 17.0 + material.time) * sin(input.vPoolPoint.y * 13.0 - material.time * 0.7) * 0.015;
+        albedo = inkToDisplay(inkRGB(vec3<f32>(0.94, 0.98, 0.97)));
+        alpha = edge * (0.025 + waves * 0.28 + shimmer);
+      }`
+    }
+  },
   gl: {
     vertex: { beforeTransform: `{ vPoolPoint = position.xz / material.radius; }` },
     fragment: {

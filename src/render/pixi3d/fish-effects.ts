@@ -13,6 +13,26 @@ const fishBit: ShaderBit = {
   attributes: { aFishPoint: "float32x2", aFishSeed: "float32" },
   interStage: { vFishPoint: "vec2<f32>", vFishPhase: "f32" },
   bindings: { material: { time: "f32" } },
+  gpu: {
+    vertex: {
+      beforeTransform: `{ output.vFishPoint = input.aFishPoint; output.vFishPhase = input.aFishSeed; }`
+    },
+    fragment: {
+      material: `{
+        let at = input.vFishPoint - vec2<f32>(fract(input.vFishPhase * 7.13) - 0.5, fract(input.vFishPhase * 3.71) - 0.5) * 0.5;
+        let d = length(at);
+        let age = fract(material.time * 0.058 + input.vFishPhase) / 0.3;
+        if (age > 1.0) { discard; }
+        let r = 0.08 + age * 0.5;
+        let ring = 1.0 - smoothstep(0.0, 0.03, abs(d - r));
+        let fade = smoothstep(0.0, 0.15, age) * (1.0 - age);
+        let edge = 1.0 - smoothstep(0.85, 1.0, max(abs(input.vFishPoint.x), abs(input.vFishPoint.y)));
+        alpha = ring * fade * edge * 0.38;
+        if (alpha < 0.01) { discard; }
+        albedo = inkToDisplay(inkRGB(vec3<f32>(0.32, 0.45, 0.52)));
+      }`
+    }
+  },
   gl: {
     vertex: {
       beforeTransform: `{ vFishPoint = aFishPoint; vFishPhase = aFishSeed; }`

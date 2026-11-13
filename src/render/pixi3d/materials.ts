@@ -4,18 +4,48 @@
  *
  * - `partMaterial` for one model drawn alone (the map's ground layers, the
  *   catalogue, the labs): its colour on the material.
- * - `instanceMaterial` for the town's shared models (`pool.ts`): colour,
- *   opacity and surface state per copy, so one material serves every model
- *   with the same kind of part.
+ * - `copyMaterial` for the town's shared models (`pool.ts`): each copy's
+ *   parts have materials of their own, with its colour, opacity and surface
+ *   state.
  */
-import { FlatMaterial, type ShaderBit } from "@pixi/3d"
-import { faceBiasBit, GLASS, inkLineBit, inkSilhouetteBit, instanceBit, instanceSurfaceBit, materialSurfaceBit } from "./bits.ts"
+import { FlatMaterial, type ShaderBit, type View3D } from "@pixi/3d"
+import type { Renderer, RenderTexture } from "pixi.js"
+import { copySurfaceBit, faceBiasBit, GLASS, inkLineBit, inkSilhouetteBit, materialSurfaceBit, plainBit } from "./bits.ts"
 import type { InkPart, PartRole } from "./assets/ink-mesh.ts"
 import type { SurfaceState } from "./surface-state.ts"
 
 const roleBits: Record<PartRole, ReadonlyArray<ShaderBit>> = { fill: [faceBiasBit], hull: [], ink: [], contour: [inkSilhouetteBit], line: [inkLineBit], edge: [inkLineBit, inkSilhouetteBit] }
 const ribbon = (role: PartRole) => role === "line" || role === "edge"
 const doubleSided = (role: PartRole) => role === "fill" || ribbon(role)
+
+/** The materials with faces, which `faceBiasBit` moves back by the size in pixels of the picture being drawn. */
+const faces = new Set<FlatMaterial>()
+let pixels: readonly [number, number] = [1, 1]
+function face(material: FlatMaterial) {
+  material.data.facePixels = pixels
+  faces.add(material)
+}
+/**
+ * Tells the faces the size in pixels of `view`'s next picture: the part of the view its camera's viewport takes,
+ * at `target`'s pixels to a unit, or the canvas's.
+ */
+export function sizeFaces(renderer: Renderer, view: View3D, target?: RenderTexture) {
+  const resolution = target?.source.resolution ?? renderer.resolution
+  const width = view.width * view.camera.viewport.width * resolution, height = view.height * view.camera.viewport.height * resolution
+  if (width === pixels[0] && height === pixels[1]) return
+  pixels = [width, height]
+  for (const material of faces) material.data.facePixels = pixels
+}
+/** Draws `view` on the canvas, or into `options.target`. Draw every picture through here (or after `sizeFaces`), so its faces sit behind their ink. */
+export function draw(renderer: Renderer, view: View3D, options: { target?: RenderTexture; clear?: boolean; clearColor?: [number, number, number, number] } = {}) {
+  sizeFaces(renderer, view, options.target)
+  renderer.render({ container: view, ...options })
+}
+/** Destroys a material `partMaterial` or `copyMaterial` made. */
+export function releaseMaterial(material: FlatMaterial) {
+  faces.delete(material)
+  material.destroy()
+}
 
 /** A part of one model; `surface` gives its faces the structure shading, with its own state. */
 export function partMaterial(part: InkPart, surface: boolean): FlatMaterial {
@@ -35,6 +65,7 @@ export function partMaterial(part: InkPart, surface: boolean): FlatMaterial {
     material.data.surfaceGlass = Number(GLASS.includes(part.color))
     material.data.surfaceTime = 0
   }
+  if (part.role === "fill") face(material)
   return material
 }
 /** Writes a structure's surface state, its size (`bounds`: half width, height, seed, on) and the time into its material. */
@@ -45,21 +76,16 @@ export function setSurface(material: FlatMaterial, state: SurfaceState, bounds: 
   material.data.surfaceTime = time
 }
 
-const shared = new Map<string, FlatMaterial>()
-/** The material every shared copy of such a part draws with: `blend` for a copy fading or see-through. */
-export function instanceMaterial(part: InkPart, blend: boolean): FlatMaterial {
-  const glass = part.role === "fill" && GLASS.includes(part.color)
-  const key = `${part.role}/${part.opacity}/${glass}/${blend}`
-  let material = shared.get(key)
-  if (!material) {
-    material = new FlatMaterial({
-      alphaMode: blend ? "blend" : "opaque",
-      doubleSided: doubleSided(part.role),
-      extraBits: [instanceBit, ...(part.role === "fill" ? [instanceSurfaceBit] : []), ...roleBits[part.role]]
-    })
-    material.data.opacity = part.opacity
-    if (part.role === "fill") material.data.surfaceGlass = Number(glass)
-    shared.set(key, material)
+/** The material of one part of one copy of a shared model: its colour, opacity and surface state are its own. */
+export function copyMaterial(part: InkPart, blend: boolean): FlatMaterial {
+  const material = new FlatMaterial({
+    alphaMode: blend ? "blend" : "opaque",
+    doubleSided: doubleSided(part.role),
+    extraBits: [plainBit, ...(part.role === "fill" ? [copySurfaceBit] : []), ...roleBits[part.role]]
+  })
+  if (part.role === "fill") {
+    material.data.surfaceGlass = Number(GLASS.includes(part.color))
+    face(material)
   }
   return material
 }
