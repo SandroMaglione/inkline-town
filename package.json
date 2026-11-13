@@ -45,7 +45,6 @@
     "@typeonce/oxlint-plugin-ritmo": "0.23.0",
     "@typeonce/ritmo-devtools": "0.23.0",
     "@types/node": "25.5.0",
-    "@types/web": "^0.0.365",
     "oxlint": "1.92.0",
     "playwright": "^1.64.0",
     "typescript": "7.0.2",
