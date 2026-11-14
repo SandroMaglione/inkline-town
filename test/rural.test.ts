@@ -1,11 +1,11 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import * as THREE from "three"
-import { makeBuilding, buildingDimensions } from "../src/render/three/assets/buildings.ts"
-import { ruralDoorIds } from "../src/render/three/assets/rural.ts"
-import { sides, type InkAsset } from "../src/render/three/assets/primitives.ts"
-import { vertex3 } from "../src/render/three/assets/renderer.ts"
-import { noDoors } from "../src/render/three/models.ts"
+import { makeBuilding, buildingDimensions } from "../src/render/pixi3d/assets/buildings.ts"
+import { ruralDoorIds } from "../src/render/pixi3d/assets/rural.ts"
+import { sides, type InkAsset } from "../src/render/pixi3d/assets/primitives.ts"
+import { vertex3 } from "../src/render/pixi3d/assets/space.ts"
+import { fan, segmentHits } from "../src/render/pixi3d/mesh/ray.ts"
+import { noDoors } from "../src/render/pixi3d/models.ts"
 import { kinds } from "../src/game/content/index.ts"
 import { U } from "../src/game/world/iso.ts"
 
@@ -19,12 +19,7 @@ test("rural timber doors stay within their plots when opened on any road face", 
 })
 
 function verticalHits(asset: InkAsset, u: number, v: number, from: number, to: number) {
-  const start = vertex3([u * U, v * U, from]), end = vertex3([u * U, v * U, to])
-  const ray = new THREE.Ray(start, end.clone().sub(start).normalize())
-  return asset.faces.flatMap(face => face.points.slice(1, -1).flatMap((_, i) => {
-    const hit = ray.intersectTriangle(vertex3(face.points[0]!), vertex3(face.points[i + 1]!), vertex3(face.points[i + 2]!), false, new THREE.Vector3())
-    return hit && hit.distanceTo(start) <= end.distanceTo(start) ? [hit] : []
-  }))
+  return segmentHits(vertex3([u * U, v * U, from]), vertex3([u * U, v * U, to]), asset.faces.flatMap(face => fan(face.points.map(vertex3))))
 }
 
 test("the fire-watch ladder landing and every roof tread connect to the lookout without roof obstruction", () => {

@@ -1,21 +1,18 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import * as THREE from "three"
-import { makeBuilding, buildingSmokeOrigin } from "../src/render/three/assets/buildings.ts"
-import { tradeYardIds } from "../src/render/three/assets/trades.ts"
-import { workshopPoint } from "../src/render/three/assets/workshops.ts"
-import { type InkAsset, sides } from "../src/render/three/assets/primitives.ts"
-import { buildingAsset, noDoors } from "../src/render/three/models.ts"
-import { vertex3 } from "../src/render/three/assets/renderer.ts"
+import { makeBuilding, buildingSmokeOrigin } from "../src/render/pixi3d/assets/buildings.ts"
+import { tradeYardIds } from "../src/render/pixi3d/assets/trades.ts"
+import { workshopPoint } from "../src/render/pixi3d/assets/workshops.ts"
+import { type InkAsset, sides } from "../src/render/pixi3d/assets/primitives.ts"
+import { buildingAsset, noDoors } from "../src/render/pixi3d/models.ts"
+import { vertex3 } from "../src/render/pixi3d/assets/space.ts"
+import { fan, segmentHits } from "../src/render/pixi3d/mesh/ray.ts"
+import type { Vec3 } from "../src/render/pixi3d/mesh/vec3.ts"
 import { kinds } from "../src/game/content/index.ts"
 import { U } from "../src/game/world/iso.ts"
 
-function hits(asset: InkAsset, start: THREE.Vector3, end: THREE.Vector3) {
-  const ray = new THREE.Ray(start, end.clone().sub(start).normalize())
-  return asset.faces.flatMap(face => face.points.slice(1, -1).flatMap((_, i) => {
-    const hit = ray.intersectTriangle(vertex3(face.points[0]!), vertex3(face.points[i + 1]!), vertex3(face.points[i + 2]!), false, new THREE.Vector3())
-    return hit && hit.distanceTo(start) <= end.distanceTo(start) ? [hit] : []
-  }))
+function hits(asset: InkAsset, start: Vec3, end: Vec3) {
+  return segmentHits(start, end, asset.faces.flatMap(face => fan(face.points.map(vertex3))))
 }
 
 test("trade yards keep open approaches and remain inside their plots through construction and work", () => {

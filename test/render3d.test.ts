@@ -1,26 +1,26 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import * as THREE from "three"
+import { Container3D, Mesh3D } from "@pixi/3d"
 import { kindIds, kinds } from "../src/game/content/index.ts"
 import { U } from "../src/game/world/iso.ts"
-import { dressed } from "../src/render/three/assets/upgrade-dress.ts"
-import { Drawing, type InkAsset } from "../src/render/three/assets/primitives.ts"
-import { buildingAsset, buildingHeight, buildingTop, homeAsset, noDoors, scaffoldAsset, treeVariant } from "../src/render/three/models.ts"
-import { upgradeHeights } from "../src/render/three/assets/service-upgrades.ts"
-import { ModelHandle, ModelPool } from "../src/render/three/pool.ts"
-import { assetById } from "../src/render/three/assets/assets.ts"
-import { surfaceState, hazardStrength } from "../src/render/three/surface-state.ts"
-import { StructureEffects } from "../src/render/three/structure-effects.ts"
-import { vertex3 } from "../src/render/three/assets/renderer.ts"
+import { dressed } from "../src/render/pixi3d/assets/upgrade-dress.ts"
+import { Drawing, type InkAsset } from "../src/render/pixi3d/assets/primitives.ts"
+import { buildingAsset, buildingHeight, buildingTop, homeAsset, noDoors, scaffoldAsset, treeVariant } from "../src/render/pixi3d/models.ts"
+import { upgradeHeights } from "../src/render/pixi3d/assets/service-upgrades.ts"
+import { ModelHandle, ModelPool } from "../src/render/pixi3d/pool.ts"
+import { assetById } from "../src/render/pixi3d/assets/assets.ts"
+import { surfaceState, hazardStrength } from "../src/render/pixi3d/surface-state.ts"
+import { StructureEffects } from "../src/render/pixi3d/structure-effects.ts"
+import { vertex3 } from "../src/render/pixi3d/assets/space.ts"
+import { fan, segmentHits } from "../src/render/pixi3d/mesh/ray.ts"
+import { cross, length, mean, sub, type Vec3 } from "../src/render/pixi3d/mesh/vec3.ts"
 
 function valid(asset: InkAsset) {
   for (const face of asset.faces) {
     assert.ok(face.points.every(p => p.every(Number.isFinite)), asset.id)
     const [a, b, c] = face.points
     assert.ok(a && b && c)
-    const ab = new THREE.Vector3(...b).sub(new THREE.Vector3(...a)),
-      ac = new THREE.Vector3(...c).sub(new THREE.Vector3(...a))
-    assert.ok(ab.cross(ac).length() > 1e-10, `${asset.id}: zero-area face`)
+    assert.ok(length(cross(sub(b, a), sub(c, a))) > 1e-10, `${asset.id}: zero-area face`)
   }
   for (const stroke of asset.strokes) assert.ok(stroke.points.every(p => p.every(Number.isFinite)), asset.id)
 }
@@ -90,9 +90,9 @@ test("guildhall clock faces are circular in world space on every tower wall", ()
     assert.equal(clocks.length,4)
     for (const face of clocks) {
       const points=face.points.slice(0,-1).map(vertex3)
-      const center=points.reduce((sum,p)=>sum.add(p),new THREE.Vector3()).divideScalar(points.length)
-      const radius=points[0]!.distanceTo(center)
-      assert.ok(points.every(p=>Math.abs(p.distanceTo(center)-radius)<1e-8),`${side}: squashed clock face`)
+      const center=mean(points)
+      const radius=length(sub(points[0]!,center))
+      assert.ok(points.every(p=>Math.abs(length(sub(p,center))-radius)<1e-8),`${side}: squashed clock face`)
     }
   }
 })
@@ -103,11 +103,8 @@ test("the same scaffold fits every building footprint and leaves all four centra
     valid(asset)
     assert.ok([...asset.faces,...asset.strokes].flatMap(p=>p.points).every(p=>Math.abs(p[0])<=half&&Math.abs(p[1])<=half),id)
     for(const [u,v,du,dv]of [[0,half+.1,0,-1],[half+.1,0,-1,0],[0,-half-.1,0,1],[-half-.1,0,1,0]]) {
-      const origin=new THREE.Vector3(u,v,6),ray=new THREE.Ray(origin,new THREE.Vector3(du,dv,0))
-      for(const f of asset.faces)for(let i=1;i<f.points.length-1;i++) {
-        const hit=ray.intersectTriangle(new THREE.Vector3(...f.points[0]!),new THREE.Vector3(...f.points[i]!),new THREE.Vector3(...f.points[i+1]!),false,new THREE.Vector3())
-        assert.ok(!hit||hit.distanceTo(origin)>.6,`${id}/${share}: scaffold blocks a central entrance`)
-      }
+      const origin:Vec3=[u!,v!,6],reach:Vec3=[u!+du!*.6,v!+dv!*.6,6]
+      assert.equal(segmentHits(origin,reach,asset.faces.flatMap(f=>fan(f.points))).length,0,`${id}/${share}: scaffold blocks a central entrance`)
     }
   }
 })
@@ -127,7 +124,7 @@ test("scaffolding stays inside the plot and rises with the materials in", () => 
 })
 
 test("shared geometry retains independent colours, transforms and entity picking", () => {
-  const pool = new ModelPool(), root = new THREE.Group()
+  const pool = new ModelPool(), root = new Container3D()
   let built = 0
   const create = () => {
     built++
@@ -136,7 +133,7 @@ test("shared geometry retains independent colours, transforms and entity picking
     return d.asset
   }
   const a = new ModelHandle(pool, 17), b = new ModelHandle(pool, 29)
-  root.add(a.root, b.root)
+  root.addChild(a.root, b.root)
   b.root.position.x = 30
   a.colors = new Map([[0xff0001, 0x89aabb]])
   b.colors = new Map([[0xff0001, 0x663311]])
@@ -145,23 +142,22 @@ test("shared geometry retains independent colours, transforms and entity picking
   pool.flush()
   assert.equal(built, 1)
   assert.equal(pool.stats().models, 2)
-  const fill = pool.pickables().find(p => (p as THREE.Mesh).material instanceof THREE.MeshBasicMaterial &&
-    (p as THREE.Mesh).geometry.getAttribute("inkNormalA") === undefined &&
-    (p as THREE.Mesh).geometry.getAttribute("position").count === 36) as THREE.InstancedMesh
-  assert.ok(fill)
-  const color = new THREE.Color()
-  fill.getColorAt(0, color)
-  assert.equal(color.getHex(THREE.SRGBColorSpace), 0x89aabb)
-  fill.getColorAt(1, color)
-  assert.equal(color.getHex(THREE.SRGBColorSpace), 0x663311)
-  pool.root.updateMatrixWorld(true)
-  const ray = new THREE.Raycaster(new THREE.Vector3(30, 10, 0), new THREE.Vector3(0, -1, 0))
-  const hit = ray.intersectObjects(pool.pickables(), false).find(h => h.instanceId !== undefined)
+  // Each copy is meshes of its own under its root, the fill first: they share the box's geometry, and each has its own colour.
+  assert.ok(a.root.children[0] instanceof Mesh3D)
+  assert.equal(a.pieces[0]!.mesh.geometry, b.pieces[0]!.mesh.geometry)
+  const hex = (handle: ModelHandle) => {
+    const color = handle.pieces[0]!.opaque.data.color as ArrayLike<number>
+    return [0, 1, 2].reduce((n, k) => (n << 8) | Math.round(color[k]! * 255), 0)
+  }
+  assert.equal(hex(a), 0x89aabb)
+  assert.equal(hex(b), 0x663311)
+  const hit = pool.pick({ origin: [30, 10, 0], direction: [0, -1, 0] })
   assert.ok(hit)
-  assert.equal(hit.object.userData.handles[hit.instanceId!].entity, 29)
+  assert.equal(hit.handle.entity, 29)
   b.dispose()
   pool.flush()
-  assert.equal(fill.count, 1)
+  assert.equal(pool.pick({ origin: [30, 10, 0], direction: [0, -1, 0] }), null)
+  assert.equal(pool.pick({ origin: [0, 10, 0], direction: [0, -1, 0] })?.handle.entity, 17)
   a.dispose()
   for (let i = 0; i < 100; i++) {
     a.use(`state/${i}`, create)
@@ -211,13 +207,13 @@ test("different surface states share geometry and remain independent per instanc
   let built=0
   const create=()=>{built++;return homeAsset(2,0.28,1,null,noDoors)}
   a.use("home",create);b.use("home",create)
-  a.effectBounds.set(12,30,0.1,1);b.effectBounds.copy(a.effectBounds)
+  a.effectBounds=[12,30,0.1,1];b.effectBounds=[...a.effectBounds]
   a.effects=surfaceState({snow:1});b.effects=surfaceState({wear:0.9,burning:1})
   pool.flush()
-  // Non-pickable effects use the same pool; inspect the render batch directly.
-  const part=pool.root.children[0]!.children[0] as THREE.Mesh
-  const state=part.geometry.getAttribute("structureState")
-  assert.equal(state.getZ(0),1);assert.equal(state.getX(1),Math.fround(0.9));assert.equal(state.getW(1),1)
+  // Non-pickable effects use the same pool; inspect each copy's face material directly.
+  const state=(handle:ModelHandle,k:number)=>(handle.pieces.find(p=>p.part.role==="fill")!.opaque.data.surfaceState as ArrayLike<number>)[k]
+  assert.equal(a.pieces[0]!.mesh.geometry,b.pieces[0]!.mesh.geometry)
+  assert.equal(state(a,2),1);assert.equal(state(b,0),Math.fround(0.9));assert.equal(state(b,3),1)
   for(let i=0;i<100;i++){a.effects=surfaceState({wear:i/100});pool.flush()}
   assert.equal(built,1);assert.equal(pool.stats().templates,1)
   const particles=new StructureEffects(create(),26)

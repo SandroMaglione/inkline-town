@@ -1,8 +1,8 @@
-import { samplePark, parkAsset } from "../../render/three/assets/town-props.ts"
-import { groundAsset } from "../../render/three/models.ts"
+import { samplePark, parkAsset } from "../../render/pixi3d/assets/town-props.ts"
+import { groundAsset } from "../../render/pixi3d/models.ts"
 import { parksOf } from "../../game/world/appeal.ts"
 import { key } from "../../game/world/grid.ts"
-import type { InkAsset, Vertex } from "../../render/three/assets/primitives.ts"
+import type { InkAsset, Vertex } from "../../render/pixi3d/assets/primitives.ts"
 
 // Place actual park cells beside two road entrances, inside the game's grid.
 export const parkCells=samplePark.map(c=>({...c,x:c.x+28,y:c.y+28}))

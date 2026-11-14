@@ -4,7 +4,7 @@
 
 Inkline Town is a TypeScript game. The simulation runs on the
 [Ritmo](https://github.com/typeonce-dev/ritmo) ECS at a fixed step and
-knows nothing of the page; [Three.js](https://threejs.org) draws the 3D world;
+knows nothing of the page; [PixiJS 3D](https://github.com/pixijs/3d) (`@pixi/3d`, on WebGPU where the browser has it and WebGL elsewhere) draws the 3D world;
 Pixi renders the original menu thumbnails; saving is
 written with [Effect](https://effect.website).
 
@@ -39,7 +39,7 @@ it, and two fingers move the camera under it. With any pointer, a stroke let
 go off the map (over the tool bar, say) is dropped and shows red while it
 would be, as are a right click or Esc mid-drag. On touch the tooltip shows
 only for what is about to be built, never while panning or picking, in a
-thin full-width strip under the top line. This lives entirely in `src/render/three/input.ts`
+thin full-width strip under the top line. This lives entirely in `src/render/pixi3d/input.ts`
 (and the bar in `src/ui/dom/index.ts`); the game still sees one ordinary press and
 release.
 
@@ -64,7 +64,7 @@ to the bottom. The camera bar is hidden: pinch zooms and turns. New UI needs
 nothing there unless it has to move on a phone; check it at 390×844, 360×640
 and 762×330, and run `pnpm check:phone`.
 
-`src/render/three/scene.ts` owns the orthographic camera, ground projection and
+`src/render/pixi3d/scene.ts` owns the orthographic camera, ground projection and
 frame source. `views.ts` follows live construction, upgrades, resources,
 production, problem markers and the simulation's walkers and cargo. Flags,
 mill sails and smoke animate in 3D. `pool.ts` instances repeated geometry,
@@ -133,18 +133,21 @@ Material effects render in the viewers and live game. Ordinary GLB viewers
 show the underlying mesh; effect parameters are preserved as GLB extras and
 in the editable geometry descriptions, rather than baked into duplicate meshes.
 
-- `src/render/three/assets/primitives.ts`: renderer-independent polygon/stroke schema
+- `src/render/pixi3d/assets/primitives.ts`: renderer-independent polygon/stroke schema
   and reusable modelling operations in the game's cell units and pixel heights.
 - `buildings.ts`, `land.ts`, `people.ts`, `construction.ts`: procedural
   models; `assets.ts` collects them and retains the approved house/prop models.
-- `renderer.ts`: Three.js adapter, material batching, depth-tested ink,
-  continuous curved outlines and silhouette hulls. GLB uses ordinary meshes
-  and unlit materials so the ink survives import into another renderer.
+- `ink-mesh.ts`: a model as mesh data with no renderer in it: faces batched by
+  colour, ink rods and tubes, silhouette hulls, and silhouette contour edges.
+  The shapes (`../mesh/`) are ports of the three.js algorithms the models were
+  approved with, so every vertex lands where it did.
+- `renderer.ts`: the Pixi 3D adapter for one model (the ground layers, labs and
+  pictures); `glb.ts` writes and reads the GLB, with ordinary meshes and unlit
+  materials so the ink survives import into another renderer.
 - `main.ts`: original drawing comparisons, collection/search UI and downloads.
 
 The art viewer uses fixed poses; the playable game animates them from live
-state. The Three.js adapter does not establish compatibility with the private
-PixiJS 3D beta. Rear facades and rounded volumes interpret surfaces the original
+state. Rear facades and rounded volumes interpret surfaces the original
 drawing does not show. GLB edge antialiasing can differ from the live viewer.
 
 ### The complete 3D review map
@@ -204,7 +207,7 @@ import only the layers below it (`.oxlintrc.json` enforces it):
 
 ```
 app/        start-up: the one module that knows every layer
-ui/dom/     the page's UI          render/three/   the Three.js renderer
+ui/dom/     the page's UI          render/pixi3d/   the PixiJS 3D renderer
          \                        /
           view/   the world as plain data for any UI and any renderer
             |
@@ -261,10 +264,18 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
   - `screens/`: the charter a town is founded from, sharing (and its card), a visit to a shared town, the
     reckoning at the end of a term, and the confirm dialog.
   - `styles/`: `factory.css`, and `phone.css` after it.
-- `src/render/three/`: the live renderer: `services.ts` (its scene and view registries), `sync.ts` (a view
+- `src/render/pixi3d/`: the live renderer: `services.ts` (its scene and view registries), `sync.ts` (a view
   for each entity), `draw/` (the land, the ground, the map view, the preview, animation, the townsfolk),
   `schedule.ts` (`draw`), `scene.ts` (camera and frame source), `input.ts` (map input), `views.ts`,
-  `pool.ts`, `thumbnails.ts` (the pictures the page's menus show), effects and shaders.
+  `pool.ts` (shared models: each copy is plain meshes that share the model's geometry, with materials of its
+  own for its colour and surface state, and picking against each copy's triangles), `thumbnails.ts` and `portrait.ts` (the pictures the page's menus show, drawn offscreen
+  by the same renderer), the effects, `bits.ts` (the shader bits: instances, silhouettes, ink ribbons, the
+  surface shading, and the faces' depth offset) and `materials.ts` (which also draws every picture, `draw`, so
+  the faces know its size in pixels). It runs on WebGPU where the browser has it and on WebGL elsewhere
+  (`?renderer=webgl` in the page's address asks for WebGL), so each bit carries its code twice: `gpu` in WGSL
+  and `gl` in GLSL. A bit without one half draws nothing of its own on that renderer, with no error, so change
+  both. `mesh/` is geometry and maths with
+  no renderer in it, which the tests use in Node.
   - `assets/`: the models, drawn in code: buildings, homes, people, the land, parks (`town-props.ts`),
     services (`services.ts`: grain hoist, fish racks, watch tower, herbs, medical signs, noticeboard, builder's
     equipment), and `appearance.ts` (material state metadata for catalogue presets; wear, neighbourhood,
@@ -279,26 +290,27 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
 - `src/app/`: `browser.ts` (start-up: the runtime, the scene, the map input, the page, the loop, saves),
   `lint.ts` (what `pnpm lint:game` checks), and `devtools.ts` (the dev replay recorder).
 - `src/labs/`: the dev-only pages: the art gallery, the asset lab, the map, park, effects and model reviews,
-  the service study, and the UI kit.
+  the service study, and the UI kit. `viewer.ts` is their shared Pixi 3D view; a page of many pictures draws
+  the one view into each card's viewport.
 
 ### Reviewing the new town models
 
 [`/model-review.html?collection=town`](http://localhost:5232/model-review.html?collection=town)
 shows all 23 building kinds plus the market hall and church upgrades. The final
-nine refinements are grouped at `?collection=rural`. `src/render/three/assets/rural.ts`
+nine refinements are grouped at `?collection=rural`. `src/render/pixi3d/assets/rural.ts`
 owns timber entrances, nursery and farm fittings, chapel porches, granary louvres
 and the supported fire-watch access route. The same geometry is used in the game,
 catalogue, model sheets and GLB exports.
 
 [`/model-review.html?collection=trades`](http://localhost:5232/model-review.html?collection=trades)
 groups the mill, warehouse, fishery, bakery, weaver and watch house revisions.
-`src/render/three/assets/trades.ts` owns their equipment, loading doors, open yards and the
+`src/render/pixi3d/assets/trades.ts` owns their equipment, loading doors, open yards and the
 bakery smoke origin. The mill keeps its animated sails. Cargo sits on the ground
 or loading apron, and the four new yard layouts turn towards connected roads.
 
 [`/model-review.html?collection=workshops`](http://localhost:5232/model-review.html?collection=workshops)
 groups the revised mine, smithy, sawmill and town hall. The three workshops have
-open yards and road-facing layouts. `src/render/three/assets/workshops.ts` owns their
+open yards and road-facing layouts. `src/render/pixi3d/assets/workshops.ts` owns their
 geometry, construction frames and smoke origins. The live renderer and catalogue
 use the same models; simulation footprints and building costs are unchanged.
 
@@ -318,7 +330,7 @@ and house geometry is checked against its plate bounds. Natural rock deposits
 use six seeded silhouettes while retaining their simulation cell footprints.
 `pnpm check:revisions` renders every catalogue entry, checks the exclamation
 mark from both sides and verifies animated smoke through rendered pixels.
-The chimney plume uses `src/render/three/smoke-effects.ts` in both the catalogue and
+The chimney plume uses `src/render/pixi3d/smoke-effects.ts` in both the catalogue and
 working buildings. Smoke's GLB stores emitter metadata; particles run at runtime.
 
 Open [`/effects-lab.html`](http://localhost:5232/effects-lab.html) to inspect
@@ -359,7 +371,7 @@ road setts and the park simulation rules are unchanged.
 Open `/park-lab.html` for a park assembled from 25 cells using the current
 park layout system, with two street entrances. The three retained furnishings
 are framed lanterns, tiered fountains and simple stone busts;
-`src/render/three/fountain-effects.ts` supplies moving droplets and impact ripples in
+`src/render/pixi3d/fountain-effects.ts` supplies moving droplets and impact ripples in
 the actual basin. Park rendering in the game, catalogue, map and preview shares
 the same emitter metadata and water renderer. `pnpm check:park` verifies the
 rendered animation, pause, camera controls and phone layout, and captures stills

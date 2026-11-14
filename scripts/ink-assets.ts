@@ -1,53 +1,32 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { build } from "vite"
-import { inkAssets } from "../src/render/three/assets/assets.ts"
-import * as THREE from "three"
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
-import { exportAsset } from "../src/render/three/assets/renderer.ts"
-
-// GLTFExporter uses the browser's FileReader to assemble binary buffers.
-// There are no textures here; only readAsArrayBuffer is needed in Node.
-class BinaryReader {
-  result: ArrayBuffer | null = null
-  onloadend: (() => void) | null = null
-  readAsArrayBuffer(blob: Blob) {
-    void blob.arrayBuffer().then((buffer) => {
-      this.result = buffer
-      this.onloadend?.()
-    })
-  }
-}
-if (typeof globalThis.FileReader === "undefined") Object.assign(globalThis, { FileReader: BinaryReader })
+import { inkAssets } from "../src/render/pixi3d/assets/assets.ts"
+import { exportAsset, readGlb } from "../src/render/pixi3d/assets/glb.ts"
 
 const output = path.resolve("output/inkline-3d")
 await mkdir(path.join(output, "models"), { recursive: true })
 const manifest = []
-const loader = new GLTFLoader()
 for (const asset of inkAssets) {
   const glb = await exportAsset(asset)
   await writeFile(path.join(output, "models", `${asset.id}.glb`), new Uint8Array(glb))
   await writeFile(path.join(output, "models", `${asset.id}.json`), JSON.stringify(asset, null, 2))
-  const imported = await loader.parseAsync(glb, "")
-  if(asset.effects&&!imported.scene.getObjectByName(asset.id)?.userData.inklineSurfaceEffects)throw new Error(`${asset.id}: surface state metadata lost on export`)
-  if(asset.smokeEffect&&!imported.scene.getObjectByName(asset.id)?.userData.inklineSmokeEffect)throw new Error(`${asset.id}: smoke emitter metadata lost on export`)
-  if(asset.fountains?.length&&!imported.scene.getObjectByName(asset.id)?.userData.inklineFountains)throw new Error(`${asset.id}: fountain metadata lost on export`)
+  // Read back the way any importer would: the root's effect metadata, finite geometry, unlit materials.
+  const imported = readGlb(glb), root = imported.nodes.find((node) => node.name === asset.id)
+  if(asset.effects&&!root?.extras?.inklineSurfaceEffects)throw new Error(`${asset.id}: surface state metadata lost on export`)
+  if(asset.smokeEffect&&!root?.extras?.inklineSmokeEffect)throw new Error(`${asset.id}: smoke emitter metadata lost on export`)
+  if(asset.fountains?.length&&!root?.extras?.inklineFountains)throw new Error(`${asset.id}: fountain metadata lost on export`)
   let meshes = 0,
     vertices = 0
-  imported.scene.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) return
-    meshes++
-    const position = object.geometry.getAttribute("position")
-    if (!position?.count) throw new Error(`${asset.id}: empty imported mesh`)
-    vertices += position.count
-    for (const n of position.array) if (!Number.isFinite(n)) throw new Error(`${asset.id}: invalid imported coordinate`)
-    const materials = Array.isArray(object.material) ? object.material : [object.material]
-    for (const material of materials) {
-      if (!(material instanceof THREE.MeshBasicMaterial)) throw new Error(`${asset.id}: ink material lost its unlit shading`)
-      material.dispose()
+  for (const mesh of imported.meshes)
+    for (const primitive of mesh.primitives) {
+      meshes++
+      const position = imported.accessor(primitive.attributes.POSITION!)
+      if (!position.length) throw new Error(`${asset.id}: empty imported mesh`)
+      vertices += position.length / 3
+      for (const n of position) if (!Number.isFinite(n)) throw new Error(`${asset.id}: invalid imported coordinate`)
+      if (!imported.materials[primitive.material!]?.extensions?.KHR_materials_unlit) throw new Error(`${asset.id}: ink material lost its unlit shading`)
     }
-    object.geometry.dispose()
-  })
   if (!meshes) throw new Error(`${asset.id}: no imported meshes`)
   manifest.push({
     id: asset.id,

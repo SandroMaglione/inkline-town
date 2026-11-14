@@ -33,7 +33,7 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
   const settle = () => page.waitForTimeout(600)
   const shot = async (label: string) => { await settle(); await page.screenshot({ path: `${out}/${name}-${label}.png` }) }
   const at = (x: number, y: number, z = 0) => page.evaluate(([x, y, z]) => (window as any).town.view.project(x, y, z), [x, y, z]) as Promise<{ x: number; y: number }>
-  const look = (x: number, y: number, zoom: number) => page.evaluate(([x, y, zoom]) => { const v = (window as any).town.view; v.focus(x, y); v.camera.zoom = zoom; v.camera.updateProjectionMatrix() }, [x, y, zoom])
+  const look = (x: number, y: number, zoom: number) => page.evaluate(([x, y, zoom]) => { const v = (window as any).town.view; v.setView({ ...v.view(), x, y, zoom }) }, [x, y, zoom])
   const pick = async (tile: Tile, z = 10) => {
     const p = await at(tile.x + tile.size / 2, tile.y + tile.size / 2, z)
     if (phone) await page.touchscreen.tap(p.x, p.y)

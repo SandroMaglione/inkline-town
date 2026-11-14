@@ -1,4 +1,4 @@
-import * as THREE from "three"
+import { Container3D } from "@pixi/3d"
 import {
   carrierDress,
   cartLook,
@@ -13,7 +13,7 @@ import {
 } from "../art.ts"
 import { kinds, home, GROWN, ROCK_AMOUNT, type KindId } from "../../game/content/index.ts"
 import { U, type Point } from "../../game/world/iso.ts"
-import { vertex3 } from "./assets/renderer.ts"
+import { vertex3 } from "./assets/space.ts"
 import { Drawing, type Vertex } from "./assets/primitives.ts"
 import { makeSails, makeFlag, buildingSmokeOrigin, buildingDimensions } from "./assets/buildings.ts"
 import { makeMarker, makeUpgradeMarker } from "./assets/construction.ts"
@@ -40,7 +40,7 @@ export function structureState(look: {worn?: boolean; band?: "poor" | "plain" | 
 }
 
 export class WorldView implements SceneNode {
-  readonly group = new THREE.Group()
+  readonly group = new Container3D()
   readonly anchor = { x: 0, y: 0 }
   readonly stage: GameScene
   readonly entity: number
@@ -55,7 +55,7 @@ export class WorldView implements SceneNode {
   protected model(pickable = true) {
     const model = new ModelHandle(this.stage.pool, pickable ? this.entity : null, this.anchor)
     this.models.push(model)
-    this.group.add(model.root)
+    this.group.addChild(model.root)
     return model
   }
   get alpha() {
@@ -72,7 +72,7 @@ export class WorldView implements SceneNode {
   protected viewTint: number | null = null
   protected emphasis(emphasis: Emphasis) {
     const tint = emphasis === "danger" ? 0xf3b5aa : this.viewTint !== null ? multiply(this.viewTint, this.stage.frost ? FROST : 0xffffff) : multiply(this.shade, this.stage.frost ? FROST : 0xffffff)
-    for (const m of this.models) m.tint.setHex(tint)
+    for (const m of this.models) m.tint = tint
   }
   destroy() {
     if (this.disposed) return
@@ -111,14 +111,14 @@ export class BuildingView extends WorldView {
     this.upgradeMarker = this.model()
     this.upgradeMarker.use("upgrade-marker", makeUpgradeMarker)
     this.upgradeMarker.root.visible = false
-    this.body.root.add(this.motion.root)
+    this.body.root.addChild(this.motion.root)
 
   }
   place(x: number, y: number) {
     const size = kinds[this.kindId].size
     this.anchor.x = x + size / 2
     this.anchor.y = y + size / 2
-    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
+    this.group.position.set(...vertex3([this.anchor.x, this.anchor.y, 0]))
   }
   update(look: BuildingLook, dt: number, emphasis: Emphasis) {
     const kind = kinds[this.kindId],
@@ -156,7 +156,7 @@ export class BuildingView extends WorldView {
     const state = structureState(look,this.stage.frost)
     this.body.effects = build >= 1 ? state : surfaceState()
     const serviceModel = upgraded && (this.kindId === "market" || this.kindId === "chapel")
-    this.body.effectBounds.set((serviceModel ? kind.half * U : dimensions.half) * 32 * Math.SQRT2,H/Math.cos(Math.PI/6),this.entity%97/97,1)
+    this.body.effectBounds = [(serviceModel ? kind.half * U : dimensions.half) * 32 * Math.SQRT2, H / Math.cos(Math.PI / 6), (this.entity % 97) / 97, 1]
     const effectLayout = `${level + 1}/${doorKey(doors)}`
     if (this.effects && this.effectLayout !== effectLayout) {
       this.effects.dispose()
@@ -165,8 +165,8 @@ export class BuildingView extends WorldView {
     if(!this.effects&&build>=1&&(state.burning||state.fireRisk)){
       this.effects = new StructureEffects(buildingAsset(this.kindId,1,null,doors,0,{},level),H)
       this.effectLayout = effectLayout
-      this.effects.group.userData.upgraded=upgraded
-      this.group.add(this.effects.group)
+      this.effects.made.upgraded = upgraded
+      this.group.addChild(this.effects.group)
     }
     this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
     this.shade = 0xffffff
@@ -177,22 +177,22 @@ export class BuildingView extends WorldView {
       this.motion.use("flag/" + this.kindId, () => makeFlag(this.kindId))
       const a = buildingDimensions(this.kindId).half,
         pitch = (2 * a) / kind.bays
-      this.motion.root.position.copy(vertex3([-a + pitch * (kind.bays - 0.5), -a + pitch * 0.5, H + 24]))
+      this.motion.root.position.set(...vertex3([-a + pitch * (kind.bays - 0.5), -a + pitch * 0.5, H + 24]))
       this.motion.root.rotation.y = Math.sin(this.wave) * 0.15
       this.motion.root.scale.set(1 + Math.sin(this.wave) * 0.12, 1, 1 + Math.sin(this.wave) * 0.12)
     } else if (kind.topper === "sails") {
       if (look.working) this.wave += dt * 3.6
       this.motion.use("mill-sails", makeSails)
-      this.motion.root.position.copy(vertex3([kind.half * U + 3 * U, 0, H - 6]))
+      this.motion.root.position.set(...vertex3([kind.half * U + 3 * U, 0, H - 6]))
       this.motion.root.rotation.x = this.wave
     }
     const origin = buildingSmokeOrigin(this.kindId, doors)
     const smoking=look.working&&origin!==null&&look.build>=1&&!look.burning
     if(smoking&&!this.smoke){
       this.smoke=new SmokePlume()
-      this.group.add(this.smoke.group)
+      this.group.addChild(this.smoke.group)
     }
-    if (smoking) this.smoke!.group.position.copy(vertex3(origin!))
+    if (smoking) this.smoke!.group.position.set(...vertex3(origin!))
     this.smoke?.update(performance.now()/1000,Number(smoking))
     this.viewTint = look.tint ?? null
     this.emphasis(emphasis)
@@ -221,7 +221,7 @@ export class HouseView extends WorldView {
     this.n = hash(x, y)
     this.anchor.x = x + 0.5
     this.anchor.y = y + 0.5
-    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
+    this.group.position.set(...vertex3([this.anchor.x, this.anchor.y, 0]))
   }
   update(look: HouseLook, emphasis: Emphasis) {
     const build = quantizeBuild(look.build),
@@ -233,12 +233,12 @@ export class HouseView extends WorldView {
     this.plate.use(`plate/1/${build}`, () => plateAsset(1, build))
     const state=structureState(look,this.stage.frost), H=home.tiers[look.tier].height
     this.body.effects=build>=1?state:surfaceState()
-    this.body.effectBounds.set((home.half+(look.tier>=2?1:0))*U*32*Math.SQRT2,H/Math.cos(Math.PI/6),this.n,1)
+    this.body.effectBounds = [(home.half + (look.tier >= 2 ? 1 : 0)) * U * 32 * Math.SQRT2, H / Math.cos(Math.PI / 6), this.n, 1]
     // Recreate emitters only if an actual architectural upgrade changes the roof.
-    if(this.effects&&this.effects.group.userData.tier!==look.tier){this.effects.dispose();this.effects=null}
+    if(this.effects&&this.effects.made.tier!==look.tier){this.effects.dispose();this.effects=null}
     if(!this.effects&&build>=1&&(state.burning||state.fireRisk)){
       this.effects=new StructureEffects(homeAsset(look.tier,this.n,1,null,noDoors),H)
-      this.effects.group.userData.tier=look.tier;this.group.add(this.effects.group)
+      this.effects.made.tier=look.tier;this.group.addChild(this.effects.group)
     }
     this.effects?.set(build>=1?state:surfaceState());this.effects?.update(performance.now()/1000)
     this.shade=look.closed?CLOSED_SHADE:0xffffff
@@ -259,7 +259,7 @@ export class RuinView extends WorldView {
   place(x: number, y: number, size: number) {
     this.anchor.x = x + size / 2
     this.anchor.y = y + size / 2
-    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
+    this.group.position.set(...vertex3([this.anchor.x, this.anchor.y, 0]))
     this.body.use(`ruin/${this.cause}/${size}`, () => makeRuin(size, this.cause))
   }
   update(emphasis: Emphasis) {
@@ -276,11 +276,11 @@ export class TreeView extends WorldView {
   }
   place(x: number, y: number) {
     this.variant = treeVariant(x, y)
-    this.body.root.scale.setScalar(this.variant.scale)
-    this.body.root.position.copy(vertex3(this.variant.offset))
+    this.body.root.scale.set(this.variant.scale, this.variant.scale, this.variant.scale)
+    this.body.root.position.set(...vertex3(this.variant.offset))
     this.anchor.x = x + 0.5
     this.anchor.y = y + 0.5
-    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
+    this.group.position.set(...vertex3([this.anchor.x, this.anchor.y, 0]))
   }
   update(growth: number, emphasis: Emphasis) {
     const stage = growth >= GROWN.tree ? 1 : growth >= GROWN.tree / 2 ? 0.6 : 0.3,
@@ -307,7 +307,7 @@ export class RockView extends WorldView {
     if (w === 0) return
     this.anchor.x = this.cell.x + w / 2
     this.anchor.y = this.cell.y + h / 2
-    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
+    this.group.position.set(...vertex3([this.anchor.x, this.anchor.y, 0]))
     // Quarried down to its worked face (see `FACE_TICKS`), it gives one at a time: drawn as cut benches.
     const stage = amount <= 1 ? "worked" : amount > ROCK_AMOUNT / 2
     this.body.use(`rock/${ore}/${stage}/${this.variant}/${w}x${h}`, () => makeRock(ore, stage, this.variant, w, h))
@@ -322,7 +322,7 @@ export class FieldView extends WorldView {
   place(x: number, y: number) {
     this.anchor.x = x + 0.5
     this.anchor.y = y + 0.5
-    this.group.position.copy(vertex3([this.anchor.x, this.anchor.y, 0]))
+    this.group.position.set(...vertex3([this.anchor.x, this.anchor.y, 0]))
   }
   update(growth: number) {
     const stage = Math.min(3, Math.floor((growth / GROWN.field) * 3)) as 0 | 1 | 2 | 3
@@ -383,7 +383,7 @@ export class WalkerView extends WorldView {
       asset.faces.push(...shadow.asset.faces)
       return asset
     })
-    this.group.position.copy(vertex3([x, y, 0]))
+    this.group.position.set(...vertex3([x, y, 0]))
     if (dir.x || dir.y) this.group.rotation.y = Math.atan2(-dir.y, dir.x)
     this.body.alpha = this.alpha
   }

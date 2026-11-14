@@ -20,7 +20,7 @@
  * - a crate is 6 units wide, a carried one 4.
  */
 import { Container, Graphics } from "pixi.js"
-import type { SurfaceState } from "./three/surface-state.ts"
+import type { SurfaceState } from "./pixi3d/surface-state.ts"
 
 import { goods, GROWN, home, kinds, ROCK_AMOUNT, type GoodId, type GroundId, type Kind, type KindId, type PropId, type Tier } from "../game/content/index.ts"
 import { cellOf, DIRS, key } from "../game/world/grid.ts"

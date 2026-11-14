@@ -1,7 +1,7 @@
 /**
  * Pictures of buildings, homes, and park pieces for the build menu and the
  * panel. The page does not draw them: whatever renders the town provides
- * them (see `render/three/thumbnails.ts`), so a picture matches what stands
+ * them (see `render/pixi3d/thumbnails.ts`), so a picture matches what stands
  * on the map.
  */
 import type { GroundId, KindId, PropId, Tier } from "../../../game/content/index.ts"

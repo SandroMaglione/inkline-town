@@ -1,8 +1,9 @@
-import * as THREE from "three"
-import { assetById } from "../../render/three/assets/assets.ts"
-import { buildAsset, exportAsset } from "../../render/three/assets/renderer.ts"
+import { assetById } from "../../render/pixi3d/assets/assets.ts"
+import { buildAsset, exportAsset } from "../../render/pixi3d/assets/renderer.ts"
 import { kindIds } from "../../game/content/index.ts"
-import { ruralIds } from "../../render/three/assets/rural.ts"
+import { ruralIds } from "../../render/pixi3d/assets/rural.ts"
+import type { Vec3 } from "../../render/pixi3d/mesh/vec3.ts"
+import { aim, frame as fit, labViewer, toward } from "../viewer.ts"
 import "./style.css"
 import "./handoff.css"
 
@@ -40,38 +41,40 @@ root.innerHTML = `<header><a href="/">Inkline Town</a><span>TOWN MODEL REVIEW</s
   <nav aria-label="Model collections"></nav><section class="camera"><label>Turn the models <input aria-label="Model rotation" type="range" min="-180" max="180" value="0"><output>0°</output></label><button id="rear">See the back</button><button id="reset">Reset view</button><button id="sheet">Save model sheet</button><a id="sheet-link" hidden download>Download sheet ↗</a><label>View <select aria-label="View elevation"><option value="30">Street angle</option><option value="50">From above</option><option value="15">Near the ground</option></select></label></section>
   <section class="grid" aria-label="3D models"></section><footer><a href="/proportion-review.html">Before / after proportions ↗</a> · <a href="/park-lab.html">Built park & running water ↗</a> · <a href="/effects-lab.html">Animated house effects ↗</a> · Drag a model to turn the collection · <a href="/asset-lab.html">Full asset catalogue ↗</a> · <a href="/">Play this town ↗</a></footer>`
 const nav = root.querySelector("nav")!, grid = root.querySelector<HTMLElement>(".grid")!, rotation = root.querySelector<HTMLInputElement>("input")!, elevation = root.querySelector<HTMLSelectElement>("select")!
-const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true })
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.outputColorSpace = THREE.SRGBColorSpace
-renderer.setClearColor(0xf0f2ec, 0); renderer.setScissorTest(true)
-renderer.domElement.className = "models"; document.body.append(renderer.domElement)
+// One canvas over the page; each card's picture is its model alone, drawn into the card's rectangle.
+const viewer = await labViewer(document.body, { width: innerWidth, height: innerHeight, className: "models" }), camera = viewer.camera
 let family: Family = "buildings", yaw = 0, pitch = 30, renders = 0
 let sheetUrl = ""
-let models: Array<{ scene: THREE.Scene; camera: THREE.OrthographicCamera; built: ReturnType<typeof buildAsset>; view: HTMLElement; center: THREE.Vector3; size: THREE.Vector3 }> = []
+let models: Array<{ built: ReturnType<typeof buildAsset>; view: HTMLElement; center: Vec3; size: Vec3 }> = []
+const boxOf = ([min, max]: readonly [Vec3, Vec3]) => ({ center: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2] as Vec3, size: [max[0] - min[0], max[1] - min[1], max[2] - min[2]] as Vec3 })
+/** Shows `model` alone and aims the camera at it for a picture `width` × `height`. */
+function place(model: (typeof models)[number], width: number, height: number) {
+  for (const m of models) m.built.group.visible = m === model
+  const heading = (45 + yaw) * Math.PI / 180, angle = pitch * Math.PI / 180
+  aim(camera, model.center, toward(heading, angle), 1000)
+  fit(camera, viewHeight(model.size, heading, angle, width / height) / 2, width, height)
+  model.built.updateEffects(performance.now() / 1000)
+}
 // Include both the tower height and the ground plane projected into the view.
 // Taking only the larger dimension clips the mill's foreground at street angle.
-function viewHeight(size: THREE.Vector3, heading: number, angle: number, aspect: number) {
-  const width = Math.abs(Math.cos(heading)) * size.x + Math.abs(Math.sin(heading)) * size.z
-  const depth = Math.abs(Math.sin(heading)) * size.x + Math.abs(Math.cos(heading)) * size.z
-  const height = Math.abs(Math.cos(angle)) * size.y + Math.abs(Math.sin(angle)) * depth
+function viewHeight(size: Vec3, heading: number, angle: number, aspect: number) {
+  const width = Math.abs(Math.cos(heading)) * size[0] + Math.abs(Math.sin(heading)) * size[2]
+  const depth = Math.abs(Math.sin(heading)) * size[0] + Math.abs(Math.cos(heading)) * size[2]
+  const height = Math.abs(Math.cos(angle)) * size[1] + Math.abs(Math.sin(angle)) * depth
   return Math.max(height, width / aspect, 18) * 1.12
 }
 function render() {
-  renderer.setSize(innerWidth, innerHeight, false)
-  renderer.setScissorTest(false); renderer.clear(); renderer.setScissorTest(true)
+  viewer.resize(innerWidth, innerHeight)
+  let first = true
   for (const model of models) {
     const r = model.view.getBoundingClientRect()
     if (r.bottom <= 0 || r.top >= innerHeight) continue
-    const heading = (45 + yaw) * Math.PI / 180, angle = pitch * Math.PI / 180,
-      vertical = viewHeight(model.size, heading, angle, r.width / r.height), camera = model.camera
-    camera.top = vertical / 2; camera.bottom = -camera.top; camera.left = -vertical * r.width / r.height / 2; camera.right = -camera.left
-    camera.position.copy(model.center).add(new THREE.Vector3(Math.sin(heading) * Math.cos(angle), Math.sin(angle), Math.cos(heading) * Math.cos(angle)).multiplyScalar(1000))
-    camera.lookAt(model.center); camera.updateProjectionMatrix(); camera.updateMatrixWorld()
-    model.built.updateContours(camera)
-    model.built.updateEffects(performance.now()/1000)
-    renderer.setViewport(r.left, innerHeight - r.bottom, r.width, r.height)
-    renderer.setScissor(Math.max(0, r.left), Math.max(0, innerHeight - r.bottom), Math.min(innerWidth, r.right) - Math.max(0, r.left), Math.min(innerHeight, r.bottom) - Math.max(0, r.top))
-    renderer.render(model.scene, camera)
+    place(model, r.width, r.height)
+    camera.viewport.set(r.left / innerWidth, r.top / innerHeight, r.width / innerWidth, r.height / innerHeight)
+    viewer.draw(first); first = false
   }
+  if (first) { for (const m of models) m.built.group.visible = false; viewer.draw(true) }
+  camera.viewport.set(0, 0, 1, 1)
   root.querySelector("output")!.textContent = `${Math.round(yaw)}°`; rotation.value = String(yaw); renders++
 }
 function select(next: Family) {
@@ -90,19 +93,18 @@ function select(next: Family) {
     const card = document.createElement("article")
     card.innerHTML = `<div class="card-top"><span>${String(i + 1).padStart(2, "0")}</span><a href="/asset-lab.html?asset=${id}">Inspect ↗</a></div><div class="model-view" role="img" aria-label="${asset.title} 3D model"></div><div class="caption"><h2>${asset.title}</h2><p>${asset.note}</p><button class="export">Download GLB</button></div>`
     grid.append(card)
-    const built = buildAsset(asset, {batchFaces: true}), scene = new THREE.Scene(), camera = new THREE.OrthographicCamera(-100, 100, 100, -100, 0.1, 4000)
-    scene.add(built.group); scene.updateMatrixWorld(true)
-    const bounds = new THREE.Box3().setFromObject(built.group)
-    models.push({built, scene, camera, view: card.querySelector<HTMLElement>(".model-view")!, center: bounds.getCenter(new THREE.Vector3()), size: bounds.getSize(new THREE.Vector3())})
+    const built = buildAsset(asset, {batchFaces: true})
+    viewer.view.root.addChild(built.group)
+    models.push({built, view: card.querySelector<HTMLElement>(".model-view")!, ...boxOf(built.bounds)})
     card.querySelector<HTMLButtonElement>(".export")!.onclick = async () => {
       const url = URL.createObjectURL(new Blob([await exportAsset(asset)], {type: "model/gltf-binary"})), a = document.createElement("a")
       a.href = url; a.download = `inkline-${id}.glb`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
     }
   }
   if (family === "milestones") {
-    const bounds = new THREE.Box3()
-    for (const model of models) bounds.union(new THREE.Box3().setFromObject(model.built.group))
-    for (const model of models) { bounds.getCenter(model.center); bounds.getSize(model.size) }
+    const min: Vec3 = [0, 1, 2].map(k => Math.min(...models.map(m => m.built.bounds[0][k]!))) as [number, number, number]
+    const max: Vec3 = [0, 1, 2].map(k => Math.max(...models.map(m => m.built.bounds[1][k]!))) as [number, number, number]
+    for (const model of models) Object.assign(model, boxOf([min, max]))
   }
   nav.querySelectorAll("button").forEach(b => { b.setAttribute("aria-pressed", String(b.dataset.family === next)) })
   history.replaceState(null, "", `?collection=${next}`); render()
@@ -120,17 +122,10 @@ root.querySelector<HTMLButtonElement>("#sheet")!.onclick = () => {
   ctx.fillStyle = "#f0f2ec"; ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.fillStyle = "#3d4943"; ctx.font = "30px Georgia"; ctx.fillText(`Inkline Town / ${families[family].title}`, 30, 48)
   ctx.font = "13px monospace"; ctx.fillText(`Inkline Town · ${Math.round(yaw)}° rotation · ${pitch}° elevation`, 30, 76)
-  renderer.setSize(width, 270, false); renderer.setScissorTest(false)
   models.forEach((model, i) => {
-    const camera = model.camera, heading = (45 + yaw) * Math.PI / 180, angle = pitch * Math.PI / 180,
-      vertical = viewHeight(model.size, heading, angle, width / 270)
-    camera.top = vertical / 2; camera.bottom = -camera.top; camera.left = -vertical * width / 270 / 2; camera.right = -camera.left
-    camera.position.copy(model.center).add(new THREE.Vector3(Math.sin(heading) * Math.cos(angle), Math.sin(angle), Math.cos(heading) * Math.cos(angle)).multiplyScalar(1000))
-    camera.lookAt(model.center); camera.updateProjectionMatrix(); camera.updateMatrixWorld(); model.built.updateContours(camera)
-    model.built.updateEffects(performance.now()/1000)
-    renderer.setViewport(0, 0, width, 270); renderer.render(model.scene, camera)
+    place(model, width, 270)
     const x = (i % columns) * width, y = 100 + Math.floor(i / columns) * height
-    ctx.drawImage(renderer.domElement, x, y, width, 270)
+    ctx.drawImage(viewer.snapshot(width, 270, Math.min(devicePixelRatio, 2), null), x, y, width, 270)
     ctx.fillStyle = "#3d4943"; ctx.font = "21px Georgia"; ctx.fillText(assetById.get(families[family].ids[i]!)!.title, x + 24, y + 305)
     ctx.strokeStyle = "#cbd1c5"; ctx.strokeRect(x + 12, y + 8, width - 24, height - 20)
   })
@@ -156,4 +151,4 @@ let effectFrame=0
 const animateEffects=()=>{if(families[family].ids.some(id=>assetById.get(id)?.smokeEffect||assetById.get(id)?.fountains?.length))render();effectFrame=requestAnimationFrame(animateEffects)}
 effectFrame=requestAnimationFrame(animateEffects)
 Object.assign(window, { townModelReview: { stats: () => ({ family, models: models.length, renders, yaw, pitch }) } })
-if (import.meta.hot) import.meta.hot.dispose(() => { cancelAnimationFrame(effectFrame);models.forEach(m => m.built.dispose()); renderer.dispose(); renderer.domElement.remove(); removeEventListener("scroll", schedule); removeEventListener("resize", schedule) })
+if (import.meta.hot) import.meta.hot.dispose(() => { cancelAnimationFrame(effectFrame);models.forEach(m => m.built.dispose()); viewer.dispose(); removeEventListener("scroll", schedule); removeEventListener("resize", schedule) })

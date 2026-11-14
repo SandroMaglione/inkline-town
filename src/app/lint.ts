@@ -19,7 +19,7 @@ import { Edits, Game, Rules } from "../game/schema.ts"
 const lintCharter: CharterValue = { size: "small", term: 45, land: "fair", seed: 7 }
 
 export const lintTarget = async () => {
-  const [{ draw }, { project }] = await Promise.all([import("../render/three/schedule.ts"), import("../view/schedule.ts")])
+  const [{ draw }, { project }] = await Promise.all([import("../render/pixi3d/schedule.ts"), import("../view/schedule.ts")])
   const made = Game.Runtime.make({
     services: Game.Runtime.services(Game.Runtime.service(Edits, founding(lintCharter)), Game.Runtime.service(Rules, resolveRules())),
     resources: blankResources(),

@@ -6,14 +6,15 @@
  * is made once and kept. Make one of these for the page, and share it.
  */
 import type { GroundId, KindId, PropId, Tier } from "../../game/content/index.ts"
+import type { Renderer } from "pixi.js"
 import { pictureAsset } from "./models.ts"
 import { portrait } from "./portrait.ts"
 
-export const thumbnails = () => {
+export const thumbnails = (renderer: Renderer) => {
   const pictures = new Map<string, Promise<string>>()
   let portraits: Promise<unknown> = Promise.resolve()
-  const modelPicture = (make: () => Parameters<typeof portrait>[0]): Promise<string> => {
-    const url = portraits.then(() => new Promise<string>((done) => requestAnimationFrame(() => done(portrait(make())))))
+  const modelPicture = (make: () => Parameters<typeof portrait>[1]): Promise<string> => {
+    const url = portraits.then(() => new Promise<string>((done) => requestAnimationFrame(() => done(portrait(renderer, make())))))
     portraits = url.catch(() => undefined)
     return url
   }

@@ -1,9 +1,12 @@
-import * as THREE from "three"
-import { OrbitControls } from "three/addons/controls/OrbitControls.js"
-import { buildAsset, floorScale } from "../../render/three/assets/renderer.ts"
-import { inkAssets } from "../../render/three/assets/assets.ts"
-import { makePerson } from "../../render/three/assets/people.ts"
+import { Plane, Vector3 } from "@pixi/3d"
+import { OrbitCamera } from "@pixi/3d/extras"
+import { buildAsset, floorScale } from "../../render/pixi3d/assets/renderer.ts"
+import { inkAssets } from "../../render/pixi3d/assets/assets.ts"
+import { makePerson } from "../../render/pixi3d/assets/people.ts"
 import { testMap, districts } from "./map.ts"
+import { drawCounter } from "../../render/pixi3d/scene.ts"
+import { triangleCount } from "../../render/pixi3d/mesh/geometry.ts"
+import { labViewer } from "../viewer.ts"
 import "./style.css"
 
 const root = document.querySelector<HTMLElement>("#map-lab")!
@@ -23,40 +26,38 @@ root.innerHTML = `
   <span class="scene-note">Every model on the island · Original scale</span>
 `
 const viewport = root.querySelector<HTMLDivElement>("#viewport")!
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true })
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
-renderer.setClearColor(0xe2e9e6)
-renderer.outputColorSpace = THREE.SRGBColorSpace
-renderer.toneMapping = THREE.NoToneMapping
-renderer.domElement.tabIndex = 0
-renderer.domElement.setAttribute("aria-label", "3D island map. Drag to pan, right-drag to rotate, scroll to zoom.")
-viewport.append(renderer.domElement)
-const scene = new THREE.Scene()
+const viewer = await labViewer(viewport, { width: viewport.clientWidth || 1, height: viewport.clientHeight || 1, background: 0xe2e9e6 })
+const canvas = viewer.canvas, scene = viewer.view.root, camera = viewer.camera, counter = drawCounter(viewer.app.renderer)
+canvas.tabIndex = 0
+canvas.setAttribute("aria-label", "3D island map. Drag to pan, right-drag to rotate, scroll to zoom.")
 const map = buildAsset(testMap.asset, { batchFaces: true })
-scene.add(map.group)
+scene.addChild(map.group)
 const effects = testMap.effects.map((p) => {
   const model = buildAsset(
     inkAssets.find((a) => a.id === p.asset)!,
     { batchFaces: true }
   )
   model.group.position.set(p.x * floorScale, p.height / Math.cos(Math.PI / 6), p.y * floorScale)
-  scene.add(model.group)
+  scene.addChild(model.group)
   return model
 })
-const camera = new THREE.OrthographicCamera(-600, 600, 450, -450, 0.1, 6000)
-const controls = new OrbitControls(camera, renderer.domElement)
-controls.screenSpacePanning = false
-controls.zoomToCursor = true
-controls.minZoom = 0.65
-controls.maxZoom = 28
-controls.minPolarAngle = THREE.MathUtils.degToRad(25)
-controls.maxPolarAngle = THREE.MathUtils.degToRad(75)
-controls.panSpeed = 0.85
-controls.rotateSpeed = 0.65
-controls.zoomSpeed = 0.85
-controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
-controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }
-controls.listenToKeyEvents(renderer.domElement)
+const degrees = (radians: number) => (radians * 180) / Math.PI, radians = (degrees: number) => (degrees * Math.PI) / 180
+const controls = new OrbitCamera({
+  view: viewer.view,
+  target: { x: 0, y: 0, z: 0 },
+  autoUpdate: false,
+  screenSpacePanning: false,
+  zoomToCursor: true,
+  minZoom: 0.65,
+  maxZoom: 28,
+  minPolarAngle: radians(25),
+  maxPolarAngle: radians(75),
+  panSpeed: 0.85,
+  rotateSpeed: 0.65,
+  zoomSpeed: 0.85,
+  mouseButtons: { left: "pan", middle: "zoom", right: "rotate" },
+  touches: { one: "pan", two: "zoom-pan" }
+})
 const tilt = root.querySelector<HTMLInputElement>("#tilt")!
 const district = root.querySelector<HTMLSelectElement>("#district")!
 const inspect = root.querySelector<HTMLSelectElement>("#inspect")!
@@ -80,28 +81,27 @@ const actors = inkAssets
     const r = a.reference!
     if (r.type !== "walker") throw new Error("Actor requires walker reference")
     const frames = [0, 1].map((phase) => buildAsset(makePerson(a.id, a.title, r.dress, r.load, r.cart, phase), { batchFaces: true }))
-    frames.forEach((f) => scene.add(f.group))
+    frames.forEach((f) => scene.addChild(f.group))
     return { frames, offset: i / 8 }
   })
 let draws = 0
 let mode: "pan" | "rotate" = "pan"
 
 function render() {
-  for (const effect of effects) effect.group.rotation.y = controls.getAzimuthalAngle() - Math.PI / 4
-  map.updateContours(camera)
-  for (const actor of actors) for (const frame of actor.frames) frame.updateContours(camera)
-  renderer.render(scene, camera)
+  for (const effect of effects) effect.group.rotation.y = controls.azimuthAngle - Math.PI / 4
+  counter.calls = counter.triangles = 0
+  viewer.render()
   draws++
-  const degrees = THREE.MathUtils.radToDeg(controls.getAzimuthalAngle()) - 45
-  const heading = ((degrees + 540) % 360) - 180
-  const elevation = 90 - THREE.MathUtils.radToDeg(controls.getPolarAngle())
+  const turned = degrees(controls.azimuthAngle) - 45
+  const heading = ((turned + 540) % 360) - 180
+  const elevation = 90 - degrees(controls.polarAngle)
   root.querySelector("#zoom")!.textContent = `${camera.zoom.toFixed(1)}×`
   root.querySelector("#heading")!.textContent = `${Math.round(heading)}°`
   root.querySelector<HTMLElement>("#north")!.style.transform = `rotate(${-heading}deg)`
   tilt.value = String(Math.round(elevation))
   root.querySelector("#tilt-value")!.textContent = `${Math.round(elevation)}°`
 }
-controls.addEventListener("change", render)
+controls.on("change", render)
 
 function reset() {
   district.value = "all"
@@ -109,29 +109,25 @@ function reset() {
   controls.target.set(0, 0, 0)
   camera.position.set(1600, Math.sqrt(2) * 1600 * Math.tan(Math.PI / 6), 1600)
   camera.zoom = 1
-  camera.updateProjectionMatrix()
   controls.update()
   render()
 }
 function resize() {
-  const width = viewport.clientWidth,
-    height = viewport.clientHeight
-  renderer.setSize(width, height, false)
+  const width = viewport.clientWidth || 1,
+    height = viewport.clientHeight || 1
+  viewer.resize(width, height)
   const viewHeight = Math.max(1350, (2150 * height) / width)
-  camera.top = viewHeight / 2
-  camera.bottom = -viewHeight / 2
-  camera.right = (viewHeight * width) / height / 2
-  camera.left = -camera.right
-  camera.updateProjectionMatrix()
+  camera.orthographicSize = (viewHeight * width) / height / 2
   render()
 }
+/** Moves the camera and its target together by `(dx, dy, dz)`. */
+function shift(dx: number, dy: number, dz: number) {
+  controls.target.set(controls.target.x + dx, controls.target.y + dy, controls.target.z + dz)
+  camera.position.set(camera.position.x + dx, camera.position.y + dy, camera.position.z + dz)
+}
 function focus(x: number, y: number, zoom: number) {
-  const next = new THREE.Vector3(x * floorScale, 0, y * floorScale)
-  const delta = next.clone().sub(controls.target)
-  controls.target.copy(next)
-  camera.position.add(delta)
+  shift(x * floorScale - controls.target.x, -controls.target.y, y * floorScale - controls.target.z)
   camera.zoom = zoom
-  camera.updateProjectionMatrix()
   controls.update()
   render()
 }
@@ -156,41 +152,37 @@ root.querySelector<HTMLButtonElement>("#motion")!.onclick = () => {
   root.querySelector("#motion")!.setAttribute("aria-pressed", String(moving))
 }
 function zoomBy(amount: number) {
-  camera.zoom = THREE.MathUtils.clamp(camera.zoom * amount, controls.minZoom, controls.maxZoom)
-  camera.updateProjectionMatrix()
+  camera.zoom = Math.min(controls.maxZoom, Math.max(controls.minZoom, camera.zoom * amount))
   controls.update()
   render()
 }
 function rotateBy(angle: number) {
-  const offset = camera.position.clone().sub(controls.target)
-  offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(angle))
-  camera.position.copy(controls.target).add(offset)
+  const t = controls.target, x = camera.position.x - t.x, z = camera.position.z - t.z, a = radians(angle)
+  camera.position.set(t.x + x * Math.cos(a) + z * Math.sin(a), camera.position.y, t.z - x * Math.sin(a) + z * Math.cos(a))
   controls.update()
 }
 function setTilt(angle: number) {
-  const spherical = new THREE.Spherical().setFromVector3(camera.position.clone().sub(controls.target))
-  spherical.phi = THREE.MathUtils.degToRad(90 - angle)
-  camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(spherical))
+  const t = controls.target, x = camera.position.x - t.x, y = camera.position.y - t.y, z = camera.position.z - t.z
+  const r = Math.hypot(x, y, z), theta = Math.atan2(x, z), phi = radians(90 - angle)
+  camera.position.set(t.x + r * Math.sin(phi) * Math.sin(theta), t.y + r * Math.cos(phi), t.z + r * Math.sin(phi) * Math.cos(theta))
   controls.update()
 }
 function setMode(next: "pan" | "rotate") {
   mode = next
-  controls.mouseButtons.LEFT = mode === "pan" ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
-  controls.touches.ONE = mode === "pan" ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE
-  controls.touches.TWO = mode === "pan" ? THREE.TOUCH.DOLLY_PAN : THREE.TOUCH.DOLLY_ROTATE
+  controls.mouseButtons.left = mode === "pan" ? "pan" : "rotate"
+  controls.touches.one = mode === "pan" ? "pan" : "rotate"
+  controls.touches.two = mode === "pan" ? "zoom-pan" : "zoom-rotate"
   root.querySelector("#pan")!.setAttribute("aria-pressed", String(mode === "pan"))
   root.querySelector("#rotate")!.setAttribute("aria-pressed", String(mode === "rotate"))
-  renderer.domElement.style.cursor = mode === "pan" ? "grab" : "ew-resize"
+  canvas.style.cursor = mode === "pan" ? "grab" : "ew-resize"
 }
 function panBy(right: number, forward: number) {
-  const direction = camera.getWorldDirection(new THREE.Vector3())
-  direction.y = 0
-  direction.normalize()
-  const side = new THREE.Vector3().crossVectors(direction, camera.up).normalize()
-  const delta = side.multiplyScalar(right).add(direction.multiplyScalar(forward))
-  controls.target.add(delta)
-  camera.position.add(delta)
+  // Along the ground: the camera's forward (towards its target) and its right, level.
+  const fx = controls.target.x - camera.position.x, fz = controls.target.z - camera.position.z, l = Math.hypot(fx, fz) || 1
+  const dx = fx / l, dz = fz / l
+  shift(-dz * right + dx * forward, 0, dx * right + dz * forward)
   controls.update()
+  render()
 }
 root.querySelector<HTMLButtonElement>("#pan")!.onclick = () => setMode("pan")
 root.querySelector<HTMLButtonElement>("#rotate")!.onclick = () => setMode("rotate")
@@ -200,21 +192,25 @@ root.querySelector<HTMLButtonElement>("#zoom-out")!.onclick = () => zoomBy(0.8)
 root.querySelector<HTMLButtonElement>("#turn-left")!.onclick = () => rotateBy(-45)
 root.querySelector<HTMLButtonElement>("#turn-right")!.onclick = () => rotateBy(45)
 tilt.oninput = () => setTilt(Number(tilt.value))
-renderer.domElement.addEventListener("pointerdown", () => renderer.domElement.focus({ preventScroll: true }))
+canvas.addEventListener("pointerdown", () => canvas.focus({ preventScroll: true }))
 const onKeyDown = (event: KeyboardEvent) => {
   if (event.target instanceof HTMLElement && event.target.closest("input,select,button,a")) return
   const amount = 45 / camera.zoom
   switch (event.key.toLowerCase()) {
     case "a":
+    case "arrowleft":
       panBy(-amount, 0)
       break
     case "d":
+    case "arrowright":
       panBy(amount, 0)
       break
     case "w":
+    case "arrowup":
       panBy(0, amount)
       break
     case "s":
+    case "arrowdown":
       panBy(0, -amount)
       break
     case "q":
@@ -239,28 +235,25 @@ const onKeyDown = (event: KeyboardEvent) => {
   event.preventDefault()
 }
 window.addEventListener("keydown", onKeyDown)
-const raycaster = new THREE.Raycaster()
-const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-renderer.domElement.addEventListener("dblclick", (event) => {
-  const rect = renderer.domElement.getBoundingClientRect()
-  raycaster.setFromCamera(
-    new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, (-(event.clientY - rect.top) / rect.height) * 2 + 1),
-    camera
-  )
-  const point = raycaster.ray.intersectPlane(ground, new THREE.Vector3())
+const ground = new Plane(new Vector3(0, 1, 0), 0)
+canvas.addEventListener("dblclick", (event) => {
+  const rect = canvas.getBoundingClientRect()
+  const point = viewer.view.screenToWorld({ x: ((event.clientX - rect.left) / rect.width) * viewer.width, y: ((event.clientY - rect.top) / rect.height) * viewer.height }, ground)
   if (point) {
-    const delta = point.clone().sub(controls.target)
-    controls.target.copy(point)
-    camera.position.add(delta)
+    shift(point.x - controls.target.x, point.y - controls.target.y, point.z - controls.target.z)
     controls.update()
+    render()
   }
 })
 let previous = 0,
   elapsed = 0
-renderer.setAnimationLoop((now) => {
+let frameId = 0
+const loop = (now: number) => {
+  frameId = requestAnimationFrame(loop)
   if (!previous) previous = now
   if (moving) elapsed += Math.min(0.05, (now - previous) / 1000)
   previous = now
+  controls.update()
   if (!moving && draws > 0) return
   for (const actor of actors) {
     const t = (elapsed * 0.035 + actor.offset) % 1,
@@ -271,13 +264,13 @@ renderer.setAnimationLoop((now) => {
       f.group.visible = i === phase
       f.group.position.set(x * floorScale, 0, 4 * floorScale)
       f.group.rotation.y = forward ? 0 : Math.PI
-      f.updateContours(camera)
     })
   }
   map.updateEffects(elapsed)
   effects.forEach(e=>e.updateEffects(elapsed))
-  renderer.render(scene, camera)
-})
+  render()
+}
+frameId = requestAnimationFrame(loop)
 const resizeObserver = new ResizeObserver(resize)
 resizeObserver.observe(viewport)
 reset()
@@ -289,7 +282,10 @@ Object.assign(window, {
     reset,
     focusDistrict,
     focus,
-    capture: () => renderer.domElement.toDataURL("image/webp", 0.95),
+    capture: () => {
+      render()
+      return canvas.toDataURL("image/webp", 0.95)
+    },
     rotateBy,
     zoomBy,
     setTilt,
@@ -304,12 +300,12 @@ Object.assign(window, {
       trees: testMap.trees,
       roadCells: testMap.roads,
       zoom: camera.zoom,
-      heading: THREE.MathUtils.radToDeg(controls.getAzimuthalAngle()),
-      elevation: 90 - THREE.MathUtils.radToDeg(controls.getPolarAngle()),
-      target: controls.target.toArray().map((value) => value / floorScale),
+      heading: degrees(controls.azimuthAngle),
+      elevation: 90 - degrees(controls.polarAngle),
+      target: [controls.target.x, controls.target.y, controls.target.z].map((value) => value / floorScale),
       draws,
-      drawCalls: renderer.info.render.calls,
-      triangles: renderer.info.render.triangles,
+      drawCalls: counter.calls,
+      triangles: counter.triangles || [map, ...effects].reduce((n, m) => n + m.parts.reduce((k, p) => k + triangleCount(p.part.mesh), 0), 0),
       mode
     })
   }
@@ -317,12 +313,12 @@ Object.assign(window, {
 
 if (import.meta.hot)
   import.meta.hot.dispose(() => {
-    renderer.setAnimationLoop(null)
-    controls.dispose()
+    cancelAnimationFrame(frameId)
+    controls.destroy()
     resizeObserver.disconnect()
     window.removeEventListener("keydown", onKeyDown)
     map.dispose()
     effects.forEach((model) => model.dispose())
     actors.forEach((actor) => actor.frames.forEach((frame) => frame.dispose()))
-    renderer.dispose()
+    viewer.dispose()
   })

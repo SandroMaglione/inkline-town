@@ -4,7 +4,7 @@ import { gzipSync } from "node:zlib"
 import { mkdir, writeFile } from "node:fs/promises"
 import { execFileSync } from "node:child_process"
 import { proportionModels } from "../src/labs/model-review/proportion-models.ts"
-import { assetById } from "../src/render/three/assets/assets.ts"
+import { assetById } from "../src/render/pixi3d/assets/assets.ts"
 
 const revision = execFileSync("git", ["rev-parse", "HEAD"], {encoding: "utf8"}).trim()
 if (revision !== "a2845b4f537dcb2998a58b7fae26783d7de4a1ec") throw new Error("Baseline must be captured from the approved a2845b4 revision")

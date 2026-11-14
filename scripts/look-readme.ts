@@ -51,10 +51,7 @@ await run(1000)
 
 type Camera = { x: number; y: number; zoom: number; heading: number; elevation: number }
 const camera = (c: Camera) => page.evaluate((c) => {
-  const v = (window as any).town.view
-  v.heading = c.heading; v.elevation = c.elevation
-  v.camera.zoom = c.zoom; v.camera.updateProjectionMatrix()
-  v.focus(c.x, c.y)
+  ;(window as any).town.view.setView(c)
 }, c)
 const town = () => page.evaluate(() => (window as any).town.snapshot()) as Promise<any>
 const hall = (await town()).entities.find((e: any) => e.components["Town/TownHall"]).components["Town/Tile"]

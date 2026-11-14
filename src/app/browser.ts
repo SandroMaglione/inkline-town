@@ -10,7 +10,7 @@ import { FixedLoop, HostClock, Result } from "@typeonce/ritmo"
 import { Effect } from "effect"
 import { BrowserHostClock } from "@typeonce/ritmo-browser"
 
-import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "../render/three/views.ts"
+import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "../render/pixi3d/views.ts"
 import { lands, sizes, step } from "../game/content/index.ts"
 import { bookkeeping, editQueue } from "../game/edits.ts"
 import { resolveRules } from "../game/rules/config.ts"
@@ -18,11 +18,11 @@ import { blankResources, settle, simulate } from "../game/schedule.ts"
 import { Edits, Game, Rules } from "../game/schema.ts"
 import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World } from "../platform/save.ts"
 import { download, sharedId } from "../platform/share/client.ts"
-import { MapInput } from "../render/three/input.ts"
-import { GameScene, type CameraView } from "../render/three/scene.ts"
-import { draw } from "../render/three/schedule.ts"
-import { BuildingNodes, FieldNodes, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, WalkerNodes } from "../render/three/services.ts"
-import { thumbnails } from "../render/three/thumbnails.ts"
+import { MapInput } from "../render/pixi3d/input.ts"
+import { GameScene, type CameraView } from "../render/pixi3d/scene.ts"
+import { draw } from "../render/pixi3d/schedule.ts"
+import { BuildingNodes, FieldNodes, HouseNodes, RockNodes, RuinNodes, StageService, TreeNodes, WalkerNodes } from "../render/pixi3d/services.ts"
+import { thumbnails } from "../render/pixi3d/thumbnails.ts"
 import { createDomUi, type Persistence } from "../ui/dom/index.ts"
 import { blankInteraction, blankShown } from "../view/contracts.ts"
 import { project } from "../view/schedule.ts"
@@ -53,7 +53,7 @@ const start = async () => {
   const shown = blankShown()
   const edits = editQueue()
   // The renderer draws into `mount`; the page's UI goes around it, and reaches the map only through `MapPort`.
-  const stage = new GameScene(mount)
+  const stage = await GameScene.create(mount)
   let input: MapInput | null = null
   const page = createDomUi<CameraView>(
     { interaction, shown, send: edits.push },
@@ -69,7 +69,7 @@ const start = async () => {
       reset: () => input?.reset(),
       sync: () => input?.sync()
     },
-    thumbnails(),
+    thumbnails(stage.app.renderer),
     () => persistence,
     { shared: shared !== null, saved }
   )
