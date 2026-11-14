@@ -106,7 +106,7 @@ function render(){
     pair.forEach((p,j)=>{p.scene.visible=i===j})
     for(const b of [built,person])b.updateEffects(1.2)
     camera.viewport.set(i/2,0,1/2,1)
-    viewer.app.renderer.render({container:viewer.view,clear:i===0})
+    viewer.draw(i===0)
   })
   camera.viewport.set(0,0,1,1)
   root.querySelector("output")!.textContent=`${yaw}°`

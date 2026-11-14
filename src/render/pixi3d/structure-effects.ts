@@ -13,6 +13,47 @@ const fireBit: ShaderBit = {
   attributes: { aEffectAt: "float32x3", aEffectScale: "float32x2", aEffectSeed: "float32" },
   interStage: { vFireAge: "f32", vFireSeed: "f32" },
   bindings: { material: { time: "f32", power: "f32", mode: "f32" } },
+  gpu: {
+    vertex: {
+      afterTransform: `{
+        let mode = material.mode; let seed = input.aEffectSeed;
+        let life = select(select(2.8, 4.2, mode < 1.5), 1.8, mode < 0.5);
+        let age = fract(material.time / life + seed);
+        var c = camera.uViewMatrix * modelMatrix * vec4<f32>(input.aEffectAt, 1.0);
+        c.y += select(select(age * 35.0, age * 32.0, mode < 1.5), 0.0, mode < 0.5);
+        c.x += sin(seed * 43.0 + age * 4.0) * select(3.0, 0.7, mode < 0.5) * age;
+        let size = select(select(1.0, 0.55 + age * 1.15, mode < 1.5), (0.8 + 0.2 * sin(material.time * 8.0 + seed * 31.0)) * material.power, mode < 0.5);
+        if (mode < 0.5) { c.y += input.aEffectScale.y * size * 0.5; }
+        c = vec4<f32>(c.xy + (position.xy * input.aEffectScale) * size, c.zw);
+        clipPosition = camera.uProjectionMatrix * c;
+        output.vFireAge = age; output.vFireSeed = seed;
+      }`
+    },
+    fragment: {
+      material: `{
+        let p = input.vUV; var a = 0.0; var color = vec3<f32>(0.0); let mode = material.mode; let t = material.time;
+        if (mode < 0.5) {
+          let y = p.y; let curl = sin(y * 8.0 - t * 4.5 + input.vFireSeed * 39.0) * 0.11 * y;
+          let body = abs(p.x - 0.5 - curl) / (0.46 * (1.0 - y * 0.86));
+          let edge = 1.0 - smoothstep(0.45, 1.0, body + inkNoise(vec2<f32>(p.x * 6.0, y * 5.0 - t * 3.5) + input.vFireSeed * 10.0) * 0.27);
+          a = edge * smoothstep(0.0, 0.10, y) * (1.0 - smoothstep(0.82, 1.0, y)) * 0.82;
+          let core = (1.0 - body) * pow(1.0 - y, 0.7);
+          color = mix(vec3<f32>(0.87, 0.33, 0.12), vec3<f32>(1.0, 0.83, 0.38), smoothstep(0.0, 0.8, core));
+        } else if (mode < 1.5) {
+          let d = length((p - 0.5) * vec2<f32>(2.0, 1.8));
+          let cloud = inkNoise(p * 3.0 + vec2<f32>(input.vFireSeed * 9.0, t * 0.12)) * 0.65 + inkNoise(p * 7.0 + input.vFireSeed * 11.0) * 0.35;
+          a = (1.0 - smoothstep(0.3, 1.0, d + cloud * 0.24)) * sin(input.vFireAge * 3.14159) * 0.24 * material.power;
+          color = mix(vec3<f32>(0.35, 0.39, 0.33), vec3<f32>(0.64, 0.66, 0.58), input.vFireAge);
+        } else {
+          a = (1.0 - smoothstep(0.05, 0.5, length(p - 0.5))) * sin(input.vFireAge * 3.14159) * material.power;
+          color = vec3<f32>(1.0, 0.67, 0.24);
+        }
+        if (a < 0.015) { discard; }
+        alpha = a;
+        albedo = inkToDisplay(inkRGB(color));
+      }`
+    }
+  },
   gl: {
     vertex: {
       afterTransform: `{

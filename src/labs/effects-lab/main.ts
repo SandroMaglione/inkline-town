@@ -23,7 +23,6 @@ root.innerHTML=`<header><a href="/model-review.html">Inkline Town</a><span>LIVE 
 const grid=root.querySelector<HTMLElement>(".grid")!,pool=new ModelPool()
 // One canvas over the page; each card's picture is the one view drawn into the card's rectangle.
 const viewer=await labViewer(document.body,{width:innerWidth,height:innerHeight,className:"rendering"}),camera=viewer.camera,scene=viewer.view.root
-scene.addChild(pool.root)
 const views=cases.map((c,i)=>{
   const card=document.createElement("article")
   card.innerHTML=`<div class="render-view" role="img" aria-label="${c.title}"></div><div class="caption"><h2>${c.title}</h2><p>${c.note}</p></div>`;grid.append(card)
@@ -58,9 +57,9 @@ function render(){
     const r=v.view.getBoundingClientRect();if(r.bottom<=0||r.top>=innerHeight)return
     place(i,r.width,r.height)
     camera.viewport.set(r.left/innerWidth,r.top/innerHeight,r.width/innerWidth,r.height/innerHeight)
-    viewer.app.renderer.render({container:viewer.view,clear:first});first=false
+    viewer.draw(first);first=false
   })
-  if(first)viewer.app.renderer.render({container:viewer.view,clear:true})
+  if(first)viewer.draw(true)
   camera.viewport.set(0,0,1,1)
   root.querySelector("#stats")!.textContent=`1 active house mesh · ${views.length} instances · ${time.toFixed(1)} s`
   frames++

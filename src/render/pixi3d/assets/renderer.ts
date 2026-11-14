@@ -15,7 +15,7 @@ import { floorScale, vertex3 } from "./space.ts"
 import { lineGeometry, toGeometry } from "../gpu.ts"
 import { bounds } from "../mesh/geometry.ts"
 import { add, type Vec3 } from "../mesh/vec3.ts"
-import { partMaterial, setSurface } from "../materials.ts"
+import { partMaterial, releaseMaterial, setSurface } from "../materials.ts"
 import { SmokePlume } from "../smoke-effects.ts"
 import { FountainWater } from "../fountain-effects.ts"
 
@@ -82,7 +82,7 @@ export function buildAsset(asset: InkAsset, options: InkMeshOptions & { surfaceE
       for (const { mesh } of parts) {
         const material = mesh.material
         mesh.destroy({ geometry: true })
-        material.destroy()
+        releaseMaterial(material)
       }
       group.removeFromParent()
       group.destroy()

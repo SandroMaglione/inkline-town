@@ -6,7 +6,8 @@
 import { View3D, type Camera3D } from "@pixi/3d"
 import { Application, RenderTexture } from "pixi.js"
 import { cross, dot, normalize, scale, sub, add, type Vec3 } from "../render/pixi3d/mesh/vec3.ts"
-import { channels } from "../render/pixi3d/gpu.ts"
+import { backend, channels } from "../render/pixi3d/gpu.ts"
+import { draw, sizeFaces } from "../render/pixi3d/materials.ts"
 
 export interface LabViewer {
   readonly app: Application
@@ -19,6 +20,8 @@ export interface LabViewer {
   /** Sizes the canvas buffer (CSS pixels times the pixel ratio) and the view; the stylesheet sizes it on the page. */
   resize(width: number, height: number): void
   render(): void
+  /** Draws the view into its camera's viewport, for a page that draws one view into many places; `clear` wipes the canvas first. */
+  draw(clear: boolean): void
   /**
    * The view drawn offscreen at `width` × `height`, `resolution` pixels a CSS
    * pixel, on `background` (or transparent for `null`), as a canvas of its own.
@@ -31,7 +34,7 @@ export async function labViewer(mount: HTMLElement, options: { width: number; he
   const background = options.background === undefined ? null : options.background
   const app = new Application()
   await app.init({
-    preference: "webgl",
+    preference: await backend(),
     antialias: true,
     backgroundColor: background ?? 0xffffff,
     backgroundAlpha: background === null ? 0 : 1,
@@ -67,7 +70,11 @@ export async function labViewer(mount: HTMLElement, options: { width: number; he
       app.renderer.resize(width, height)
       view.setSize(width, height)
     },
+    draw(clear) {
+      draw(app.renderer, view, { clear })
+    },
     render() {
+      sizeFaces(app.renderer, view)
       app.render()
     },
     snapshot(width, height, resolution = 1, fill = background) {
@@ -75,7 +82,7 @@ export async function labViewer(mount: HTMLElement, options: { width: number; he
       view.setSize(width, height)
       const target = RenderTexture.create({ width, height, resolution, antialias: true })
       const [r, g, b] = channels(fill ?? 0)
-      app.renderer.render({ container: view, target, clearColor: [r, g, b, fill === null ? 0 : 1] })
+      draw(app.renderer, view, { target, clearColor: [r, g, b, fill === null ? 0 : 1] })
       const out = document.createElement("canvas")
       out.width = Math.round(width * resolution)
       out.height = Math.round(height * resolution)

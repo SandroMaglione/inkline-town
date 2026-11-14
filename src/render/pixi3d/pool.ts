@@ -1,9 +1,9 @@
-import { BatchedMesh3D, Container3D, Matrix4, RenderPassBit, type FlatMaterial, type Geometry3D } from "@pixi/3d"
+import { Container3D, Matrix4, Mesh3D, type FlatMaterial, type Geometry3D } from "@pixi/3d"
 import type { InkAsset } from "./assets/primitives.ts"
 import { inkMesh, type InkPart } from "./assets/ink-mesh.ts"
 import { surfaceState, type SurfaceState } from "./surface-state.ts"
 import { tinted, toGeometry } from "./gpu.ts"
-import { instanceMaterial } from "./materials.ts"
+import { copyMaterial, releaseMaterial } from "./materials.ts"
 import { bounds, triangleCount, type MeshData } from "./mesh/geometry.ts"
 import { rayHitsBox, rayTriangle, type Ray } from "./mesh/ray.ts"
 import type { Vec3 } from "./mesh/vec3.ts"
@@ -11,8 +11,6 @@ import type { Vec3 } from "./mesh/vec3.ts"
 interface Part {
   readonly part: InkPart
   readonly geometry: Geometry3D
-  readonly opaque: FlatMaterial
-  readonly blend: FlatMaterial
 }
 interface Template {
   readonly key: string
@@ -21,16 +19,22 @@ interface Template {
   readonly box: readonly [Vec3, Vec3]
   readonly triangles: number
   readonly handles: Set<ModelHandle>
-  batch: BatchedMesh3D | null
-  capacity: number
-  /** Each slot's material: 0 none (drawn by no pass), 1 opaque, 2 blended. */
-  modes: Uint8Array
-  /** The copies drawn at the last flush, in slot order. */
+  /** The copies drawn at the last flush. */
   drawn: Array<ModelHandle>
+  /** The copies holding meshes of this model, shown or hidden. */
+  readonly dressed: Set<ModelHandle>
   used: number
 }
+/** One part of one copy: a mesh under the copy's root, with materials of its own. */
+interface Piece {
+  readonly part: InkPart
+  readonly mesh: Mesh3D
+  readonly opaque: FlatMaterial
+  /** Made the first time the copy fades. */
+  blend: FlatMaterial | null
+}
 
-/** One logical model. Its root owns transforms; shared GPU instances draw it. */
+/** One logical model. Its root owns transforms; its parts are meshes under it that share the model's geometry. */
 export class ModelHandle {
   readonly root = new Container3D()
   /** A colour over the whole model (sRGB hex), multiplied in linear light. */
@@ -42,6 +46,11 @@ export class ModelHandle {
   /** Its structure's half width and height (world units), a noise seed, and 1 to shade it as one; or all 0. */
   effectBounds: [number, number, number, number] = [0, 0, 0, 0]
   template: Template | null = null
+  pieces: Array<Piece> = []
+  /** Its meshes for every model it has been, hidden while it is another: a walker steps through a few, over and over. */
+  readonly sets = new Map<Template, Array<Piece>>()
+  /** What its materials were last given, to write them only when something changes. */
+  sent: { values: Float64Array; colors: ReadonlyMap<number, number> | null } | null = null
   readonly pool: ModelPool
   readonly entity: number | null
   readonly pickCell: { x: number; y: number } | null
@@ -52,9 +61,22 @@ export class ModelHandle {
   }
   use(key: string, create: () => InkAsset) {
     if (this.template?.key === key) return
-    this.pool.release(this)
-    this.template = this.pool.acquire(key, create)
-    this.template.handles.add(this)
+    this.pool.leave(this)
+    const template = this.pool.acquire(key, create)
+    this.template = template
+    template.handles.add(this)
+    let pieces = this.sets.get(template)
+    if (!pieces) {
+      pieces = template.parts.map(({ part, geometry }) => {
+        const opaque = copyMaterial(part, false), mesh = new Mesh3D({ geometry, material: opaque, castShadow: false })
+        this.root.addChild(mesh)
+        return { part, mesh, opaque, blend: null }
+      })
+      this.sets.set(template, pieces)
+      template.dressed.add(this)
+    }
+    this.pieces = pieces
+    this.sent = null
   }
   dispose() {
     this.pool.release(this)
@@ -66,20 +88,19 @@ const visible = (node: Container3D) => {
   for (let p: Container3D | null = node; p; p = p.parent) if (!p.visible) return false
   return true
 }
-const pass = (mode: number) => (mode === 2 ? RenderPassBit.TRANSPARENT : mode === 1 ? RenderPassBit.OPAQUE : 0)
 
 /**
- * Geometry and materials are built once per visual state. Repeated homes,
- * trees and walkers share one batch a model, a slot for each part of each
- * copy, with entity IDs kept for picking. Unused construction and animation
- * states have a bounded cache.
+ * Geometry is built once per visual state and shared by every copy. Each copy
+ * is plain meshes under its own root, so the scene graph places it and the
+ * engine draws the copies of a part together. Entity IDs are kept for picking.
+ * Unused construction and animation states have a bounded cache.
  */
 export class ModelPool {
-  readonly root = new Container3D({ label: "models" })
   private templates = new Map<string, Template>()
   private stamp = 0
   private matrix = new Matrix4()
   private inverse = new Matrix4()
+  private color = new Float32Array(4)
   acquire(key: string, create: () => InkAsset): Template {
     let entry = this.templates.get(key)
     if (!entry) {
@@ -89,17 +110,15 @@ export class ModelPool {
       const extents = solid.map((p) => bounds(p.mesh))
       entry = {
         key,
-        parts: solid.map((part) => ({ part, geometry: toGeometry(part.mesh), opaque: instanceMaterial(part, false), blend: instanceMaterial(part, true) })),
+        parts: solid.map((part) => ({ part, geometry: toGeometry(part.mesh) })),
         box: [
           [Math.min(...extents.map((e) => e[0][0])), Math.min(...extents.map((e) => e[0][1])), Math.min(...extents.map((e) => e[0][2]))],
           [Math.max(...extents.map((e) => e[1][0])), Math.max(...extents.map((e) => e[1][1])), Math.max(...extents.map((e) => e[1][2]))]
         ],
         triangles: solid.reduce((n, p) => n + triangleCount(p.mesh), 0),
         handles: new Set(),
-        batch: null,
-        capacity: 0,
-        modes: new Uint8Array(),
         drawn: [],
+        dressed: new Set(),
         used: ++this.stamp
       }
       this.templates.set(key, entry)
@@ -107,70 +126,56 @@ export class ModelPool {
     entry.used = ++this.stamp
     return entry
   }
-  release(handle: ModelHandle) {
+  /** The copy stops being its model, and keeps that model's meshes hidden. */
+  leave(handle: ModelHandle) {
     if (!handle.template) return
+    for (const { mesh } of handle.pieces) mesh.visible = false
+    handle.pieces = []
     handle.template.handles.delete(handle)
     handle.template.used = ++this.stamp
     handle.template = null
   }
+  private strip(handle: ModelHandle, template: Template) {
+    for (const { mesh, opaque, blend } of handle.sets.get(template) ?? []) {
+      mesh.destroy()
+      releaseMaterial(opaque)
+      if (blend) releaseMaterial(blend)
+    }
+    handle.sets.delete(template)
+    template.dressed.delete(handle)
+  }
+  release(handle: ModelHandle) {
+    this.leave(handle)
+    for (const template of [...handle.sets.keys()]) this.strip(handle, template)
+  }
+  /** Gives each copy's materials its colour, opacity and surface state, where they changed. */
   flush() {
     for (const entry of this.templates.values()) {
-      const handles = [...entry.handles].filter((h) => h.alpha > 0 && visible(h.root))
-      entry.drawn = handles
-      if (!handles.length || !entry.parts.length) {
-        if (entry.batch) entry.batch.visible = false
-        continue
-      }
-      const P = entry.parts.length
-      if (entry.capacity < handles.length) {
-        entry.batch?.destroy()
-        entry.capacity = 2 ** Math.ceil(Math.log2(Math.max(4, handles.length)))
-        const vec4 = (value: [number, number, number, number]) => ({ value, type: "vec4<f32>" as const })
-        entry.batch = new BatchedMesh3D({
-          size: entry.capacity * P,
-          label: entry.key,
-          // Copies off screen are skipped: most of a large town is, close in.
-          cull: "gpu",
-          instanceData: { tint: vec4([1, 1, 1, 1]), state: vec4([0, 0, 0, 0]), hazards: vec4([0, 0, 0, 0]), bounds: vec4([0, 0, 0, 0]) }
-        })
-        for (let slot = 0; slot < entry.capacity * P; slot++) entry.batch.setGeometryAt(slot, entry.parts[slot % P]!.geometry)
-        entry.modes = new Uint8Array(entry.capacity * P)
-        this.root.addChild(entry.batch)
-      }
-      const batch = entry.batch!
-      batch.visible = true
-      const matrices = batch.matrices, data = batch.instanceData, f = data.fields
-      handles.forEach((handle, i) => {
-        const world = handle.root.getGlobalTransform(this.matrix).elements
+      entry.drawn = [...entry.handles].filter((h) => h.alpha > 0 && visible(h.root))
+      for (const handle of entry.handles) {
         const alpha = Math.min(1, Math.max(0, handle.alpha)), e = handle.effects, b = handle.effectBounds
-        for (let p = 0; p < P; p++) {
-          const slot = i * P + p, part = entry.parts[p]!.part
-          matrices.data.set(world, matrices.offset + slot * matrices.stride)
-          const o = data.offset + slot * data.stride
-          tinted(handle.colors?.get(part.color) ?? part.color, handle.tint, data.data, o + f.tint!)
-          data.data[o + f.tint! + 3] = alpha
-          data.data.set([e.wear, e.care, e.snow, e.burning], o + f.state!)
-          data.data.set([e.fireRisk, e.health, e.order, e.sick], o + f.hazards!)
-          data.data.set(b, o + f.bounds!)
-          const mode = alpha < 1 || part.opacity < 1 ? 2 : 1
-          if (entry.modes[slot] !== mode) {
-            batch.setMaterialAt(slot, mode === 2 ? entry.parts[p]!.blend : entry.parts[p]!.opaque)
-            batch.setPassesAt(slot, pass(mode))
-            entry.modes[slot] = mode
+        const values = [handle.tint, alpha, e.wear, e.care, e.snow, e.burning, e.fireRisk, e.health, e.order, e.sick, b[0], b[1], b[2], b[3]]
+        if (handle.sent && handle.sent.colors === handle.colors && values.every((v, i) => v === handle.sent!.values[i])) continue
+        handle.sent = { values: Float64Array.from(values), colors: handle.colors }
+        for (const piece of handle.pieces) {
+          const { part, mesh } = piece
+          if (mesh.visible !== alpha > 0) mesh.visible = alpha > 0
+          const material = alpha < 1 || part.opacity < 1 ? (piece.blend ??= copyMaterial(part, true)) : piece.opaque
+          if (mesh.material !== material) mesh.material = material
+          tinted(handle.colors?.get(part.color) ?? part.color, handle.tint, this.color, 0)
+          material.data.color = [this.color[0]!, this.color[1]!, this.color[2]!, alpha * part.opacity]
+          if (part.role === "fill") {
+            material.data.surfaceState = [e.wear, e.care, e.snow, e.burning]
+            material.data.surfaceHazards = [e.fireRisk, e.health, e.order, e.sick]
+            material.data.surfaceBounds = [...b]
           }
         }
-      })
-      for (let slot = handles.length * P; slot < entry.capacity * P; slot++)
-        if (entry.modes[slot] !== 0) {
-          batch.setPassesAt(slot, 0)
-          entry.modes[slot] = 0
-        }
-      matrices.update()
-      data.update()
+      }
     }
     const idle = [...this.templates.values()].filter((e) => !e.handles.size).sort((a, b) => a.used - b.used)
     for (const entry of idle.slice(0, Math.max(0, idle.length - 64))) {
-      this.disposeEntry(entry)
+      for (const handle of [...entry.dressed]) this.strip(handle, entry)
+      for (const { geometry } of entry.parts) geometry.destroy()
       this.templates.delete(entry.key)
     }
   }
@@ -207,12 +212,11 @@ export class ModelPool {
       triangles: drawn.reduce((n, e) => n + e.triangles * e.drawn.length, 0)
     }
   }
-  private disposeEntry(entry: Template) {
-    entry.batch?.destroy()
-    for (const { geometry } of entry.parts) geometry.destroy()
-  }
   dispose() {
-    for (const entry of this.templates.values()) this.disposeEntry(entry)
+    for (const entry of this.templates.values()) {
+      for (const handle of [...entry.dressed]) this.release(handle)
+      for (const { geometry } of entry.parts) geometry.destroy()
+    }
     this.templates.clear()
   }
 }

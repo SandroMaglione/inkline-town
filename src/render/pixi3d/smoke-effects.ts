@@ -10,6 +10,30 @@ const smokeBit: ShaderBit = {
   attributes: { aPuffSeed: "float32" },
   interStage: { vSmokeAge: "f32", vSmokeSeed: "f32" },
   bindings: { material: { time: "f32", power: "f32" } },
+  gpu: {
+    vertex: {
+      afterTransform: `{
+        let age = fract(material.time / 3.8 + input.aPuffSeed);
+        var c = camera.uViewMatrix * modelMatrix * vec4<f32>(0.0, 0.0, 0.0, 1.0);
+        c.y += age * 29.0;
+        c.x += age * age * 6.0 + sin(age * 5.0 + input.aPuffSeed * 29.0) * age * 2.0;
+        let size = 4.0 + age * 11.0;
+        c = vec4<f32>(c.xy + position.xy * vec2<f32>(size, size * 1.18), c.zw);
+        clipPosition = camera.uProjectionMatrix * c;
+        output.vSmokeAge = age; output.vSmokeSeed = input.aPuffSeed;
+      }`
+    },
+    fragment: {
+      material: `{
+        let p = (input.vUV - 0.5) * 2.0;
+        let cloud = inkNoise(input.vUV * 3.0 + input.vSmokeSeed * 13.0 + vec2<f32>(0.0, material.time * 0.13)) * 0.65 + inkNoise(input.vUV * 7.0 + input.vSmokeSeed * 9.0) * 0.35;
+        let edge = 1.0 - smoothstep(0.35, 1.0, length(p) + cloud * 0.24);
+        alpha = edge * sin(input.vSmokeAge * 3.14159) * 0.19 * material.power;
+        if (alpha < 0.008) { discard; }
+        albedo = inkToDisplay(inkRGB(mix(vec3<f32>(0.40, 0.45, 0.39), vec3<f32>(0.68, 0.70, 0.63), input.vSmokeAge)));
+      }`
+    }
+  },
   gl: {
     vertex: {
       afterTransform: `{
