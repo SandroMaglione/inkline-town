@@ -19,7 +19,34 @@ export async function backend(): Promise<"webgpu" | "webgl"> {
   if (new URLSearchParams(location.search).get("renderer") === "webgl") return "webgl"
   // Pixi 3D needs this feature on WebGPU, and Pixi would not fall back to WebGL by itself without it.
   const adapter = await navigator.gpu?.requestAdapter().catch(() => null)
-  return adapter?.features.has("indirect-first-instance") ? "webgpu" : "webgl"
+  if (!adapter?.features.has("indirect-first-instance")) return "webgl"
+  return (await drawsFrame(adapter)) ? "webgpu" : "webgl"
+}
+
+/**
+ * Whether `adapter` can really draw a frame on a canvas. Some GPUs offer WebGPU, then lose the device at the
+ * first frame, which would leave the map blank behind a working page; those get WebGL instead.
+ */
+async function drawsFrame(adapter: GPUAdapter): Promise<boolean> {
+  let device: GPUDevice | null = null
+  try {
+    device = await adapter.requestDevice()
+    let lost = false
+    void device.lost.then(() => { lost = true })
+    const context = document.createElement("canvas").getContext("webgpu")
+    if (!context) return false
+    context.configure({ device, format: navigator.gpu.getPreferredCanvasFormat(), alphaMode: "premultiplied" })
+    const encoder = device.createCommandEncoder()
+    encoder.beginRenderPass({ colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: "clear", storeOp: "store" }] }).end()
+    device.queue.submit([encoder.finish()])
+    // A frame that never finishes isn't taken as a failure: the check only rules out what fails outright.
+    await Promise.race([device.queue.onSubmittedWorkDone(), new Promise((done) => setTimeout(done, 1000))])
+    return !lost
+  } catch {
+    return false
+  } finally {
+    device?.destroy()
+  }
 }
 
 const formats: Record<number, VertexFormat> = { 1: "float32", 2: "float32x2", 3: "float32x3", 4: "float32x4" }
