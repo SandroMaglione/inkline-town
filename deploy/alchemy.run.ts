@@ -1,7 +1,8 @@
 import { fileURLToPath } from "node:url"
 
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import * as Alchemy from "alchemy"
-import * as Cloudflare from "alchemy/Cloudflare"
+import { Stage } from "alchemy/Stage"
 import * as Effect from "effect/Effect"
 
 // Keep deployment dependencies separate from the browser game.
@@ -24,7 +25,7 @@ export default Alchemy.Stack(
     state: Cloudflare.state()
   },
   Effect.gen(function* () {
-    const stage = yield* Alchemy.Stage
+    const stage = yield* Stage
     // Shared towns: each a gzipped save and its picture (see src/server/handler.ts).
     const shares = yield* Cloudflare.R2.Bucket("Shares", {
       lifecycleRules: [
