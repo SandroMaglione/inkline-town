@@ -7,6 +7,7 @@ import { sizes } from "../../../game/content/index.ts"
 import type { Edit } from "../../../game/edits.ts"
 import type { Interaction, Stats } from "../../../view/contracts.ts"
 import type { Controls } from "../controls.ts"
+import { createCreditLine } from "../brand/credit.ts"
 import { el } from "../kit/dom.ts"
 import { clockText, signed } from "../kit/text.ts"
 import { verdictOf } from "./share-card.ts"
@@ -113,7 +114,7 @@ export const createReckoning = (ui: Interaction, stats: () => Stats | null, send
     share.title = "A picture of the town and its verdict, or a link anyone can open"
     share.onclick = () => controls.openShare()
     actions.append(again, look, share)
-    card.append(actions)
+    card.append(actions, createCreditLine())
     reckoning.append(card)
     showReckoning(true)
   }

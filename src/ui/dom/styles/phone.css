@@ -140,6 +140,7 @@
     padding: 4px; gap: 1px; z-index: 4;
   }
   .fold-more .system .phone-only { display: flex; }
+  .system .credit.corner { display: none; }
   .fold-more .system button, .fold-more .system button.labelled {
     font-size: 12px; gap: 10px; padding: 7px 12px 7px 9px; min-height: 34px; justify-content: flex-start; color: #3d4943;
   }
@@ -167,6 +168,9 @@
   }
   .dialog .sheet > .actions .frame { flex: 1; justify-content: center; padding: 10px 12px; }
   .dialog .sheet > .actions .frame.primary { flex: 2; }
+  /* The credit stays with the content, above the buttons pinned to the bottom. */
+  .dialog .sheet > .credit.line { order: 1; margin-top: 4px; padding-bottom: 14px; }
+  .dialog .sheet:has(> .credit.line) > .actions { order: 2; }
   /* Room under the last of the content, so it never ends tucked against the buttons. */
   .dialog .charter { padding-bottom: 18px; }
   .dialog h2 { font-size: 17px; }

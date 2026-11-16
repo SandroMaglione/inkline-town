@@ -6,6 +6,7 @@
 import type { Interaction, Stats } from "../../view/contracts.ts"
 import type { IconName } from "../../view/icons.ts"
 import type { Controls, Fold } from "./controls.ts"
+import { createCreditCorner } from "./brand/credit.ts"
 import { el } from "./kit/dom.ts"
 import { iconEl } from "./kit/icons.ts"
 
@@ -44,6 +45,8 @@ export const createSystemMenu = (
   // A phone has no camera bar: this puts the camera back.
   action("view", "recentre", "Back to the original angle and centre", resetCamera)
   system.lastElementChild!.classList.add("phone-only")
+  // The maker's credit rides just above the bar, wherever the bar goes.
+  system.append(createCreditCorner())
   // A choice from the menu folds it.
   system.addEventListener("click", () => {
     if (fold() === "more") controls.setFold(null)
