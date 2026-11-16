@@ -10,6 +10,7 @@ import { generate } from "../../../game/world/mapgen.ts"
 import type { Interaction } from "../../../view/contracts.ts"
 import type { IconName } from "../../../view/icons.ts"
 import type { Controls } from "../controls.ts"
+import { createCreditLine } from "../brand/credit.ts"
 import { el, escapeHtml, setHtml } from "../kit/dom.ts"
 import { icon } from "../kit/icons.ts"
 import { section } from "../kit/section.ts"
@@ -201,7 +202,7 @@ export const createCharter = (
       cancel.onclick = () => closeCharter()
       actions.append(cancel)
     }
-    card.append(body, actions)
+    card.append(body, actions, createCreditLine())
     dialog.append(card)
     dialog.classList.add("open")
   }
