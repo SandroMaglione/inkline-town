@@ -41,6 +41,8 @@ export class MapInput {
   /** The stroke being dragged is over something other than the map: let go, it is dropped. */
   private offMap = false
   private touch = false
+  /** Photo mode: the map only looks. Drags move the camera; nothing is built, picked, or hovered. */
+  private looking = false
   readonly controls: HTMLElement
   private abort = new AbortController()
   constructor(scene: GameScene, ui: Interaction, shown: Shown, host: MapHost) {
@@ -78,12 +80,12 @@ export class MapInput {
               ? "pan"
               : this.mode === "rotate"
                 ? "rotate"
-                : ui.tool === "road" || ui.tool === "home" || ui.tool === "pave" || ui.tool === "ground"
+                : !this.looking && (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave" || ui.tool === "ground")
                   ? "edit"
                   : "pan"
         const deferred = mode === "edit" && this.held !== null
         this.press = { id: e.pointerId, start: p, last: p, mode, moved: false, deferred }
-        if (e.button === 0 && this.mode !== "rotate" && !deferred) ui.gestures.push({ type: "press", at: scene.groundAt(p.x, p.y) })
+        if (e.button === 0 && this.mode !== "rotate" && !deferred && !this.looking) ui.gestures.push({ type: "press", at: scene.groundAt(p.x, p.y) })
       },
       { signal }
     )
@@ -134,7 +136,8 @@ export class MapInput {
         if (!this.held) ui.dragFrom = null
       }
       const press = this.press
-      if (press?.id === e.pointerId) {
+      if (press?.id === e.pointerId && this.looking) this.press = null
+      else if (press?.id === e.pointerId) {
         const input = scene.inputAt(p.x, p.y, ui.tool)
         const panned = cancelled || press.mode === "rotate" || e.button !== 0 || (press.mode === "pan" && press.moved)
         const ground = scene.groundAt(p.x, p.y)
@@ -287,7 +290,19 @@ export class MapInput {
     this.ui.dragFrom = null
     this.updatePointer()
   }
+  /** Photo mode on or off: see `looking`. */
+  look(on: boolean) {
+    this.reset()
+    this.looking = on
+    this.updatePointer()
+  }
   private updatePointer() {
+    if (this.looking) {
+      this.ui.stroke = null
+      this.ui.pointer = null
+      this.ui.pointerHit = null
+      return
+    }
     if (this.armed && this.armed.tool !== this.ui.tool) this.armed = null
     // A held stroke goes with its tool, or once the page has dropped it (another tool chosen).
     if (this.held && (this.held.tool !== this.ui.tool || (this.ui.dragFrom === null && !this.ui.gestures.some((g) => g.type === "press")))) this.held = null
@@ -315,6 +330,7 @@ export class MapInput {
    * build (a stroke being drawn or held, an armed tap), never while it moves the camera or
    * picks a building, whose panel says the same; the stylesheet pins it to the top on touch. */
   get tip(): Point | null {
+    if (this.looking) return null
     if (!this.touch) return this.screen
     if (this.pinch) return null
     if (this.held || this.armed) return this.screen ?? { x: 0, y: 0 }

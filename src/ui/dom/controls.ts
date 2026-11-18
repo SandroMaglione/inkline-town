@@ -35,6 +35,8 @@ export interface Controls {
   readonly refreshTools: () => void
   readonly openCharter: (cancellable: boolean) => void
   readonly openShare: () => void
+  /** Photo mode: the town alone, framed, for pictures and films (see `screens/photo.ts`). */
+  readonly openPhoto: () => void
   readonly showReckoning: (open: boolean) => void
   /** Asks before something that replaces the town: save first, go ahead, or stay. */
   readonly confirmLeave: (title: string, text: string, go: string, run: () => void) => void

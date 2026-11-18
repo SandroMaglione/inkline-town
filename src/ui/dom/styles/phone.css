@@ -239,3 +239,10 @@
 @media (pointer: coarse) and (max-width: 760px) and (min-height: 501px) {
   .tooltip { top: calc(84px + env(safe-area-inset-top)) !important; }
 }
+
+/* Photo mode on a phone: the bar's groups wrap, unlabelled, and buttons keep a finger's size. */
+@media (max-width: 760px), (max-height: 500px) {
+  .photo-bar { gap: 6px; bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .photo-bar .group > b { display: none; }
+  .photo-bar button { padding: 6px 8px; min-height: 36px; }
+}

@@ -1,5 +1,5 @@
 /**
- * Share, the guide, save, load, and new town: a row of icons in the bottom
+ * Share, photo mode, the guide, save, load, and new town: a row of icons in the bottom
  * right (folded into one menu on a phone). Founding or loading replaces the
  * town, so each asks first.
  */
@@ -15,7 +15,7 @@ export const createSystemMenu = (
   persistence: () => { readonly save: () => string | null; readonly load: () => string | null },
   resetCamera: () => void,
   fold: () => Fold | null,
-  controls: Pick<Controls, "toast" | "confirmLeave" | "openCharter" | "openShare" | "setFold">
+  controls: Pick<Controls, "toast" | "confirmLeave" | "openCharter" | "openShare" | "openPhoto" | "setFold">
 ) => {
   const system = el("div", "system")
   const action = (name: IconName, label: string, tip: string, run: () => void) => {
@@ -26,6 +26,7 @@ export const createSystemMenu = (
     system.append(button)
   }
   action("share", "share", "Share a picture of the town, or a link anyone can open to watch it and play on", () => controls.openShare())
+  action("picture", "photo", "Photo mode: the town alone, framed for a post, with camera moves, pictures, and films (V)", () => controls.openPhoto())
   // The guide, on or off (it is on for a new mayor).
   const guideButton = el("button", "guide-toggle")
   guideButton.title = "Turn the guide on or off: it tells a new mayor what to do next, and why"

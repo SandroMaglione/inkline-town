@@ -618,3 +618,46 @@ kbd.key {
 }
 .panel-open .credit.corner { display: none; }
 .credit.line { justify-content: flex-end; margin-top: 18px; padding-top: 12px; border-top: 1px dashed #d3d7ce; }
+
+/* ── Photo mode: the town alone, framed, with a bar of its own (screens/photo.ts) ── */
+body.photo-mode > :not(#app):not(.photo-ui) { display: none !important; }
+body.photo-mode.framed { background: #2e3531; }
+body.photo-mode.framed #app { box-shadow: 0 0 0 1px #4a544e, 0 18px 50px rgba(0, 0, 0, 0.35); }
+.photo-ui { display: none; }
+body.photo-mode .photo-ui { display: flex; }
+.photo-bar {
+  position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 5;
+  gap: 8px; align-items: stretch; justify-content: center; flex-wrap: wrap; width: max-content; max-width: calc(100vw - 24px);
+  transition: opacity 400ms;
+}
+.photo-bar.idle { opacity: 0; pointer-events: none; }
+.photo-bar .group, .photo-bar > button {
+  display: flex; align-items: center; gap: 2px; padding: 5px; background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db;
+}
+.photo-bar .group > b { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; color: #77817a; padding: 0 6px 0 4px; }
+.photo-bar button {
+  font: inherit; font-size: 12px; color: #3d4943; background: transparent; border: 1px solid transparent; border-radius: 5px;
+  padding: 6px 9px; min-height: 32px; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;
+}
+.photo-bar > button { padding: 6px 12px; background: #f7f8f4; border-color: #c9cec4; }
+.photo-bar button:hover:not(:disabled) { background: #eceee8; }
+.photo-bar button[aria-pressed=true], .photo-bar button[aria-pressed=true]:hover { background: #3d4943; color: #f7f8f4; }
+.photo-bar button[aria-pressed=true] .glyph { background: #f7f8f4; border-radius: 4px; padding: 1px; margin: -1px; }
+.photo-bar button:disabled { opacity: 0.38; cursor: default; }
+.photo-bar .snap { font-weight: 700; }
+.photo-bar .rec .dot { width: 9px; height: 9px; border-radius: 50%; background: #c4553f; }
+.photo-bar .rec[aria-pressed=true] { background: #c4553f; color: #fff; font-variant-numeric: tabular-nums; }
+.photo-bar .rec[aria-pressed=true] .dot { background: #fff; animation: photo-rec 1s steps(2) infinite; }
+.photo-hint {
+  position: fixed; top: calc(16px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 5; max-width: calc(100vw - 32px);
+  padding: 7px 12px; background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db;
+  font-size: 12px; color: #3d4943; opacity: 0; pointer-events: none; transition: opacity 300ms;
+}
+.photo-hint.show { opacity: 1; }
+.photo-flash { position: fixed; inset: 0; z-index: 6; background: #fff; opacity: 0; pointer-events: none; }
+.photo-flash.go { animation: photo-flash 380ms ease-out; }
+@keyframes photo-flash { from { opacity: 0.85; } to { opacity: 0; } }
+@keyframes photo-rec { 50% { opacity: 0.2; } }
+@media (prefers-reduced-motion: reduce) {
+  .photo-flash.go, .photo-bar .rec[aria-pressed=true] .dot { animation: none; }
+}

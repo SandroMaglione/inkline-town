@@ -23,6 +23,7 @@ import { createPanel } from "./panels/frame.ts"
 import { townHistory } from "./panels/town.ts"
 import { createCharter } from "./screens/charter.ts"
 import { createConfirm } from "./screens/confirm.ts"
+import { createPhoto, type PhotoCamera } from "./screens/photo.ts"
 import { createReckoning } from "./screens/reckoning.ts"
 import { createShare } from "./screens/share.ts"
 import { createVisit } from "./screens/visit.ts"
@@ -55,6 +56,8 @@ export interface MapPort<Camera> {
   readonly reset: () => void
   /** Follows the tool once a frame (the cursor, a held stroke). */
   readonly sync: () => void
+  /** Photo mode's camera: the map only looks, and flies camera moves. */
+  readonly photo: PhotoCamera
 }
 
 /**
@@ -152,6 +155,7 @@ export const createDomUi = <Camera>(
     refreshTools: () => toolbar.refresh(),
     openCharter: (cancellable) => charter.open(cancellable),
     openShare: () => void share.open(),
+    openPhoto: () => photo.open(),
     showReckoning: (open) => reckoning.show(open),
     confirmLeave: (title, text, go, run) => confirm.ask(title, text, go, run)
   }
@@ -170,6 +174,8 @@ export const createDomUi = <Camera>(
     if (visit.visiting()) visit.endVisit()
   }, controls)
   const share = createShare(stats, () => ui.speed, visit.visiting, map, (camera) => persistence().shareFile(camera), controls)
+  // Photo mode opens over a town being played or watched, never over a sheet.
+  const photo = createPhoto(ui, stats, map, () => ui.founding || document.querySelector(".dialog.open") !== null, controls)
   const tooltip = el("div", "tooltip")
   // A phone's buttons for what stays folded away: the guide and the map views.
   const foldButtons = el("div", "fold-buttons")
@@ -186,7 +192,7 @@ export const createDomUi = <Camera>(
   const system = createSystemMenu(ui, persistence, map.resetCamera, folds.fold, controls)
   document.body.append(
     hud.left, hud.right, tooltip, toast.element, toolbar.element, system.element, panel.element, reckoning.result, charter.element, confirm.element,
-    reckoning.element, share.element, visit.element, mapViews.list, mapViews.legend, foldButtons
+    reckoning.element, share.element, visit.element, mapViews.list, mapViews.legend, foldButtons, ...photo.elements
   )
 
   // A tap on the map folds the HUD and puts a toast away; a pan or a pinch, to look around with the goods or the guide open, does not.
@@ -218,7 +224,7 @@ export const createDomUi = <Camera>(
         if (confirm.open()) confirm.dismiss()
         if (share.isOpen()) share.close()
       },
-      blocked: () => ui.founding || reckoning.isOpen() || confirm.open() || share.isOpen() || visit.visiting()
+      blocked: () => ui.founding || reckoning.isOpen() || confirm.open() || share.isOpen() || visit.visiting() || photo.isOpen()
     },
     map.cancelStroke,
     controls
@@ -255,6 +261,7 @@ export const createDomUi = <Camera>(
       reckoning.sync(s)
     }
     map.sync()
+    photo.sync()
     const screenPointer = map.pointer()
     // A stroke being drawn says what it lays and costs.
     const text = ui.dragFrom && ui.stroke !== "cancel" && town.stroke ? town.stroke : town.tooltip

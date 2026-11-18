@@ -58,8 +58,8 @@ export const download = async (id: string): Promise<string> => {
 /** A phone or a tablet: where the system's share sheet is the way to share. */
 export const handheld = () => typeof navigator.share === "function" && matchMedia("(pointer: coarse)").matches
 
-/** Hands a picture to the share sheet, or saves it. Answers what happened, for a toast. */
-export const offerPicture = async (picture: Blob, name: string, text: string): Promise<string> => {
+/** Hands a picture (or a film: `noun`) to the share sheet, or saves it. Answers what happened, for a toast. */
+export const offerPicture = async (picture: Blob, name: string, text: string, noun = "picture"): Promise<string> => {
   const file = new File([picture], name, { type: picture.type })
   if (handheld() && navigator.canShare?.({ files: [file] })) {
     try {
@@ -74,7 +74,7 @@ export const offerPicture = async (picture: Blob, name: string, text: string): P
   link.download = name
   link.click()
   setTimeout(() => URL.revokeObjectURL(link.href), 10_000)
-  return `Saved the picture as ${name}`
+  return `Saved the ${noun} as ${name}`
 }
 
 /** Hands a link to the share sheet, or copies it. */
