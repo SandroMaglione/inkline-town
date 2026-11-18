@@ -18,6 +18,7 @@ import { blankResources, settle, simulate } from "../game/schedule.ts"
 import { Edits, Game, Rules } from "../game/schema.ts"
 import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World } from "../platform/save.ts"
 import { download, sharedId } from "../platform/share/client.ts"
+import { CameraDirector } from "../render/pixi3d/director.ts"
 import { MapInput } from "../render/pixi3d/input.ts"
 import { GameScene, type CameraView } from "../render/pixi3d/scene.ts"
 import { draw } from "../render/pixi3d/schedule.ts"
@@ -55,6 +56,8 @@ const start = async () => {
   // The renderer draws into `mount`; the page's UI goes around it, and reaches the map only through `MapPort`.
   const stage = await GameScene.create(mount)
   let input: MapInput | null = null
+  // Photo mode's camera moves: set once a frame, before the frame is drawn.
+  const director = new CameraDirector(stage)
   const page = createDomUi<CameraView>(
     { interaction, shown, send: edits.push },
     {
@@ -67,7 +70,18 @@ const start = async () => {
       confirmStroke: () => input?.confirmStroke(),
       cancelStroke: () => input?.cancelStroke(),
       reset: () => input?.reset(),
-      sync: () => input?.sync()
+      sync: () => input?.sync(),
+      photo: {
+        look: (on) => input?.look(on),
+        play: (shot, done) => director.play(shot, done),
+        stop: () => director.stop(),
+        playing: () => director.playing,
+        street: (on, done, instant) => director.toStreet(on, done, instant),
+        onStreet: () => director.onStreet,
+        travelling: () => director.travelling,
+        canvas: () => stage.canvas,
+        filmAt: (width) => stage.filmAt(width)
+      }
     },
     thumbnails(stage.app.renderer),
     () => persistence,
@@ -137,7 +151,7 @@ const start = async () => {
       if (!saved.ok) throw new Error(`The town could not be saved: ${JSON.stringify(saved.error)}`)
       return saved.value
     }
-    Object.assign(window, { town: { interaction, shown, edits, runtime, snapshot, advance, view: stage } })
+    Object.assign(window, { town: { interaction, shown, edits, runtime, snapshot, advance, view: stage, director } })
     if (runtime.debug !== undefined) {
       // Loaded in dev only: the production bundle never includes devtools.
       const { attachDevtools } = await import("./devtools.ts")
@@ -240,6 +254,7 @@ const start = async () => {
     render: ({ elapsedSeconds }) => {
       clock.deltaSeconds = elapsedSeconds
       clock.elapsed += elapsedSeconds
+      director.frame(elapsedSeconds)
       const viewed = runtime.tick(project)
       if (!viewed.ok) throw new Error(`The town view stopped: ${JSON.stringify(viewed.error)}`)
       const drawn = runtime.tick(draw)

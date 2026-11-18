@@ -114,6 +114,10 @@ export class BuildingView extends WorldView {
     this.body.root.addChild(this.motion.root)
 
   }
+  /** What it is: the camera director looks for the town hall. */
+  get kind(): KindId {
+    return this.kindId
+  }
   place(x: number, y: number) {
     const size = kinds[this.kindId].size
     this.anchor.x = x + size / 2
@@ -342,6 +346,10 @@ export class WalkerView extends WorldView {
     this.dress = dress
     this.cart = cart
     this.body = this.model(false)
+  }
+  /** A carrier pushing a cart, rather than a walker on a round. */
+  get carting(): boolean {
+    return this.cart !== null
   }
   static forFigure(role: "carrier" | "walker", color: number, stage: GameScene, entity: number) {
     const n = hash(entity, 7)

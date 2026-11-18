@@ -34,9 +34,11 @@ export const inkCommonBit: ShaderBit = { name: "inkline-common", gpu: { header: 
  *
  * WebGL writes it into the fragment's depth. A Pixi 3D material can't write a
  * fragment's depth on WebGPU, so there each vertex is moved back instead, by
- * the slope its face's normal gives under an orthographic camera: the same
- * depth, for a flat face. That needs the picture's size in pixels
- * (`facePixels`, which `draw` in `materials.ts` keeps).
+ * the slope its face's normal gives: the same depth, for a flat face. That
+ * needs the picture's size in pixels (`facePixels`, which `draw` in
+ * `materials.ts` keeps). Under the street's perspective camera (photo mode)
+ * depth changes more slowly the farther off it is, so the slope is divided
+ * by the vertex's distance (`clipPosition.w`).
  */
 export const faceBiasBit: ShaderBit = {
   name: "inkline-face-bias",
@@ -48,7 +50,8 @@ export const faceBiasBit: ShaderBit = {
         let faceP = camera.uProjectionMatrix;
         let faceAcross = abs(faceN.x) / abs(faceP[0][0] * material.facePixels.x);
         let faceUp = abs(faceN.y) / abs(faceP[1][1] * material.facePixels.y);
-        let faceSlope = abs(faceP[2][2]) * 2.0 * max(faceAcross, faceUp) / max(abs(faceN.z), 1e-6);
+        let faceDepth = select(abs(faceP[2][2]), abs(faceP[3][2]) / max(clipPosition.w, 1e-6), faceP[2][3] != 0.0);
+        let faceSlope = faceDepth * 2.0 * max(faceAcross, faceUp) / max(abs(faceN.z), 1e-6);
         clipPosition.z = min(clipPosition.z + (6.0 * faceSlope + 2.0 / 16777216.0) * clipPosition.w, clipPosition.w);
       }`
     }
@@ -66,7 +69,9 @@ export const plainBit: ShaderBit = {
 
 /**
  * A sharp contour's edge, shown only where it outlines the model: one of its
- * two faces turns towards the camera and the other away.
+ * two faces turns towards the camera and the other away. Towards the camera
+ * is along its axis for the map's orthographic camera, and from the vertex to
+ * the eye for the street's perspective one (photo mode).
  */
 export const inkSilhouetteBit: ShaderBit = {
   name: "inkline-silhouette",
@@ -75,7 +80,12 @@ export const inkSilhouetteBit: ShaderBit = {
   gpu: {
     vertex: {
       beforeTransform: `{
-        let toCamera = vec3<f32>(camera.uViewMatrix[0][2], camera.uViewMatrix[1][2], camera.uViewMatrix[2][2]);
+        let inkView = camera.uViewMatrix;
+        var toCamera = vec3<f32>(inkView[0][2], inkView[1][2], inkView[2][2]);
+        if (camera.uProjectionMatrix[2][3] != 0.0) {
+          let inkEye = -(transpose(mat3x3<f32>(inkView[0].xyz, inkView[1].xyz, inkView[2].xyz)) * inkView[3].xyz);
+          toCamera = inkEye - (modelMatrix * vec4<f32>(position.xyz, 1.0)).xyz;
+        }
         let turn = mat3x3<f32>(modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz);
         output.vInkEdge = step(0.0, -dot(turn * input.aInkNormalA, toCamera) * dot(turn * input.aInkNormalB, toCamera));
       }`
@@ -86,6 +96,7 @@ export const inkSilhouetteBit: ShaderBit = {
     vertex: {
       beforeTransform: `{
         vec3 toCamera = vec3(uViewMatrix[0][2], uViewMatrix[1][2], uViewMatrix[2][2]);
+        if (uProjectionMatrix[2][3] != 0.0) toCamera = -(transpose(mat3(uViewMatrix)) * uViewMatrix[3].xyz) - (modelMatrix * vec4(position.xyz, 1.0)).xyz;
         mat3 turn = mat3(modelMatrix);
         vInkEdge = step(0.0, -dot(turn * aInkNormalA, toCamera) * dot(turn * aInkNormalB, toCamera));
       }`

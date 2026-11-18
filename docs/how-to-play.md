@@ -23,11 +23,12 @@ town, the levers you hold, how a term ends, and how the town works underneath.
 | **X** | bulldoze |
 | **T** | the town panel: goals, approval, treasury, taxes, people, the crown, trade |
 | **D**, **W**, **F**, **A**, **O**, **C** | map views: desirability, workers, fire, health (aid), order, condition; the same key again hides it |
+| **V** | photo mode (V or **Esc** again to leave) |
 | **space** | pause |
 | **1**, **2**, **3** | run at 1×, 2×, 4× |
 | **Esc** | stop placing, close the panel |
 
-Share, the guide, save, load, and new town sit in the bottom right. The town also autosaves
+Share, photo mode, the guide, save, load, and new town sit in the bottom right. The town also autosaves
 every two minutes of game time, and **load** takes whichever save is newer.
 New town and load ask before they replace the town you have.
 
@@ -37,6 +38,27 @@ there gives a link anyone can open to watch your town running, from where
 you were looking; **Play from here** makes it theirs to carry on, in their
 own browser. The end of a term has a share button too. Shared links last
 six months.
+
+**photo mode** (**V**) leaves the town alone on the screen to make pictures
+and films for posting. The panels go, and the map only looks: drag, turn,
+and zoom, and nothing is built or picked. Its bar frames the shot (the whole
+window, 16:9, 9:16 for Shorts and Reels, 1:1, or 4:5), flies the camera
+(*orbit* round where it looks, *flyover* the town, *reveal* from the town
+hall's door up to the island, *drift* low across the streets, *follow* a
+cart, again for another), and works the clock. **picture** saves the frame
+at its post's size (1080 × 1920 for 9:16), with the game's name in the
+corner unless *credit* is off; **film** records the town as you move the
+camera, or the length of a camera move started while it runs. The bar fades
+while the camera flies and comes back with the pointer.
+
+**street** takes the camera down from where it looks to the nearest road, at
+a walker's eye, and you walk the town: **W A S D** or the arrows (the arrows
+left and right, and **Q** and **E**, turn), **shift** to hurry; drag to look
+round, and the wheel or a pinch works a longer lens. On a phone, hold a
+finger still on the map to walk. You keep to the streets and open ground,
+never through a house. Down there *follow* walks a step behind a carrier
+and their cart, *orbit* turns on the spot, and the other moves rise out of
+the street into themselves; **rise** goes back up over where you stand.
 
 ## A term in office
 

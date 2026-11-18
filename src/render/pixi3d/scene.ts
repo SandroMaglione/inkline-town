@@ -26,6 +26,29 @@ export interface CameraView {
   readonly elevation: number
 }
 
+/**
+ * A perspective camera, as photo mode's street has it: standing over grid
+ * cell `x`, `y`, `height` world units up, facing as the map's camera does at
+ * `heading`, looking down by `pitch` (up when it is negative), with a
+ * vertical field of `fov` degrees at a `zoom` of 1.
+ */
+export interface EyeView {
+  readonly x: number
+  readonly y: number
+  readonly height: number
+  readonly heading: number
+  readonly pitch: number
+  readonly fov: number
+  readonly zoom: number
+}
+
+/** From where a camera looks to the camera, at `heading` and `elevation`: the map's way round. */
+export const backward = (heading: number, elevation: number) => ({
+  x: Math.sin(heading) * Math.cos(elevation),
+  y: Math.sin(elevation),
+  z: Math.cos(heading) * Math.cos(elevation)
+})
+
 export interface SceneNode {
   readonly group: Container3D
   orient(): void
@@ -34,6 +57,8 @@ export interface SceneNode {
 
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n))
 const DISTANCE = 6000, NEAR = 0.1, FAR = 14000
+/** How far an eye looks up and down, in radians. */
+const PITCH_UP = 0.6, PITCH_DOWN = 0.9
 const LAND = 0xe2e9e6, FROSTED = 0xe6edf1
 
 /**
@@ -82,6 +107,14 @@ export class GameScene {
   groundDirty = true
   /** Winter: the land is frosted and everything standing tinted cold. */
   frost = false
+  /** Photo mode's street: a perspective camera at someone's eye, or `null`: the map's own. */
+  private eyeView: EyeView | null = null
+  /** The map's zoom, kept while the camera is down at an eye. */
+  private mapZoom = 1
+  /** What the camera stands on: which cells are land (`mask`), water, and road; `street.ts` walks it. */
+  landMask = ""
+  water: ReadonlySet<number> = new Set()
+  roads: ReadonlySet<number> = new Set()
   private overlayKey = ""
   private overlay: BuiltAsset | null = null
   private landKey: string | null = null
@@ -101,6 +134,9 @@ export class GameScene {
   private height = 1
   private observer: ResizeObserver
   private mount: HTMLElement
+  /** The canvas's pixels to a page pixel: the screen's, or more while photo mode films (`filmAt`). */
+  private readonly screenResolution: number
+  private filmResolution: number | null = null
   private previous = 0
   private frames = 0
   private frameMS = 16.67
@@ -128,6 +164,7 @@ export class GameScene {
     this.mount = mount
     this.app = app
     this.counter = drawCounter(app.renderer)
+    this.screenResolution = app.renderer.resolution
     this.world = new View3D({ autoResize: false, width: Math.max(1, mount.clientWidth), height: Math.max(1, mount.clientHeight) })
     this.camera = this.world.camera
     this.camera.useOrthographic(this.world.width / 2, NEAR, FAR)
@@ -150,17 +187,50 @@ export class GameScene {
   private resize() {
     this.width = Math.max(1, this.mount.clientWidth)
     this.height = Math.max(1, this.mount.clientHeight)
-    this.app.renderer.resize(this.width, this.height)
+    this.app.renderer.resize(this.width, this.height, this.filmResolution ?? this.screenResolution)
     this.world.setSize(this.width, this.height)
     this.camera.orthographicSize = this.width / 2
   }
   private placeCamera() {
+    const eye = this.eyeView
+    if (eye) {
+      const camera = this.camera,
+        x = eye.x * floorScale,
+        z = eye.y * floorScale,
+        back = backward(eye.heading, eye.pitch)
+      if (camera.mode !== "perspective") camera.mode = "perspective"
+      camera.fov = eye.fov
+      camera.zoom = eye.zoom
+      // Depth precision rides on `near`: as far out as the town below allows, and `far` just past the island.
+      const across = Math.hypot(x - (GRID / 2) * floorScale, z - (GRID / 2) * floorScale) + GRID * floorScale * 0.75
+      camera.near = Math.max(2, (eye.height - 160) * 0.8)
+      camera.far = Math.hypot(eye.height, across) + 400
+      camera.position.set(x, eye.height, z)
+      camera.lookAt(new Vector3(x - back.x, eye.height - back.y, z - back.z))
+      this.target.set(x, 0, z)
+      this.heading = eye.heading
+      return
+    }
+    if (this.camera.mode !== "orthographic") {
+      this.camera.mode = "orthographic"
+      this.camera.near = NEAR
+      this.camera.far = FAR
+      this.camera.orthographicSize = this.width / 2
+    }
     this.camera.position.set(
       this.target.x + Math.sin(this.heading) * Math.cos(this.elevation) * DISTANCE,
       this.target.y + Math.sin(this.elevation) * DISTANCE,
       this.target.z + Math.cos(this.heading) * Math.cos(this.elevation) * DISTANCE
     )
     this.camera.lookAt(this.target)
+  }
+  /**
+   * Draws the canvas `width` pixels across, however wide it is on the page, so a
+   * film of it has the size of the post it is for; `null` goes back to the screen's.
+   */
+  filmAt(width: number | null) {
+    this.filmResolution = width === null ? null : Math.max(this.screenResolution, width / Math.max(1, this.mount.clientWidth))
+    this.resize()
   }
   /** A point on the page (client pixels) as a point on the view (its own pixels). */
   private local(sx: number, sy: number) {
@@ -188,6 +258,12 @@ export class GameScene {
     return { x: rect.left + (p.x / this.width) * rect.width, y: rect.top + (p.y / this.height) * rect.height }
   }
   pan(dx: number, dy: number) {
+    const eye = this.eyeView
+    if (eye) {
+      // At an eye a drag looks round, the town held under the pointer as it goes.
+      const perPixel = (2 * Math.atan(Math.tan((eye.fov * Math.PI) / 360) / eye.zoom)) / this.height
+      return this.rotate(dx * perPixel, dy * perPixel)
+    }
     const cx = this.width / 2,
       cy = this.height / 2,
       rect = this.canvas.getBoundingClientRect(),
@@ -198,16 +274,29 @@ export class GameScene {
     this.placeCamera()
   }
   panGrid(dx: number, dy: number) {
+    this.leaveEye()
     this.target.x += dx * floorScale
     this.target.z += dy * floorScale
     this.placeCamera()
   }
   rotate(dx: number, dy = 0) {
+    const eye = this.eyeView
+    if (eye) {
+      // Turning a head: a pull down looks up.
+      this.eyeView = { ...eye, heading: eye.heading + dx, pitch: clamp(eye.pitch - dy, -PITCH_UP, PITCH_DOWN) }
+      return this.placeCamera()
+    }
     this.heading += dx
     this.elevation = clamp(this.elevation + dy, Math.PI / 12, (Math.PI / 180) * 65)
     this.placeCamera()
   }
   zoomAt(sx: number, sy: number, factor: number) {
+    const eye = this.eyeView
+    if (eye) {
+      // At an eye, zoom is the lens's: from as the eye sees to a long lens.
+      this.eyeView = { ...eye, zoom: clamp(eye.zoom * factor, 1, 3.5) }
+      return this.placeCamera()
+    }
     const before = this.groundAt(sx, sy)
     this.camera.zoom = clamp(this.camera.zoom * factor, 0.35, 4)
     const after = this.groundAt(sx, sy)
@@ -220,6 +309,7 @@ export class GameScene {
     this.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor)
   }
   resetCamera() {
+    this.eyeView = null
     this.heading = Math.PI / 4
     this.elevation = Math.PI / 6
     this.target.set((GRID / 2) * floorScale, 0, (GRID / 2) * floorScale)
@@ -227,6 +317,7 @@ export class GameScene {
     this.placeCamera()
   }
   focus(x: number, y: number) {
+    this.leaveEye()
     this.target.set(x * floorScale, 0, y * floorScale)
     this.placeCamera()
   }
@@ -263,6 +354,7 @@ export class GameScene {
     const id = `${frost}|${mask}`
     if (id === this.landKey) return
     this.landKey = id
+    this.landMask = mask
     this.frost = frost
     this.app.renderer.background.color = frost ? FROSTED : LAND
     this.land = this.replace(this.land, landAsset(mask, frost))
@@ -272,7 +364,9 @@ export class GameScene {
     if (!this.groundDirty && id === this.groundKey) return
     this.groundDirty = false
     this.groundKey = id
-    this.ground = this.replace(this.ground, groundAsset(roads, water, false, paved))
+    this.roads = roads
+    this.water = water
+    this.ground =this.replace(this.ground, groundAsset(roads, water, false, paved))
   }
   /** The water that would give a catch now: ripples on it (see `FishWater`). */
   setFish(cells: ReadonlyArray<Point>) {
@@ -373,6 +467,7 @@ export class GameScene {
       heading: (this.heading * 180) / Math.PI,
       elevation: (this.elevation * 180) / Math.PI,
       target: [this.target.x / floorScale, this.target.z / floorScale],
+      eye: this.eyeView,
       generation: this.generation
     }
   }
@@ -382,16 +477,45 @@ export class GameScene {
   }
   /** Where the camera looks from, to share along with the town. */
   view(): CameraView {
-    return { x: this.target.x / floorScale, y: this.target.z / floorScale, zoom: this.camera.zoom, heading: this.heading, elevation: this.elevation }
+    // Down at an eye, the map's view over where it stands.
+    const zoom = this.eyeView ? this.mapZoom : this.camera.zoom
+    return { x: this.target.x / floorScale, y: this.target.z / floorScale, zoom, heading: this.heading, elevation: this.elevation }
   }
   /** Looks from a shared view, kept within the limits the controls keep to. */
   setView(view: CameraView) {
     const finite = (n: number, fallback: number) => (Number.isFinite(n) ? n : fallback)
+    this.eyeView = null
     this.target.set(clamp(finite(view.x, GRID / 2), 0, GRID) * floorScale, 0, clamp(finite(view.y, GRID / 2), 0, GRID) * floorScale)
     this.camera.zoom = clamp(finite(view.zoom, 1), 0.35, 4)
     this.heading = finite(view.heading, Math.PI / 4)
     this.elevation = clamp(finite(view.elevation, Math.PI / 6), Math.PI / 12, (Math.PI / 180) * 65)
     this.placeCamera()
+  }
+  /** The eye the camera is down at, or `null` while it looks over the map. */
+  eye(): EyeView | null {
+    return this.eyeView
+  }
+  /** Puts the camera at an eye (see `EyeView`); `setView` brings it back over the map. */
+  setEye(eye: EyeView) {
+    const finite = (n: number, fallback: number) => (Number.isFinite(n) ? n : fallback)
+    if (!this.eyeView) this.mapZoom = this.camera.zoom
+    this.eyeView = {
+      // Coming down from the map, the camera starts far off the island (`director.ts`'s dolly zoom).
+      x: finite(eye.x, GRID / 2),
+      y: finite(eye.y, GRID / 2),
+      height: Math.max(1, finite(eye.height, 16)),
+      heading: finite(eye.heading, Math.PI / 4),
+      pitch: clamp(finite(eye.pitch, 0), -Math.PI / 2 + 0.01, Math.PI / 2 - 0.01),
+      fov: clamp(finite(eye.fov, 55), 0.2, 120),
+      zoom: clamp(finite(eye.zoom, 1), 0.2, 8)
+    }
+    this.placeCamera()
+  }
+  /** Back over the map from an eye, looking down on where it stood. */
+  private leaveEye() {
+    if (!this.eyeView) return
+    this.eyeView = null
+    this.camera.zoom = this.mapZoom
   }
   /**
    * The town as the camera sees it, drawn afresh at `width` × `height`
@@ -404,7 +528,8 @@ export class GameScene {
     this.pool.flush()
     this.world.setSize(width, height)
     this.camera.orthographicSize = width / 2
-    this.camera.zoom = Math.max(0.3, zoom * fit)
+    // At an eye, the field of view is upright, so the picture's height already holds what is on screen.
+    if (!this.eyeView) this.camera.zoom = Math.max(0.3, zoom * fit)
     const target = RenderTexture.create({ width, height, resolution: scale, antialias: true })
     const [r, g, b] = channels(this.frost ? FROSTED : LAND)
     draw(this.app.renderer, this.world, { target, clearColor: [r, g, b, 1] })
