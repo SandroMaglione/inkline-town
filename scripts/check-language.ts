@@ -10,7 +10,7 @@ const browser = await chromium.launch({
 const base = process.env.GAME_BASE_URL ?? "http://127.0.0.1:5232"
 const errors: string[] = []
 try {
-  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 360, height: 640 }, { width: 762, height: 330 }]) {
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 600, height: 912 }, { width: 390, height: 844 }, { width: 360, height: 640 }, { width: 762, height: 330 }]) {
     const phone = viewport.width <= 760 || viewport.height <= 500
     const context = await browser.newContext({ locale: "fr-CA", viewport, hasTouch: phone, isMobile: phone })
     const page = await context.newPage()
@@ -20,6 +20,7 @@ try {
     assert.equal(await page.locator("html").getAttribute("lang"), "fr")
     const chooser = page.locator(".dialog.open .language-picker select")
     assert.equal(await chooser.inputValue(), "fr")
+    assert.equal(await page.locator(".dialog.open .language-picker .language-label").isVisible(), false)
     assert.equal(await page.evaluate((key) => localStorage.getItem(key), LANGUAGE_KEY), null)
     assert.ok(await page.getByRole("button", { name: "Nouvelle partie", exact: true }).isVisible())
     if (!phone) {
@@ -88,7 +89,26 @@ try {
       await page.keyboard.press("Escape")
       assert.ok(await page.locator(".system").isVisible())
     }
+    const picker = page.locator(".system .language-picker")
+    const label = picker.locator(".language-label")
+    assert.ok(await picker.locator(".glyph").isVisible())
+    assert.equal(await label.isVisible(), phone, "the folded menu shows the language label")
+    if (phone) {
+      assert.equal(await label.textContent(), "language")
+      const icon = (await picker.locator(".glyph").boundingBox())!
+      const caption = (await label.boundingBox())!
+      const select = (await picker.locator("select").boundingBox())!
+      const menu = (await page.locator(".system").boundingBox())!
+      assert.ok(icon.x + icon.width <= caption.x, "the icon precedes the label")
+      assert.ok(select.x <= icon.x && select.x + select.width >= caption.x + caption.width, "the select covers icon and label")
+      assert.ok(menu.x >= 0 && menu.x + menu.width <= viewport.width && menu.y >= 0 && menu.y + menu.height <= viewport.height, "the folded menu stays on screen")
+    }
     await page.locator(".system .language-picker select").selectOption("fr")
+    assert.equal(await label.textContent(), "langue")
+    if (phone) {
+      const menu = (await page.locator(".system").boundingBox())!
+      assert.ok(menu.x >= 0 && menu.x + menu.width <= viewport.width && menu.y >= 0 && menu.y + menu.height <= viewport.height, "the translated menu stays on screen")
+    }
     assert.equal(await page.evaluate(() => JSON.stringify(window.town.snapshot())), before, "switching must not change the world")
     assert.equal(await page.locator(".toolbar .town-button").getAttribute("title"), "Objectifs, statistiques, impôts et commerce de la ville (T)")
     assert.equal(await page.locator(".toolbar .pause").getAttribute("aria-label"), "Reprendre la partie")

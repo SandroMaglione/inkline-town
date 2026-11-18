@@ -133,7 +133,7 @@
   /* The camera: pinch zooms and turns it, and the menu has "recentre". */
   .camera-controls { display: none; }
 
-  /* ── The menu: share, the guide, save, load, new town, recentre ── */
+  /* ── The menu: share, the guide, save, load, new town, recentre, language ── */
   .system, .panel-open .system { display: none; }
   .fold-more .system, .fold-more.panel-open .system {
     display: flex; flex-direction: column; top: auto; right: calc(8px + env(safe-area-inset-right)); bottom: calc(58px + env(safe-area-inset-bottom));
@@ -141,9 +141,12 @@
   }
   .fold-more .system .phone-only { display: flex; }
   .system .credit.corner { display: none; }
-  .fold-more .system button, .fold-more .system button.labelled {
+  .fold-more .system button, .fold-more .system button.labelled, .fold-more .system .language-picker {
     font-size: 12px; gap: 10px; padding: 7px 12px 7px 9px; min-height: 34px; justify-content: flex-start; color: #3d4943;
   }
+  .fold-more .system .language-picker { box-sizing: border-box; border: 1px solid transparent; }
+  .fold-more .system .language-picker .glyph svg { width: 16px; height: 16px; }
+  .fold-more .system .language-label { display: inline; }
 
   .toast { bottom: calc(108px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px); white-space: normal; text-align: center; font-size: 13px; line-height: 1.4; padding: 9px 14px; }
   .stroke-bar { bottom: calc(56px + env(safe-area-inset-bottom)); }

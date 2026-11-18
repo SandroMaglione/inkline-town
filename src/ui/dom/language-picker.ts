@@ -30,6 +30,6 @@ export const createLanguagePicker = (toast: (message: string) => void) => {
       toast("Could not save the language preference")
     }
   }
-  label.append(globe, select)
+  label.append(globe, el("span", "language-label", "language"), select)
   return label
 }

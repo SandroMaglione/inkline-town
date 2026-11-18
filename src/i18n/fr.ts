@@ -8,6 +8,7 @@ export const french: Readonly<Record<string, string>> = {
   ...frenchDetails,
   ...frenchMessages,
   "Language": "Langue",
+  "language": "langue",
   "Choose language": "Choisir la langue",
   "Could not save the language preference": "Impossible de mémoriser la langue",
   "drawing the town…": "dessin de la ville…",

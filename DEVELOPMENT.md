@@ -74,7 +74,7 @@ Phones get their layout from `src/ui/dom/styles/phone.css`, loaded after `factor
 a narrow or short screen the HUD folds away: one top line (clock, treasury,
 people, and a chip of planks, stone and tools), one tool bar along the bottom
 (town, the tools, pause (a switch: play while paused), a speed button that cycles, and a ⋯ menu holding
-share, guide, save, load, new town and recentre), and two buttons top right
+share, guide, save, load, new town, recentre and language), and two buttons top right
 for the guide and the map overlays. `src/ui/dom/folds.ts` sets `body.fold-goods`,
 `fold-guide`, `fold-views` or `fold-more` while one is open; a tap on the map
 folds it, a pan or pinch does not. Once the town has a minute of goods
