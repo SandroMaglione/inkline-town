@@ -165,6 +165,10 @@ pnpm install
 pnpm dev
 ```
 
+## License
+
+Apache 2.0 ([LICENSE](LICENSE)). Keep the [NOTICE](NOTICE) crediting Sandro Maglione at [typeonce.games](https://typeonce.games); the Typeonce name and logo are not covered.
+
 ---
 
 [How to play](docs/how-to-play.md) · [Developing](DEVELOPMENT.md) · [The design behind the term](docs/mayor-plan.md)

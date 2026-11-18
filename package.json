@@ -1,6 +1,7 @@
 {
   "name": "factory-yard",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@10.17.1",
   "scripts": {
