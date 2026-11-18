@@ -21,6 +21,33 @@ pnpm balance    # a bot plays terms headless and reports the pressure
 
 Before pushing, run `pnpm typecheck`, `pnpm test`, and `pnpm check`.
 
+## Languages
+
+The game supports English and French. On first use it picks the first supported
+language in the browser's ordered preferences (including regional variants such
+as `fr-CA`), falling back to English. The globe selector on the founding screen
+and in the system menu changes the language immediately without restarting the
+town. Its explicit choice is stored as `inkline-town/language`, separately from
+town saves.
+
+`src/i18n/index.ts` owns the language registry and the source-message translator.
+To add a language, add its catalogue and register its id, native name and messages
+in `languages`; detection and the selector use the same registry. English messages
+are the keys; `{0}`, `{1}`, etc. capture dynamic values, and `{0:number}` restricts
+a numeric slot. Keep sentence templates specific and preserve all slots and
+interactive `[homes]` / `[view:fire]` references. Missing entries retain English.
+
+`src/i18n/dom.ts` binds source text and accessible attributes at explicit output
+boundaries, including HTML's text nodes but never `data-*` action identifiers.
+Use `el`, `setHtml`, or its `setText`, `textNode`, `setTitle`, `setAttribute` and
+`setMarkup` helpers for new player-facing text. Language changes replay these
+bindings in place, preserving inputs and event handlers. Simulation, snapshots,
+and chronicle messages remain language-independent. Run `node --test
+test/i18n.test.ts` for catalogue and detection checks.
+With the dev server running, `pnpm check:language` verifies regional detection,
+the saved override, live switching without changing the world, camera controls,
+and selectors at desktop and phone sizes.
+
 ## The playable 3D game
 
 Open [`/`](http://localhost:5232/) with the dev server running. The existing

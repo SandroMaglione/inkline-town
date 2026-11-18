@@ -1,3 +1,4 @@
+import { setAttribute, setText } from "../../../i18n/dom.ts"
 /**
  * The maker's credit: the Typeonce pixel lockup, a link to typeonce.games,
  * and "Made with ritmo", a link to the GitHub repository of the ECS runtime
@@ -75,7 +76,7 @@ const link = (href: string, label: string, ...content: Array<Node>): HTMLAnchorE
   a.href = href
   a.target = "_blank"
   a.rel = "noopener"
-  a.setAttribute("aria-label", `${label} (opens in a new tab)`)
+  setAttribute(a, "aria-label", `${label} (opens in a new tab)`)
   a.append(...content)
   // The keys belong to the town again as soon as the link has been used.
   a.addEventListener("click", () => a.blur())
@@ -85,7 +86,7 @@ const link = (href: string, label: string, ...content: Array<Node>): HTMLAnchorE
 const text = (className: string, value: string): HTMLSpanElement => {
   const span = document.createElement("span")
   span.className = className
-  span.textContent = value
+  setText(span, value)
   return span
 }
 
@@ -104,7 +105,7 @@ const links = (lockup: number): Array<Node> => [
 export const createCreditCorner = (): HTMLElement => {
   const note = document.createElement("nav")
   note.className = "credit corner"
-  note.setAttribute("aria-label", "Made by Typeonce")
+  setAttribute(note, "aria-label", "Made by Typeonce")
   note.append(...links(16))
   return note
 }

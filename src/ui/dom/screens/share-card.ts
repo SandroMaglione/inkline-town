@@ -7,6 +7,7 @@ import { lands, sizes } from "../../../game/content/index.ts"
 import { icon, type IconName } from "../kit/icons.ts"
 import type { Stats } from "../../../view/contracts.ts"
 import { PICTURE_HEIGHT, PICTURE_WIDTH, type ShareMeta } from "../../../platform/share/format.ts"
+import { t } from "../../../i18n/dom.ts"
 
 const INK = "#3d4943",
   MUTED = "#77817a",
@@ -41,13 +42,13 @@ export const cardFacts = (s: Stats): CardFacts => {
         ? `A ${s.fate.rankTitle}: term ${s.fate.term} is over, ${verdictOf(s)}`
         : `A ${s.fate.rankTitle} · year ${s.season.year} · term ${s.fate.term}`
   return {
-    headline,
-    land: `${capital(sizes[s.charter.size].title)}, ${lands[s.charter.land].title} land · ${s.charter.term}-minute term`,
+    headline: t(headline),
+    land: capital(t(`${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · ${s.charter.term}-minute term`)),
     numbers: [
-      { icon: "people", value: `${s.settlers + s.citizens}`, label: "residents" },
-      { icon: "citizens", value: `${s.citizens}`, label: "citizens" },
-      { icon: "coins", value: `${s.coins}`, label: "coins" },
-      { icon: "approval", value: signed(s.mood.approval), label: "approval" }
+      { icon: "people", value: `${s.settlers + s.citizens}`, label: t("residents") },
+      { icon: "citizens", value: `${s.citizens}`, label: t("citizens") },
+      { icon: "coins", value: `${s.coins}`, label: t("coins") },
+      { icon: "approval", value: signed(s.mood.approval), label: t("approval") }
     ]
   }
 }

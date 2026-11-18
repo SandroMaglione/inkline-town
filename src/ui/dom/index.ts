@@ -1,3 +1,4 @@
+import { setTitle } from "../../i18n/dom.ts"
 /**
  * The page's UI: one way to show the town, on the DOM. It reads what the
  * view shows (`TownView`), writes what the player does with the map
@@ -174,7 +175,7 @@ export const createDomUi = <Camera>(
   // A phone's buttons for what stays folded away: the guide and the map views.
   const foldButtons = el("div", "fold-buttons")
   const layersButton = el("button", "card")
-  layersButton.title = "Map overlays"
+  setTitle(layersButton, "Map overlays")
   layersButton.append(iconEl("layers", 16))
   layersButton.onclick = () => folds.toggleFold("views")
   foldButtons.append(ticker.bulb, layersButton)

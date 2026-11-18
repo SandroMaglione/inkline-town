@@ -1,3 +1,4 @@
+import { setAttribute, setMarkup, setText, setTitle } from "../../i18n/dom.ts"
 /**
  * The heads-up display. Top left: the term's clock and the treasury, the
  * goods in stock below, then the crown's request and any alarm (the ticker
@@ -49,17 +50,17 @@ export const createHud = (
   const coins = el("div", "cell coins")
   bar.append(clock, coins)
   const stock = el("div", "card stock")
-  stock.title = "Goods in the town's storage, and which way each is going · click for what the town makes and uses"
+  setTitle(stock, "Goods in the town's storage, and which way each is going · click for what the town makes and uses")
   const goodCells = new Map<GoodId, HTMLElement>()
   const goodTrends = new Map<GoodId, HTMLElement>()
   for (const group of groups) {
     const cell = el("div", "group")
     for (const g of group) {
       const item = el("span", "good")
-      item.title = `${goods[g].title}: ${goodHelp[g]}`
-      item.setAttribute("aria-label", goods[g].title)
+      setTitle(item, `${goods[g].title}: ${goodHelp[g]}`)
+      setAttribute(item, "aria-label", goods[g].title)
       const glyph = el("span", "glyph")
-      glyph.innerHTML = goodIcon(g, 18)
+      setMarkup(glyph, goodIcon(g, 18))
       const count = el("span", "count", "0")
       const trend = el("span", "trend")
       item.append(glyph, count, trend)
@@ -82,7 +83,7 @@ export const createHud = (
   // The top line: the clock and treasury (on a phone, the people and a chip of the building goods beside them).
   const topline = el("div", "topline")
   const goodsChip = el("button", "card goods-chip")
-  goodsChip.title = "The goods in storage"
+  setTitle(goodsChip, "The goods in storage")
   topline.append(bar, goodsChip)
   // Under the goods, on a click: each good's last minute, made against used, and where it is held.
   const flowCard = el("div", "card flow")
@@ -100,7 +101,7 @@ export const createHud = (
   const jobs = el("div", "cell jobs")
   folk.append(approval, settlerCell, citizenCell, jobs)
   people.append(folk)
-  folk.title = "Open the town's numbers, goals, and levers (T)"
+  setTitle(folk, "Open the town's numbers, goals, and levers (T)")
   folk.onclick = () => controls.toggleMenu("town")
   let shortCursor = 0
   jobs.onclick = (event) => {
@@ -139,9 +140,9 @@ export const createHud = (
       `${icon("coins", 20)}<span class="stack"><b>${s.coins}${cf ? `<span class="trend ${trendClass(way)}">${trendMark(way)}</span>` : ""}</b>` +
         `<small class="${change >= 0 ? "up" : "down"}">${change >= 0 ? "+" : ""}${change}/min</small></span>`
     )
-    coins.title = cf
+    setTitle(coins, cf
       ? `Coins in the treasury · click for the town's last minute\nLast minute: ${signed(change)} (made ${cf.made}, used ${cf.used}${cf.traded !== 0 ? `, traded ${signed(cf.traded)}` : ""})\nAt the current rates: ${signed(s.net)}/min (taxes, trade, upkeep, administration)`
-      : `Coins in the treasury, and what it gains (or loses) a minute at the current rates · click for the town's last minute`
+      : `Coins in the treasury, and what it gains (or loses) a minute at the current rates · click for the town's last minute`)
     coins.classList.toggle("debt", s.coins < 0)
     const left = Math.max(0, s.charter.term * 60 - Math.floor((s.minute - s.fate.began) * 60))
     const severity = (w: typeof s.season.coming) => (w === null ? "" : ` (${winters[w].title})`)
@@ -151,34 +152,34 @@ export const createHud = (
         ? "no more winters this term"
         : `winter in ${clockText(s.season.left)}${severity(s.season.coming)}`
     setHtml(clock, `${icon(s.season.winter ? "winter" : "clock", 20)}<span class="stack"><b>${clockText(left)}${speed === 0 ? `<span class="paused-tag">paused</span>` : ""}</b><small class="${s.season.winter ? "winter" : s.season.coming === "hard" ? "down" : ""}">year ${s.season.year} · ${until}</small></span>`)
-    clock.title = `${s.season.winter ? "Winter: fields lie still, fishing is slow, and homes eat faster" : "Time left in the term"}\nThe almanac: the coming winter is ${s.season.coming === null ? "beyond the term" : winters[s.season.coming].title}, the one after ${s.season.after === null ? "beyond the term" : winters[s.season.after].title}.\nMild: fishing at ${Math.round(winters.mild.fishing * 100)}%. Normal: ${Math.round(winters.normal.fishing * 100)}%. Hard: half as long again, fishing at ${Math.round(winters.hard.fishing * 100)}%, and homes heating are a fire risk.`
+    setTitle(clock, `${s.season.winter ? "Winter: fields lie still, fishing is slow, and homes eat faster" : "Time left in the term"}\nThe almanac: the coming winter is ${s.season.coming === null ? "beyond the term" : winters[s.season.coming].title}, the one after ${s.season.after === null ? "beyond the term" : winters[s.season.after].title}.\nMild: fishing at ${Math.round(winters.mild.fishing * 100)}%. Normal: ${Math.round(winters.normal.fishing * 100)}%. Hard: half as long again, fishing at ${Math.round(winters.hard.fishing * 100)}%, and homes heating are a fire risk.`)
     const trend = s.mood.target > s.mood.approval ? "↑" : s.mood.target < s.mood.approval ? "↓" : ""
     setHtml(approval, `${icon("approval", 18)}<span class="stack"><b class="${s.mood.approval < 0 ? "down" : ""}">${signed(s.mood.approval)} <span class="${s.mood.target >= s.mood.approval ? "up" : "down"}">${trend}</span></b><small>approval</small></span>`)
     setHtml(settlerCell, `${icon("settlers", 18)}<span class="stack"><b>${s.settlers}</b><small>settlers</small></span>`)
     setHtml(citizenCell, `${icon("citizens", 18)}<span class="stack"><b>${s.citizens}</b><small>citizens${s.burghers > 0 ? ` · ${s.burghers} burghers` : ""}</small></span>`)
     const short = s.shortStaffed.length
     setHtml(jobs, `${icon("jobs", 18)}<span class="stack"><b>${s.employed}<span class="of">/${s.jobs}</span></b><small class="${short > 0 ? "down" : ""}">${short > 0 ? `${short} short · click` : "jobs filled"}</small></span>`)
-    jobs.title = short > 0
+    setTitle(jobs, short > 0
       ? `Workers at work over workers needed. ${short} workplace${short > 1 ? "s are" : " is"} short: ${s.shortStaffed.slice(0, 5).map((w) => `${w.title} ${w.assigned}/${w.needed}${w.nobodyNear ? " (no homes within 15 road cells)" : ""}`).join(", ")}. Click to visit them in turn.`
-      : "Workers at work over workers needed: every workplace has its crew. Residents walk at most 15 road cells to work."
+      : "Workers at work over workers needed: every workplace has its crew. Residents walk at most 15 road cells to work.")
     const chipHtml = (["planks", "stone", "tools"] as const)
       .map((g) => `<span class="${s.stock[g] === 0 ? "short" : ""}">${goodIcon(g, 14)}${s.stock[g]}</span>`)
       .join("")
     if (goodsChip.dataset.html !== chipHtml) {
       goodsChip.dataset.html = chipHtml
-      goodsChip.innerHTML = chipHtml
+      setMarkup(goodsChip, chipHtml)
     }
     for (const [g, count] of goodCells) {
-      count.textContent = String(s.stock[g])
+      setText(count, String(s.stock[g]))
       const way = s.flow ? flowTrend(s.flow, g) : 0
       const trend = goodTrends.get(g)!
-      trend.textContent = s.flow ? trendMark(way) : ""
+      setText(trend, s.flow ? trendMark(way) : "")
       trend.className = `trend ${trendClass(way)}`
       // Empty storage is only worth dimming when nothing is held anywhere else either.
       count.parentElement!.classList.toggle("empty", s.stock[g] === 0 && (s.flow?.elsewhere[g] ?? 0) === 0)
-      count.parentElement!.title = `${goods[g].title}: ${goodHelp[g]}` + (s.flow
+      setTitle(count.parentElement!, `${goods[g].title}: ${goodHelp[g]}` + (s.flow
         ? `\nLast minute: made ${s.flow.made[g]}, used ${s.flow.used[g]}${s.flow.traded[g] !== 0 ? `, ${s.flow.traded[g] > 0 ? "bought" : "sold"} ${Math.abs(s.flow.traded[g])}` : ""}. ${s.stock[g]} in storage, ${s.flow.elsewhere[g]} about town (in workshops and markets, and on the way).`
-        : "")
+        : ""))
     }
     // On a phone the goods chip opens the table itself, once there is a minute to show; the plain goods until then.
     document.body.classList.toggle("flow-ready", s.flow !== null)
@@ -193,7 +194,7 @@ export const createHud = (
         `${icon("crown", 18)}<span class="lines"><span class="ask">the crown asks for <b>${s.crown.amount}</b> ${goodIcon(s.crown.good, 14)} <b>${goods[s.crown.good].title}</b></span>` +
           `<span class="terms"><span class="${have < s.crown.amount ? "down" : "up"}">${have} in store</span> · due in <b>${clockText(s.crown.left)}</b> · +${s.crown.reward} coins</span></span>`
       )
-      deliver.title = have < s.crown.amount ? `Not enough ${goods[s.crown.good].title} in store yet` : `Send ${s.crown.amount} ${goods[s.crown.good].title} to the crown for ${s.crown.reward} coins`
+      setTitle(deliver, have < s.crown.amount ? `Not enough ${goods[s.crown.good].title} in store yet` : `Send ${s.crown.amount} ${goods[s.crown.good].title} to the crown for ${s.crown.reward} coins`)
       deliver.disabled = have < s.crown.amount
     }
     // What threatens the term, or is about to raise the town a rank.
@@ -215,7 +216,7 @@ export const createHud = (
       .join("")
     if (alarm.dataset.html !== html) {
       alarm.dataset.html = html
-      alarm.innerHTML = html
+      setMarkup(alarm, html)
     }
     alarm.classList.toggle("show", warnings.length > 0)
     alarm.classList.toggle("good", warnings.length === 1 && s.fate.rises !== null)

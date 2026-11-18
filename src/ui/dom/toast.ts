@@ -1,3 +1,4 @@
+import { setMarkup } from "../../i18n/dom.ts"
 /**
  * The toast: a message for a few seconds, long enough to read (about 15
  * letters a second, and a moment to look), and gone as soon as the mayor taps
@@ -14,7 +15,7 @@ export const createToast = () => {
   return {
     element: box,
     show: (message: string) => {
-      box.innerHTML = iconize(escapeHtml(message))
+      setMarkup(box, iconize(escapeHtml(message)))
       box.classList.add("show")
       at = Date.now()
       window.clearTimeout(timer)

@@ -1,3 +1,4 @@
+import { setMarkup, setText, setTitle } from "../../../i18n/dom.ts"
 /**
  * The end of the term: the reckoning. Its verdict, the term in numbers, a
  * chart of residents, coins, and approval over it, and its chronicle; then
@@ -61,7 +62,7 @@ export const createReckoning = (ui: Interaction, stats: () => Stats | null, send
       return
     }
     const id = `${s.charter.seed}|${s.fate.state}|${s.fate.at}`
-    result.textContent = s.fate.state === "lost" ? "the term is lost · see how" : `term ${s.fate.term} is over · see how`
+    setText(result, s.fate.state === "lost" ? "the term is lost · see how" : `term ${s.fate.term} is over · see how`)
     if (id === reckoned) return
     reckoned = id
     const title = s.fate.state === "lost" ? s.fate.reason.split(":")[0]!.toLowerCase() : `term ${s.fate.term} is over: ${verdictOf(s)}`
@@ -84,19 +85,19 @@ export const createReckoning = (ui: Interaction, stats: () => Stats | null, send
     fact("score", `${s.fate.score}`)
     card.append(facts)
     const graph = el("div", "chart")
-    graph.innerHTML = chart(s)
+    setMarkup(graph, chart(s))
     card.append(graph, el("p", "legend", "— residents (dashed: the next rank) · coins · - - approval · shaded: winters"))
     const story = el("div", "chronicle")
-    story.innerHTML = s.chronicle
+    setMarkup(story, s.chronicle
       .filter((l) => l.tick >= s.fate.began * 3600)
       // Timed from the start of this term, as its chart is.
       .map((l) => `<p><b>${clockText(Math.round((l.tick - s.fate.began * 3600) / 60))}</b> ${l.text}</p>`)
-      .join("")
+      .join(""))
     card.append(story)
     const actions = el("div", "actions")
     if (s.fate.state === "over") {
       const stand = el("button", "frame primary", "Next term")
-      stand.title = `Stand for another ${s.charter.term} minutes: the same town, new winters, and the crown's requests start small again`
+      setTitle(stand, `Stand for another ${s.charter.term} minutes: the same town, new winters, and the crown's requests start small again`)
       stand.onclick = () => {
         send({ type: "nextTerm" })
         showReckoning(false)
@@ -111,7 +112,7 @@ export const createReckoning = (ui: Interaction, stats: () => Stats | null, send
     const look = el("button", "frame", "Look at the town")
     look.onclick = () => showReckoning(false)
     const share = el("button", "frame", "Share the town")
-    share.title = "A picture of the town and its verdict, or a link anyone can open"
+    setTitle(share, "A picture of the town and its verdict, or a link anyone can open")
     share.onclick = () => controls.openShare()
     actions.append(again, look, share)
     card.append(actions, createCreditLine())

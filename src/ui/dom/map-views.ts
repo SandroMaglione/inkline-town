@@ -1,3 +1,4 @@
+import { setMarkup, setTitle, textNode } from "../../i18n/dom.ts"
 /**
  * The map views (`view/tools.ts`), and the legend of the one shown. On a
  * phone the list folds away once one is chosen, so the map shows.
@@ -12,13 +13,13 @@ export const createMapViews = (ui: Interaction, controls: Pick<Controls, "setVie
   const views = el("div", "views")
   const legend = el("div", "card legend")
   const viewsTitle = el("div", "views-title", "map overlays")
-  viewsTitle.title = "Colour the map by one of these, to see where the town is doing well or badly. Press the key again (or click) to hide it."
+  setTitle(viewsTitle, "Colour the map by one of these, to see where the town is doing well or badly. Press the key again (or click) to hide it.")
   views.append(viewsTitle)
   const buttons = (Object.keys(mapViews) as Array<MapViewId>).map((view) => {
     const v = mapViews[view]
     const button = el("button", "")
-    button.title = `Show ${v.label} over the map (${v.key}); again to hide it`
-    button.append(iconEl(v.icon, 15), document.createTextNode(v.label), el("kbd", "", v.key))
+    setTitle(button, `Show ${v.label} over the map (${v.key}); again to hide it`)
+    button.append(iconEl(v.icon, 15), textNode(v.label), el("kbd", "", v.key))
     button.onclick = () => controls.setView(ui.view === view ? "none" : view)
     views.append(button)
     return { view, button }
@@ -37,7 +38,7 @@ export const createMapViews = (ui: Interaction, controls: Pick<Controls, "setVie
         : ""
       if (legend.dataset.html !== html) {
         legend.dataset.html = html
-        legend.innerHTML = html
+        setMarkup(legend, html)
       }
       legend.classList.toggle("show", l !== null)
     }

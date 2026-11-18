@@ -1,3 +1,4 @@
+import { setText } from "../../../i18n/dom.ts"
 /**
  * What upgrading a building would cost and give, said in full before the
  * mayor pays, with the button that begins it.
@@ -44,7 +45,7 @@ export const upgradeBox = (parts: PanelParts, offer: NonNullable<Extract<Panel, 
   parts.live(() => {
     const now = parts.town.panel
     if (now?.type !== "building" || !now.upgrade) return
-    needed.textContent = now.upgrade.needed ? `needed now: ${now.upgrade.needed}` : "not needed yet: the gold arrow shows when it is"
+    setText(needed, now.upgrade.needed ? `needed now: ${now.upgrade.needed}` : "not needed yet: the gold arrow shows when it is")
     needed.classList.toggle("now", now.upgrade.needed !== null)
     const coins = parts.town.stats?.coins ?? 0, stock = parts.town.stats?.stock
     const materials = (Object.entries(offer.cost.materials) as Array<[GoodId, number]>).filter(([, n]) => n > 0)
@@ -59,7 +60,7 @@ export const upgradeBox = (parts: PanelParts, offer: NonNullable<Extract<Panel, 
       ...(upkeep ? [{ icon: "upkeep", label: "upkeep after", value: upkeep.replace(/^upkeep /, "") } as Line] : [])
     ])
     begin.disabled = now.upgrade.blocked !== null || now.upgrade.short !== null
-    why.textContent = now.upgrade.blocked ?? now.upgrade.short ?? "it goes on working while the works go on, and scaffolding rises inside its plot"
+    setText(why, now.upgrade.blocked ?? now.upgrade.short ?? "it goes on working while the works go on, and scaffolding rises inside its plot")
   })
   const footer = el("div", "begin")
   footer.append(begin, why)

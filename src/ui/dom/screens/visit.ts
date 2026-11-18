@@ -1,3 +1,4 @@
+import { setTitle } from "../../../i18n/dom.ts"
 /**
  * Visiting a shared town: it runs as its mayor left it, with the building
  * tools put away, until the visitor plays on from here (it becomes theirs,
@@ -31,7 +32,7 @@ export const createVisit = (
     words.append(el("b", "", "a shared town"), el("small", "", title))
     text.append(words)
     const play = el("button", "frame primary", "Play from here")
-    play.title = "Make this town yours: build, govern, and it autosaves in this browser"
+    setTitle(play, "Make this town yours: build, govern, and it autosaves in this browser")
     play.onclick = () => {
       endVisit()
       controls.toast("The town is yours: it autosaves as you play")

@@ -1,3 +1,4 @@
+import { setAttribute, setText, setTitle, textNode } from "../../i18n/dom.ts"
 /**
  * The tool bar, built from the tool table (`view/tools.ts`): the town's
  * panel first and larger, then the tools, the clock, and (on a phone) the
@@ -13,12 +14,12 @@ export const createToolbar = (ui: Interaction, controls: Pick<Controls, "toggleM
   const bar = el("div", "toolbar")
   // The town's panel is opened most: it has a button of its own, first and larger.
   const townButton = el("button", "town-button")
-  townButton.title = "The town's goals, numbers, taxes, and trade (T)"
+  setTitle(townButton, "The town's goals, numbers, taxes, and trade (T)")
   townButton.append(iconEl("town", 22), el("span", "", "town"), el("kbd", "", "T"))
   townButton.onclick = () => controls.toggleMenu("town")
   // Everything the bottom-right buttons do, folded into one menu on a phone.
   const moreButton = el("button", "more")
-  moreButton.title = "Share, the guide, save, load, new town"
+  setTitle(moreButton, "Share, the guide, save, load, new town")
   moreButton.append(iconEl("more"))
   moreButton.onclick = () => controls.toggleFold("more")
   const toolGroup = el("div", "group")
@@ -26,8 +27,8 @@ export const createToolbar = (ui: Interaction, controls: Pick<Controls, "toggleM
   const buttons = tools.map(({ id, tip }) => {
     const command: Command = commands[id]
     const button = el("button", "")
-    button.title = tip
-    button.append(iconEl(command.icon), document.createTextNode(command.label), el("kbd", "", command.key ?? ""))
+    setTitle(button, tip)
+    button.append(iconEl(command.icon), textNode(command.label), el("kbd", "", command.key ?? ""))
     const action = command.action
     button.onclick = () => ("menu" in action ? controls.toggleMenu(action.menu) : "tool" in action ? controls.choose(action.tool) : undefined)
     toolGroup.append(button)
@@ -43,7 +44,7 @@ export const createToolbar = (ui: Interaction, controls: Pick<Controls, "toggleM
   ].map(({ speed, label, key }) => {
     const button = el("button", speed === 0 ? "pause" : "", label)
     if (speed === 0) button.append(iconEl("pause", 14))
-    button.title = speed === 0 ? "Pause the town, or run it again (space)" : `Run the town at ${label} (${key})`
+    setTitle(button, speed === 0 ? "Pause the town, or run it again (space)" : `Run the town at ${label} (${key})`)
     // Pause is a switch: pressed again it runs the town at its last speed.
     button.onclick = () => (speed === 0 ? controls.togglePause() : controls.setSpeed(speed))
     speedGroup.append(button)
@@ -51,7 +52,7 @@ export const createToolbar = (ui: Interaction, controls: Pick<Controls, "toggleM
   })
   // A phone has room for one speed button: it runs a paused town, else goes on to the next speed.
   const cycle = el("button", "cycle")
-  cycle.title = "Change speed: 1×, 2×, 4×"
+  setTitle(cycle, "Change speed: 1×, 2×, 4×")
   cycle.onclick = () => controls.cycleSpeed()
   speedGroup.append(cycle)
   bar.append(moreButton)
@@ -75,9 +76,9 @@ export const createToolbar = (ui: Interaction, controls: Pick<Controls, "toggleM
       // Paused, the pause button shows play.
       const pause = speeds[0]!.button
       pause.replaceChildren(iconEl(speed === 0 ? "play" : "pause", 14))
-      pause.setAttribute("aria-label", speed === 0 ? "Run the town" : "Pause the town")
-      cycle.textContent = `${speed === 0 ? last : speed}×`
-      cycle.title = speed === 0 ? `Run the town at ${last}×` : "Change speed: 1×, 2×, 4×"
+      setAttribute(pause, "aria-label", speed === 0 ? "Run the town" : "Pause the town")
+      setText(cycle, `${speed === 0 ? last : speed}×`)
+      setTitle(cycle, speed === 0 ? `Run the town at ${last}×` : "Change speed: 1×, 2×, 4×")
     }
   }
 }

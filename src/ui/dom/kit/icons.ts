@@ -1,3 +1,4 @@
+import { setMarkup } from "../../../i18n/dom.ts"
 /**
  * Small line-drawn icons for the page, in the town's ink and colours: goods,
  * the town's numbers, the tools. Each is a 16 × 16 SVG drawn with the same
@@ -93,7 +94,7 @@ export const icon = (name: IconName, size = 16, extraClass = ""): string =>
 export const iconEl = (name: IconName, size = 16, extraClass = ""): HTMLElement => {
   const span = document.createElement("span")
   span.className = "glyph"
-  span.innerHTML = icon(name, size, extraClass)
+  setMarkup(span, icon(name, size, extraClass))
   return span
 }
 

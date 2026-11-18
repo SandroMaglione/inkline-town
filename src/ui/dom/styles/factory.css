@@ -10,6 +10,11 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .camera-controls output {font-size:11px;color:#77817a;min-width:33px;text-align:center}
 
 .icon { display: block; flex: none; }
+.language-picker { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 34px; min-height: 34px; border-radius: 5px; color: #3d4943; vertical-align: middle; flex: none; }
+.language-picker:hover { background: #eceee8; }
+.language-picker:focus-within { outline: 2px solid #2f5a9c; outline-offset: 2px; }
+.language-picker select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font: inherit; }
+.dialog .title > .language-picker { float: right; margin-left: 8px; }
 .glyph { display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .glyph .swatch { width: 10px; height: 10px; display: inline-block; }
 

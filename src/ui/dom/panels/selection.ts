@@ -1,3 +1,4 @@
+import { setText, setTitle } from "../../../i18n/dom.ts"
 /**
  * The panel of what is picked: a building, a home, a park, or a ruin. How it
  * is, its rows under headings (kept in step with what the view says each
@@ -78,19 +79,19 @@ export const selectionPanel = (parts: PanelParts, p: Exclude<Panel, { readonly t
     const now = parts.town.panel
     if (!now || now.type === "build" || now.type === "town" || now.type !== p.type) return
     if (now.type === "building") {
-      status.textContent = now.problem ?? now.status
+      setText(status, now.problem ?? now.status)
       status.className = `pill ${now.problem !== null ? "problem" : now.status === "working" ? "working" : ""}`
       syncGroups(now.groups)
     } else if (now.type === "house") {
-      status.textContent = now.summary
+      setText(status, now.summary)
       status.className = `pill ${now.trouble ? "problem" : "working"}`
       syncGroups(now.groups)
     } else if (now.type === "park") {
-      status.textContent = `${now.value > 0 ? "+" : ""}${now.value} out to ${now.reach} cells`
+      setText(status, `${now.value > 0 ? "+" : ""}${now.value} out to ${now.reach} cells`)
       status.className = "pill working"
       syncGroups([{ title: "what makes it", icon: "appeal", lines: now.lines }])
     } else {
-      status.textContent = now.cause
+      setText(status, now.cause)
       status.className = "pill problem"
       syncGroups([{ title: "what is left", icon: "condition", lines: now.lines }])
     }
@@ -100,7 +101,7 @@ export const selectionPanel = (parts: PanelParts, p: Exclude<Panel, { readonly t
     const actions = el("div", "actions")
     if (p.type === "building") {
       const pause = el("button", "frame", "Pause work")
-      pause.title = "A paused building has no workers and pays a quarter of its upkeep"
+      setTitle(pause, "A paused building has no workers and pays a quarter of its upkeep")
       pause.onclick = () => {
         const now = parts.town.panel
         if (now?.type === "building") parts.send({ type: "pause", cell: now.cell, on: !now.paused })
@@ -108,14 +109,14 @@ export const selectionPanel = (parts: PanelParts, p: Exclude<Panel, { readonly t
       parts.live(() => {
         const now = parts.town.panel
         if (now?.type !== "building") return
-        pause.textContent = now.paused ? "Resume work" : "Pause work"
+        setText(pause, now.paused ? "Resume work" : "Pause work")
         pause.style.display = now.pausable ? "" : "none"
       })
       actions.append(pause)
     }
     if (p.type === "house") {
       const close = el("button", "frame", "Close home")
-      close.title = "A closed home stands empty: no taxes, and no cost to the town hall's administration. Reopen it and settlers move back in."
+      setTitle(close, "A closed home stands empty: no taxes, and no cost to the town hall's administration. Reopen it and settlers move back in.")
       close.onclick = () => {
         const now = parts.town.panel
         if (now?.type === "house") parts.send({ type: "pause", cell: now.cell, on: !now.closed })
@@ -123,7 +124,7 @@ export const selectionPanel = (parts: PanelParts, p: Exclude<Panel, { readonly t
       parts.live(() => {
         const now = parts.town.panel
         if (now?.type !== "house") return
-        close.textContent = now.closed ? "Reopen home" : "Close home"
+        setText(close, now.closed ? "Reopen home" : "Close home")
         close.style.display = now.closable ? "" : "none"
       })
       actions.append(close)
@@ -132,7 +133,7 @@ export const selectionPanel = (parts: PanelParts, p: Exclude<Panel, { readonly t
     remove.onclick = () => parts.send({ type: "remove", cell: p.cell })
     parts.live(() => {
       const now = parts.town.panel
-      remove.title = now?.type === "building" || now?.type === "house" ? now.salvage : ""
+      setTitle(remove, now?.type === "building" || now?.type === "house" ? now.salvage : "")
     })
     actions.append(remove)
     panel.append(actions)

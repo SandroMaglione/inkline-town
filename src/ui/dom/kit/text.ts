@@ -7,9 +7,11 @@ import { goodIds, goods, kindOrder, kinds, type GoodId, type KindId } from "../.
 import { refLook, refOf } from "../../../view/tools.ts"
 import { escapeHtml } from "./dom.ts"
 import { goodIcon, icon } from "./icons.ts"
+import { languages, translate } from "../../../i18n/index.ts"
+import { t } from "../../../i18n/dom.ts"
 
 /** Words in the town's messages that name a building or a good, longest first, so "smoked fish" wins over "fish". */
-const namedThings: ReadonlyArray<{ readonly word: string; readonly ref: { readonly kind: KindId } | { readonly good: GoodId } }> = [
+const englishThings: ReadonlyArray<{ readonly word: string; readonly ref: { readonly kind: KindId } | { readonly good: GoodId } }> = [
   ...kindOrder.flatMap((id) => {
     const title = kinds[id].title.toLowerCase()
     return [title, `${title}s`].map((word) => ({ word, ref: { kind: id } }))
@@ -18,9 +20,13 @@ const namedThings: ReadonlyArray<{ readonly word: string; readonly ref: { readon
   { word: "loaves", ref: { good: "bread" as GoodId } },
   { word: "loaf", ref: { good: "bread" as GoodId } }
 ].sort((a, b) => b.word.length - a.word.length)
+const namedThings = [
+  ...englishThings,
+  ...languages.flatMap((language) => englishThings.map((thing) => ({ ...thing, word: translate(thing.word, language.id) })))
+].sort((a, b) => b.word.length - a.word.length)
 const namedPattern = new RegExp(
-  `\\b(${namedThings.map((t) => t.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b|\\(([A-Z])\\)|\\[([a-z]+(?::[a-z]+)?)\\]`,
-  "gi"
+  `(?<![\\p{L}\\p{N}_])(${namedThings.map((t) => t.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![\\p{L}\\p{N}_])|\\(([A-Z])\\)|\\[([a-z]+(?::[a-z]+)?)\\]`,
+  "giu"
 )
 /** Goods as numbers name them ("2 planks", "1 plank"), and as recipes do ("flour → bread"), by title. */
 const goodWords: ReadonlyArray<readonly [string, GoodId]> = [
@@ -57,7 +63,7 @@ const forDevice = (text: string) => text.replace(/\{([^{}|]*)\|([^{}|]*)\}/g, (_
  * `asks`: when given, only these buildings become chips to place one; others it names are plain words.
  */
 export const callouts = (text: string, standing: ReadonlySet<KindId> = new Set(), asks?: ReadonlySet<KindId>): string =>
-  escapeHtml(forDevice(text)).replace(namedPattern, (match, word: string | undefined, key: string | undefined, tool: string | undefined) => {
+  escapeHtml(forDevice(t(text))).replace(namedPattern, (match, word: string | undefined, key: string | undefined, tool: string | undefined) => {
     if (key) return `<kbd class="key">${key}</kbd>`
     if (tool) {
       const ref = refOf(tool)

@@ -1,3 +1,4 @@
+import { setMarkup, setText, setTitle } from "../../../i18n/dom.ts"
 /** The build menu: every building by category, then the park pieces, each with its cost, what it does, and its picture. */
 import {
   categoryColor, categoryOrder, goods, groundIds, grounds, home, kindOrder, kinds, park as parkRules, propIds, props, type Category, type GroundId, type Kind, type ParkPiece, type PropId
@@ -54,17 +55,17 @@ export const buildMenu = (parts: PanelParts, controls: Pick<Controls, "place" | 
         kind.appeal ? `<span class="chip ${kind.appeal.value < 0 ? "bad" : "good"}" title="desirability ${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value} beside it, out to ${kind.appeal.reach} cells${kind.appeal.value < 0 ? ": keep homes away" : ": homes like it"}">${icon("appeal", 14)}${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value}</span>` : "",
         `<span class="chip dim" title="upkeep: coins a minute while it stands (a quarter when paused)">${icon("upkeep", 14)}${kind.upkeep}/min</span>`
       ].join("")
-      terms.innerHTML = `<span class="cap">does</span>${does}`
+      setMarkup(terms, `<span class="cap">does</span>${does}`)
       const blurb = el("span", "blurb", kind.blurb)
       option.append(thumb(parts.pictures, id), el("span", "name", kind.title.toLowerCase()), cost.box, terms, blurb)
-      option.title = `${kind.title}: ${kind.blurb}${kind.workers > 0 ? ` · ${kind.workers} ${kind.crew === "citizens" ? "citizen" : "settler"} workers from within 15 road cells` : ""}${kind.service ? ` · walkers reach ${kind.service.range} road cells` : ""}${kind.appeal ? ` · desirability ${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value} out to ${kind.appeal.reach} cells` : ""} · ${kind.upkeep} coins a minute`
+      setTitle(option, `${kind.title}: ${kind.blurb}${kind.workers > 0 ? ` · ${kind.workers} ${kind.crew === "citizens" ? "citizen" : "settler"} workers from within 15 road cells` : ""}${kind.service ? ` · walkers reach ${kind.service.range} road cells` : ""}${kind.appeal ? ` · desirability ${kind.appeal.value > 0 ? "+" : ""}${kind.appeal.value} out to ${kind.appeal.reach} cells` : ""} · ${kind.upkeep} coins a minute`)
       option.onclick = () => controls.place(id)
       parts.live(() => {
         const lock = lockText(parts, kind)
         const short = cost.refresh()
         option.disabled = lock !== null
         option.classList.toggle("short", lock === null && short)
-        blurb.textContent = lock ?? kind.blurb
+        setText(blurb, lock ?? kind.blurb)
       })
       box.append(option)
     }
@@ -88,10 +89,10 @@ export const buildMenu = (parts: PanelParts, controls: Pick<Controls, "place" | 
     const cost = costChips(piece.cost, has)
     cost.box.prepend(el("span", "cap", "cost"))
     const terms = el("span", "chips")
-    terms.innerHTML = `<span class="cap">does</span><span class="chip good" title="beauty it adds to its park">${icon("appeal", 14)}+${piece.beauty}</span><span class="chip dim" title="upkeep, coins a minute">${icon("upkeep", 14)}${piece.upkeep}/min</span>`
+    setMarkup(terms, `<span class="cap">does</span><span class="chip good" title="beauty it adds to its park">${icon("appeal", 14)}+${piece.beauty}</span><span class="chip dim" title="upkeep, coins a minute">${icon("upkeep", 14)}${piece.upkeep}/min</span>`)
     const blurb = el("span", "blurb", piece.blurb)
     option.append(thumb(parts.pictures, `park:${id}`), el("span", "name", piece.title.toLowerCase()), cost.box, terms, blurb)
-    option.title = `${piece.title}: ${piece.blurb} · beauty +${piece.beauty}${ground ? " a cell" : ""} · ${piece.upkeep} coins a minute`
+    setTitle(option, `${piece.title}: ${piece.blurb} · beauty +${piece.beauty}${ground ? " a cell" : ""} · ${piece.upkeep} coins a minute`)
     option.onclick = pick
     parts.live(() => {
       const lock = lockText(parts, piece)
@@ -99,7 +100,7 @@ export const buildMenu = (parts: PanelParts, controls: Pick<Controls, "place" | 
       option.disabled = lock !== null
       option.classList.toggle("short", lock === null && short)
       option.classList.toggle("on", (ground ? ui.tool === "ground" && ui.ground === id : ui.tool === "prop" && ui.prop === id))
-      blurb.textContent = lock ?? piece.blurb
+      setText(blurb, lock ?? piece.blurb)
     })
     parks.append(option)
   }

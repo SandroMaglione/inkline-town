@@ -1,3 +1,4 @@
+import { setTitle } from "../../../i18n/dom.ts"
 /**
  * Founding a town: the charter dialog. Pick the land's size, the term, and
  * its richness; the land is drawn small as it would be founded. On the way
@@ -15,6 +16,7 @@ import { el, escapeHtml, setHtml } from "../kit/dom.ts"
 import { icon } from "../kit/icons.ts"
 import { section } from "../kit/section.ts"
 import { ago } from "../kit/text.ts"
+import { createLanguagePicker } from "../language-picker.ts"
 import type { TownHistory } from "../panels/town.ts"
 
 /**
@@ -72,7 +74,7 @@ export const createCharter = (
     author.target = "_blank"
     author.rel = "noopener"
     by.append(author)
-    title.append(by)
+    title.append(by, createLanguagePicker(controls.toast))
     card.append(title, el("p", "sub", "Pick the land, then grow the town to its goal before the term runs out."))
     const body = el("div", "charter")
     const options = el("div", "")
@@ -102,7 +104,7 @@ export const createCharter = (
       const said = el("p", "note")
       const buttons = values.map((v) => {
         const b = el("button", "frame choice", label(v))
-        b.title = tip(v)
+        setTitle(b, tip(v))
         b.onclick = () => {
           set(v)
           refresh()
@@ -159,7 +161,7 @@ export const createCharter = (
     const refresh = () => {
       for (const r of refreshers) r()
       const land = drawLand(map)
-      reroll.title = `Draw other land (this is seed ${choice.seed})`
+      setTitle(reroll, `Draw other land (this is seed ${choice.seed})`)
       const rocks = land.rocks.filter((r) => !r.ore).length
       setHtml(cells, `${icon("pave", 13)}${land.cells} cells`)
       setHtml(facts, chip("wood", `${land.trees.length} trees`) + chip("stone", `${rocks} stone`) + chip("ore", `${land.rocks.length - rocks} ore`))
@@ -183,7 +185,7 @@ export const createCharter = (
     if (!cancellable && savedTown) {
       const saved = savedTown
       const resume = el("button", "frame", "Continue saved")
-      resume.title = `Carry on with the town saved in this browser: ${saved.title}${saved.savedAt > 0 ? `, saved ${ago(saved.savedAt)}` : ""}`
+      setTitle(resume, `Carry on with the town saved in this browser: ${saved.title}${saved.savedAt > 0 ? `, saved ${ago(saved.savedAt)}` : ""}`)
       resume.onclick = () => {
         const said = load() ?? "Loaded"
         controls.toast(said)

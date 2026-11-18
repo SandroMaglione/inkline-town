@@ -1,3 +1,4 @@
+import { setMarkup, setText, setTitle } from "../../../i18n/dom.ts"
 /**
  * The view's lines (see `Line`) as rows: what on the left, its value on the
  * right, any goods as chips, a note underneath, and what to do about it.
@@ -15,21 +16,21 @@ export const renderLine = (pictures: Pictures, row: HTMLElement, l: Line) => {
   row.className = `line ${l.tone ?? ""}`
   const chips = l.goods ? `<span class="chips">${l.goods.map((g) => `<span class="chip" title="${goods[g.good].title}">${goodIcon(g.good, 14)}${g.count}</span>`).join("")}</span>` : ""
   // Goods take the value's place: chips on the right.
-  row.innerHTML = `<span class="mark">${icon(l.icon, 16)}</span><span class="what"></span>${chips || `<span class="count"></span>`}${l.note ? `<small class="note"></small>` : ""}`
-  row.querySelector<HTMLElement>(".what")!.textContent = l.label
-  if (!chips) row.querySelector<HTMLElement>(".count")!.innerHTML = iconize(escapeHtml(l.value ?? ""))
-  if (l.note) row.querySelector<HTMLElement>(".note")!.innerHTML = iconize(escapeHtml(l.note))
+  setMarkup(row, `<span class="mark">${icon(l.icon, 16)}</span><span class="what"></span>${chips || `<span class="count"></span>`}${l.note ? `<small class="note"></small>` : ""}`)
+  setText(row.querySelector<HTMLElement>(".what")!, l.label)
+  if (!chips) setMarkup(row.querySelector<HTMLElement>(".count")!, iconize(escapeHtml(l.value ?? "")))
+  if (l.note) setMarkup(row.querySelector<HTMLElement>(".note")!, iconize(escapeHtml(l.note)))
   // What to do about it, on a row of its own: a building to place shows its picture, and the row places one.
   if (l.fix) {
     const build = l.fix.build && kinds[l.fix.build].buildable ? l.fix.build : undefined
     const fix = el(build ? "button" : "div", "fix")
     if (build) {
       fix.dataset.build = build
-      fix.title = `Build a ${kinds[build].title.toLowerCase()}`
+      setTitle(fix, `Build a ${kinds[build].title.toLowerCase()}`)
       fix.append(thumb(pictures, build))
     } else fix.append(iconEl("hint", 14))
     const text = el("span", "do")
-    text.innerHTML = iconize(callouts(l.fix.text))
+    setMarkup(text, iconize(callouts(l.fix.text)))
     fix.append(text)
     row.append(fix)
   }

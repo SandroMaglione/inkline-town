@@ -1,3 +1,4 @@
+import { setMarkup, setText, textNode } from "../../../i18n/dom.ts"
 /** A labelled number in a panel, and a signed sum coloured by its sign. */
 import type { GoodId } from "../../../game/content/index.ts"
 import type { IconName } from "../../../view/icons.ts"
@@ -10,8 +11,8 @@ export const row = (box: HTMLElement, label: string, glyph?: IconName | GoodId) 
   const line = el("div", "row")
   const value = el("span", "count")
   const name = el("span", "label")
-  if (glyph) name.innerHTML = icon(glyph, 16)
-  name.append(document.createTextNode(label))
+  if (glyph) setMarkup(name, icon(glyph, 16))
+  name.append(textNode(label))
   line.append(name, value)
   box.append(line)
   return value
@@ -19,7 +20,7 @@ export const row = (box: HTMLElement, label: string, glyph?: IconName | GoodId) 
 
 /** Sets a number with its sign, coloured by it. */
 export const money = (node: HTMLElement, n: number, suffix = "") => {
-  node.textContent = `${signed(n)}${suffix}`
+  setText(node, `${signed(n)}${suffix}`)
   node.classList.toggle("up", n > 0)
   node.classList.toggle("down", n < 0)
 }

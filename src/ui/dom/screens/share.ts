@@ -1,3 +1,4 @@
+import { setText, textNode } from "../../../i18n/dom.ts"
 /**
  * Sharing: a picture of the town (the card), to post anywhere; and, on
  * asking, a link that opens the town itself, running, for anyone to watch and
@@ -63,14 +64,14 @@ export const createShare = <Camera>(
     sheet.append(el("p", "sub", "Post the picture anywhere, or make a link: whoever opens it sees this town running, from where you look at it now, and can play on from here."))
     const actions = el("div", "actions")
     const picture = el("button", "frame primary", "")
-    picture.append(iconEl("picture", 15), document.createTextNode(handheld() ? "Share the picture" : "Save the picture"))
+    picture.append(iconEl("picture", 15), textNode(handheld() ? "Share the picture" : "Save the picture"))
     picture.onclick = async () => controls.toast(await offerPicture(png, name, caption))
     const link = el("button", "frame", "")
-    link.append(iconEl("link", 15), document.createTextNode("Make a link"))
+    link.append(iconEl("link", 15), textNode("Make a link"))
     const linkRow = el("div", "link-row")
     link.onclick = async () => {
       link.disabled = true
-      link.lastChild!.textContent = "Making a link…"
+      setText(link.lastChild!, "Making a link…")
       try {
         const small = await blobOf(scaled(card, PICTURE_WIDTH, PICTURE_HEIGHT), "image/jpeg", PICTURE_QUALITY)
         const made = await upload(shareFile(map.camera()), small, metaOf(facts))
@@ -90,7 +91,7 @@ export const createShare = <Camera>(
         copy.focus()
       } catch (error) {
         link.disabled = false
-        link.lastChild!.textContent = "Try the link again"
+        setText(link.lastChild!, "Try the link again")
         controls.toast(error instanceof Error ? error.message : "Could not share the town")
       }
     }

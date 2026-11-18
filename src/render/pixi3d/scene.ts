@@ -16,6 +16,7 @@ import { FishWater } from "./fish-effects.ts"
 import { backend, channels } from "./gpu.ts"
 import { draw, sizeFaces } from "./materials.ts"
 import type { ParkCell } from "../../game/world/appeal.ts"
+import { setAttribute } from "../../i18n/dom.ts"
 
 /** Where the camera stands: the grid cell it looks at, its zoom, and its angles. */
 export interface CameraView {
@@ -134,7 +135,7 @@ export class GameScene {
     app.stage.addChild(this.world)
     const canvas = app.canvas
     canvas.className = "world-canvas"
-    canvas.setAttribute("aria-label", "Inkline Town 3D map. Drag to pan, right-drag to rotate, wheel to zoom.")
+    setAttribute(canvas, "aria-label", "Inkline Town 3D map. Drag to pan, right-drag to rotate, wheel to zoom.")
     canvas.tabIndex = 0
     mount.append(canvas)
     this.world.root.addChild(this.objects, this.fish.group)

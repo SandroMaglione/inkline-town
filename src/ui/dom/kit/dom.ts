@@ -1,9 +1,10 @@
 /** The few DOM helpers every part of the page builds with. */
+import { setMarkup, textNode } from "../../../i18n/dom.ts"
 
 export const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = "") => {
   const node = document.createElement(tag)
   node.className = className
-  node.textContent = text
+  if (text) node.append(textNode(text))
   return node
 }
 
@@ -15,7 +16,7 @@ export const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: str
 export const setHtml = (node: HTMLElement, html: string) => {
   if (node.dataset.html === html) return
   node.dataset.html = html
-  node.innerHTML = html
+  setMarkup(node, html)
 }
 
 export const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")

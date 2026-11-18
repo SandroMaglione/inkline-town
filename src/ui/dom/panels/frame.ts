@@ -1,3 +1,4 @@
+import { setTitle } from "../../../i18n/dom.ts"
 /**
  * The side panel: the build menu, the town's panel, or what is picked. It is
  * built once for what it shows, and its numbers are refreshed in place every
@@ -46,7 +47,7 @@ export const createPanel = (
     text.append(el("h2", "", title))
     if (below) text.append(below)
     const closeButton = el("button", "close")
-    closeButton.title = "Close (Esc)"
+    setTitle(closeButton, "Close (Esc)")
     closeButton.append(iconEl("close", 18))
     closeButton.onclick = () => {
       ui.selected = null

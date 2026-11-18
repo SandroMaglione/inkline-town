@@ -1,3 +1,4 @@
+import { setMarkup, setText, setTitle } from "../../i18n/dom.ts"
 /**
  * The town ticker: the guide's step first (what to do next, and why), then
  * what needs looking at now, then the news of the last minute and a half.
@@ -18,7 +19,7 @@ import { callouts } from "./kit/text.ts"
 export const createTicker = (ui: Interaction, fold: () => Fold | null, controls: Pick<Controls, "useRef" | "toast" | "setFold" | "goTo" | "place">) => {
   const ticker = el("div", "card ticker")
   const bulb = el("button", "card")
-  bulb.title = "The guide, and what needs looking at now"
+  setTitle(bulb, "The guide, and what needs looking at now")
   const badge = el("span", "badge")
   bulb.append(iconEl("hint", 16), badge)
   bulb.onclick = () => controls.setFold(fold() === "guide" ? null : "guide")
@@ -139,11 +140,11 @@ export const createTicker = (ui: Interaction, fold: () => Fold | null, controls:
     ].join("")
     if (ticker.dataset.html !== tickerHtml) {
       ticker.dataset.html = tickerHtml
-      ticker.innerHTML = tickerHtml
+      setMarkup(ticker, tickerHtml)
     }
     for (const em of ticker.querySelectorAll<HTMLElement>("em[data-tick]")) {
       const text = ago(Number(em.dataset.tick))
-      if (em.textContent !== text) em.textContent = text
+      if (em.textContent !== text) setText(em, text)
     }
     lines = { guide: g, alerts: s.alerts, news }
     ticker.classList.toggle("show", tickerHtml !== "" && s.fate.state === "playing")
@@ -151,7 +152,7 @@ export const createTicker = (ui: Interaction, fold: () => Fold | null, controls:
     const bad = alerts.some((a) => a.tone === "bad")
     const things = alerts.length + (g ? 1 : 0)
     const said = g?.count ? `${g.count.at}/${g.count.of}` : things > 0 ? String(things) : ""
-    if (badge.textContent !== said) badge.textContent = said
+    if (badge.textContent !== said) setText(badge, said)
     bulb.classList.toggle("alert", bad)
     // On a phone the step stays out above the tool bar, until tucked away; not behind the town picker or an open sheet.
     const stepKey = g ? `${g.key}${g.waiting ? ":under way" : g.locked ? ":locked" : ""}` : ""

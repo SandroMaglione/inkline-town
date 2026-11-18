@@ -1,3 +1,4 @@
+import { setMarkup, setTitle } from "../../../i18n/dom.ts"
 /** A cost as icon chips, each marked when the town is short of it. */
 import { goods, type GoodId, type Kind } from "../../../game/content/index.ts"
 import { el } from "./dom.ts"
@@ -11,13 +12,13 @@ export const costChips = (cost: Kind["cost"], has: Holdings) => {
   const chips: Array<{ chip: HTMLElement; short: () => boolean }> = []
   if (cost.coins > 0) {
     const chip = el("span", "chip")
-    chip.innerHTML = `${icon("coins", 14)}${cost.coins}`
+    setMarkup(chip, `${icon("coins", 14)}${cost.coins}`)
     chips.push({ chip, short: () => (has()?.coins ?? 0) < cost.coins })
   }
   for (const [g, n] of Object.entries(cost.materials) as Array<[GoodId, number]>) {
     const chip = el("span", "chip")
-    chip.title = goods[g].title
-    chip.innerHTML = `${goodIcon(g, 14)}${n}`
+    setTitle(chip, goods[g].title)
+    setMarkup(chip, `${goodIcon(g, 14)}${n}`)
     chips.push({ chip, short: () => (has()?.stock[g] ?? 0) < n })
   }
   box.append(...chips.map((c) => c.chip))

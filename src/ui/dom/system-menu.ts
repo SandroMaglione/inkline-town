@@ -1,3 +1,4 @@
+import { setTitle, textNode } from "../../i18n/dom.ts"
 /**
  * Share, the guide, save, load, and new town: a row of icons in the bottom
  * right (folded into one menu on a phone). Founding or loading replaces the
@@ -9,6 +10,7 @@ import type { Controls, Fold } from "./controls.ts"
 import { createCreditCorner } from "./brand/credit.ts"
 import { el } from "./kit/dom.ts"
 import { iconEl } from "./kit/icons.ts"
+import { createLanguagePicker } from "./language-picker.ts"
 
 export const createSystemMenu = (
   ui: Interaction,
@@ -20,16 +22,16 @@ export const createSystemMenu = (
   const system = el("div", "system")
   const action = (name: IconName, label: string, tip: string, run: () => void) => {
     const button = el("button", name === "share" ? "labelled" : "")
-    button.title = tip
-    button.append(iconEl(name), document.createTextNode(label))
+    setTitle(button, tip)
+    button.append(iconEl(name), textNode(label))
     button.onclick = run
     system.append(button)
   }
   action("share", "share", "Share a picture of the town, or a link anyone can open to watch it and play on", () => controls.openShare())
   // The guide, on or off (it is on for a new mayor).
   const guideButton = el("button", "guide-toggle")
-  guideButton.title = "Turn the guide on or off: it tells a new mayor what to do next, and why"
-  guideButton.append(iconEl("hint"), document.createTextNode("guide"))
+  setTitle(guideButton, "Turn the guide on or off: it tells a new mayor what to do next, and why")
+  guideButton.append(iconEl("hint"), textNode("guide"))
   let guideOff = false
   guideButton.onclick = () => ui.guide.push({ type: guideOff ? "on" : "off" })
   system.append(guideButton)
@@ -45,6 +47,7 @@ export const createSystemMenu = (
   // A phone has no camera bar: this puts the camera back.
   action("view", "recentre", "Back to the original angle and centre", resetCamera)
   system.lastElementChild!.classList.add("phone-only")
+  system.append(createLanguagePicker(controls.toast))
   // The maker's credit rides just above the bar, wherever the bar goes.
   system.append(createCreditCorner())
   // A choice from the menu folds it.
@@ -56,7 +59,7 @@ export const createSystemMenu = (
     update: (s: Stats) => {
       guideOff = s.guide.off
       guideButton.classList.toggle("on", !s.guide.off)
-      guideButton.title = s.guide.off ? "Turn the guide back on: a next step to take, and why, at the top of the ticker" : "Turn the guide off"
+      setTitle(guideButton, s.guide.off ? "Turn the guide back on: a next step to take, and why, at the top of the ticker" : "Turn the guide off")
     }
   }
 }

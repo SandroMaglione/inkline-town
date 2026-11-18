@@ -9,6 +9,8 @@
 import { FixedLoop, HostClock, Result } from "@typeonce/ritmo"
 import { Effect } from "effect"
 import { BrowserHostClock } from "@typeonce/ritmo-browser"
+import { detectLanguage, LANGUAGE_KEY, localization } from "../i18n/index.ts"
+import { setText } from "../i18n/dom.ts"
 
 import type { BuildingView, FieldView, HouseView, RockView, RuinView, TreeView, WalkerView } from "../render/pixi3d/views.ts"
 import { lands, sizes, step } from "../game/content/index.ts"
@@ -40,6 +42,16 @@ const loaded = () => {
 }
 
 const start = async () => {
+  let savedLanguage: string | null = null
+  try {
+    savedLanguage = localStorage.getItem(LANGUAGE_KEY)
+  } catch (error) {
+    console.warn("Could not read the language preference", error)
+  }
+  localization.language = detectLanguage(savedLanguage, navigator.languages.length > 0 ? navigator.languages : [navigator.language])
+  document.documentElement.lang = localization.language
+  const loadingText = document.querySelector("#loading span")
+  if (loadingText) setText(loadingText, "drawing the town…")
   const mount = document.getElementById("app")!
   let persistence: Persistence<CameraView> = { save: () => "Not ready", load: () => "Not ready", shareFile: () => "" }
   // A shared town's link (`/t/<id>`): fetch it while the page starts, and load it once the town is up.
