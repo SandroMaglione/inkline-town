@@ -163,7 +163,7 @@
     width: min(460px, calc(100% - 32px)); max-height: calc(100dvh - 32px); border: 1px solid #c3c8bf; border-radius: 6px; padding: 18px 16px 0;
   }
   .dialog .sheet > .actions {
-    position: sticky; bottom: 0; margin: auto -16px 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    position: sticky; bottom: 0; z-index: 1; margin: auto -16px 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
     background: #f1f3ed; border-top: 1px solid #dcdfd7; box-shadow: 0 -6px 12px rgba(61, 73, 67, 0.06);
   }
   .dialog .sheet > .actions .frame { flex: 1; justify-content: center; padding: 10px 12px; }
@@ -238,4 +238,33 @@
 /* A portrait phone's top line takes two rows: the hint goes under both. */
 @media (pointer: coarse) and (max-width: 760px) and (min-height: 501px) {
   .tooltip { top: calc(84px + env(safe-area-inset-top)) !important; }
+}
+
+/* ── The sign-up (`brand/signup.ts`) on a phone ── */
+@media (max-width: 760px), (max-height: 500px) {
+  /* 16 px, or iOS zooms the page when the field is tapped. */
+  .signup input { font-size: 16px; }
+  .signup .headline { font-size: 16px; }
+  .signup .frame { padding: 10px 14px; }
+  .signup .buttons .frame { flex: 1; }
+  /* The card takes the lower part of the screen above the tool bar; the guide's step tucks away under it. */
+  .signup.afloat {
+    left: calc(8px + env(safe-area-inset-left)); right: calc(8px + env(safe-area-inset-right)); width: auto; bottom: calc(58px + env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 130px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+  .signup-up .hud .ticker.peek { display: none; }
+  /* On the reckoning it scrolls with the content and the footer, above the buttons pinned to the bottom. */
+  .dialog .sheet > .signup.reckoning { order: 1; margin: 16px 0 4px; }
+}
+/* A landscape phone: little height, so the card goes wide instead: the words on the left, the form on the right. */
+@media (max-height: 500px) {
+  .signup.afloat {
+    left: 0; right: 0; width: min(720px, calc(100vw - 16px)); margin: 0 auto; max-height: calc(100dvh - 66px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+  .signup.afloat .moment { padding: 8px 44px 7px 16px; }
+  .signup.afloat .inner { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; align-items: start; padding: 10px 16px 12px; }
+  .signup.afloat .studio { margin-bottom: 4px; }
+  .signup.afloat .headline { font-size: 14px; margin-bottom: 4px; }
+  .signup.afloat .body { margin: 0; font-size: 12px; line-height: 1.45; }
+  .signup.afloat .act { padding-top: 26px; }
 }

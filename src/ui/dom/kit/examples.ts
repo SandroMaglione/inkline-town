@@ -4,6 +4,8 @@
  * (`pnpm dev`, then /ui-kit.html). A new state of a block gets an example here.
  */
 import type { Line } from "../../../view/contracts.ts"
+import { fakeOutcome } from "../brand/signup-rules.ts"
+import { createSignup, type SignupPlacement } from "../brand/signup.ts"
 import { costChips } from "./cost-chips.ts"
 import { el } from "./dom.ts"
 import { iconEl, iconNames, icon } from "./icons.ts"
@@ -76,5 +78,49 @@ export const kitExamples = (pictures: Pictures): HTMLElement => {
   const help = section("a section's help", "info", "A section's help sits behind the ⓘ: one line of what the numbers mean.")
   help.append(iconEl("hint"))
   sheet.append(help)
+  return sheet
+}
+
+/**
+ * The sign-up (`brand/signup.ts`) in each state: the first spring's card at rest, with an address typed,
+ * with each error, sending, and signed up; and the reckoning's panel. The card here is not fixed above a
+ * tool bar, and nothing is sent or remembered: each answers with the made-up answer the form gives away
+ * from typeonce.games.
+ */
+export const signupExamples = (): HTMLElement => {
+  const sheet = el("div", "signup-examples")
+  sheet.style.cssText = "display: flex; flex-direction: column; align-items: flex-start; gap: 22px;"
+  const example = (title: string, placement: SignupPlacement, set: (signup: ReturnType<typeof createSignup>) => void = () => {}) => {
+    const signup = createSignup(placement, { close: () => {} }, (email) => new Promise((resolve) => setTimeout(() => resolve(fakeOutcome(email)), 600)))
+    set(signup)
+    const label = el("p", "empty", title)
+    label.style.margin = "0 0 6px"
+    const item = el("div", "")
+    // The card's width above the tool bar; the panel's, in the reckoning's wide sheet.
+    item.style.width = placement === "spring" ? "420px" : "668px"
+    item.append(label, signup.element)
+    sheet.append(item)
+  }
+  example("first spring: at rest", "spring")
+  example("an address typed", "spring", (s) => (s.field.value = "mayor@inkline.town"))
+  example("refused: invalid_email", "spring", (s) => {
+    s.field.value = "mayor.inkline.town"
+    s.show("invalid_email")
+  })
+  example("refused: rate_limited", "spring", (s) => {
+    s.field.value = "limit@inkline.town"
+    s.show("rate_limited")
+  })
+  example("refused: anything else", "spring", (s) => {
+    s.field.value = "down@inkline.town"
+    s.show("unavailable")
+  })
+  example("sending", "spring", (s) => {
+    s.field.value = "mayor@inkline.town"
+    s.sending(true)
+  })
+  example("signed up: keep playing is the main button", "spring", (s) => s.show("ok"))
+  example("the reckoning: at rest (a wide sheet puts the form beside the words)", "reckoning")
+  example("the reckoning: signed up", "reckoning", (s) => s.show("ok"))
   return sheet
 }

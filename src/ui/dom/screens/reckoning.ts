@@ -1,13 +1,16 @@
 /**
  * The end of the term: the reckoning. Its verdict, the term in numbers, a
  * chart of residents, coins, and approval over it, and its chronicle; then
- * another term, a new town, or a last look.
+ * another term, a new town, or a last look. Under the buttons, while this
+ * device has not signed up or closed it in the last day, the sign-up for news
+ * of the next Typeonce game (`brand/signup.ts`).
  */
 import { sizes } from "../../../game/content/index.ts"
 import type { Edit } from "../../../game/edits.ts"
 import type { Interaction, Stats } from "../../../view/contracts.ts"
 import type { Controls } from "../controls.ts"
 import { createCreditLine } from "../brand/credit.ts"
+import { createSignup, signupMemory } from "../brand/signup.ts"
 import { el } from "../kit/dom.ts"
 import { clockText, signed } from "../kit/text.ts"
 import { verdictOf } from "./share-card.ts"
@@ -114,7 +117,17 @@ export const createReckoning = (ui: Interaction, stats: () => Stats | null, send
     share.title = "A picture of the town and its verdict, or a link anyone can open"
     share.onclick = () => controls.openShare()
     actions.append(again, look, share)
-    card.append(actions, createCreditLine())
+    card.append(actions)
+    if (signupMemory.allowed()) {
+      const signup = createSignup("reckoning", {
+        close: () => {
+          signupMemory.closed()
+          signup.element.remove()
+        }
+      })
+      card.append(signup.element)
+    }
+    card.append(createCreditLine())
     reckoning.append(card)
     showReckoning(true)
   }

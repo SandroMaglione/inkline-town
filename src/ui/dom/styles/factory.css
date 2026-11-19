@@ -618,3 +618,70 @@ kbd.key {
 }
 .panel-open .credit.corner { display: none; }
 .credit.line { justify-content: flex-end; margin-top: 18px; padding-top: 12px; border-top: 1px dashed #d3d7ce; }
+
+/* ── The sign-up for the next Typeonce game (`brand/signup.ts`): the dialog's paper in the town's ink ── */
+.signup {
+  position: relative; box-sizing: border-box; text-align: left; font-size: 13px; line-height: 1.5; color: #3d4943;
+  background: #f1f3ed; border: 1px solid #3d4943; border-radius: 6px; box-shadow: 0 3px 0 #c9cec4;
+}
+/* An ink rule along the top edge. */
+.signup::before {
+  content: ""; position: absolute; left: -1px; right: -1px; top: -1px; height: 3px; background: #3d4943; border-radius: 6px 6px 0 0;
+  transform-origin: left center; pointer-events: none;
+}
+.signup .close {
+  position: absolute; top: 7px; right: 7px; z-index: 1; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+  padding: 0; border: 0; border-radius: 4px; background: transparent; color: #77817a; font: inherit; font-size: 19px; line-height: 1; cursor: pointer;
+}
+.signup .close:hover { background: #e6e9e2; color: #3d4943; }
+.signup .moment { margin: 0; padding: 12px 48px 11px 20px; border-bottom: 1px dashed #c9cec4; font-size: 12px; color: #6c766f; }
+.signup .moment b { color: #3d4943; }
+.signup .inner { padding: 16px 20px; }
+.signup .studio { display: flex; align-items: center; gap: 9px; margin: 0 36px 12px 0; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
+.signup .studio .mark { display: block; flex: none; }
+.signup.spring .studio { margin-right: 0; }
+.signup .headline { margin: 0 0 6px; font-size: 17px; line-height: 1.3; font-weight: 700; color: #2f3a34; }
+.signup .body { margin: 0 0 14px; color: #4f5a53; }
+.signup form { margin: 0; }
+/* The page turns selection off; an address is typed, pasted, and corrected here. */
+.signup input {
+  display: block; width: 100%; box-sizing: border-box; margin: 0; padding: 9px 11px; font: inherit; font-size: 14px; color: #3d4943;
+  background: #fbfcf9; border: 1px solid #a9b0a8; border-radius: 2px; outline: none; -webkit-user-select: text; user-select: text;
+}
+.signup input::placeholder { color: #a3aaa4; }
+.signup input:focus { border-color: #3d4943; box-shadow: 0 0 0 1px #3d4943; }
+.signup .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.signup .frame {
+  display: inline-flex; align-items: center; justify-content: center; padding: 8px 16px; font: inherit; font-size: 13px; color: #3d4943;
+  background: transparent; border: 1px solid #3d4943; border-radius: 2px; white-space: nowrap; cursor: pointer;
+}
+.signup .frame:hover { background: #e6e9e2; }
+.signup .frame.primary { background: #3d4943; color: #f7f8f4; font-weight: 700; }
+.signup .frame.primary:hover { background: #2f3a34; }
+.signup .frame:disabled { opacity: 0.6; cursor: progress; }
+.signup .message { margin: 8px 0 0; font-size: 12px; }
+.signup .message:empty { display: none; }
+.signup.error input, .signup.error input:focus { border-color: #b04a39; box-shadow: 0 0 0 1px #b04a39; }
+.signup.error .message { color: #b04a39; }
+.signup .thanks { margin: 2px 0 0; font-size: 14px; font-weight: 700; color: #4f8a3e; }
+
+/* At the first spring: a card above the tool bar, the town paused under it. It rises in once, an ink stroke drawn across its top. */
+.signup.afloat {
+  position: fixed; z-index: 5; left: 0; right: 0; bottom: calc(72px + env(safe-area-inset-bottom)); width: min(420px, calc(100vw - 32px)); margin: 0 auto;
+  max-height: calc(100dvh - 160px); overflow-y: auto; overscroll-behavior: contain;
+  animation: signup-rise 400ms cubic-bezier(.2,.8,.2,1) both;
+}
+.signup.afloat::before { animation: signup-ink 900ms cubic-bezier(.3,.7,.2,1) 120ms both; }
+@keyframes signup-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes signup-ink { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .signup.afloat, .signup.afloat::before { animation: none; }
+}
+
+/* On the reckoning: under its buttons, above the footer; on a wide sheet the words left and the form right, so it stays short. */
+.signup.reckoning { margin-top: 22px; }
+@media (min-width: 761px) and (min-height: 501px) {
+  .signup.reckoning .inner { display: grid; grid-template-columns: 1fr 290px; column-gap: 24px; align-items: start; }
+  .signup.reckoning .body { margin-bottom: 0; }
+  .signup.reckoning .act { padding-top: 40px; }
+}
