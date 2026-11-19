@@ -10,6 +10,7 @@ import type { Edit } from "../../game/edits.ts"
 import type { Point } from "../../game/world/iso.ts"
 import type { Interaction, Shown, Tool, View } from "../../view/contracts.ts"
 import { commands, refOf } from "../../view/tools.ts"
+import { createSpringCard } from "./brand/spring-card.ts"
 import type { Controls } from "./controls.ts"
 import { createFolds, phone } from "./folds.ts"
 import { createHud } from "./hud.ts"
@@ -170,6 +171,15 @@ export const createDomUi = <Camera>(
     if (visit.visiting()) visit.endVisit()
   }, controls)
   const share = createShare(stats, () => ui.speed, visit.visiting, map, (camera) => persistence().shareFile(camera), controls)
+  // The sign-up's card at the first spring: it waits while the mayor is in the middle of something.
+  const springCard = createSpringCard({
+    speed: () => ui.speed,
+    setSpeed: controls.setSpeed,
+    busy: () =>
+      ui.dragFrom !== null || ui.stroke === "held" || ui.menu !== null || ui.selected !== null || folds.fold() !== null ||
+      toast.showing() || document.querySelector(".dialog.open") !== null,
+    away: () => ui.founding || visit.visiting()
+  })
   const tooltip = el("div", "tooltip")
   // A phone's buttons for what stays folded away: the guide and the map views.
   const foldButtons = el("div", "fold-buttons")
@@ -215,8 +225,11 @@ export const createDomUi = <Camera>(
     ui,
     {
       escape: () => {
+        const sheet = confirm.open() || share.isOpen() || reckoning.isOpen()
         if (confirm.open()) confirm.dismiss()
         if (share.isOpen()) share.close()
+        // With no sheet over the map, Esc puts the sign-up's card away, and does nothing else.
+        return !sheet && springCard.escape()
       },
       blocked: () => ui.founding || reckoning.isOpen() || confirm.open() || share.isOpen() || visit.visiting()
     },
@@ -253,6 +266,7 @@ export const createDomUi = <Camera>(
       system.update(s)
       mapViews.showLegend(town.legend)
       reckoning.sync(s)
+      springCard.sync(s)
     }
     map.sync()
     const screenPointer = map.pointer()

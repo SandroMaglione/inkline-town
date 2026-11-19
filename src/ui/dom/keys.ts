@@ -7,10 +7,14 @@ import type { Interaction } from "../../view/contracts.ts"
 import { commands, mapViews, type Command, type MapViewId } from "../../view/tools.ts"
 import type { Controls } from "./controls.ts"
 
-/** `sheet.escape`: Esc closes the sheet open over the map, if any; `sheet.blocked`: the keys are not the map's now. */
+/**
+ * `sheet.escape`: Esc closes the sheet or card open over the map, if any (`true`: that was all Esc did);
+ * `sheet.blocked`: the keys are not the map's now. Keys typed in a field (the sign-up's address, a share
+ * link) are the field's: none of them reaches the town.
+ */
 export const bindKeys = (
   ui: Interaction,
-  sheet: { readonly escape: () => void; readonly blocked: () => boolean },
+  sheet: { readonly escape: () => boolean | void; readonly blocked: () => boolean },
   cancelStroke: () => void,
   controls: Pick<Controls, "choose" | "toggleMenu" | "setSpeed" | "togglePause" | "setView" | "refreshTools">
 ) => {
@@ -26,7 +30,7 @@ export const bindKeys = (
   window.addEventListener("keydown", (event) => {
     if (event.target instanceof HTMLElement && event.target.closest("input,select,textarea,[contenteditable=true]")) return
     if (event.key === " " && event.target instanceof HTMLButtonElement) return
-    if (event.key === "Escape") sheet.escape()
+    if (event.key === "Escape" && sheet.escape() === true) return
     if (sheet.blocked()) return
     if (event.key === " ") {
       event.preventDefault()
