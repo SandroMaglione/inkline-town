@@ -110,6 +110,7 @@ export const describeBuilding = (frame: Frame, row: BuildingRow) => {
     })
   const appealHere = upgradeAt(kind, level)?.appeal ?? kind.appeal
   if (appealHere) running.push({ icon: "appeal", label: "desirability nearby", value: signed(appealHere.value) })
+  // Separate independently translated sentences; HTML collapses the line breaks.
   const help = [
     upkeep > 0 ? "Upkeep is paid every minute it stands, a quarter of it while paused." : "",
     condition ? "Everything wears down; a builder's yard mends it." : "",
@@ -117,7 +118,7 @@ export const describeBuilding = (frame: Frame, row: BuildingRow) => {
     appealHere ? `It changes how nice the streets are out to ${appealHere.reach} cells${appealHere.value < 0 ? ": homes close by hold fewer people and pay less" : ""}.` : ""
   ]
     .filter((t) => t !== "")
-    .join(" ")
+    .join("\n")
   const groups: Array<Group> = [
     ...(work.length > 0 ? [{ title: "at work", icon: "jobs", lines: work } as Group] : []),
     ...(running.length > 0 ? [{ title: "running it", icon: "coins", help, lines: running } as Group] : [])

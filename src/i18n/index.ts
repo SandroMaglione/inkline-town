@@ -46,7 +46,7 @@ export const translate = (message: string, language: Language): string => {
     return target.replace(/\{(\d+)\}/g, (_, slot: string) => translate(match[slots.indexOf(slot) + 1]!, language))
   }
   // Composite readouts and tooltips join independent messages with these separators.
-  for (const separator of ["\n", " · ", ": "]) {
+  for (const separator of ["\n", " · ", ": ", ", ", " → "]) {
     if (message.includes(separator)) return message.split(separator).map((piece) => translate(piece, language)).join(separator)
   }
   return message

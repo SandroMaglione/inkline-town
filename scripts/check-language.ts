@@ -37,7 +37,7 @@ try {
         const root = document.createElement("div")
         root.id = "locale-binding-probe"
         root.hidden = true
-        setMarkup(root, '<button data-kind="fishery" title="Language">Pause work</button><input value="initial">')
+        setMarkup(root, '<button data-kind="fishery" title="Language">Pause work</button><input value="initial"><p title="Pick a fishery to upgrade">wood → planks</p>')
         const button = root.querySelector("button")!, input = root.querySelector("input")!
         input.value = "player input"
         let clicks = 0
@@ -48,12 +48,13 @@ try {
         document.body.append(root)
         return {
           french: button.textContent, title: button.title,
+          recipe: root.querySelector("p")!.textContent, upgrade: root.querySelector("p")!.title,
           buildingChip: callouts("Build a fishery").includes('data-kind="fishery"'),
           toolChip: callouts("Lay [homes]").includes('data-tool="homes"')
         }
       })
       assert.deepEqual(bindings, {
-        french: "Suspendre le travail", title: "Langue", buildingChip: true, toolChip: true
+        french: "Suspendre le travail", title: "Langue", recipe: "bois → planches", upgrade: "Choisissez un bâtiment à améliorer : pêcherie", buildingChip: true, toolChip: true
       })
     }
     const box = (await chooser.boundingBox())!
@@ -67,13 +68,15 @@ try {
         button.click()
         const result = {
           english: button.textContent, title: button.title, kind: button.dataset.kind,
-          input: root.querySelector("input")!.value, clicks: root.dataset.clicks, sameButton: root.dataset.sameButton
+          input: root.querySelector("input")!.value, clicks: root.dataset.clicks, sameButton: root.dataset.sameButton,
+          recipe: root.querySelector("p")!.textContent, upgrade: root.querySelector("p")!.title
         }
         root.remove()
         return result
       })
       assert.deepEqual(bindings, {
-        english: "Pause work", title: "Language", kind: "fishery", input: "player input", clicks: "1", sameButton: "true"
+        english: "Pause work", title: "Language", kind: "fishery", input: "player input", clicks: "1", sameButton: "true",
+        recipe: "wood → planks", upgrade: "Pick a fishery to upgrade"
       })
     }
     await page.reload()

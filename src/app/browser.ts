@@ -130,7 +130,7 @@ const start = async () => {
     debug: import.meta.env.DEV ? { hostClock } : undefined
   })
   if (!made.ok) {
-    mount.textContent = `The town could not start: ${JSON.stringify(made.error)}`
+    setText(mount, `The town could not start: ${JSON.stringify(made.error)}`)
     loaded()
     return
   }
@@ -263,19 +263,18 @@ const start = async () => {
       requestAnimationFrame(loaded)
     },
     onFailure: (failure) => {
-      mount.textContent =
-        failure.kind === "InvalidTickDelta" ? `Invalid frame delta: ${failure.deltaMS}` : "The town stopped after a system failure."
+      setText(mount, failure.kind === "InvalidTickDelta" ? `Invalid frame delta: ${failure.deltaMS}` : "The town stopped after a system failure.")
       loaded()
     }
   })
   if (!loop.ok) {
-    mount.textContent = `Invalid fixed-loop option: ${loop.error.field}`
+    setText(mount, `Invalid fixed-loop option: ${loop.error.field}`)
     loaded()
   }
 }
 
 start().catch((error: unknown) => {
-  document.getElementById("app")!.textContent = `The town could not start: ${error instanceof Error ? error.message : String(error)}`
+  setText(document.getElementById("app")!, `The town could not start: ${error instanceof Error ? error.message : String(error)}`)
   loaded()
 })
 
