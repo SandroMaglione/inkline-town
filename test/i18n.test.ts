@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { goods, grounds, kinds, props } from "../src/game/content/index.ts"
+import { goods, grounds, kinds, props, ranks } from "../src/game/content/index.ts"
 import { guideSteps } from "../src/game/rules/guide.ts"
+import { upgradeBlock } from "../src/game/schedule.ts"
 import { detectLanguage, translate } from "../src/i18n/index.ts"
 import { french } from "../src/i18n/fr.ts"
 
@@ -68,6 +69,17 @@ test("French translates each part of building help", () => {
     "Tout s'use ; un atelier de maçon assure les réparations.",
     "Modifie l'attrait des rues dans un rayon de 3 cases."
   ].join("\n"))
+})
+
+test("town hall upgrade rank requirements are translated", () => {
+  const first = kinds.townhall.upgrade!
+  const second = first.next!
+  const village = upgradeBlock(first, 0, { ranks })!
+  const town = upgradeBlock(second, 1, { ranks })!
+  assert.equal(translate(village, "fr"), "la ville doit atteindre le rang village")
+  assert.equal(translate(town, "fr"), "la ville doit atteindre le rang ville")
+  assert.equal(translate(village, "en"), village)
+  assert.equal(translate(`${first.title} ${village}`, "fr"), "pour améliorer Maison des guildes, la ville doit atteindre le rang village")
 })
 
 test("every guide action, explanation and completion condition is translated, retaining interactive references", () => {

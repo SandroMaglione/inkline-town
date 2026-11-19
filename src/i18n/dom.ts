@@ -3,6 +3,7 @@ import { localization, translate } from "./index.ts"
 interface Binding {
   text?: string
   html?: string
+  formatted?: { source: string; format: (text: string) => string }
   attributes?: Map<string, string>
 }
 const bindings = new WeakMap<Node, Binding>()
@@ -60,10 +61,17 @@ export const setMarkup = (node: HTMLElement, source: string) => {
   bindMarkup(node)
 }
 
+/** Translate the complete message before adding presentational markup. */
+export const setFormattedText = (node: HTMLElement, source: string, format: (text: string) => string) => {
+  binding(node).formatted = { source, format }
+  setMarkup(node, format(t(source)))
+}
+
 /** Replay only registered presentation bindings: identifiers, inputs and event handlers are untouched. */
 export const refreshTranslations = (root: Node) => {
   const value = bindings.get(root)
   if (value?.text !== undefined) setText(root, value.text)
+  if (root instanceof HTMLElement && value?.formatted) setFormattedText(root, value.formatted.source, value.formatted.format)
   if (root instanceof Element) {
     for (const [name, source] of value?.attributes ?? []) setAttribute(root, name, source)
   }

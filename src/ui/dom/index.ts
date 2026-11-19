@@ -15,10 +15,10 @@ import type { Controls } from "./controls.ts"
 import { createFolds, phone } from "./folds.ts"
 import { createHud } from "./hud.ts"
 import { bindKeys } from "./keys.ts"
-import { el, escapeHtml, setHtml } from "./kit/dom.ts"
+import { el } from "./kit/dom.ts"
 import { iconEl } from "./kit/icons.ts"
 import type { Pictures } from "./kit/picture.ts"
-import { iconize, touchScreen } from "./kit/text.ts"
+import { setIconizedText, touchScreen } from "./kit/text.ts"
 import { createMapViews } from "./map-views.ts"
 import { createPanel } from "./panels/frame.ts"
 import { townHistory } from "./panels/town.ts"
@@ -264,7 +264,7 @@ export const createDomUi = <Camera>(
     strokeBar.classList.toggle("open", held)
     document.body.classList.toggle("stroke-held", held)
     if (text && screenPointer) {
-      setHtml(tooltip, iconize(escapeHtml(text)))
+      setIconizedText(tooltip, text)
       tooltip.style.display = "block"
       tooltip.style.left = `${Math.min(screenPointer.x, window.innerWidth - tooltip.offsetWidth - 20)}px`
       tooltip.style.top = `${screenPointer.y}px`

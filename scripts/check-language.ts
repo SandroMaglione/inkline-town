@@ -33,11 +33,15 @@ try {
         }
         const domUrl = moduleUrl("/src/i18n/dom.ts"), textUrl = moduleUrl("/src/ui/dom/kit/text.ts")
         const { setMarkup }: typeof import("../src/i18n/dom.ts") = await import(domUrl)
-        const { callouts }: typeof import("../src/ui/dom/kit/text.ts") = await import(textUrl)
+        const { callouts, setIconizedText }: typeof import("../src/ui/dom/kit/text.ts") = await import(textUrl)
         const root = document.createElement("div")
         root.id = "locale-binding-probe"
         root.hidden = true
         setMarkup(root, '<button data-kind="fishery" title="Language">Pause work</button><input value="initial"><p title="Pick a fishery to upgrade">wood → planks</p>')
+        const notice = document.createElement("p")
+        notice.className = "iconized"
+        setIconizedText(notice, "Guildhall · −500 coins · carriers bring 30 planks · 40 stone · 6 tools")
+        root.append(notice)
         const button = root.querySelector("button")!, input = root.querySelector("input")!
         input.value = "player input"
         let clicks = 0
@@ -49,12 +53,14 @@ try {
         return {
           french: button.textContent, title: button.title,
           recipe: root.querySelector("p")!.textContent, upgrade: root.querySelector("p")!.title,
+          notice: notice.textContent, amounts: notice.querySelectorAll(".amount").length,
           buildingChip: callouts("Build a fishery").includes('data-kind="fishery"'),
           toolChip: callouts("Lay [homes]").includes('data-tool="homes"')
         }
       })
       assert.deepEqual(bindings, {
-        french: "Suspendre le travail", title: "Langue", recipe: "bois → planches", upgrade: "Choisissez un bâtiment à améliorer : pêcherie", buildingChip: true, toolChip: true
+        french: "Suspendre le travail", title: "Langue", recipe: "bois → planches", upgrade: "Choisissez un bâtiment à améliorer : pêcherie",
+        notice: "Maison des guildes · −500 · les porteurs apportent 30 40 6", amounts: 4, buildingChip: true, toolChip: true
       })
     }
     const box = (await chooser.boundingBox())!
@@ -69,14 +75,16 @@ try {
         const result = {
           english: button.textContent, title: button.title, kind: button.dataset.kind,
           input: root.querySelector("input")!.value, clicks: root.dataset.clicks, sameButton: root.dataset.sameButton,
-          recipe: root.querySelector("p")!.textContent, upgrade: root.querySelector("p")!.title
+          recipe: root.querySelector("p")!.textContent, upgrade: root.querySelector("p")!.title,
+          notice: root.querySelector(".iconized")!.textContent, amounts: root.querySelectorAll(".iconized .amount").length
         }
         root.remove()
         return result
       })
       assert.deepEqual(bindings, {
         english: "Pause work", title: "Language", kind: "fishery", input: "player input", clicks: "1", sameButton: "true",
-        recipe: "wood → planks", upgrade: "Pick a fishery to upgrade"
+        recipe: "wood → planks", upgrade: "Pick a fishery to upgrade",
+        notice: "Guildhall · −500 · carriers bring 30 40 6", amounts: 4
       })
     }
     await page.reload()
@@ -115,6 +123,26 @@ try {
     assert.equal(await page.evaluate(() => JSON.stringify(window.town.snapshot())), before, "switching must not change the world")
     assert.equal(await page.locator(".toolbar .town-button").getAttribute("title"), "Objectifs, statistiques, impôts et commerce de la ville (T)")
     assert.equal(await page.locator(".toolbar .pause").getAttribute("aria-label"), "Reprendre la partie")
+    if (!phone) {
+      await page.evaluate(() => {
+        const hall = window.town.snapshot().entities.find((entity) => entity.components["Town/TownHall"])
+        if (!hall) throw new Error("Missing town hall")
+        window.town.interaction.selected = hall.id
+      })
+      const upgrade = page.locator(".panel.open .upgrade")
+      await upgrade.waitFor()
+      assert.equal(await upgrade.locator(".begin .sub").textContent(), "la ville doit atteindre le rang village")
+      const missing = upgrade.locator(".note").filter({ hasText: "il manque en réserve" })
+      assert.equal(await missing.count(), 1)
+      assert.ok((await missing.textContent())?.includes("Les travaux attendent ces matériaux"))
+      assert.ok(await missing.locator("svg").count() > 0, "missing resources keep their icons")
+      await picker.locator("select").selectOption("en")
+      assert.equal(await upgrade.locator(".begin .sub").textContent(), "needs the town to be a village")
+      assert.equal(await upgrade.locator(".note").filter({ hasText: "the store lacks" }).count(), 1)
+      await picker.locator("select").selectOption("fr")
+      assert.equal(await upgrade.locator(".note").filter({ hasText: "il manque en réserve" }).count(), 1)
+      await page.locator(".panel .close").click()
+    }
     if (phone) await page.locator(".toolbar .more").click()
     await page.locator(".toolbar .town-button").click()
     const townText = await page.locator(".panel.open").textContent()

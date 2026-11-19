@@ -239,6 +239,8 @@ export const frenchMessages: Readonly<Record<string, string>> = {
   "A home on {0} stood empty after its thefts, and is left derelict.": "Une maison à {0}, désertée après des vols, est abandonnée.",
   "upgrade to {0}": "améliorer en {0}",
   "Begin the {0}": "Commencer : {0}",
+  "needs the town to be a {0}": "la ville doit atteindre le rang {0}",
+  "{0} needs the town to be a {1}": "pour améliorer {0}, la ville doit atteindre le rang {1}",
   "needed now: {0}": "nécessaire maintenant : {0}",
   "not needed yet: the gold arrow shows when it is": "pas encore nécessaire : une flèche dorée l'indiquera",
   "now, to begin": "maintenant, pour commencer",

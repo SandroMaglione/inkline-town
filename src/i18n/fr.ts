@@ -168,6 +168,7 @@ export const french: Readonly<Record<string, string>> = {
   "stone": "pierre",
   "ore": "minerai",
   "tools": "outils",
+  "tool": "outil",
   "fish": "poisson",
   "smoked fish": "poisson fumé",
   "wheat": "blé",

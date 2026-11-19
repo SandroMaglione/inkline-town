@@ -5,10 +5,10 @@ import { setMarkup, setText, setTitle } from "../../../i18n/dom.ts"
  */
 import { goods, kinds } from "../../../game/content/index.ts"
 import type { Line } from "../../../view/contracts.ts"
-import { el, escapeHtml } from "./dom.ts"
+import { el } from "./dom.ts"
 import { goodIcon, icon, iconEl } from "./icons.ts"
 import { thumb, type Pictures } from "./picture.ts"
-import { callouts, iconize } from "./text.ts"
+import { callouts, iconize, setIconizedText } from "./text.ts"
 
 /** A line of a description as a row: its icon and what it is about, its value, any goods as chips, and a note underneath saying why. */
 export const renderLine = (pictures: Pictures, row: HTMLElement, l: Line) => {
@@ -18,8 +18,8 @@ export const renderLine = (pictures: Pictures, row: HTMLElement, l: Line) => {
   // Goods take the value's place: chips on the right.
   setMarkup(row, `<span class="mark">${icon(l.icon, 16)}</span><span class="what"></span>${chips || `<span class="count"></span>`}${l.note ? `<small class="note"></small>` : ""}`)
   setText(row.querySelector<HTMLElement>(".what")!, l.label)
-  if (!chips) setMarkup(row.querySelector<HTMLElement>(".count")!, iconize(escapeHtml(l.value ?? "")))
-  if (l.note) setMarkup(row.querySelector<HTMLElement>(".note")!, iconize(escapeHtml(l.note)))
+  if (!chips) setIconizedText(row.querySelector<HTMLElement>(".count")!, l.value ?? "")
+  if (l.note) setIconizedText(row.querySelector<HTMLElement>(".note")!, l.note)
   // What to do about it, on a row of its own: a building to place shows its picture, and the row places one.
   if (l.fix) {
     const build = l.fix.build && kinds[l.fix.build].buildable ? l.fix.build : undefined

@@ -8,7 +8,7 @@ import { refLook, refOf } from "../../../view/tools.ts"
 import { escapeHtml } from "./dom.ts"
 import { goodIcon, icon } from "./icons.ts"
 import { languages, translate } from "../../../i18n/index.ts"
-import { t } from "../../../i18n/dom.ts"
+import { setFormattedText, t } from "../../../i18n/dom.ts"
 
 /** Words in the town's messages that name a building or a good, longest first, so "smoked fish" wins over "fish". */
 const englishThings: ReadonlyArray<{ readonly word: string; readonly ref: { readonly kind: KindId } | { readonly good: GoodId } }> = [
@@ -29,9 +29,13 @@ const namedPattern = new RegExp(
   "giu"
 )
 /** Goods as numbers name them ("2 planks", "1 plank"), and as recipes do ("flour → bread"), by title. */
-const goodWords: ReadonlyArray<readonly [string, GoodId]> = [
+const englishGoodWords: ReadonlyArray<readonly [string, GoodId]> = [
   ...goodIds.map((id) => [goods[id].title, id] as const),
   ...goodIds.filter((id) => goods[id].title.endsWith("s")).map((id) => [goods[id].title.slice(0, -1), id] as const)
+]
+const goodWords = [
+  ...englishGoodWords,
+  ...languages.flatMap((language) => englishGoodWords.map(([word, good]) => [translate(word, language.id), good] as const))
 ].sort((a, b) => b[0].length - a[0].length)
 const goodAlternatives = goodWords.map(([w]) => w).join("|")
 const goodOf = (word: string) => goodWords.find(([w]) => w === word)![1]
@@ -43,12 +47,15 @@ const goodOf = (word: string) => goodWords.find(([w]) => w === word)![1]
  */
 export const iconize = (html: string): string =>
   html
-    .replace(/([+−-]?)(\d+) coins a minute/g, (_, sign: string, n: string) => `<span class="amount">${sign}${icon("coins", 13)}${n}/min</span>`)
-    .replace(/(\d+) coins\b/g, (_, n: string) => `<span class="amount">${icon("coins", 13)}${n}</span>`)
-    .replace(new RegExp(`(\\d+) (${goodAlternatives})\\b`, "g"), (_, n: string, w: string) => `<span class="amount">${goodIcon(goodOf(w), 13)}${n}</span>`)
-    .replace(new RegExp(`\\b(${goodAlternatives}) → (${goodAlternatives})\\b`, "g"), (_, a: string, b: string) => `<span class="amount">${goodIcon(goodOf(a), 13)}${a}</span> → <span class="amount">${goodIcon(goodOf(b), 13)}${b}</span>`)
+    .replace(/([+−-]?)(\d+) (?:coins a minute|pièces par minute)/g, (_, sign: string, n: string) => `<span class="amount">${sign}${icon("coins", 13)}${n}/min</span>`)
+    .replace(/(\d+) (?:coins|pièces)\b/g, (_, n: string) => `<span class="amount">${icon("coins", 13)}${n}</span>`)
+    .replace(new RegExp(`(\\d+) (${goodAlternatives})(?![\\p{L}\\p{N}_])`, "gu"), (_, n: string, w: string) => `<span class="amount">${goodIcon(goodOf(w), 13)}${n}</span>`)
+    .replace(new RegExp(`(?<![\\p{L}\\p{N}_])(${goodAlternatives}) → (${goodAlternatives})(?![\\p{L}\\p{N}_])`, "gu"), (_, a: string, b: string) => `<span class="amount">${goodIcon(goodOf(a), 13)}${a}</span> → <span class="amount">${goodIcon(goodOf(b), 13)}${b}</span>`)
     // A cost as icons side by side: the dots between them only crowd it.
     .replace(/<\/span> · <span class="amount">/g, '</span> <span class="amount">')
+
+const formattedIconText = (text: string) => iconize(escapeHtml(text))
+export const setIconizedText = (node: HTMLElement, text: string) => setFormattedText(node, text, formattedIconText)
 
 /** A finger rather than a mouse: messages say "tap", and keys are left out. */
 export const touchScreen = () => matchMedia("(pointer: coarse)").matches

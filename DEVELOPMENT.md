@@ -44,6 +44,8 @@ Use `el`, `setHtml`, or its `setText`, `textNode`, `setTitle`, `setAttribute` an
 bindings in place, preserving inputs and event handlers. Simulation, snapshots,
 and chronicle messages remain language-independent. Run `node --test
 test/i18n.test.ts` for catalogue and detection checks.
+For text with amount icons, use `setIconizedText` so the complete message is
+translated before icons are inserted and is rebuilt when the language changes.
 With the dev server running, `pnpm check:language` verifies regional detection,
 the saved override, live switching without changing the world, camera controls,
 and selectors at desktop and phone sizes.

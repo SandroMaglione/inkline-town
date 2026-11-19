@@ -1,11 +1,10 @@
-import { setMarkup } from "../../i18n/dom.ts"
 /**
  * The toast: a message for a few seconds, long enough to read (about 15
  * letters a second, and a moment to look), and gone as soon as the mayor taps
  * the map again: by then they have read it, or are acting on it.
  */
-import { el, escapeHtml } from "./kit/dom.ts"
-import { iconize } from "./kit/text.ts"
+import { el } from "./kit/dom.ts"
+import { setIconizedText } from "./kit/text.ts"
 
 export const createToast = () => {
   const box = el("div", "toast")
@@ -15,7 +14,7 @@ export const createToast = () => {
   return {
     element: box,
     show: (message: string) => {
-      setMarkup(box, iconize(escapeHtml(message)))
+      setIconizedText(box, message)
       box.classList.add("show")
       at = Date.now()
       window.clearTimeout(timer)
