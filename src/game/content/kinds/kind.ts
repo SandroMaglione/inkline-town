@@ -132,7 +132,7 @@ export type Level = 0 | 1 | 2
 
 /** The upgrade a building at `level` stands as (`undefined`: none), and the one it could have next. */
 export const upgradeAt = (kind: Pick<Kind, "upgrade">, level: number): Upgrade | undefined =>
-  level <= 0 ? undefined : level === 1 ? kind.upgrade : kind.upgrade?.next
+  level === 1 ? kind.upgrade : level === 2 ? kind.upgrade?.next : undefined
 export const nextUpgrade = (kind: Pick<Kind, "upgrade">, level: number): Upgrade | undefined => upgradeAt(kind, level + 1)
 
 /**

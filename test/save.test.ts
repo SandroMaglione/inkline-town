@@ -12,9 +12,10 @@ import { Effect } from "effect"
 
 import { describe, load, loadLatest, loadText, memoryStorage, read, save, SAVE_FORMAT, SAVE_VERSION, Storage, World, type LoadError } from "../src/platform/save.ts"
 import { headless, type Headless } from "../src/game/headless.ts"
+import { settle } from "../src/game/schedule.ts"
 
 const worldOf = (town: Headless): World["Service"] => ({
-  snapshot: () => ({ ok: true, value: town.snapshot() }),
+  snapshot: () => town.runtime.snapshot(),
   restore: (data) => {
     try {
       town.restore(data)
@@ -58,6 +59,37 @@ test("a saved town loads back as it was", () => {
   assert.notEqual(playing(town), before)
   assert.equal(run(load("manual"))._tag, "Success")
   assert.equal(playing(town), before)
+})
+
+test("a city hall cannot be upgraded again and its town can still be saved and loaded", () => {
+  const { town, storage, run } = setup()
+  let cell = { x: 0, y: 0 }
+  town.change((snapshot) => {
+    const hall = snapshot.entities.find((entity) => entity.components["Town/TownHall"])!
+    cell = hall.components["Town/Tile"]
+    hall.components["Town/Upgraded"] = { level: 2 }
+    snapshot.resources["Town/Fate"].rank = 2
+    snapshot.resources["Town/Treasury"].coins = 5000
+  })
+  const before = town.snapshot()
+
+  town.edit({ type: "upgrade", cell })
+  const settled = town.runtime.tick(settle)
+  assert.equal(settled.ok, true, JSON.stringify(settled))
+  const saved = run(save("manual"))
+  assert.equal(saved._tag, "Success", JSON.stringify(saved))
+
+  const file = JSON.parse(storage.get("inkline-town/save/manual")!)
+  const hall = file.world.entities.find((entity: { components: Record<string, unknown> }) => entity.components["Town/TownHall"])
+  assert.deepEqual(hall.components["Town/Upgraded"], { level: 2 })
+  assert.equal(hall.components["Town/Works"], undefined)
+  assert.equal(file.world.resources["Town/Treasury"].coins, before.resources["Town/Treasury"].coins)
+  assert.deepEqual(hall.components["Town/Inventory"], before.entities.find((entity) => entity.components["Town/TownHall"])!.components["Town/Inventory"])
+
+  town.run(1)
+  assert.equal(run(load("manual"))._tag, "Success")
+  assert.deepEqual(town.snapshot().entities.find((entity) => entity.components["Town/TownHall"])!.components["Town/Upgraded"], { level: 2 })
+  assert.equal(run(save("auto"))._tag, "Success")
 })
 
 test("nothing saved", () => {

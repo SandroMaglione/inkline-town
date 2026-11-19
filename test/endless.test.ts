@@ -11,6 +11,10 @@ import { amounts, FACE_TICKS, goodIds, kinds, ranks, stepsOf, YEARS_PER_TERM } f
 import { canPlace, GridBuilder } from "../src/game/world/grid.ts"
 import { goalsOf, nextRank, scoreOf } from "../src/game/rules/goals.ts"
 import { headless, type Snapshot } from "../src/game/headless.ts"
+import { Game } from "../src/game/schema.ts"
+import { frameAccess, frameOf } from "../src/view/frame.ts"
+import { buildingPanel } from "../src/view/panels/building.ts"
+import { noneWanted, upgradesOf, upgradesWanted } from "../src/view/upgrades.ts"
 
 const charter = { size: "small", term: 45, land: "fair", seed: 11 } as const
 
@@ -146,6 +150,48 @@ test("the town hall becomes a guildhall from its own stores, and the guildhall a
   const city = hallOf(t.snapshot())
   assert.deepEqual(city.components["Town/Upgraded"], { level: 2 }, JSON.stringify(city.components["Town/Works"]))
   assert.equal(city.components["Town/Inventory"].cap, kinds.townhall.upgrade!.next!.cap)
+})
+
+const UpgradeOffers = Game.Inspector("Test/UpgradeOffers", frameAccess, ({ queries, resources }) => {
+  const frame = frameOf(queries, resources)
+  const hall = frame.buildings.find((row) => row.data.building.kind === "townhall")
+  assert.ok(hall)
+  const wanted = upgradesWanted(frame, noneWanted())
+  const offers = upgradesOf(frame, wanted)
+  const panel = buildingPanel(frame, hall, wanted.get(hall.entity.id) ?? null)
+  assert.ok(panel.type === "building")
+  return {
+    panel: panel.upgrade?.title ?? null,
+    entries: offers.upgrades.filter((offer) => offer.kind === "townhall").map(({ to, ready }) => ({ to, ready })),
+    wanted: wanted.has(hall.entity.id),
+    due: offers.due.has(hall.entity.id)
+  }
+})
+
+test("the upgrade panel and hints stop offering upgrades after the city hall", () => {
+  const town = headless(charter)
+  const setHallLevel = (level: 0 | 1 | 2) => {
+    town.change((snapshot) => {
+      snapshot.resources["Town/Fate"].rank = 2
+      snapshot.resources["Town/Treasury"].coins = 5000
+      const hall = snapshot.entities.find((entity) => entity.components["Town/TownHall"])!
+      if (level === 0) delete hall.components["Town/Upgraded"]
+      else hall.components["Town/Upgraded"] = { level }
+      hall.components["Town/Inventory"].cap = 100 * (level + 1)
+      hall.components["Town/Inventory"].stock.planks = 100 * (level + 1)
+    })
+  }
+
+  setHallLevel(0)
+  assert.deepEqual(town.runtime.inspect(UpgradeOffers), {
+    panel: "Guildhall", entries: [{ to: "guildhall", ready: 1 }], wanted: true, due: true
+  })
+  setHallLevel(1)
+  assert.deepEqual(town.runtime.inspect(UpgradeOffers), {
+    panel: "City hall", entries: [{ to: "city hall", ready: 1 }], wanted: true, due: true
+  })
+  setHallLevel(2)
+  assert.deepEqual(town.runtime.inspect(UpgradeOffers), { panel: null, entries: [], wanted: false, due: false })
 })
 
 test("once a term runs out, the next one carries on the same town", () => {

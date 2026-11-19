@@ -434,7 +434,7 @@ export const ApplyEdits = Game.System(
           const kind = kinds[data.building.get(row.value).kind]
           const level = data.upgraded.get(row.value)?.level ?? 0
           const up = nextUpgrade(kind, level)
-          if (!up || data.works.has(row.value) || begun.has(row.value.id) || data.site.has(row.value) || data.rising.has(row.value)) break
+          if (level === 2 || !up || data.works.has(row.value) || begun.has(row.value.id) || data.site.has(row.value) || data.rising.has(row.value)) break
           const blocked = upgradeBlock(up, resources.fate.get().rank, rules)
           if (blocked) {
             events.toast.emit(`${up.title} ${blocked}`)
@@ -447,7 +447,7 @@ export const ApplyEdits = Game.System(
           coins -= up.cost.coins
           begun.add(row.value.id)
           const owed = amounts(up.cost.materials)
-          commands.insert(row.value, [Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }])
+          commands.insert(row.value, [Works, { owed, total: total(owed), done: 0, level: level === 0 ? 1 : 2 }])
           const was = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
           write(resources.chronicle, t, `Works begin on the ${was}: it is to be ${anA(up.title.toLowerCase())}.`)
           events.toast.emit(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)
