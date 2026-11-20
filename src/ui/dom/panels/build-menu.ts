@@ -108,7 +108,8 @@ export const buildMenu = (parts: PanelParts, controls: Pick<Controls, "place" | 
     const cost = costChips(t, piece.cost, has)
     cost.box.prepend(el("span", "cap", said.cost))
     const terms = el("span", "chips")
-    terms.innerHTML = `<span class="cap">${escapeHtml(said.does)}</span>${chip("chip good", said.parks.beauty, `${icon("appeal", 14)}+${piece.beauty}`)}${chip("chip dim", said.parks.upkeep, `${icon("upkeep", 14)}${piece.upkeep}${perMinute}`)}`
+    // A park piece's beauty and upkeep are fractions: written as the language writes a number ("0,25" in Italian).
+    terms.innerHTML = `<span class="cap">${escapeHtml(said.does)}</span>${chip("chip good", said.parks.beauty, `${icon("appeal", 14)}+${t.format.grouping(piece.beauty)}`)}${chip("chip dim", said.parks.upkeep, `${icon("upkeep", 14)}${t.format.grouping(piece.upkeep)}${perMinute}`)}`
     const blurb = el("span", "blurb", named.blurb)
     option.append(thumb(parts.pictures, `park:${id}`), el("span", "name", named.title), cost.box, terms, blurb)
     option.title = said.parks.piece(named.title, named.blurb, { beauty: piece.beauty, upkeep: piece.upkeep, ground })
