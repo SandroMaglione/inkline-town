@@ -84,8 +84,8 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel-open .system { right: 376px; bottom: calc(70px + env(safe-area-inset-bottom)); flex-direction: column; }
 .panel-open .system button.labelled { font-size: 0; gap: 0; padding: 6px 9px; }
 @media (max-width: 1210px) { .system { bottom: calc(70px + env(safe-area-inset-bottom)); } }
-/* Italian's tool bar is longer (its labels are), so the system bar steps up above it on a wider screen than English's does. */
-@media (max-width: 1400px) { :lang(it) .system { bottom: calc(70px + env(safe-area-inset-bottom)); } }
+/* Where a language's tool bar is longer than English's (its labels are), the system bar steps up above it on a wider screen than English's does. */
+@media (max-width: 1400px) { :is(:lang(it)) .system { bottom: calc(70px + env(safe-area-inset-bottom)); } }
 .toolbar .group, .system {
   display: flex; gap: 4px; padding: 5px; background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db;
 }
@@ -602,8 +602,8 @@ kbd.key {
   background: linear-gradient(to right, var(--rail) min(var(--at), 50%), var(--fill) min(var(--at), 50%), var(--fill) max(var(--at), 50%), var(--rail) max(var(--at), 50%));
 }
 .panel .deal-line .mode { width: 12ch; text-align: right; font-size: 11px; color: #9aa29b; white-space: nowrap; }
-/* A fixed width, so the slider beside it does not change length as its words do; Italian's are longer ("compra ≤72/min"). */
-:lang(it) .panel .deal-line .mode { width: 15ch; }
+/* A fixed width, so the slider beside it does not change length as its words do; wider where a language's are longer than English's ("compra ≤72/min"). */
+:is(:lang(it)) .panel .deal-line .mode { width: 15ch; }
 .panel .deal-line .mode.sell { color: #4f8a3e; font-weight: 700; }
 .panel .deal-line .mode.buy { color: #3d6db5; font-weight: 700; }
 
