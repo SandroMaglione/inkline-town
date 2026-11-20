@@ -632,6 +632,26 @@ export const page = {
       unsaveable: (e) => `Impossibile salvare il paese: ${e.reason}`
     } satisfies Wording<Trouble>
   },
+  /**
+   * News of the next Typeonce game (`ui/dom/brand/signup.ts`): the card at the first spring, and the panel on the
+   * reckoning. "Typeonce Games" is a name, and stays.
+   */
+  signup: {
+    label: "Nuovi giochi di Typeonce Games",
+    moment: { lead: "Primavera dell'anno 3.", text: "Il paese ha superato il suo primo inverno." },
+    headline: "Gioca per primo al prossimo gioco Typeonce",
+    body: "Inkline Town è fatto da Typeonce Games. Lascia la tua email e il prossimo gioco gratuito ti arriva il giorno in cui esce.",
+    email: "Indirizzo email",
+    placeholder: "tu@esempio.it",
+    submit: "Ricevi i nuovi giochi",
+    keep: "Continua a giocare",
+    outcome: {
+      ok: "Controlla la posta per confermare.",
+      invalid_email: "Questo indirizzo non sembra giusto.",
+      rate_limited: "Troppi tentativi. Aspetta un minuto e riprova.",
+      unavailable: "Non è andata a buon fine. Riprova."
+    }
+  },
   /** On the card shown while the town is drawn for the first time (the page's own HTML says it in English until the language is known). */
   loading: "si disegna il paese…",
   /** The town could not start, or stopped: said in place of the page. */

@@ -593,6 +593,30 @@ translate it (grammar first: what a noun needs in that language), end
 `test/i18n.test.ts` then holds it to naming every upgrade, wording every
 event and notice with only tokens the game knows, and saying the same
 things as English.
+## News of the next game
+
+Typeonce Games makes free browser games; a player can leave an email to hear
+when the next one ships (`src/ui/dom/brand/signup.ts`, under the studio's mark
+from the credit). It shows in two places, both when the town waits anyway:
+
+- **At the first spring**: when the town's first winter ends (the start of year 3,
+  a third of the way into the first term), a card rises above the tool bar and
+  the town pauses under it (`brand/spring-card.ts`). "Keep playing", the ×, or
+  Esc put it away and the town goes on at the speed it had. It waits while the
+  mayor is in the middle of something (a stroke, a panel, a fold, a dialog, a toast).
+- **On the reckoning**, under its buttons, at every end of term.
+
+Signing up hides both for good on that device; closing either hides both for a
+day. `localStorage["inkline-town/signup"]` keeps which (never a save's key).
+Never on the founding screen or a visit to a shared town.
+
+The address goes to `https://typeonce.games/api/subscribe`, which answers only
+typeonce.games and its subdomains. Anywhere else (`pnpm dev`, a preview) the
+form answers itself and sends nothing: an address without `@` is refused,
+`limit@…` is told to wait, `down@…` finds the service down, and the rest
+succeed. Every state is on `/ui-kit.html`. To see the card in the game, load a
+town from before minute 15 of a 45-minute term and `town.advance(60)`; to see it
+again, `localStorage.removeItem("inkline-town/signup")`.
 
 ## Testing
 
@@ -628,6 +652,10 @@ worked face), a market becomes a market hall only once the town is a town
 on the same town with its own winters, and a long reign of five terms ends
 each on time, starts the crown's tally afresh each term, thins its older
 history, keeps its chronicle capped, and keeps its save in bounds.
+
+`test/signup.test.ts` checks when the sign-up may show (signed up, closed
+less than or more than a day ago), that it keeps to its own key, and that
+nothing is sent from anywhere but typeonce.games.
 
 `test/share.test.ts` checks the server's routes and what they refuse, and
 carries a real town through them into another headless town, which must

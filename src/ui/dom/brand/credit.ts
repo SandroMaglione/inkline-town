@@ -9,6 +9,9 @@
  * - `line`: a footer along the bottom of the charter and the reckoning, the two
  *   moments the town is waiting anyway.
  *
+ * The sign-up for news of the next game (`signup.ts`) wears the same mark
+ * (`createMark`), so the two read as one studio.
+ *
  * Every link is a real `<a>` that opens a new tab, so the town is never left.
  * While that tab is in front the town's frames stop (the loop clamps a frame to
  * a quarter of a second), so the term does not run on while the mayor is away.
@@ -96,6 +99,9 @@ const links = (t: Catalog, lockup: number): Array<Node> => [
   text("dot", "·"),
   link(t, ritmoSite, t.page.credit.ritmo, text("what", t.page.credit.madeWith), text("name", "ritmo"), svg(arrowPath, ARROW.length, ARROW.length, 7, "arrow"))
 ]
+
+/** The Typeonce mark alone, `size` CSS pixels square: the lockup's own pixels. */
+export const createMark = (size: number): SVGSVGElement => svg(art(PIXEL_MARK_32, 0, 0), MARK_SIZE, MARK_SIZE, size, "mark")
 
 /** The note in the bottom-right corner. */
 export const createCreditCorner = (t: Catalog): HTMLElement => {

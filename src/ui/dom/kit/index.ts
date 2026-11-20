@@ -5,7 +5,7 @@
 export { el, escapeHtml, hex, setHtml } from "./dom.ts"
 export { costChips, type Holdings } from "./cost-chips.ts"
 export { goodIcon, icon, iconEl, iconNames } from "./icons.ts"
-export { kitExamples } from "./examples.ts"
+export { kitExamples, signupExamples } from "./examples.ts"
 export { renderLine, syncLines } from "./lines.ts"
 export { thumb, type Pictured, type Pictures } from "./picture.ts"
 export { money, row } from "./rows.ts"

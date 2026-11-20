@@ -22,6 +22,8 @@ export const createToast = (t: Catalog) => {
       // As long as its words take to read: an amount shown as an icon is counted as the words it stands for.
       timer = window.setTimeout(() => box.classList.remove("show"), Math.min(8000, Math.max(2200, 1200 + words(t, message).length * 65)))
     },
+    /** A toast is up: what waits its turn (the sign-up's card) holds off. */
+    showing: () => box.classList.contains("show"),
     /** A tap on the map puts a toast away (one it raised itself stays). */
     tapped: () => {
       if (!box.classList.contains("show") || Date.now() - at <= 250) return

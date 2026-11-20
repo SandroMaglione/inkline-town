@@ -589,6 +589,30 @@ export const page = {
       unsaveable: (e) => `Could not save the town: ${e.reason}`
     } satisfies Wording<Trouble>
   },
+  /**
+   * News of the next Typeonce game (`ui/dom/brand/signup.ts`): the card at the first spring, and the panel on the
+   * reckoning. "Typeonce Games" is a name, and stays.
+   */
+  signup: {
+    /** The sign-up, read aloud. */
+    label: "New games from Typeonce Games",
+    /** The card's top strip, in the town's own voice: the moment (in bold), and what it means. The first spring is always year 3's. */
+    moment: { lead: "Spring of year 3.", text: "The town came through its first winter." },
+    headline: "Play the next Typeonce game first",
+    body: "Inkline Town is made by Typeonce Games. Leave your email and the next free game reaches you the day it ships.",
+    /** The field, read aloud, and what it shows while empty. */
+    email: "Email address",
+    placeholder: "you@example.com",
+    submit: "Get new games",
+    keep: "Keep playing",
+    /** How a sign-up went, in the studio's words (as on typeonce.games). */
+    outcome: {
+      ok: "Check your inbox to confirm.",
+      invalid_email: "That address does not look right.",
+      rate_limited: "Too many tries. Wait a minute and try again.",
+      unavailable: "That did not go through. Try again."
+    }
+  },
   /** On the card shown while the town is drawn for the first time (the page's own HTML says it in English until the language is known). */
   loading: "drawing the town…",
   /** The town could not start, or stopped: said in place of the page. */
