@@ -1,6 +1,6 @@
 /** The language, against the real local game: the founding screen and the
- * system bar both open the language's dialog, which lists every language by
- * its own name; choosing another keeps the choice, brings the page back in
+ * system bar both open the language's menu, at the button, which lists
+ * every language by its own name; choosing another keeps the choice, brings the page back in
  * it, and carries on with the town in play, looking where the mayor was
  * looking; and what the town said before reads in the new language too.
  * Start pnpm dev first. BROWSER_EXECUTABLE_PATH selects an installed
@@ -30,16 +30,22 @@ const reads=async(page:Page,t:Catalog,what:string)=>{
   assert.equal(await page.evaluate(()=>document.documentElement.lang),t.locale,`${what}: the page's lang`)
   assert.equal(await page.evaluate(()=>window.town.words.current.locale),t.locale,`${what}: the catalog in use`)
 }
-/** Opens the language's dialog from the button with this title, and checks it lists every language by its own name, the one in use marked. */
-const openDialog=async(page:Page,opener:ReturnType<Page["locator"]>,t:Catalog,what:string)=>{
+/** Opens the language's menu from a button, and checks it lists every language by its own name, the one in use marked, within the screen. */
+const openMenu=async(page:Page,opener:ReturnType<Page["locator"]>,t:Catalog,what:string)=>{
   await opener.click()
-  const dialog=page.locator(".dialog.language.open")
-  await dialog.waitFor()
-  const choices=dialog.locator(".choices button")
+  const menu=page.locator(".language-menu.open")
+  await menu.waitFor()
+  const choices=menu.locator("button")
   assert.deepEqual(await choices.allTextContents(),locales.map(languageName),`${what}: every language by its own name`)
   assert.deepEqual(await choices.evaluateAll(buttons=>buttons.map(b=>b.getAttribute("lang"))),[...locales],`${what}: each name is marked as its own language`)
-  assert.deepEqual(await dialog.locator(".choices button.on").allTextContents(),[languageName(locales.find(l=>l===t.locale)!)],`${what}: the language in use is marked`)
-  return dialog
+  assert.deepEqual(await menu.locator("button.on").allTextContents(),[languageName(locales.find(l=>l===t.locale)!)],`${what}: the language in use is marked`)
+  const box=(await menu.boundingBox())!,screen=page.viewportSize()!
+  assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<=screen.width&&box.y+box.height<=screen.height,`${what}: the menu is within the screen`)
+  // It opens at its button, not across the page from it.
+  const from=(await opener.boundingBox())!
+  const beside=Math.abs(box.x-from.x)<=1||Math.abs(box.x+box.width-(from.x+from.width))<=1
+  assert.ok(beside&&(Math.abs(box.y+box.height-from.y)<=12||Math.abs(box.y-(from.y+from.height))<=12),`${what}: the menu opens at its button (${JSON.stringify(box)} at ${JSON.stringify(from)})`)
+  return menu
 }
 
 try {
@@ -52,12 +58,18 @@ try {
   await page.waitForFunction(()=>"town" in window)
   await reads(page,en,"a reader of English")
 
-  // The founding screen: the first thing a new mayor reads has the language's button on it.
-  const fromCharter=await openDialog(page,page.locator(".dialog.open .language-button"),en,"the founding screen")
+  // The founding screen: the first thing a new mayor reads has the language's button on it, at its foot, across from the maker's credit.
+  const founding=page.locator(".dialog.open .language-button")
+  const [button,credit]=[(await founding.boundingBox())!,(await page.locator(".dialog.open .credit.line a").first().boundingBox())!]
+  assert.ok(button.x+button.width<credit.x&&Math.abs(button.y+button.height/2-(credit.y+credit.height/2))<=8,"the language button is on the credit's line, on the other side")
+  const fromCharter=await openMenu(page,founding,en,"the founding screen")
   await page.screenshot({path:`${output}/founding.png`})
-  // The language already in use is no change: the dialog closes, and the charter is still there.
-  await fromCharter.locator(".choices button.on").click()
-  assert.equal(await page.locator(".dialog.language.open").count(),0)
+  // A press elsewhere puts the menu away; so does the language already in use, which is no change, and the charter is still there.
+  await page.mouse.click(8,8)
+  assert.equal(await page.locator(".language-menu.open").count(),0,"a press elsewhere puts the menu away")
+  await founding.click()
+  await fromCharter.locator("button.on").click()
+  assert.equal(await page.locator(".language-menu.open").count(),0)
   assert.ok(await page.getByRole("button",{name:en.page.charter.start,exact:true}).isVisible())
 
   // A town in play, somewhere particular to look from.
@@ -71,13 +83,14 @@ try {
   const round:ReadonlyArray<Locale>=[...locales.filter(l=>l!==en.locale),...(locales.length>1?[locales.find(l=>l===en.locale)!]:[])]
   for (const to of round) {
     const t=await load(to)
-    const dialog=await openDialog(page,page.locator(".system button").filter({has:page.locator(`xpath=self::*[@title=${JSON.stringify(current.page.system.language.tip)}]`)}),current,`in ${current.locale}`)
+    const menu=await openMenu(page,page.locator(".system button").filter({has:page.locator(`xpath=self::*[@title=${JSON.stringify(current.page.system.language.tip)}]`)}),current,`in ${current.locale}`)
     await page.screenshot({path:`${output}/choosing-${current.locale}.png`})
-    await dialog.getByRole("button",{name:languageName(to),exact:true}).click()
+    await menu.getByRole("menuitemradio",{name:languageName(to),exact:true}).click()
     await page.waitForFunction(tag=>document.documentElement.lang===tag&&"town" in window&&!window.town.interaction.founding&&window.town.shown.town.stats!==null,to)
     await reads(page,t,`chosen ${to}`)
     assert.equal(await page.evaluate(()=>localStorage.getItem("inkline-town/language")),to,"the choice is kept for the next visit")
     assert.equal(await page.locator(".dialog.open").count(),0,`${to}: no charter is asked for: the town is carried on with`)
+    assert.equal(await page.locator(".language-menu.open").count(),0)
     const back=await page.evaluate(()=>{const s=window.town.snapshot();return{entities:s.entities.length,seed:s.resources["Town/Charter"].seed as number,step:s.resources["Town/Time"].step as number,view:window.town.view.view(),events:(s.resources["Town/Chronicle"].lines as ReadonlyArray<{readonly event:Event}>).map(l=>l.event),told:window.town.shown.town.stats!.chronicle.map(l=>l.text)}})
     assert.equal(back.seed,town.seed,`${to}: the same town`)
     assert.equal(back.entities,town.entities,`${to}: with everything it had`)
@@ -101,18 +114,18 @@ try {
   await reads(again,current,"the next visit")
   await again.close()
 
-  // A phone: the founding screen's button is on screen, and the dialog fits.
+  // A phone: the founding screen's button is at the foot of the sheet, and its menu fits the screen.
   const phone=await browser.newPage({viewport:{width:390,height:720},deviceScaleFactor:2,isMobile:true,hasTouch:true,locale:"en-US"})
   phone.on("pageerror",e=>errors.push(`phone: ${e.message}`))
   await phone.goto(base)
   await phone.waitForFunction(()=>"town" in window)
-  const button=(await phone.locator(".dialog.open .language-button").boundingBox())!
-  assert.ok(button.y>=0&&button.x>=0&&button.x+button.width<=390,"phone: the language button is on the founding screen")
   const found=(await phone.getByRole("button",{name:en.page.charter.start,exact:true}).boundingBox())!
   assert.ok(found.y>=0&&found.y+found.height<=720,"phone: the found button is still on screen")
-  const sheet=await openDialog(phone,phone.locator(".dialog.open .language-button"),en,"phone")
-  const card=(await sheet.locator(".sheet").boundingBox())!
-  assert.ok(card.x>=0&&card.x+card.width<=390&&card.y>=0&&card.y+card.height<=720,"phone: the language dialog fits the screen")
+  const small=phone.locator(".dialog.open .language-button")
+  await small.scrollIntoViewIfNeeded()
+  const at=(await small.boundingBox())!
+  assert.ok(at.x>=0&&at.x+at.width<=390&&at.y>=0&&at.y+at.height<=found.y,"phone: the language button is on the founding screen, above its pinned buttons")
+  await openMenu(phone,small,en,"phone")
   await phone.screenshot({path:`${output}/phone.png`})
   assert.ok(await phone.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),"phone: the page scrolls sideways")
   await phone.close()

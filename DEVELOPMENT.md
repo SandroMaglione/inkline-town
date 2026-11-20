@@ -564,9 +564,10 @@ the page writes the result only where it changed (`setHtml`), so there is
 nothing to subscribe to. Catalog functions run every frame: keep them cheap,
 and never make an `Intl` formatter inside one.
 
-**Choosing one.** The system bar's globe and a button on the founding
-screen open the same dialog (`src/ui/dom/screens/language.ts`): every
-language by its own name. The page's labels are made once, in the language
+**Choosing one.** The system bar's globe, and a button at the foot of the
+founding screen across from the maker's credit, open the same small menu at
+the button (`src/ui/dom/screens/language.ts`): every language by its own
+name. The page's labels are made once, in the language
 it started in, so a change brings the page back anew: the choice is kept
 (`src/platform/language.ts`, in `localStorage`), the town in play is
 autosaved, the page reloads in the new language and carries on with that

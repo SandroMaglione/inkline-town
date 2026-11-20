@@ -139,10 +139,6 @@ export const page = {
   },
   /** Choosing the language: every language is listed by its own name, so only what is around the list is said here. */
   language: {
-    title: "language",
-    sub: "The town is read in the language you choose: its panels, its guide, and its news from here on.",
-    /** Under the list: what changing it does to the town in play. */
-    keeps: "Changing it reloads the page. A town in play is saved first, and carried on with.",
     /** On the language now in use, read aloud. */
     current: (name: string): string => `${name} (in use)`,
     /** The browser would not keep the choice, so the page stays as it is. */

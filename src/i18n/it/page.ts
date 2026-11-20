@@ -176,10 +176,6 @@ export const page = {
   },
   /** Choosing the language: every language is listed by its own name, so only what is around the list is said here. */
   language: {
-    title: "lingua",
-    sub: "Il paese si legge nella lingua che scegli: i suoi pannelli, la sua guida e, da qui in avanti, le sue notizie.",
-    /** Under the list: what changing it does to the town in play. */
-    keeps: "Cambiarla ricarica la pagina. Un paese in corso viene prima salvato, e poi si riprende da lì.",
     /** On the language now in use, read aloud. */
     current: (name: string): string => `${name} (in uso)`,
     /** The browser would not keep the choice, so the page stays as it is. */

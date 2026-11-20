@@ -166,7 +166,7 @@ export const createDomUi = <Camera>(
     refreshTools: () => toolbar.refresh(),
     openCharter: (cancellable) => charter.open(cancellable),
     openShare: () => void share.open(),
-    openLanguage: () => language.open(),
+    openLanguage: (at) => language.open(at),
     showReckoning: (open) => reckoning.show(open),
     confirmLeave: (ask, run) => confirm.ask(ask, run)
   }
@@ -181,7 +181,7 @@ export const createDomUi = <Camera>(
   const confirm = createConfirm(t, () => persistence().save(), () => ui.speed, controls)
   const reckoning = createReckoning(t, ui, stats, send, controls)
   const visit = createVisit(t, { ...controls, closeCharter: () => charter.close(), resetPage: () => resetPage() })
-  const language = createLanguage(t, options.chooseLanguage ?? (() => null), () => ui.speed, controls)
+  const language = createLanguage(t, options.chooseLanguage ?? (() => null), controls)
   const charter = createCharter(t, ui, send, () => persistence().load(), history, options.saved ?? null, () => {
     if (visit.visiting()) visit.endVisit()
   }, language.button, controls)

@@ -21,11 +21,11 @@ export const createSystemMenu = (
 ) => {
   const said = t.page.system
   const system = el("div", "system")
-  const action = (name: IconName, words: { readonly label: string; readonly tip: string }, run: () => void) => {
+  const action = (name: IconName, words: { readonly label: string; readonly tip: string }, run: (button: HTMLElement) => void) => {
     const button = el("button", name === "share" ? "labelled" : "")
     button.title = words.tip
     button.append(iconEl(name), document.createTextNode(words.label))
-    button.onclick = run
+    button.onclick = () => run(button)
     system.append(button)
   }
   action("share", said.share, () => controls.openShare())
@@ -39,7 +39,7 @@ export const createSystemMenu = (
   action("save", said.save, () => controls.toast(persistence().save() ?? t.page.save.saved))
   action("load", said.load, () => controls.confirmLeave(said.leave.load, () => controls.toast(persistence().load().said)))
   action("newTown", said.newTown, () => controls.confirmLeave(said.leave.newTown, () => controls.openCharter(true)))
-  action("language", said.language, () => controls.openLanguage())
+  action("language", said.language, (button) => controls.openLanguage(button))
   // A phone has no camera bar: this puts the camera back.
   action("view", said.recentre, resetCamera)
   system.lastElementChild!.classList.add("phone-only")

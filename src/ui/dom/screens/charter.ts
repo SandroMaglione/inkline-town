@@ -21,8 +21,8 @@ import type { TownHistory } from "../panels/town.ts"
 /**
  * `savedTown`: the newest town saved in this browser, which the first charter offers to carry on with.
  * `founded`: a town is about to be founded from the dialog (a visit to a shared town ends).
- * `languageButton`: makes the button that opens the language's dialog: a new mayor meets this screen first, and
- * must be able to read it.
+ * `languageButton`: makes the button that opens the language's menu: a new mayor meets this screen first, and
+ * must be able to read it. It sits at the foot of the sheet, across from the maker's credit.
  */
 export const createCharter = (
   t: Catalog,
@@ -79,7 +79,7 @@ export const createCharter = (
     author.rel = "noopener"
     by.append(author)
     title.append(by)
-    card.append(languageButton(), title, el("p", "sub", said.sub))
+    card.append(title, el("p", "sub", said.sub))
     const body = el("div", "charter")
     const options = el("div", "")
     const preview = el("div", "preview")
@@ -198,7 +198,7 @@ export const createCharter = (
       cancel.onclick = () => closeCharter()
       actions.append(cancel)
     }
-    card.append(body, actions, createCreditLine(t))
+    card.append(body, actions, createCreditLine(t, languageButton()))
     dialog.append(card)
     dialog.classList.add("open")
   }

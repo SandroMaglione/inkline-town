@@ -112,10 +112,14 @@ export const createCreditCorner = (t: Catalog): HTMLElement => {
   return note
 }
 
-/** The footer of a dialog. */
-export const createCreditLine = (t: Catalog): HTMLElement => {
+/** The footer of a dialog: the credit at its end, and (`lead`) something of the page's own at its start, across from it. */
+export const createCreditLine = (t: Catalog, lead?: HTMLElement): HTMLElement => {
   const line = document.createElement("footer")
   line.className = "credit line"
+  if (lead) {
+    lead.classList.add("lead")
+    line.append(lead)
+  }
   line.append(...links(t, 16))
   return line
 }
