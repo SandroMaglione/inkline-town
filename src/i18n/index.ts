@@ -32,7 +32,8 @@ const languages = {
   it: { name: "Italiano", load: () => import("./it/index.ts").then((module) => module.it) },
   es: { name: "Español", load: () => import("./es/index.ts").then((module) => module.es) },
   fr: { name: "Français", load: () => import("./fr/index.ts").then((module) => module.fr) },
-  de: { name: "Deutsch", load: () => import("./de/index.ts").then((module) => module.de) }
+  de: { name: "Deutsch", load: () => import("./de/index.ts").then((module) => module.de) },
+  ja: { name: "日本語", load: () => import("./ja/index.ts").then((module) => module.ja) }
 } satisfies Record<string, Language>
 
 export type Locale = keyof typeof languages
