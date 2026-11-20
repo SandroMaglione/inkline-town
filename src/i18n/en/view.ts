@@ -346,7 +346,7 @@ export const view = {
       burghers: (value) => `${value}%`,
       approval: (value) => `${value}`,
       income: (value) => `${value}`,
-      hall: (value, target) => (value >= target ? "built" : "not yet")
+      hall: (value, target): string => (value >= target ? "built" : "not yet")
     } satisfies Record<GoalId, (value: number, target: number) => string>
   },
 
@@ -485,7 +485,7 @@ export const view = {
     worth: parkWorth,
     /** What a park's beauty is made of. */
     part: {
-      ground: (l) => (l.capped ? "ground (all it counts for)" : "ground"),
+      ground: (l): string => (l.capped ? "ground (all it counts for)" : "ground"),
       ways: (l) => `way${l.count === 1 ? "" : "s"} in from the street`,
       prop: (l) => props[l.prop].noun.one
     } satisfies Wording<ParkLabel>,

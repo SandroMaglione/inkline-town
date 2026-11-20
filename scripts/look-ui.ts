@@ -9,14 +9,23 @@
  *   node scripts/balance.ts --size small --seeds 1 --snapshot 30 --out snapshots
  *   pnpm dev --host 127.0.0.1 --port 5232 &
  *   SAVE=snapshots/small-fair-8919-30min.json node scripts/look-ui.ts
+ *
+ * `LANGUAGE=it` looks at it in another language (and writes to
+ * `output/look-ui/it`): how a translation sits in the panels, the tool bar,
+ * and a phone's HUD.
  */
 import { existsSync } from "node:fs"
 import { mkdir, readFile } from "node:fs/promises"
 import { chromium, type Page } from "playwright"
 
+import { DEFAULT_LOCALE, load, locales } from "../src/i18n/index.ts"
+
 const executable = process.env.BROWSER_EXECUTABLE_PATH ?? ["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(existsSync)
 const browser = await chromium.launch({ headless: true, ...(executable ? { executablePath: executable } : {}) })
-const out = process.env.OUT ?? "output/look-ui"
+const language = locales.find((locale) => locale === process.env.LANGUAGE) ?? DEFAULT_LOCALE
+/** The page's own words for what this script clicks, in the language looked at. */
+const t = await load(language)
+const out = process.env.OUT ?? (language === DEFAULT_LOCALE ? "output/look-ui" : `output/look-ui/${language}`)
 await mkdir(out, { recursive: true })
 if (!process.env.SAVE) throw new Error("SAVE=<a save file, as `pnpm balance --snapshot` writes>")
 const save = await readFile(process.env.SAVE, "utf8")
@@ -45,10 +54,10 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
   const close = async () => { await page.locator(".panel .close").first().click().catch(() => {}); await settle() }
 
   await page.goto(process.env.GAME_BASE_URL ?? "http://127.0.0.1:5232")
-  await page.evaluate((text) => localStorage.setItem("inkline-town/save/manual", text), save)
+  await page.evaluate(([text, language]) => { localStorage.setItem("inkline-town/save/manual", text!); localStorage.setItem("inkline-town/language", language!) }, [save, language])
   await page.reload()
   await page.waitForFunction(() => (window as any).town)
-  await page.getByRole("button", { name: /Continue/ }).first().click()
+  await page.getByRole("button", { name: t.page.charter.resume, exact: true }).first().click()
   await page.waitForFunction(() => !(window as any).town.interaction.founding)
   await page.locator(".toolbar .pause").click()
   await page.evaluate(() => (window as any).town.interaction.guide.push({ type: "off" }))
@@ -158,9 +167,9 @@ for (const [name, width, height, phone] of [["desktop", 1440, 1000, false], ["ph
   }
 
   // 4. The build menu: no upgrades in it now.
-  await page.locator(".toolbar button").filter({ hasText: /^build/i }).first().click()
+  await page.locator(".toolbar button").filter({ hasText: t.commands.build.label }).first().click()
   await settle()
-  await page.locator(".panel").getByText(/parks/i).first().scrollIntoViewIfNeeded().catch(() => {})
+  await page.locator(".panel").getByText(t.page.build.parks.title).first().scrollIntoViewIfNeeded().catch(() => {})
   await shot("6-build-menu")
   await page.close()
 }

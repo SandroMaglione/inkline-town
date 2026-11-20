@@ -92,7 +92,7 @@ const start = async () => {
     () => persistence,
     { shared: shared !== null, saved, carried: carried !== null, chooseLanguage: (locale) => chooseLanguage(locale) }
   )
-  input = new MapInput(stage, interaction, shown, { tapAgain: (to) => page.toast(words.current.page.map.tapAgain[to]), blocked: page.blocked })
+  input = new MapInput(stage, interaction, shown, { camera: t.page.camera, tapAgain: (to) => page.toast(t.page.map.tapAgain[to]), blocked: page.blocked })
   const { syncPage, resetPage, toast, visit, visitFailed, visiting } = page
   if (shared)
     download(shared).then(

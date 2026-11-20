@@ -3,9 +3,11 @@
  * chapter by chapter, and never falls silent before the town is complete;
  * signs from the town go ahead of the course once it is founded; it puts
  * away what the town has already done (shown or not); it says what opens a
- * building the town cannot build yet; and its words (English's, in
- * `src/i18n/en/guide.ts`: the rules say everything as data) fit a finger as
- * well as a mouse, and name what they name as tokens the game knows.
+ * building the town cannot build yet; and its words (each language's, in
+ * `src/i18n/<locale>/guide.ts`: the rules say everything as data) fit a
+ * finger as well as a mouse, and name what they name as tokens the game
+ * knows. What the guide says is checked word for word in English; that it
+ * says it well-formed, short, and with the same chips, in every language.
  */
 import assert from "node:assert/strict"
 import { test } from "node:test"
@@ -15,8 +17,16 @@ import {
   chapters, courseCount, courseSteps, guideDone, guideStep, guideStepIds, guideSteps, lockedNote, PLANKS_LOW, STONE_LOW, upcoming,
   type GuideFacts, type GuideLocked, type GuideSoon, type GuideStep, type GuideWaiting
 } from "../src/game/rules/guide.ts"
-import { en, plain, say } from "../src/i18n/index.ts"
+import { en, load, locales, plain, say, type Catalog } from "../src/i18n/index.ts"
 import { parse } from "../src/i18n/token.ts"
+
+/** Every language the game speaks: what holds of the guide's words holds of each. */
+const catalogs: ReadonlyArray<Catalog> = await Promise.all(locales.map(load))
+/**
+ * How long a text may run in a language: English sets the limit (what fits a phone's peek), and another
+ * language may take a third more (Italian says the same in more letters), no further.
+ */
+const limit = (t: Catalog, english: number) => (t.locale === en.locale ? english : Math.floor((english * 4) / 3))
 
 const words = en.guide
 /** A guide message as the mayor reads it: each chip by its word. */
@@ -155,17 +165,21 @@ test("a step the treasury cannot pay for says to save up, and gives way to one i
   assert.equal(lockedNote(stepOf("cloth"), poor), null)
 })
 
-test("every course step is one thing to do and one reason, short enough for a phone", () => {
-  for (const step of courseSteps) {
-    const { action, why } = words.steps[step.id]
-    assert.ok(read(action).length <= 110, `${step.id}: the action fits a phone's peek`)
-    assert.equal(read(action).match(/[.!?](\s|$)/g)?.length, 1, `${step.id}: the action is one sentence`)
-    assert.ok(read(why).length <= 180, `${step.id}: the reason is short`)
+test("every course step is one thing to do and one reason, short enough for a phone, in every language", () => {
+  for (const t of catalogs) {
+    for (const step of courseSteps) {
+      const { action, why } = t.guide.steps[step.id]
+      const said = plain(t, action)
+      assert.ok(said.length <= limit(t, 110), `${t.locale} ${step.id}: the action fits a phone's peek (${said.length})`)
+      assert.equal(said.match(/[.!?](\s|$)/g)?.length, 1, `${t.locale} ${step.id}: the action is one sentence`)
+      assert.ok(plain(t, why).length <= limit(t, 180), `${t.locale} ${step.id}: the reason is short (${plain(t, why).length})`)
+    }
   }
 })
 
-/** Every message the guide can show: each step's words, and what it says of a town under way, locked, or waiting. */
-const everyMessage = (): Array<readonly [string, string]> => {
+/** Every message the guide can show in a language: each step's words, and what it says of a town under way, locked, or waiting. */
+const everyMessage = (t: Catalog): Array<readonly [string, string]> => {
+  const words = t.guide
   const waitings: ReadonlyArray<GuideWaiting> = [{ _tag: "homesNoPlanks" }, { _tag: "homesRising" }, { _tag: "siteNoPlanks" }, { _tag: "siteRising" }, { _tag: "homesLaid" }]
   const lockeds: ReadonlyArray<GuideLocked> = kindIds.flatMap((kind): Array<GuideLocked> => [
     { _tag: "residents", kind, needs: 60, now: 45 },
@@ -184,23 +198,39 @@ const everyMessage = (): Array<readonly [string, string]> => {
   ]
 }
 
-test("no step names a key: tools are chips, and words fit both a finger and a mouse", () => {
-  for (const [what, text] of everyMessage()) {
-    assert.doesNotMatch(text, /\bpress [A-Z]\b|\bEsc\b/i, `${what}: no keys`)
-    assert.ok(parse(text).every((part) => part.type !== "key"), `${what}: no keys`)
-    assert.doesNotMatch(text.replace(/\{[^}]*\}/g, ""), /\bclick/i, `${what}: "click" only as {tap|click}`)
+test("no step names a key: tools are chips, and words fit both a finger and a mouse, in every language", () => {
+  for (const t of catalogs) {
+    for (const [what, text] of everyMessage(t)) {
+      assert.doesNotMatch(text, /\b(press|premi) [A-Z]\b|\bEsc\b/i, `${t.locale} ${what}: no keys`)
+      assert.ok(parse(text).every((part) => part.type !== "key"), `${t.locale} ${what}: no keys`)
+      // What a mouse does ("click", "clicca") is only ever said beside what a finger does, as {tap|click}.
+      assert.doesNotMatch(text.replace(/\{[^}]*\}/g, ""), /\bclic/i, `${t.locale} ${what}: "click" only as {tap|click}`)
+    }
   }
 })
 
-test("every guide message names what it names as tokens the game knows", () => {
-  for (const [what, text] of everyMessage()) {
-    // Read as words, with the device's choice made: whatever is still in brackets or braces is a token nothing knows (a misspelt tool, a building that is not one).
-    const said = read(text).replace(/\{([^{}|]*)\|([^{}|]*)\}/g, "$2")
-    assert.doesNotMatch(said, /[[\]{}]/, `${what}: every token is one the game knows`)
+test("every guide message names what it names as tokens the game knows, in every language", () => {
+  for (const t of catalogs) {
+    for (const [what, text] of everyMessage(t)) {
+      assert.ok(plain(t, text).trim() !== "", `${t.locale} ${what}: says something`)
+      // Read as words, with the device's choice made: whatever is still in brackets or braces is a token nothing knows (a misspelt tool, a building that is not one).
+      const said = plain(t, text).replace(/\{([^{}|]*)\|([^{}|]*)\}/g, "$2")
+      assert.doesNotMatch(said, /[[\]{}]/, `${t.locale} ${what}: every token is one the game knows`)
+    }
+    // The chapters and the steps are all worded, and nothing is worded that is not a step.
+    assert.deepEqual(Object.keys(t.guide.chapters).sort(), [...chapters].sort(), t.locale)
+    assert.deepEqual(Object.keys(t.guide.steps).sort(), [...guideStepIds].sort(), t.locale)
   }
-  // The chapters and the steps are all worded, and nothing is worded that is not a step.
-  assert.deepEqual(Object.keys(words.chapters).sort(), [...chapters].sort())
-  assert.deepEqual(Object.keys(words.steps).sort(), [...guideStepIds].sort())
+})
+
+test("every language names the same things in each step as English does: the same buildings, goods, tools, and map views", () => {
+  /** What a message names beyond words, whatever the order a language says it in: each token's kind and id, sorted. */
+  const named = (text: string) =>
+    parse(text)
+      .flatMap((part) => (part.type === "kind" ? [`kind:${part.kind}`] : part.type === "good" ? [`good:${part.good}`] : part.type === "command" ? [`command:${part.command}`] : part.type === "view" ? [`view:${part.view}`] : []))
+      .sort()
+  const english = new Map(everyMessage(en))
+  for (const t of catalogs) for (const [what, text] of everyMessage(t)) assert.deepEqual(named(text), named(english.get(what)!), `${t.locale} ${what}`)
 })
 
 test("a step under way says what the town is doing about it", () => {
@@ -275,7 +305,7 @@ test("the guide never sends the mayor to place a building the town cannot build 
     for (const kind of step.asks ?? []) {
       const { residents, citizens } = kinds[kind].unlock
       assert.ok(kinds[kind].buildable, `${kind} can be built`)
-      assert.ok(parse(words.steps[step.id].action).some((part) => part.type === "kind" && part.kind === kind), `${step.id} names the ${kind} as a chip`)
+      for (const t of catalogs) assert.ok(parse(t.guide.steps[step.id].action).some((part) => part.type === "kind" && part.kind === kind), `${t.locale}: ${step.id} names the ${kind} as a chip`)
       // Short of the unlock: either the step does not apply, or it says what opens it.
       for (const short of [residents > 0 ? everything(residents - 1, citizens) : null, citizens > 0 ? everything(residents + 200, citizens - 1) : null]) {
         if (!short) continue
@@ -288,10 +318,12 @@ test("the guide never sends the mayor to place a building the town cannot build 
   }
 })
 
-test("every step says what closes it", () => {
-  for (const step of guideSteps) {
-    const goal = read(words.steps[step.id].goal)
-    assert.ok(goal.length > 0 && goal.length <= 80, step.id)
+test("every step says what closes it, in every language", () => {
+  for (const t of catalogs) {
+    for (const step of guideSteps) {
+      const goal = plain(t, t.guide.steps[step.id].goal)
+      assert.ok(goal.length > 0 && goal.length <= limit(t, 80), `${t.locale} ${step.id} (${goal.length})`)
+    }
   }
 })
 

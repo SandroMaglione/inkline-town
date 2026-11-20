@@ -127,6 +127,16 @@ export const page = {
       stay: "Keep playing"
     }
   },
+  /** The camera bar in the map's corner (the renderer draws it): its two drag modes, the zoom, and the way back. */
+  camera: {
+    label: "Map camera",
+    pan: { label: "Pan", title: "Drag to pan; the road, pave, home, and park ground tools drag to build" },
+    rotate: { label: "Rotate", title: "Drag to rotate instead of placing. Right-drag also rotates, and Q and E turn it an eighth." },
+    zoomOut: "Zoom out",
+    zoom: "Camera zoom",
+    zoomIn: "Zoom in",
+    reset: { label: "Reset camera", title: "Original angle and centre (Home)" }
+  },
   /** Choosing the language: every language is listed by its own name, so only what is around the list is said here. */
   language: {
     title: "language",
@@ -541,7 +551,7 @@ export const page = {
     } satisfies Wording<Offered>,
     /** Why a town could not be shared, or a shared one opened. What the server itself says (`error`) is in its own words. */
     failed: {
-      unreachable: (f) => (f.sending ? "Could not reach the server to share the town" : "Could not reach the server for that town"),
+      unreachable: (f): string => (f.sending ? "Could not reach the server to share the town" : "Could not reach the server for that town"),
       notFound: () => "No town is shared under that link (shares are kept for six months)",
       refused: (f) => `${f.sending ? "Could not share the town" : "Could not open that town"}: ${f.error ?? `the server answered ${f.status}`}`,
       unpacked: () => "The town could not be packed up"
@@ -571,9 +581,9 @@ export const page = {
     loadedAuto: (title: string): string => `Loaded the autosave: ${title}`,
     /** What went wrong with a save. */
     trouble: {
-      nothingSaved: (e) => (e.auto ? "No autosave yet" : "Nothing saved yet"),
+      nothingSaved: (e): string => (e.auto ? "No autosave yet" : "Nothing saved yet"),
       unreadable: () => "The save could not be read",
-      wrongVersion: (e) => (e.older ? "That save is from an older version of the game" : "That save is from a newer version of the game"),
+      wrongVersion: (e): string => (e.older ? "That save is from an older version of the game" : "That save is from a newer version of the game"),
       rejected: (e) => `The save does not fit this game: ${e.reason}`,
       storageFailed: (e) => `Could not save: ${e.reason}`,
       unsaveable: (e) => `Could not save the town: ${e.reason}`
