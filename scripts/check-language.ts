@@ -72,11 +72,12 @@ try {
   assert.equal(await page.locator(".language-menu.open").count(),0)
   assert.ok(await page.getByRole("button",{name:en.page.charter.start,exact:true}).isVisible())
 
-  // A town in play, somewhere particular to look from.
+  // A town in play, somewhere particular to look from. What stands in it is counted without its walkers and
+  // carriers: the town runs on while the language is chosen, and they come and go.
   await page.getByRole("button",{name:en.page.charter.start,exact:true}).click()
   await page.waitForFunction(()=>!window.town.interaction.founding&&window.town.shown.town.stats!==null)
   await page.evaluate(()=>{window.town.advance(20);window.town.view.setView({x:24,y:27,zoom:1.6,heading:1.1,elevation:0.7})})
-  let town=await page.evaluate(()=>{const s=window.town.snapshot();return{entities:s.entities.length,seed:s.resources["Town/Charter"].seed as number,step:s.resources["Town/Time"].step as number,view:window.town.view.view()}})
+  let town=await page.evaluate(()=>{const s=window.town.snapshot();return{entities:s.entities.filter(e=>!("Town/Figure" in e.components)).length,seed:s.resources["Town/Charter"].seed as number,step:s.resources["Town/Time"].step as number,view:window.town.view.view()}})
   let current:Catalog=en
 
   // To every other language and back: each change keeps the choice, comes back in that language, and carries the town on.
@@ -91,7 +92,7 @@ try {
     assert.equal(await page.evaluate(()=>localStorage.getItem("inkline-town/language")),to,"the choice is kept for the next visit")
     assert.equal(await page.locator(".dialog.open").count(),0,`${to}: no charter is asked for: the town is carried on with`)
     assert.equal(await page.locator(".language-menu.open").count(),0)
-    const back=await page.evaluate(()=>{const s=window.town.snapshot();return{entities:s.entities.length,seed:s.resources["Town/Charter"].seed as number,step:s.resources["Town/Time"].step as number,view:window.town.view.view(),events:(s.resources["Town/Chronicle"].lines as ReadonlyArray<{readonly event:Event}>).map(l=>l.event),told:window.town.shown.town.stats!.chronicle.map(l=>l.text)}})
+    const back=await page.evaluate(()=>{const s=window.town.snapshot();return{entities:s.entities.filter(e=>!("Town/Figure" in e.components)).length,seed:s.resources["Town/Charter"].seed as number,step:s.resources["Town/Time"].step as number,view:window.town.view.view(),events:(s.resources["Town/Chronicle"].lines as ReadonlyArray<{readonly event:Event}>).map(l=>l.event),told:window.town.shown.town.stats!.chronicle.map(l=>l.text)}})
     assert.equal(back.seed,town.seed,`${to}: the same town`)
     assert.equal(back.entities,town.entities,`${to}: with everything it had`)
     assert.ok(back.step>=town.step,`${to}: no earlier than it was left (${back.step} after ${town.step})`)

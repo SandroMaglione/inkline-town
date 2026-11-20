@@ -15,7 +15,8 @@ await mkdir(output,{recursive:true})
 const errors:Array<string>=[]
 try {
   for (const [name,width,height] of [["portrait",390,720],["landscape",762,330]] as const) {
-    const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:2,isMobile:true,hasTouch:true})
+    // English, whatever this machine's own language: the check finds buttons by their English names.
+    const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:2,isMobile:true,hasTouch:true,locale:"en-US"})
     page.on("pageerror",e=>errors.push(`${name}: ${e.message}`))
     await page.goto(process.env.GAME_BASE_URL??"http://127.0.0.1:5232")
     await page.waitForFunction(()=>"town" in window)

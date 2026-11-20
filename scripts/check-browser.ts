@@ -21,7 +21,8 @@ declare global {
 }
 const executable=process.env.BROWSER_EXECUTABLE_PATH??["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser","/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(existsSync)
 const browser=await chromium.launch({headless:true,...(executable?{executablePath:executable}:{})})
-const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1})
+// The page opens in the browser's own language where the game speaks it: this check clicks English labels, so it asks for English.
+const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1,locale:"en-US"})
 const errors:Array<string>=[]
 page.on("pageerror",e=>errors.push(e.message))
 page.on("console",m=>{if(m.type()==="error")errors.push(m.text())})
@@ -215,7 +216,7 @@ try {
   const picture=await fetch(unfurl.match(/property="og:image" content="([^"]+)"/)![1]!)
   assert.equal(picture.headers.get("content-type"),"image/jpeg")
   const sharedWorld=await snapshot()
-  const visitor=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,hasTouch:true,isMobile:true})
+  const visitor=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,hasTouch:true,isMobile:true,locale:"en-US"})
   visitor.on("pageerror",e=>errors.push(`visitor: ${e.message}`))
   await visitor.goto(url)
   await visitor.waitForFunction(()=>document.body.classList.contains("visiting"),undefined,{timeout:60000})
