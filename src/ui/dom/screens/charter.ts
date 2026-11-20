@@ -21,6 +21,8 @@ import type { TownHistory } from "../panels/town.ts"
 /**
  * `savedTown`: the newest town saved in this browser, which the first charter offers to carry on with.
  * `founded`: a town is about to be founded from the dialog (a visit to a shared town ends).
+ * `languageButton`: makes the button that opens the language's dialog: a new mayor meets this screen first, and
+ * must be able to read it.
  */
 export const createCharter = (
   t: Catalog,
@@ -30,6 +32,7 @@ export const createCharter = (
   history: TownHistory,
   savedTown: { readonly title: string; readonly savedAt: number } | null,
   founded: () => void,
+  languageButton: () => HTMLElement,
   controls: Pick<Controls, "toast" | "showReckoning" | "choose" | "setSpeed">
 ) => {
   const said = t.page.charter
@@ -76,7 +79,7 @@ export const createCharter = (
     author.rel = "noopener"
     by.append(author)
     title.append(by)
-    card.append(title, el("p", "sub", said.sub))
+    card.append(languageButton(), title, el("p", "sub", said.sub))
     const body = el("div", "charter")
     const options = el("div", "")
     const preview = el("div", "preview")
@@ -187,17 +190,7 @@ export const createCharter = (
       const saved = savedTown
       const resume = el("button", "frame", said.resume)
       resume.title = said.resumeTitle(saved.title, saved.savedAt > 0 ? ago(t, saved.savedAt) : null)
-      resume.onclick = () => {
-        const result = load()
-        controls.toast(result.said)
-        if (!result.loaded) return
-        history.clear()
-        ui.selected = null
-        ui.menu = null
-        closeCharter()
-        controls.choose("select")
-        controls.setSpeed(1)
-      }
+      resume.onclick = () => void carryOn()
       actions.append(resume)
     }
     if (cancellable) {
@@ -213,5 +206,18 @@ export const createCharter = (
     ui.founding = false
     dialog.classList.remove("open")
   }
-  return { element: dialog, open: openCharter, close: closeCharter }
+  /** Carries on with the town saved last instead of founding one: says how the load went, and whether there is a town to play. */
+  const carryOn = (): boolean => {
+    const result = load()
+    controls.toast(result.said)
+    if (!result.loaded) return false
+    history.clear()
+    ui.selected = null
+    ui.menu = null
+    closeCharter()
+    controls.choose("select")
+    controls.setSpeed(1)
+    return true
+  }
+  return { element: dialog, open: openCharter, close: closeCharter, carryOn }
 }

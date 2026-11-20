@@ -78,7 +78,7 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   position: fixed; bottom: calc(14px + env(safe-area-inset-bottom)); display: flex; align-items: stretch; gap: 8px; z-index: 2;
 }
 .toolbar { left: 16px; max-width: calc(100vw - 32px); overflow-x: auto; }
-/* Share, the guide, save, load, new town: icons in the bottom right. With the panel open it moves over, and up above the toolbar it would cover. */
+/* Share, the guide, the language, save, load, new town: icons in the bottom right. With the panel open it moves over, and up above the toolbar it would cover. */
 .system { right: 16px; transition: right 240ms cubic-bezier(.2,.8,.2,1), bottom 240ms cubic-bezier(.2,.8,.2,1); }
 /* With the panel open: a column of icons beside it, above the toolbar. */
 .panel-open .system { right: 376px; bottom: calc(70px + env(safe-area-inset-bottom)); flex-direction: column; }
@@ -302,6 +302,14 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .dialog .choices { display: flex; gap: 6px; flex-wrap: wrap; }
 .dialog .choice { border-color: #c9cec4; color: #6c766f; }
 .dialog .choice.on { border-color: #3d4943; color: #3d4943; font-weight: 700; background: #e6e9e2; }
+/* The language: the languages by their own names, over whatever sheet it was opened from; and the button that opens it on the founding screen, in its corner. */
+.dialog.language { z-index: 11; }
+.dialog.language .choices { margin-top: 14px; }
+.dialog.language .choice { padding: 8px 14px; }
+.dialog .language-button {
+  float: right; display: flex; align-items: center; gap: 6px; margin: -4px -8px 0 12px; padding: 4px 9px;
+  font-size: 12px; border-color: #c9cec4; color: #5d6861;
+}
 .dialog .preview { display: flex; flex-direction: column; gap: 6px; }
 /* The land is the picture the charter is chosen by: as large as the sheet allows, with its reroll on it. */
 .dialog .preview .map { position: relative; }

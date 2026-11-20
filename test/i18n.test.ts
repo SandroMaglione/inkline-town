@@ -12,9 +12,10 @@ import { test } from "node:test"
 
 import { goodIds, kindIds, kinds, ranks, upgradeAt, type GoodId, type KindId } from "../src/game/content/index.ts"
 import { STREET_WAYS, type Event, type Lock, type Notice, type Place } from "../src/game/said.ts"
-import { en, load, locales, pick, plain, say, type Catalog } from "../src/i18n/index.ts"
+import { en, languageName, load, localeOf, locales, pick, plain, say, type Catalog } from "../src/i18n/index.ts"
 import * as token from "../src/i18n/token.ts"
 import { parse } from "../src/i18n/token.ts"
+import { carriedOver, carryOver, prefer, preferred } from "../src/platform/language.ts"
 import { commands, mapViews, type CommandId, type MapViewId } from "../src/view/tools.ts"
 
 const catalogs: ReadonlyArray<Catalog> = await Promise.all(locales.map(load))
@@ -239,7 +240,45 @@ test("each language is loaded as the catalog it says it is", async () => {
   for (const locale of locales) {
     const t = await load(locale)
     assert.equal(t.locale, locale)
-    assert.ok(t.language !== "")
+    assert.equal(localeOf(t), locale)
+    assert.ok(languageName(locale) !== "")
     assert.doesNotThrow(() => new Intl.PluralRules(t.locale))
   }
+})
+
+// ── Keeping the choice ────────────────────────────────────────────────────
+
+/** A browser's storage, in a map; `blocked`: one that throws on every use, as a browser set to keep nothing does. */
+const storage = (blocked = false) => {
+  const kept = new Map<string, string>()
+  const guard = () => {
+    if (blocked) throw new Error("storage is blocked")
+  }
+  return {
+    getItem: (key: string) => (guard(), kept.get(key) ?? null),
+    setItem: (key: string, value: string) => (guard(), void kept.set(key, value)),
+    removeItem: (key: string) => (guard(), void kept.delete(key))
+  }
+}
+
+test("the language chosen is kept for the next visit, and a browser that keeps nothing only forgets it", () => {
+  const store = storage()
+  assert.equal(preferred(store), null, "none chosen yet")
+  for (const locale of locales) {
+    assert.equal(prefer(store, locale), true)
+    assert.equal(pick(preferred(store), ["zz"]), locale)
+  }
+  const blocked = storage(true)
+  assert.equal(prefer(blocked, "en"), false, "the page is told the choice was not kept")
+  assert.equal(preferred(blocked), null)
+})
+
+test("a change of language carries the town over the reload once, with where the mayor was looking", () => {
+  const tab = storage()
+  assert.equal(carriedOver(tab), null, "an ordinary visit carries nothing over")
+  assert.equal(carryOver(tab, '{"x":24,"y":27}'), true)
+  assert.equal(carriedOver(tab), '{"x":24,"y":27}')
+  assert.equal(carriedOver(tab), null, "taken once: the next reload asks for a charter as usual")
+  assert.equal(carryOver(storage(true), "{}"), false, "a tab that keeps nothing says so, and the page does not reload")
+  assert.equal(carriedOver(storage(true)), null)
 })

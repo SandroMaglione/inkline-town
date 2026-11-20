@@ -116,6 +116,7 @@ export const page = {
       turnOn: "Turn the guide back on: a next step to take, and why, at the top of the ticker",
       turnOff: "Turn the guide off"
     },
+    language: { label: "language", tip: "Choose the language the town is read in" },
     save: { label: "save", tip: "Save the town in this browser (it also autosaves every two minutes)" },
     load: { label: "load", tip: "Load the latest save: yours or the autosave, whichever is newer" },
     newTown: { label: "new town", tip: "Found a new town on new land" },
@@ -125,6 +126,17 @@ export const page = {
       newTown: leave("found a new town?", "This town is left behind for good unless it is saved first.", "Save, then choose new land", "Choose new land without saving"),
       stay: "Keep playing"
     }
+  },
+  /** Choosing the language: every language is listed by its own name, so only what is around the list is said here. */
+  language: {
+    title: "language",
+    sub: "The town is read in the language you choose: its panels, its guide, and its news from here on.",
+    /** Under the list: what changing it does to the town in play. */
+    keeps: "Changing it reloads the page. A town in play is saved first, and carried on with.",
+    /** On the language now in use, read aloud. */
+    current: (name: string): string => `${name} (in use)`,
+    /** The browser would not keep the choice, so the page stays as it is. */
+    notKept: "This browser would not keep the choice, so the language stays as it is"
   },
   /** The maker's credit: what each link is, read aloud. */
   credit: {
@@ -567,6 +579,8 @@ export const page = {
       unsaveable: (e) => `Could not save the town: ${e.reason}`
     } satisfies Wording<Trouble>
   },
+  /** On the card shown while the town is drawn for the first time (the page's own HTML says it in English until the language is known). */
+  loading: "drawing the town…",
   /** The town could not start, or stopped: said in place of the page. */
   fatal: {
     start: (why: string): string => `The town could not start: ${why}`,

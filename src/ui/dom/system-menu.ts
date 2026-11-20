@@ -1,7 +1,7 @@
 /**
- * Share, the guide, save, load, and new town: a row of icons in the bottom
- * right (folded into one menu on a phone). Founding or loading replaces the
- * town, so each asks first.
+ * Share, the guide, save, load, new town, and the language: a row of icons
+ * in the bottom right (folded into one menu on a phone). Founding or loading
+ * replaces the town, so each asks first.
  */
 import type { Catalog } from "../../i18n/index.ts"
 import type { Interaction, Stats } from "../../view/contracts.ts"
@@ -17,7 +17,7 @@ export const createSystemMenu = (
   persistence: () => { readonly save: () => string | null; readonly load: () => { readonly said: string } },
   resetCamera: () => void,
   fold: () => Fold | null,
-  controls: Pick<Controls, "toast" | "confirmLeave" | "openCharter" | "openShare" | "setFold">
+  controls: Pick<Controls, "toast" | "confirmLeave" | "openCharter" | "openShare" | "openLanguage" | "setFold">
 ) => {
   const said = t.page.system
   const system = el("div", "system")
@@ -39,6 +39,7 @@ export const createSystemMenu = (
   action("save", said.save, () => controls.toast(persistence().save() ?? t.page.save.saved))
   action("load", said.load, () => controls.confirmLeave(said.leave.load, () => controls.toast(persistence().load().said)))
   action("newTown", said.newTown, () => controls.confirmLeave(said.leave.newTown, () => controls.openCharter(true)))
+  action("language", said.language, () => controls.openLanguage())
   // A phone has no camera bar: this puts the camera back.
   action("view", said.recentre, resetCamera)
   system.lastElementChild!.classList.add("phone-only")

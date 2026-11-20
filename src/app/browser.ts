@@ -16,7 +16,7 @@ import { bookkeeping, editQueue } from "../game/edits.ts"
 import { resolveRules } from "../game/rules/config.ts"
 import { blankResources, settle, simulate } from "../game/schedule.ts"
 import { Edits, Game, Rules } from "../game/schema.ts"
-import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World } from "../platform/save.ts"
+import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World, type About } from "../platform/save.ts"
 import { download, ShareError, sharedId } from "../platform/share/client.ts"
 import { MapInput } from "../render/pixi3d/input.ts"
 import { GameScene, type CameraView } from "../render/pixi3d/scene.ts"
@@ -27,8 +27,8 @@ import { createDomUi, type Persistence } from "../ui/dom/index.ts"
 import { blankInteraction, blankShown } from "../view/contracts.ts"
 import { project } from "../view/schedule.ts"
 import { Clock, Interaction, Outbox, Shown, Words } from "../view/services.ts"
-import { en, load as loadWords, pick, say, type Words as WordsValue } from "../i18n/index.ts"
-import { preferred } from "../platform/language.ts"
+import { en, load as loadWords, localeOf, pick, say, type Locale, type Words as WordsValue } from "../i18n/index.ts"
+import { carriedOver, carryOver, prefer, preferred } from "../platform/language.ts"
 
 /** Minutes of game time between autosaves. */
 const AUTOSAVE_MINUTES = 2
@@ -54,13 +54,19 @@ const start = async () => {
   words.current = await loadWords(pick(preferred(localStorage), navigator.languages))
   document.documentElement.lang = words.current.locale
   const t = words.current
+  // The loading card is in the page's own HTML, in English: from here on it is in the language chosen.
+  document.querySelector("#loading span")?.replaceChildren(t.page.loading)
   let persistence: Persistence<CameraView> = { save: () => t.page.save.notReady, load: () => ({ loaded: false, said: t.page.save.notReady }), shareFile: () => "" }
   // A shared town's link (`/t/<id>`): fetch it while the page starts, and load it once the town is up.
   const shared = sharedId(location.pathname)
   let arriving: string | null = null
   // A town saved in this browser before: the founding screen offers to carry on with it.
   const last = Effect.runSync(Effect.result(latest.pipe(Effect.provideService(Storage, browserStorage(localStorage)))))
-  const saved = last._tag === "Success" && last.success !== null ? { title: last.success.title || t.page.save.earlier, savedAt: last.success.savedAt } : null
+  /** A save in a line, in the page's language: by what it is of, or (a save from before it said) by its own title. */
+  const titleOf = (file: { readonly title: string; readonly about?: About }) => (file.about ? t.page.save.title(file.about) : file.title || t.page.save.earlier)
+  const saved = last._tag === "Success" && last.success !== null ? { title: titleOf(last.success), savedAt: last.success.savedAt } : null
+  // Back from a change of language: the town in play was saved before the page reloaded, and is carried on with.
+  let carried = shared === null ? carriedOver(sessionStorage) : null
   // What the player is doing, what the view shows, and the edits waiting for the next step: shared by the UI, the view, and the simulation.
   const interaction = blankInteraction()
   const shown = blankShown()
@@ -84,7 +90,7 @@ const start = async () => {
     },
     thumbnails(stage.app.renderer),
     () => persistence,
-    { shared: shared !== null, saved }
+    { shared: shared !== null, saved, carried: carried !== null, chooseLanguage: (locale) => chooseLanguage(locale) }
   )
   input = new MapInput(stage, interaction, shown, { tapAgain: (to) => page.toast(words.current.page.map.tapAgain[to]), blocked: page.blocked })
   const { syncPage, resetPage, toast, visit, visitFailed, visiting } = page
@@ -151,7 +157,7 @@ const start = async () => {
       if (!saved.ok) throw new Error(`The town could not be saved: ${JSON.stringify(saved.error)}`)
       return saved.value
     }
-    Object.assign(window, { town: { interaction, shown, edits, runtime, snapshot, advance, view: stage } })
+    Object.assign(window, { town: { interaction, shown, edits, runtime, snapshot, advance, view: stage, words } })
     if (runtime.debug !== undefined) {
       // Loaded in dev only: the production bundle never includes devtools.
       const { attachDevtools } = await import("./devtools.ts")
@@ -159,6 +165,21 @@ const start = async () => {
     }
   }
 
+  /** What the town in play is, for a save's title: the land it stands on, and how far in it is. */
+  const aboutTown = (): About | null => {
+    const s = shown.town.stats
+    return s ? { size: s.charter.size, land: s.charter.land, year: s.season.year, minutes: Math.floor(s.minute) } : null
+  }
+  /** Looks from where a change of language left the camera (as `chooseLanguage` wrote it down); from where a town starts, if that cannot be read. */
+  const lookFrom = (camera: string) => {
+    try {
+      const view: unknown = JSON.parse(camera)
+      if (typeof view === "object" && view !== null) return stage.setView({ x: NaN, y: NaN, zoom: NaN, heading: NaN, elevation: NaN, ...view })
+    } catch {
+      // Not a view: the camera stays where the town put it.
+    }
+    stage.resetCamera()
+  }
   // Saves are Effect programs over the browser's storage and this town (see `save.ts`);
   // loading validates every component before touching the world.
   const world: World["Service"] = {
@@ -169,9 +190,10 @@ const start = async () => {
       return restored.ok ? null : restored.error._tag
     },
     title: () => {
-      const s = shown.town.stats
-      return s ? t.page.save.title({ size: s.charter.size, land: s.charter.land, year: s.season.year, minutes: Math.floor(s.minute) }) : t.page.save.untitled
-    }
+      const about = aboutTown()
+      return about ? t.page.save.title(about) : t.page.save.untitled
+    },
+    about: () => aboutTown()
   }
   const run = <A, E>(program: Effect.Effect<A, E, Storage | World>) =>
     Effect.runSync(
@@ -185,7 +207,7 @@ const start = async () => {
     load: () => {
       const loaded = run(loadLatest)
       if (loaded._tag === "Failure") return { loaded: false, said: say(t.page.save.trouble, describe(loaded.failure)) }
-      return { loaded: true, said: loaded.success.slot === "auto" ? t.page.save.loadedAuto(loaded.success.title || t.page.save.earlier) : t.page.save.loaded(loaded.success.title || t.page.save.earlier) }
+      return { loaded: true, said: loaded.success.slot === "auto" ? t.page.save.loadedAuto(titleOf(loaded.success)) : t.page.save.loaded(titleOf(loaded.success)) }
     },
     shareFile: (camera) => {
       const file = run(fileOf("manual"))
@@ -200,7 +222,28 @@ const start = async () => {
     const camera = (JSON.parse(text) as { camera?: CameraView }).camera
     if (camera) stage.setView(camera)
     else stage.resetCamera()
-    visit(loaded.success.title)
+    visit(titleOf(loaded.success))
+  }
+  /**
+   * Changes the language. Every label on the page is made in the language it started in, so the page comes back
+   * anew in the one chosen: the choice is kept first, then the town in play is saved (the autosave) and marked to
+   * be carried on with, looking where the mayor is looking. If the browser will not keep the choice, or the town
+   * cannot be saved, nothing changes, and the reason is said. A town being visited comes back from its link.
+   */
+  const chooseLanguage = (locale: Locale): string | null => {
+    const was = localeOf(words.current)
+    if (!prefer(localStorage, locale)) return t.page.language.notKept
+    if (shown.town.stats !== null && !interaction.founding && !visiting()) {
+      const kept = run(save("auto"))
+      const carrying = kept._tag === "Success" && carryOver(sessionStorage, JSON.stringify(stage.view()))
+      if (!carrying) {
+        // The town would be lost: the language stays as it was.
+        prefer(localStorage, was)
+        return kept._tag === "Failure" ? say(t.page.save.trouble, describe(kept.failure)) : t.page.language.notKept
+      }
+    }
+    location.reload()
+    return null
   }
   /** The page autosaves every `AUTOSAVE_MINUTES` of game time while a term runs. */
   let autosaved = 0
@@ -229,6 +272,14 @@ const start = async () => {
         const text = arriving
         arriving = null
         arrive(text)
+        settling = true
+      }
+      // Back from a change of language, once the town the page started with has been founded: on with the one saved.
+      if (carried !== null && edits.queued.length === 0) {
+        const camera = carried
+        carried = null
+        page.carryOn()
+        lookFrom(camera)
         settling = true
       }
       // The town's numbers are still the old town's until the next frame draws the new one: wait for them.

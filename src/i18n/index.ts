@@ -10,7 +10,7 @@
  * nobody downloads a language they do not read.
  *
  * To add a language: a folder beside `en/` exporting an object that
- * `satisfies Catalog`, and a line in `loaders` below. The compiler lists
+ * `satisfies Catalog`, and a line in `languages` below. The compiler lists
  * what is still to translate.
  */
 import { en, type Catalog } from "./en/index.ts"
@@ -20,16 +20,27 @@ export { en }
 export { plain } from "./plain.ts"
 export { say, type Wording } from "./wording.ts"
 
-/** Each language, and how its catalog is loaded. */
-const loaders = {
-  en: (): Promise<Catalog> => Promise.resolve(en)
-} satisfies Record<string, () => Promise<Catalog>>
+/** A language the game speaks: what it calls itself (for the language menu, before its catalog is loaded), and how its catalog is loaded. */
+interface Language {
+  readonly name: string
+  readonly load: () => Promise<Catalog>
+}
 
-export type Locale = keyof typeof loaders
-export const locales = Object.keys(loaders) as ReadonlyArray<Locale>
+/** Each language, by its tag (BCP 47). */
+const languages = {
+  en: { name: "English", load: () => Promise.resolve(en) }
+} satisfies Record<string, Language>
+
+export type Locale = keyof typeof languages
+export const locales = Object.keys(languages) as ReadonlyArray<Locale>
 export const DEFAULT_LOCALE: Locale = "en"
 
-const isLocale = (tag: string): tag is Locale => tag in loaders
+const isLocale = (tag: string): tag is Locale => tag in languages
+
+/** What a language calls itself: "English", "Italiano". Never translated: a reader looks for their own language's name. */
+export const languageName = (locale: Locale): string => languages[locale].name
+/** The language a catalog is in. A catalog's tag is always one the game speaks; English stands in if it ever is not. */
+export const localeOf = (t: Catalog): Locale => (isLocale(t.locale) ? t.locale : DEFAULT_LOCALE)
 
 /**
  * The language to play in: the one chosen before (`saved`), else the first
@@ -49,7 +60,7 @@ export const pick = (saved: string | null, wanted: ReadonlyArray<string> = []): 
 }
 
 /** A language's catalog, loaded. */
-export const load = (locale: Locale): Promise<Catalog> => loaders[locale]()
+export const load = (locale: Locale): Promise<Catalog> => languages[locale].load()
 
 /**
  * The catalog in use, held where the view and the page read it. A holder,

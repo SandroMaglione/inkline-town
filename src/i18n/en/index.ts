@@ -22,8 +22,6 @@ import { view } from "./view.ts"
 export const en = {
   /** The language's tag (BCP 47), for `<html lang>` and for `Intl`. */
   locale: "en",
-  /** What the language calls itself, for the language menu. */
-  language: "English",
   /** Numbers and lists as the language writes them. */
   format: { signed, grouping, and, or },
   ...names,

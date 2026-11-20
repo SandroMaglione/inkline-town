@@ -78,7 +78,9 @@ const paths = {
   appeal: `<path d="M8 1.8l1.8 3.9 4.2.5-3.1 2.9.8 4.2L8 11.2l-3.7 2.1.8-4.2L2 6.2l4.2-.5z" fill="#cfe5b8"/>`,
   condition: `<path d="M2.5 14.5v-8l5.5-4 5.5 4v8z" fill="#f5f6f2"/><path d="M6 6.5l2 2.5-1.5 2 2 3" fill="none" stroke="#b04a39" stroke-width="1.2"/>`,
   view: `<path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z" fill="#f7f8f4"/><circle cx="8" cy="8" r="2.3" fill="#c9d6ee"/>`,
-  workers: `<circle cx="8" cy="5" r="2.3" fill="#f5f6f2"/><path d="M5.3 4.5c0-2 1.2-3 2.7-3s2.7 1 2.7 3z" fill="#e3c25a" stroke-width="1"/><path d="M3.5 14c0-3.5 2-5.5 4.5-5.5s4.5 2 4.5 5.5z" fill="#e9c48a"/>`
+  workers: `<circle cx="8" cy="5" r="2.3" fill="#f5f6f2"/><path d="M5.3 4.5c0-2 1.2-3 2.7-3s2.7 1 2.7 3z" fill="#e3c25a" stroke-width="1"/><path d="M3.5 14c0-3.5 2-5.5 4.5-5.5s4.5 2 4.5 5.5z" fill="#e9c48a"/>`,
+  // A globe: the language the town is read in.
+  language: `<circle cx="8" cy="8" r="6" fill="#dce6f5"/><path d="M2 8h12M8 2c-2.2 1.6-3.2 3.6-3.2 6s1 4.4 3.2 6c2.2-1.6 3.2-3.6 3.2-6S10.2 3.6 8 2z" fill="none" stroke-width="1"/><path d="M3 5h10M3 11h10" fill="none" stroke-width="1"/>`
 } satisfies Record<IconName, string>
 
 export type { IconName }

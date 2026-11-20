@@ -9,7 +9,7 @@ export const iconIds = [
   "coins", "settlers", "citizens", "people", "jobs", "approval", "clock", "winter", "summer", "crown", "hint", "caution", "locate", "warning", "goal",
   "faith", "food", "trade", "treasury", "taxes", "chronicle", "select", "road", "homes", "build", "bulldoze", "town", "pause", "play", "save", "load",
   "newTown", "close", "more", "layers", "share", "picture", "link", "info", "upkeep", "burghers", "decor", "pave", "fire", "health", "order", "repair",
-  "appeal", "condition", "view", "workers"
+  "appeal", "condition", "view", "workers", "language"
 ] as const
 /** An icon: one of the town's own, or a good's. */
 export type IconName = (typeof iconIds)[number] | GoodId

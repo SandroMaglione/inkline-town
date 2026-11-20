@@ -16,6 +16,7 @@ pnpm test       # model-based tests: random mayors, rules that must always hold;
 pnpm check      # lint (oxlint and Ritmo's schedule lints), then every way a term can end, ends it
 pnpm check:browser # the actual 3D game: placement, picking, saves, populated towns and phone layout
 pnpm check:phone   # phone sizes: the picker's found button on screen, the folded HUD opens and closes
+pnpm check:language # the language menu: every language listed, a change keeps the town in play and rewords its past
 pnpm balance    # a bot plays terms headless and reports the pressure
 ```
 
@@ -563,10 +564,22 @@ the page writes the result only where it changed (`setHtml`), so there is
 nothing to subscribe to. Catalog functions run every frame: keep them cheap,
 and never make an `Intl` formatter inside one.
 
+**Choosing one.** The system bar's globe and a button on the founding
+screen open the same dialog (`src/ui/dom/screens/language.ts`): every
+language by its own name. The page's labels are made once, in the language
+it started in, so a change brings the page back anew: the choice is kept
+(`src/platform/language.ts`, in `localStorage`), the town in play is
+autosaved, the page reloads in the new language and carries on with that
+town, looking from where the mayor was looking. If the choice cannot be
+kept, or the town cannot be saved, nothing changes and the page says why.
+A save's title is data too (`about`), so "Loaded …" reads in the language
+of the page, not of the save. `pnpm check:language` plays all of it in a
+browser, through every language and back.
+
 **To add a language**: copy `src/i18n/en/` to a folder named by its tag,
 translate it (grammar first: what a noun needs in that language), end
-`index.ts` with `satisfies Catalog`, and add it to `loaders` in
-`src/i18n/index.ts`. `pnpm typecheck` lists what is missing;
+`index.ts` with `satisfies Catalog`, and add it to `languages` in
+`src/i18n/index.ts`, with what the language calls itself. `pnpm typecheck` lists what is missing;
 `test/i18n.test.ts` then holds it to naming every upgrade, wording every
 event and notice with only tokens the game knows, and saying the same
 things as English.

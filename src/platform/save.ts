@@ -10,7 +10,7 @@
  */
 import { Clock, Context, Effect, Schema } from "effect"
 
-import { goodIds, TOWN_RANK, TRADE_LOAD } from "../game/content/index.ts"
+import { goodIds, landIds, sizeIds, TOWN_RANK, TRADE_LOAD } from "../game/content/index.ts"
 import { reasons, type Reason } from "../game/said.ts"
 
 export const SAVE_FORMAT = "inkline-town/save"
@@ -156,6 +156,13 @@ const keyOf = (slot: Slot) => `inkline-town/save/${slot}`
 /** Where the first charter version kept its one save: the world alone, no envelope. */
 const LEGACY_KEY = "town/save/charter"
 
+/**
+ * What a save is of, as data: the land it was founded on and how far in it is. The page says it in its own
+ * language ("medium, fair land · year 2 · 23 min in"), whichever the town was saved in.
+ */
+export const About = Schema.Struct({ size: Schema.Literals(sizeIds), land: Schema.Literals(landIds), year: Schema.Int, minutes: Schema.Int })
+export type About = typeof About.Type
+
 /** A save file. */
 export const SaveFile = Schema.Struct({
   format: Schema.Literal(SAVE_FORMAT),
@@ -164,10 +171,12 @@ export const SaveFile = Schema.Struct({
   /** When it was saved, in milliseconds since the epoch. */
   savedAt: Schema.Int,
   /**
-   * What it is, in a line: "medium, fair land · year 2 · 23 min in", in the language it was saved in (the page's own
-   * when it is saved); empty for a save from before files had titles, which the page names itself.
+   * What it is, in a line: "medium, fair land · year 2 · 23 min in", in the language it was saved in; empty for a
+   * save from before files had titles. `about` is the same as data, which the page words in the language it is
+   * read in; a save from before it had one is listed by its `title`.
    */
   title: Schema.String,
+  about: Schema.optionalKey(About),
   world: Schema.Unknown
 })
 export type SaveFile = typeof SaveFile.Type
@@ -235,6 +244,8 @@ export class World extends Context.Service<World, {
   readonly restore: (world: unknown) => string | null
   /** The town in a line, for a save's title. */
   readonly title: () => string
+  /** The same as data (see `About`), when the town has numbers to tell it by. */
+  readonly about?: () => About | null
 }>()("inkline-town/World") {}
 
 /** The browser's storage (which can throw: full, or blocked). */
@@ -260,12 +271,14 @@ export const fileOf = (slot: Slot) =>
     const world = yield* World
     const snapshot = world.snapshot()
     if (!snapshot.ok) return yield* new Unsaveable({ slot, reason: JSON.stringify(snapshot.error) })
+    const about = world.about?.() ?? null
     const file: SaveFile = {
       format: SAVE_FORMAT,
       version: SAVE_VERSION,
       slot,
       savedAt: yield* Clock.currentTimeMillis,
       title: world.title(),
+      ...(about ? { about } : {}),
       world: snapshot.value
     }
     return file

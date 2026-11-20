@@ -11,7 +11,7 @@
 import { defaultCharter, type GroundId, type KindId, type PropId } from "../../game/content/index.ts"
 import type { Edit } from "../../game/edits.ts"
 import type { Point } from "../../game/world/iso.ts"
-import type { Words } from "../../i18n/index.ts"
+import type { Locale, Words } from "../../i18n/index.ts"
 import type { Interaction, Shown, Tool, View } from "../../view/contracts.ts"
 import { commands, refOf } from "../../view/tools.ts"
 import type { Controls } from "./controls.ts"
@@ -26,6 +26,7 @@ import { createMapViews } from "./map-views.ts"
 import { createPanel } from "./panels/frame.ts"
 import { townHistory } from "./panels/town.ts"
 import { createCharter } from "./screens/charter.ts"
+import { createLanguage } from "./screens/language.ts"
 import { createConfirm } from "./screens/confirm.ts"
 import { createReckoning } from "./screens/reckoning.ts"
 import { createShare } from "./screens/share.ts"
@@ -66,13 +67,21 @@ export interface MapPort<Camera> {
 /**
  * `shared`: the page opened on a shared town's link, so it loads that rather than asking for a charter.
  * `saved`: the newest town saved in this browser, which the first charter offers to carry on with.
+ * `carried`: the page came back from a change of language with the town in play saved: no charter is asked for,
+ * and the page carries on with that town once it can (`carryOn`).
+ * `chooseLanguage`: changes the language the page is in (it reloads), or says why it could not.
  */
 export const createDomUi = <Camera>(
   view: { readonly interaction: Interaction; readonly shown: Shown; readonly send: (edit: Edit) => void; readonly words: Words },
   map: MapPort<Camera>,
   pictures: Pictures,
   persistence: () => Persistence<Camera>,
-  options: { readonly shared?: boolean; readonly saved?: { readonly title: string; readonly savedAt: number } | null } = {}
+  options: {
+    readonly shared?: boolean
+    readonly saved?: { readonly title: string; readonly savedAt: number } | null
+    readonly carried?: boolean
+    readonly chooseLanguage?: (locale: Locale) => string | null
+  } = {}
 ) => {
   const ui = view.interaction
   const t = view.words.current
@@ -156,6 +165,7 @@ export const createDomUi = <Camera>(
     refreshTools: () => toolbar.refresh(),
     openCharter: (cancellable) => charter.open(cancellable),
     openShare: () => void share.open(),
+    openLanguage: () => language.open(),
     showReckoning: (open) => reckoning.show(open),
     confirmLeave: (ask, run) => confirm.ask(ask, run)
   }
@@ -170,9 +180,10 @@ export const createDomUi = <Camera>(
   const confirm = createConfirm(t, () => persistence().save(), () => ui.speed, controls)
   const reckoning = createReckoning(t, ui, stats, send, controls)
   const visit = createVisit(t, { ...controls, closeCharter: () => charter.close(), resetPage: () => resetPage() })
+  const language = createLanguage(t, options.chooseLanguage ?? (() => null), () => ui.speed, controls)
   const charter = createCharter(t, ui, send, () => persistence().load(), history, options.saved ?? null, () => {
     if (visit.visiting()) visit.endVisit()
-  }, controls)
+  }, language.button, controls)
   const share = createShare(t, stats, () => ui.speed, visit.visiting, map, (camera) => persistence().shareFile(camera), controls)
   const tooltip = el("div", "tooltip")
   // A phone's buttons for what stays folded away: the guide and the map views.
@@ -190,7 +201,7 @@ export const createDomUi = <Camera>(
   const system = createSystemMenu(t, ui, persistence, map.resetCamera, folds.fold, controls)
   document.body.append(
     hud.left, hud.right, tooltip, toast.element, toolbar.element, system.element, panel.element, reckoning.result, charter.element, confirm.element,
-    reckoning.element, share.element, visit.element, mapViews.list, mapViews.legend, foldButtons
+    reckoning.element, share.element, visit.element, language.element, mapViews.list, mapViews.legend, foldButtons
   )
 
   // A tap on the map folds the HUD and puts a toast away; a pan or a pinch, to look around with the goods or the guide open, does not.
@@ -221,13 +232,14 @@ export const createDomUi = <Camera>(
       escape: () => {
         if (confirm.open()) confirm.dismiss()
         if (share.isOpen()) share.close()
+        if (language.isOpen()) language.close()
       },
-      blocked: () => ui.founding || reckoning.isOpen() || confirm.open() || share.isOpen() || visit.visiting()
+      blocked: () => ui.founding || reckoning.isOpen() || confirm.open() || share.isOpen() || language.isOpen() || visit.visiting()
     },
     map.cancelStroke,
     controls
   )
-  if (!options.shared) charter.open(false)
+  if (!options.shared && !options.carried) charter.open(false)
 
   // A road, a row of homes, or a patch of park let go of on a touch screen is held here until built or
   // dropped; the tooltip says what it lays and costs.
@@ -281,6 +293,10 @@ export const createDomUi = <Camera>(
     visit: visit.visit,
     visitFailed: visit.visitFailed,
     visiting: visit.visiting,
+    /** Carries on with the town saved last (after a change of language); if it cannot be loaded, the charter asks for a new one. */
+    carryOn: () => {
+      if (!charter.carryOn()) charter.open(false)
+    },
     /** A dialog is open over the map: the keyboard is not the map's. */
     blocked: () => document.querySelector(".dialog.open") !== null
   }

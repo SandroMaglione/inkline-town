@@ -133,7 +133,7 @@
   /* The camera: pinch zooms and turns it, and the menu has "recentre". */
   .camera-controls { display: none; }
 
-  /* ── The menu: share, the guide, save, load, new town, recentre ── */
+  /* ── The menu: share, the guide, the language, save, load, new town, recentre ── */
   .system, .panel-open .system { display: none; }
   .fold-more .system, .fold-more.panel-open .system {
     display: flex; flex-direction: column; top: auto; right: calc(8px + env(safe-area-inset-right)); bottom: calc(58px + env(safe-area-inset-bottom));
@@ -158,6 +158,8 @@
     display: flex; flex-direction: column; font-size: 13px;
   }
   .dialog .sheet > * { flex: none; }
+  /* The sheet is a column here, so the language button takes the end of a line of its own above the title. */
+  .dialog .language-button { float: none; align-self: flex-end; margin: -6px 0 2px; }
   /* A question (load? new town?) stays a card in the middle. */
   .dialog .sheet.narrow {
     width: min(460px, calc(100% - 32px)); max-height: calc(100dvh - 32px); border: 1px solid #c3c8bf; border-radius: 6px; padding: 18px 16px 0;

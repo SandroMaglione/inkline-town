@@ -43,6 +43,8 @@ export interface Controls {
   readonly refreshTools: () => void
   readonly openCharter: (cancellable: boolean) => void
   readonly openShare: () => void
+  /** Opens the dialog the language is chosen in. */
+  readonly openLanguage: () => void
   readonly showReckoning: (open: boolean) => void
   /** Asks before something that replaces the town: save first, go ahead, or stay. */
   readonly confirmLeave: (ask: LeaveAsk, run: () => void) => void

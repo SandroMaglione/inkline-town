@@ -11,10 +11,11 @@ import type { EditQueue } from "../src/game/edits.ts"
 import type { Interaction, Shown } from "../src/view/contracts.ts"
 import type { GameScene } from "../src/render/pixi3d/scene.ts"
 import type { Snapshot } from "../src/game/headless.ts"
+import type { Words } from "../src/i18n/index.ts"
 
 declare global {
   interface Window {
-    town:{interaction:Interaction;shown:Shown;edits:EditQueue;view:GameScene;advance:(seconds:number)=>void;snapshot:()=>Snapshot}
+    town:{interaction:Interaction;shown:Shown;edits:EditQueue;view:GameScene;advance:(seconds:number)=>void;snapshot:()=>Snapshot;words:Words}
   }
 }
 const executable=process.env.BROWSER_EXECUTABLE_PATH??["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser","/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(existsSync)
