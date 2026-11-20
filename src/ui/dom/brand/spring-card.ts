@@ -10,6 +10,7 @@
  * screen or a visit to someone else's town, and only while the sign-up may
  * show on this device.
  */
+import type { Catalog } from "../../../i18n/index.ts"
 import type { Stats } from "../../../view/contracts.ts"
 import { firstSpring, type Season } from "./signup-rules.ts"
 import { createSignup, signupMemory, type Signup } from "./signup.ts"
@@ -23,7 +24,7 @@ export interface SpringCardHost {
   readonly away: () => boolean
 }
 
-export const createSpringCard = (host: SpringCardHost) => {
+export const createSpringCard = (t: Catalog, host: SpringCardHost) => {
   /** The town the season below belongs to, and its season last frame. */
   let town: number | null = null
   let before: Season | null = null
@@ -50,7 +51,7 @@ export const createSpringCard = (host: SpringCardHost) => {
     shown.add(term)
     resumeSpeed = host.speed()
     host.setSpeed(0)
-    card = createSignup("spring", {
+    card = createSignup(t, "spring", {
       close: () => {
         signupMemory.closed()
         takeDown(true)

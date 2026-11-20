@@ -24,7 +24,7 @@ const save = await readFile(process.env.SAVE, "utf8")
 const [width = 1440, height = 900] = (process.env.SIZE ?? "1440x900").split("x").map(Number)
 const errors: Array<string> = []
 
-const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: Number(process.env.SCALE ?? 2) })
+const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: Number(process.env.SCALE ?? 2), locale: "en-US" })
 page.on("pageerror", (e) => errors.push(e.message))
 await page.clock.install()
 await page.goto(process.env.GAME_BASE_URL ?? "http://127.0.0.1:5232")

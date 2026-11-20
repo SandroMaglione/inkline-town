@@ -7,15 +7,17 @@
  */
 import { sizes } from "../../../game/content/index.ts"
 import type { Edit } from "../../../game/edits.ts"
+import type { Catalog } from "../../../i18n/index.ts"
 import type { Interaction, Stats } from "../../../view/contracts.ts"
 import type { Controls } from "../controls.ts"
 import { createCreditLine } from "../brand/credit.ts"
 import { createSignup, signupMemory } from "../brand/signup.ts"
 import { el } from "../kit/dom.ts"
-import { clockText, signed } from "../kit/text.ts"
+import { clockText, markup, signed } from "../kit/text.ts"
 import { verdictOf } from "./share-card.ts"
 
-export const createReckoning = (ui: Interaction, stats: () => Stats | null, send: (edit: Edit) => void, controls: Pick<Controls, "openCharter" | "openShare">) => {
+export const createReckoning = (t: Catalog, ui: Interaction, stats: () => Stats | null, send: (edit: Edit) => void, controls: Pick<Controls, "openCharter" | "openShare">) => {
+  const said = t.page.reckoning
   const reckoning = el("div", "dialog")
   const result = el("button", "result", "")
   result.onclick = () => showReckoning(true)
@@ -64,10 +66,10 @@ export const createReckoning = (ui: Interaction, stats: () => Stats | null, send
       return
     }
     const id = `${s.charter.seed}|${s.fate.state}|${s.fate.at}`
-    result.textContent = s.fate.state === "lost" ? "the term is lost · see how" : `term ${s.fate.term} is over · see how`
+    result.textContent = s.fate.state === "lost" ? said.lost : said.over(s.fate.term)
     if (id === reckoned) return
     reckoned = id
-    const title = s.fate.state === "lost" ? s.fate.reason.split(":")[0]!.toLowerCase() : `term ${s.fate.term} is over: ${verdictOf(s)}`
+    const title = s.fate.state === "lost" ? s.fate.ended : said.title(s.fate.term, said.verdict[verdictOf(s)])
     reckoning.replaceChildren()
     const card = el("div", "sheet wide")
     card.append(el("h2", "", title), el("p", "sub", s.fate.reason))
@@ -77,49 +79,49 @@ export const createReckoning = (ui: Interaction, stats: () => Stats | null, send
       f.append(el("b", "", value), el("span", "", label))
       facts.append(f)
     }
-    fact("rank", s.fate.rankTitle)
-    fact("minutes in office", `${Math.round(s.fate.at)}`)
-    fact("residents", `${s.settlers + s.citizens}`)
-    fact("citizens · burghers", `${s.citizens} · ${s.burghers}`)
-    fact("coins", `${s.coins}`)
-    fact("approval", signed(s.mood.approval))
-    fact("crown met · missed", `${s.crown.met} · ${s.crown.missed}`)
-    fact("score", `${s.fate.score}`)
+    fact(said.facts.rank, t.rank(s.fate.rank))
+    fact(said.facts.minutes, `${Math.round(s.fate.at)}`)
+    fact(said.facts.residents, `${s.settlers + s.citizens}`)
+    fact(said.facts.citizens, `${s.citizens} · ${s.burghers}`)
+    fact(said.facts.coins, `${s.coins}`)
+    fact(said.facts.approval, signed(s.mood.approval))
+    fact(said.facts.crown, `${s.crown.met} · ${s.crown.missed}`)
+    fact(said.facts.score, `${s.fate.score}`)
     card.append(facts)
     const graph = el("div", "chart")
     graph.innerHTML = chart(s)
-    card.append(graph, el("p", "legend", "— residents (dashed: the next rank) · coins · - - approval · shaded: winters"))
+    card.append(graph, el("p", "legend", said.legend))
     const story = el("div", "chronicle")
     story.innerHTML = s.chronicle
       .filter((l) => l.tick >= s.fate.began * 3600)
       // Timed from the start of this term, as its chart is.
-      .map((l) => `<p><b>${clockText(Math.round((l.tick - s.fate.began * 3600) / 60))}</b> ${l.text}</p>`)
+      .map((l) => `<p><b>${clockText(Math.round((l.tick - s.fate.began * 3600) / 60))}</b> ${markup(t, l.text)}</p>`)
       .join("")
     card.append(story)
     const actions = el("div", "actions")
     if (s.fate.state === "over") {
-      const stand = el("button", "frame primary", "Next term")
-      stand.title = `Stand for another ${s.charter.term} minutes: the same town, new winters, and the crown's requests start small again`
+      const stand = el("button", "frame primary", said.next)
+      stand.title = said.nextTitle(s.charter.term)
       stand.onclick = () => {
         send({ type: "nextTerm" })
         showReckoning(false)
       }
       actions.append(stand)
     }
-    const again = el("button", "frame" + (s.fate.state === "over" ? "" : " primary"), s.fate.state === "over" ? "Retire: found a new town" : "Found a new town")
+    const again = el("button", "frame" + (s.fate.state === "over" ? "" : " primary"), s.fate.state === "over" ? said.retire : said.found)
     again.onclick = () => {
       showReckoning(false)
       controls.openCharter(true)
     }
-    const look = el("button", "frame", "Look at the town")
+    const look = el("button", "frame", said.look)
     look.onclick = () => showReckoning(false)
-    const share = el("button", "frame", "Share the town")
-    share.title = "A picture of the town and its verdict, or a link anyone can open"
+    const share = el("button", "frame", said.share)
+    share.title = said.shareTitle
     share.onclick = () => controls.openShare()
     actions.append(again, look, share)
     card.append(actions)
     if (signupMemory.allowed()) {
-      const signup = createSignup("reckoning", {
+      const signup = createSignup(t, "reckoning", {
         close: () => {
           signupMemory.closed()
           signup.element.remove()
@@ -127,7 +129,7 @@ export const createReckoning = (ui: Interaction, stats: () => Stats | null, send
       })
       card.append(signup.element)
     }
-    card.append(createCreditLine())
+    card.append(createCreditLine(t))
     reckoning.append(card)
     showReckoning(true)
   }

@@ -17,8 +17,6 @@ export const propIds = ["lamp", "fountain", "statue"] as const
 export type PropId = (typeof propIds)[number]
 
 export interface ParkPiece {
-  readonly title: string
-  readonly blurb: string
   readonly cost: Kind["cost"]
   /** Coins a minute. */
   readonly upkeep: number
@@ -28,16 +26,16 @@ export interface ParkPiece {
 }
 
 export const grounds: Readonly<Record<GroundId, ParkPiece>> = {
-  lawn: { title: "Lawn", blurb: "grass to lay a park out on", cost: { coins: 2, materials: {} }, upkeep: 0.05, beauty: 0.25, unlock: free },
-  flowers: { title: "Flower bed", blurb: "planted borders: prettier than lawn", cost: { coins: 5, materials: {} }, upkeep: 0.15, beauty: 0.75, unlock: free },
-  path: { title: "Gravel path", blurb: "a walk through the park", cost: { coins: 3, materials: {} }, upkeep: 0.05, beauty: 0.25, unlock: free },
-  square: { title: "Paved square", blurb: "stone setts, for a statue or a fountain to stand on", cost: { coins: 3, materials: { stone: 1 } }, upkeep: 0.05, beauty: 0.25, unlock: free }
+  lawn: { cost: { coins: 2, materials: {} }, upkeep: 0.05, beauty: 0.25, unlock: free },
+  flowers: { cost: { coins: 5, materials: {} }, upkeep: 0.15, beauty: 0.75, unlock: free },
+  path: { cost: { coins: 3, materials: {} }, upkeep: 0.05, beauty: 0.25, unlock: free },
+  square: { cost: { coins: 3, materials: { stone: 1 } }, upkeep: 0.05, beauty: 0.25, unlock: free }
 }
 
 export const props: Readonly<Record<PropId, ParkPiece>> = {
-  lamp: { title: "Lamp", blurb: "an iron lamp post along the walk", cost: { coins: 12, materials: { tools: 1 } }, upkeep: 0.2, beauty: 1.5, unlock: free },
-  fountain: { title: "Fountain", blurb: "a stone basin of fresh water", cost: { coins: 70, materials: { stone: 3 } }, upkeep: 2, beauty: 4, unlock: { residents: 30, citizens: 0 } },
-  statue: { title: "Statue", blurb: "a founder in stone, the pride of the park", cost: { coins: 160, materials: { stone: 6 } }, upkeep: 3, beauty: 5, unlock: { residents: 0, citizens: 20 } }
+  lamp: { cost: { coins: 12, materials: { tools: 1 } }, upkeep: 0.2, beauty: 1.5, unlock: free },
+  fountain: { cost: { coins: 70, materials: { stone: 3 } }, upkeep: 2, beauty: 4, unlock: { residents: 30, citizens: 0 } },
+  statue: { cost: { coins: 160, materials: { stone: 6 } }, upkeep: 3, beauty: 5, unlock: { residents: 0, citizens: 20 } }
 }
 
 /** How a park's beauty adds up (see `parkSources`). */

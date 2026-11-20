@@ -28,6 +28,8 @@
 import { amounts, CONDITION_MAX, goodIds, kinds, RISK_MAX, stepsOf, type CharterValue, type GroundId, type KindId, type PropId } from "../src/game/content/index.ts"
 import { canPlace, DIRS, entrances, GridBuilder, isRoad, key, type Use } from "../src/game/world/grid.ts"
 import { inside } from "../src/game/world/iso.ts"
+import type { Event } from "../src/game/said.ts"
+import { en, plain, say } from "../src/i18n/index.ts"
 import { parkValue, ringOf, type ParkCell } from "../src/game/world/appeal.ts"
 import { headless, type Snapshot } from "../src/game/headless.ts"
 
@@ -149,7 +151,7 @@ const check = (name: string, ok: boolean, detail: string) => {
   })
   t.run(3.5 * 60)
   const f = t.fate()
-  check("bankrupt", f.state === "lost" && f.reason.startsWith("Bankrupt"), `${f.state} at ${(f.at / 3600).toFixed(1)} min: ${f.reason}`)
+  check("bankrupt", f.state === "lost" && f.reason === "bankrupt", `${f.state} at ${(f.at / 3600).toFixed(1)} min: ${f.reason}`)
 }
 
 // Revolt: an angry town, taxed to the hilt and unpaid.
@@ -163,7 +165,7 @@ const check = (name: string, ok: boolean, detail: string) => {
   })
   t.run(2.5 * 60)
   const f = t.fate()
-  check("revolt", f.state === "lost" && f.reason.startsWith("Revolt"), `${f.state} at ${(f.at / 3600).toFixed(1)} min: ${f.reason}`)
+  check("revolt", f.state === "lost" && f.reason === "revolt", `${f.state} at ${(f.at / 3600).toFixed(1)} min: ${f.reason}`)
 }
 
 // Abandoned: a town that once had a hundred people and now has none.
@@ -174,7 +176,7 @@ const check = (name: string, ok: boolean, detail: string) => {
   })
   t.run(2)
   const f = t.fate()
-  check("abandoned", f.state === "lost" && f.reason.startsWith("Abandoned"), `${f.state}: ${f.reason}`)
+  check("abandoned", f.state === "lost" && f.reason === "abandoned", `${f.state}: ${f.reason}`)
 }
 
 // Over: a term left to run out (a short one, to be quick about it).
@@ -197,11 +199,11 @@ const check = (name: string, ok: boolean, detail: string) => {
   t.edit({ type: "building", kind: "lumberjack", cell: { x: hall.x + 4, y: hall.y + 2 }, open: false })
   t.run(12 * 60)
   const c = t.snapshot().resources["Town/Crown"]
-  const lines = t.snapshot().resources["Town/Chronicle"].lines as Array<{ text: string }>
-  check("crown", c.missed >= 1 && lines.some((l) => l.text.includes("unanswered")), `met ${c.met}, missed ${c.missed}, snubs ${c.snubs.length}`)
+  const lines = t.snapshot().resources["Town/Chronicle"].lines as Array<{ event: Event }>
+  check("crown", c.missed >= 1 && lines.some((l) => l.event._tag === "crownUnanswered"), `met ${c.met}, missed ${c.missed}, snubs ${c.snubs.length}`)
   t.run(6 * 60)
   const f = t.fate()
-  check("dismissed", f.state === "lost" && f.reason.startsWith("Dismissed"), `${f.state} at ${(f.at / 3600).toFixed(1)} min: ${f.reason}`)
+  check("dismissed", f.state === "lost" && f.reason === "dismissed", `${f.state} at ${(f.at / 3600).toFixed(1)} min: ${f.reason}`)
 }
 
 // Save and load: a town mid-term loads back to the same state, and runs on the same.
@@ -339,7 +341,7 @@ const entity = (t: ReturnType<typeof town>, id: number) => t.snapshot().entities
     most = Math.max(most, t.snapshot().resources["Town/Census"].burning)
   }
   const ruins = t.snapshot().entities.filter((e) => e.components["Town/Ruin"]?.cause === "burnt").length
-  const news = (t.snapshot().resources["Town/Chronicle"].lines as Array<{ text: string }>).filter((l) => l.text.startsWith("Fire on")).map((l) => l.text)
+  const news = (t.snapshot().resources["Town/Chronicle"].lines as Array<{ event: Event }>).filter((l) => l.event._tag === "fire" || l.event._tag === "fireOver").map((l) => plain(en, say(en.chronicle, l.event)))
   check("fire spreads", most >= 2 && ruins >= 2, `${most} burning at once, ${ruins} burnt down · ${news.at(-1) ?? "no news"}`)
 }
 
@@ -371,7 +373,7 @@ const entity = (t: ReturnType<typeof town>, id: number) => t.snapshot().entities
   t.run(40)
   const ruins = t.snapshot().entities.filter((e) => e.components["Town/Ruin"]?.cause === "burnt").length
   const standingHomes = homes.filter((id) => entity(t, id)).length
-  const news = (t.snapshot().resources["Town/Chronicle"].lines as Array<{ text: string }>).filter((l) => l.text.startsWith("Fire on")).map((l) => l.text)
+  const news = (t.snapshot().resources["Town/Chronicle"].lines as Array<{ event: Event }>).filter((l) => l.event._tag === "fire" || l.event._tag === "fireOver").map((l) => plain(en, say(en.chronicle, l.event)))
   check("firefighters", ruins === 1 && standingHomes === 2, `${ruins} burnt down, ${standingHomes} of 3 still standing · ${news.at(-1) ?? "no news"}`)
 }
 

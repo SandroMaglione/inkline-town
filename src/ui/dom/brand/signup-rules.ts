@@ -96,13 +96,8 @@ export const SIGNUP_GAME = "inkline-town"
 /** How a sign-up went. */
 export type Outcome = "ok" | "invalid_email" | "rate_limited" | "unavailable"
 
-/** What the player reads for each outcome, in the studio's words (as on typeonce.games). */
-export const OUTCOME_TEXT: Readonly<Record<Outcome, string>> = {
-  ok: "Check your inbox to confirm.",
-  invalid_email: "That address does not look right.",
-  rate_limited: "Too many tries. Wait a minute and try again.",
-  unavailable: "That did not go through. Try again."
-}
+// What the player reads for each outcome is the language's (`page.signup.outcome` in `i18n`, in the studio's words
+// as on typeonce.games); `signup.ts` holds the catalog to wording every one.
 
 /** Whether `hostname` is typeonce.games or one of its subdomains: the only place a sign-up is really sent from. */
 export const liveHost = (hostname: string): boolean => hostname === "typeonce.games" || hostname.endsWith(".typeonce.games")

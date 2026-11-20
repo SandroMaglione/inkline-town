@@ -1,4 +1,3 @@
-import { upgradeAt } from "../content/index.ts"
 import { shippedRules, type Rules } from "./config.ts"
 
 /** Food in storage: what would carry the town through a winter. */
@@ -17,6 +16,22 @@ export const steadyNet = (samples: ReadonlyArray<{ readonly net: number }>, now:
 /** The rank a town reaches next: the one after `rank`, or the last when it has reached the top. */
 export const nextRank = (rank: number, rules: Rules = shippedRules) => Math.min(rank + 1, rules.ranks.length - 1)
 
+/** What a rank asks of a town, one goal each. */
+export const goalIds = ["residents", "citizens", "burghers", "approval", "income", "hall"] as const
+export type GoalId = (typeof goalIds)[number]
+/**
+ * A goal: what it asks (`target`), how the town stands (`value`), both in the
+ * goal's own unit (residents; a share of them in percent; approval; coins a
+ * minute; the town hall's upgrades), and whether it is met. Numbers only: the
+ * page's language says what each asks ("320 residents", "a guildhall").
+ */
+export interface Goal {
+  readonly id: GoalId
+  readonly target: number
+  readonly value: number
+  readonly met: boolean
+}
+
 /**
  * What the next rank asks of the town (see `ranks`), each goal met or not:
  * by default the town rank's, the goals a town founded as a village
@@ -27,25 +42,22 @@ export const goalsOf = (
   s: { readonly settlers: number; readonly citizens: number; readonly burghers?: number; readonly coins: number; readonly net: number; readonly approval: number; readonly hall?: number },
   rules: Rules = shippedRules,
   rank = 1
-) => {
+): ReadonlyArray<Goal> => {
   const land = rules.sizes[charter.size].goal, r = rules.ranks[nextRank(rank, rules)]!
   const residents = s.settlers + s.citizens, burghers = s.burghers ?? 0, hall = s.hall ?? 0
   const wanted = { residents: Math.round((land.residents * r.residents) / 10) * 10, income: Math.round((land.income * r.income) / 5) * 5 }
-  const hallTitle = (upgradeAt(rules.kinds.townhall, r.hall)?.title ?? "town hall").toLowerCase()
   const share = (n: number) => (residents > 0 ? Math.round((n / residents) * 100) : 0)
   return [
-    { id: "residents", target: wanted.residents, text: `${wanted.residents} residents`, value: `${residents}`, met: residents >= wanted.residents },
+    { id: "residents", target: wanted.residents, value: residents, met: residents >= wanted.residents },
     ...(r.citizens > 0
-      ? [{ id: "citizens", target: Math.round(r.citizens * 100), text: `${Math.round(r.citizens * 100)}% of them citizens`, value: `${share(s.citizens)}%`, met: residents > 0 && s.citizens >= residents * r.citizens }]
+      ? [{ id: "citizens" as const, target: Math.round(r.citizens * 100), value: share(s.citizens), met: residents > 0 && s.citizens >= residents * r.citizens }]
       : []),
     ...(r.burghers > 0
-      ? [{ id: "burghers", target: Math.round(r.burghers * 100), text: `${Math.round(r.burghers * 100)}% of them burghers`, value: `${share(burghers)}%`, met: residents > 0 && burghers >= residents * r.burghers }]
+      ? [{ id: "burghers" as const, target: Math.round(r.burghers * 100), value: share(burghers), met: residents > 0 && burghers >= residents * r.burghers }]
       : []),
-    { id: "approval", target: r.approval, text: `approval ${r.approval} or more`, value: `${s.approval}`, met: s.approval >= r.approval },
-    { id: "income", target: wanted.income, text: `${wanted.income} coins a minute, out of debt`, value: `${s.net}`, met: s.net >= wanted.income && s.coins >= 0 },
-    ...(r.hall > 0
-      ? [{ id: "hall", target: r.hall, text: `a ${hallTitle}`, value: hall >= r.hall ? "built" : "not yet", met: hall >= r.hall }]
-      : [])
+    { id: "approval", target: r.approval, value: s.approval, met: s.approval >= r.approval },
+    { id: "income", target: wanted.income, value: s.net, met: s.net >= wanted.income && s.coins >= 0 },
+    ...(r.hall > 0 ? [{ id: "hall" as const, target: r.hall, value: hall, met: hall >= r.hall }] : [])
   ]
 }
 

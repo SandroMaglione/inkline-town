@@ -11,6 +11,13 @@ import { amounts, FACE_TICKS, goodIds, kinds, ranks, stepsOf, YEARS_PER_TERM } f
 import { canPlace, GridBuilder } from "../src/game/world/grid.ts"
 import { goalsOf, nextRank, scoreOf } from "../src/game/rules/goals.ts"
 import { headless, type Snapshot } from "../src/game/headless.ts"
+import type { Event } from "../src/game/said.ts"
+import { en, plain, say } from "../src/i18n/index.ts"
+
+/** The chronicle as the simulation keeps it: data, an event a line. */
+const news = (s: Snapshot): ReadonlyArray<Event> => (s.resources["Town/Chronicle"].lines as ReadonlyArray<{ readonly event: Event }>).map((l) => l.event)
+/** The chronicle as a mayor reads it in English, each line in words alone. */
+const told = (s: Snapshot): ReadonlyArray<string> => news(s).map((e) => plain(en, say(en.chronicle, e)))
 
 const charter = { size: "small", term: 45, land: "fair", seed: 11 } as const
 
@@ -84,7 +91,7 @@ test("a rock quarried down stays as a worked face, and gives one more now and th
 
 test("a market is upgraded to a market hall once the town is a town, and not before: paid now, built as carriers bring its materials", () => {
   const toasts: Array<string> = []
-  const t = headless(charter, { toast: (m) => toasts.push(m) })
+  const t = headless(charter, { toast: (notice) => toasts.push(plain(en, say(en.notice, notice))) })
   t.run(1)
   let cell = { x: 0, y: 0 }
   t.change((s) => {
@@ -111,7 +118,8 @@ test("a market is upgraded to a market hall once the town is a town, and not bef
   assert.equal(works.components["Town/Works"].total, Object.values(up.cost.materials).reduce((n, k) => n + k!, 0))
   assert.equal("Town/Upgraded" in works.components, false)
   assert.equal(works.components["Town/Service"].range, kinds.market.service!.range)
-  assert(begun.resources["Town/Chronicle"].lines.some((l: { text: string }) => l.text === "Works begin on the market: it is to be a market hall."))
+  assert(news(begun).some((e) => e._tag === "worksBegin" && e.kind === "market" && e.level === 1))
+  assert(told(begun).includes("Works begin on the market: it is to be a market hall."))
   t.run(90)
   const s = t.snapshot()
   const hall = s.entities.find((e) => e.components["Town/Building"]?.kind === "market")!
@@ -120,7 +128,8 @@ test("a market is upgraded to a market hall once the town is a town, and not bef
   assert.equal(hall.components["Town/Service"].range, up.service!.range)
   assert.equal(hall.components["Town/Service"].interval, stepsOf(up.service!.seconds))
   assert(stockOf(s, "stone") <= stone - up.cost.materials.stone!)
-  assert(s.resources["Town/Chronicle"].lines.some((l: { text: string }) => l.text === "The market is now a market hall."))
+  assert(news(s).some((e) => e._tag === "upgraded" && e.kind === "market" && e.level === 1))
+  assert(told(s).includes("The market is now a market hall."))
 })
 
 test("the town hall becomes a guildhall from its own stores, and the guildhall a city hall", () => {
@@ -153,7 +162,7 @@ test("once a term runs out, the next one carries on the same town", () => {
   t.run(1)
   const end = charter.term * 3600
   t.change((s) => {
-    s.resources["Town/Fate"] = { ...s.resources["Town/Fate"], state: "over", reason: "Term 1 is over.", at: end, rank: 1 }
+    s.resources["Town/Fate"] = { ...s.resources["Town/Fate"], state: "over", reason: "over", at: end, rank: 1 }
     s.resources["Town/Crown"].open = true
   })
   const before = t.snapshot()
@@ -174,7 +183,7 @@ test("once a term runs out, the next one carries on the same town", () => {
   // The crown starts over: an open request lapses, and the next comes a while into the term.
   assert.equal(s.resources["Town/Crown"].open, false)
   assert(s.resources["Town/Crown"].next > end)
-  assert(s.resources["Town/Chronicle"].lines.some((l: { text: string }) => l.text.startsWith("Term 2:")))
+  assert(news(s).some((e) => e._tag === "nextTerm" && e.term === 2))
 })
 
 test("a long reign: five terms follow one another, each judged on its own, and the save stays in bounds", () => {
@@ -198,7 +207,7 @@ test("a long reign: five terms follow one another, each judged on its own, and t
     assert.equal(over.state, "over", `term ${n} runs out on time`)
     assert.equal(over.term, n)
     assert.equal(over.began, (n - 1) * term)
-    assert.match(over.reason, new RegExp(`^Term ${n} is over`))
+    assert.equal(over.reason, "over")
     t.edit({ type: "nextTerm" })
     t.run(1)
     const s = t.snapshot()
@@ -220,7 +229,7 @@ test("a long reign: five terms follow one another, each judged on its own, and t
 
 test("the bulldozer clears a worked face, but not a rock still standing", () => {
   const toasts: Array<string> = []
-  const t = headless(charter, { toast: (m) => toasts.push(m) })
+  const t = headless(charter, { toast: (notice) => toasts.push(plain(en, say(en.notice, notice))) })
   t.run(1)
   const rocks = t.snapshot().entities.filter((e) => e.components["Town/Rock"])
   const [worked, standing] = [rocks[0]!, rocks[1]!]

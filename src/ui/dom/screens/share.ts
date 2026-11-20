@@ -3,7 +3,8 @@
  * asking, a link that opens the town itself, running, for anyone to watch and
  * play on. The town waits while the sheet is open.
  */
-import { handheld, offerLink, offerPicture, upload } from "../../../platform/share/client.ts"
+import { say, type Catalog } from "../../../i18n/index.ts"
+import { handheld, offerLink, offerPicture, ShareError, upload } from "../../../platform/share/client.ts"
 import { PICTURE_HEIGHT, PICTURE_QUALITY, PICTURE_WIDTH } from "../../../platform/share/format.ts"
 import type { Stats } from "../../../view/contracts.ts"
 import type { Controls } from "../controls.ts"
@@ -18,6 +19,7 @@ export interface ShareMap<Camera> {
 }
 
 export const createShare = <Camera>(
+  t: Catalog,
   stats: () => Stats | null,
   speed: () => number,
   visiting: () => boolean,
@@ -25,6 +27,7 @@ export const createShare = <Camera>(
   shareFile: (camera: Camera) => string,
   controls: Pick<Controls, "setSpeed" | "toast">
 ) => {
+  const said = t.page.share
   const shareBox = el("div", "dialog share")
   let shareSpeed = 1
   const closeShare = () => {
@@ -41,36 +44,36 @@ export const createShare = <Camera>(
     if (!s || shareBox.classList.contains("open")) return
     shareSpeed = speed()
     controls.setSpeed(0)
-    const facts = cardFacts(s)
+    const facts = cardFacts(t, s)
     let card: HTMLCanvasElement, png: Blob
     try {
       card = await drawCard(map.picture(PICTURE_WIDTH, PICTURE_HEIGHT, 2), facts, location.host)
       png = await blobOf(card, "image/png")
-    } catch (error) {
+    } catch {
       controls.setSpeed(shareSpeed)
-      return controls.toast(error instanceof Error ? error.message : "The picture could not be made")
+      return controls.toast(said.noPicture)
     }
     const name = `inkline-town-${s.fate.state === "playing" ? `year-${s.season.year}` : `term-${s.fate.term}`}.png`
     const caption = `${metaOf(facts).title} · ${metaOf(facts).description}`
     shareBox.replaceChildren()
     const sheet = el("div", "sheet")
-    sheet.append(el("h2", "", "share the town"))
+    sheet.append(el("h2", "", said.title))
     const preview = document.createElement("img")
     preview.className = "card-preview"
     preview.alt = caption
     preview.src = URL.createObjectURL(png)
     sheet.append(preview)
-    sheet.append(el("p", "sub", "Post the picture anywhere, or make a link: whoever opens it sees this town running, from where you look at it now, and can play on from here."))
+    sheet.append(el("p", "sub", said.sub))
     const actions = el("div", "actions")
     const picture = el("button", "frame primary", "")
-    picture.append(iconEl("picture", 15), document.createTextNode(handheld() ? "Share the picture" : "Save the picture"))
-    picture.onclick = async () => controls.toast(await offerPicture(png, name, caption))
+    picture.append(iconEl("picture", 15), document.createTextNode(handheld() ? said.sharePicture : said.savePicture))
+    picture.onclick = async () => controls.toast(say(said.offered, await offerPicture(png, name, caption)))
     const link = el("button", "frame", "")
-    link.append(iconEl("link", 15), document.createTextNode("Make a link"))
+    link.append(iconEl("link", 15), document.createTextNode(said.makeLink))
     const linkRow = el("div", "link-row")
     link.onclick = async () => {
       link.disabled = true
-      link.lastChild!.textContent = "Making a link…"
+      link.lastChild!.textContent = said.making
       try {
         const small = await blobOf(scaled(card, PICTURE_WIDTH, PICTURE_HEIGHT), "image/jpeg", PICTURE_QUALITY)
         const made = await upload(shareFile(map.camera()), small, metaOf(facts))
@@ -79,9 +82,9 @@ export const createShare = <Camera>(
         field.readOnly = true
         field.value = made.url
         field.onfocus = () => field.select()
-        const copy = el("button", "frame primary", handheld() ? "Share the link" : "Copy the link")
-        copy.onclick = async () => controls.toast(await offerLink(made.url, metaOf(facts).title))
-        const open = el("a", "frame", "Open")
+        const copy = el("button", "frame primary", handheld() ? said.shareLink : said.copyLink)
+        copy.onclick = async () => controls.toast(say(said.offered, await offerLink(made.url, metaOf(facts).title)))
+        const open = el("a", "frame", said.open)
         open.setAttribute("href", made.url)
         open.setAttribute("target", "_blank")
         open.setAttribute("rel", "noopener")
@@ -90,11 +93,12 @@ export const createShare = <Camera>(
         copy.focus()
       } catch (error) {
         link.disabled = false
-        link.lastChild!.textContent = "Try the link again"
-        controls.toast(error instanceof Error ? error.message : "Could not share the town")
+        link.lastChild!.textContent = said.again
+        // What the sharing itself says went wrong; anything else (the picture, the town's file) only that it did.
+        controls.toast(error instanceof ShareError ? say(said.failed, error.failure) : said.notShared)
       }
     }
-    const close = el("button", "frame", "Close")
+    const close = el("button", "frame", t.page.common.close)
     close.onclick = () => closeShare()
     actions.append(picture, link, close)
     sheet.append(actions, linkRow)

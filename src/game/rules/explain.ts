@@ -1,22 +1,21 @@
 /**
- * Why a home is short of something, in a line that names the cause and
- * what to do about it. The panel reads these out, and the legibility test
- * checks that the usual dead ends (cloth withheld from a poor street, no
- * market in reach, nothing in store) are each told plainly. Plain
- * functions over plain facts: nothing here knows the ECS.
+ * Why a home is short of something: the cause, and what to build about it.
+ * The causes are data (which cause, with its numbers); the page's language
+ * puts each into a line that names it and says what to do (`view.cause` in
+ * `i18n`), the panel reads those out, and the legibility test checks that
+ * the usual dead ends (cloth withheld from a poor street, no market in
+ * reach, nothing in store) are each told plainly. Plain functions over
+ * plain facts: nothing here knows the ECS, or a language.
  */
 import type { KindId, Need, Tier } from "../content/index.ts"
+import type { AppealPart } from "../world/appeal.ts"
 import { shippedRules, type Rules } from "./config.ts"
 import { kept as keptBy, met, wantsBurgherGoods, wantsCitizenGoods, type Needs } from "./households.ts"
 
-export interface Part {
-  readonly label: string
-  readonly value: number
-}
 /** A street as a home sees it: its desirability, and what makes it (strongest first). */
 export interface Street {
   readonly desirability: number
-  readonly parts: ReadonlyArray<Part>
+  readonly parts: ReadonlyArray<AppealPart>
 }
 /** What the town has of each provision: in storage and on market shelves together. */
 export interface InTown {
@@ -32,51 +31,42 @@ export interface Served {
   readonly faith: boolean
 }
 
-export const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)}`
+/** What counts most against a street, for a cause in a line: the quarry −6, the warehouse −2. */
+export const against = (parts: ReadonlyArray<AppealPart>, most = 2): ReadonlyArray<AppealPart> => parts.filter((p) => p.value < 0).slice(0, most)
 
-/** What counts most against a street, for a cause in a line: "quarry −6, warehouse −2". */
-export const against = (parts: ReadonlyArray<Part>, most = 2): string =>
-  parts.filter((p) => p.value < 0).slice(0, most).map((p) => `${p.label} ${signed(p.value)}`).join(", ")
+/** Whether anything drags a street down (then the advice is to move it away), or it only lacks what would lift it. */
+export const draggedDown = (street: Street): boolean => street.parts.some((p) => p.value < 0)
 
-/** A street against what the next tier needs: "−4 here, 5 needed: quarry −6". */
-export const streetShort = (street: Street, needed: number): string => {
-  const why = against(street.parts)
-  return `${signed(street.desirability)} here, ${needed} needed${why ? `: ${why}` : ""}`
-}
-
-/** What would lift a street: the things a mayor can do. */
-export const streetAdvice = (street: Street): string =>
-  street.parts.some((p) => p.value < 0)
-    ? "move industry away, or add a park, a chapel, or paving"
-    : "a park, a chapel, or a paved street beside it"
+/** The risks a home's services keep down. */
+export type RiskId = "fire" | "health" | "order"
 
 /**
- * What to do about something: a line, and, when it is building something,
- * the chain that makes it, first link first (the panel offers the first
- * one the town lacks).
+ * Why something is so, and what to build about it (`build`: the chain that
+ * makes it, first link first; the panel offers the first one the town
+ * lacks). Each cause carries the numbers its line is told with:
+ * - `noWalker`: no market's (or chapel's) walker reaches the street; how far one walks, and (a market) how far the town hall's does.
+ * - `tooPoor`: the good is not brought to a street below `needed`.
+ * - `noneInTown`: the town has none of it.
+ * - `notLately`: it is all there, and the walker has only not passed lately: nothing to do but wait.
+ * - `unkept`: the risks (`high`) a townhouse's services are not keeping down.
  */
-export interface Fix {
-  readonly text: string
-  readonly build?: ReadonlyArray<KindId>
-}
-/** Why something is so, in a few words, and what to do about it (none: it comes in time). */
-export interface Cause {
-  readonly why: string
-  readonly fix?: Fix
-}
+export type Cause =
+  | { readonly _tag: "noWalker"; readonly service: "market" | "chapel"; readonly range: number; readonly hallRange: number; readonly build: ReadonlyArray<KindId> }
+  | { readonly _tag: "tooPoor"; readonly need: "cloth" | "furniture"; readonly needed: number; readonly desirability: number }
+  | { readonly _tag: "noneInTown"; readonly need: Exclude<Need, "faith">; readonly build: ReadonlyArray<KindId> }
+  | { readonly _tag: "notLately"; readonly need: Need }
+  | { readonly _tag: "unkept"; readonly high: ReadonlyArray<RiskId>; readonly build: ReadonlyArray<KindId> }
 
-/** A cause as one line: "why: what to do". */
-export const said = (c: Cause): string => (c.fix ? `${c.why}: ${c.fix.text}` : c.why)
+/** What a cause would have the town build, if anything. */
+export const buildFor = (c: Cause): ReadonlyArray<KindId> | undefined => ("build" in c ? c.build : undefined)
 
-const noWalker = (what: "market" | "chapel", rules: Rules): Cause =>
-  what === "market"
-    ? { why: "no market walker reaches this street", fix: { text: `build a market: its walker walks ${rules.kinds.market.service!.range} road cells, the town hall's ${rules.kinds.townhall.service!.range}`, build: ["market"] } }
-    : { why: "no chapel walker reaches this street", fix: { text: `build a chapel: its walker walks ${rules.kinds.chapel.service!.range} road cells`, build: ["chapel"] } }
-
-/** A street not fine enough for a good to be brought to it: the street's own row says what lifts it. */
-const tooPoor = (good: string, street: Street, needed: number): Cause => ({
-  why: `${good} is not brought here: only to a street of ${needed} or more, and this one is ${signed(street.desirability)}`,
-  fix: { text: "raise the street (see street)" }
+/** No walker reaches the home. */
+const noWalker = (service: "market" | "chapel", rules: Rules): Cause => ({
+  _tag: "noWalker",
+  service,
+  range: rules.kinds[service].service!.range,
+  hallRange: rules.kinds.townhall.service!.range,
+  build: [service]
 })
 
 /**
@@ -88,38 +78,32 @@ export const causeOf = (need: Need, h: Needs, street: Street, inTown: InTown, se
   if (met(h, need)) return null
   switch (need) {
     case "cloth": {
-      if (!wantsCitizenGoods(h, street.desirability, rules)) return tooPoor("cloth", street, rules.home.tiers[2].appeal)
+      if (!wantsCitizenGoods(h, street.desirability, rules)) return { _tag: "tooPoor", need, needed: rules.home.tiers[2].appeal, desirability: street.desirability }
       if (!served.goods) return noWalker("market", rules)
-      if (inTown.cloth === 0) return { why: "the town has no cloth", fix: { text: "build a weaver: it weaves a sheep farm's wool", build: ["sheep", "weaver"] } }
-      return { why: "the market's walker has not passed with cloth lately" }
+      if (inTown.cloth === 0) return { _tag: "noneInTown", need, build: ["sheep", "weaver"] }
+      return { _tag: "notLately", need }
     }
     case "bread": {
       if (!served.goods) return noWalker("market", rules)
-      if (inTown.bread === 0) return { why: "the town has no bread", fix: { text: "build a bakery: a farm's wheat goes to a mill, and its flour to a bakery", build: ["farm", "mill", "bakery"] } }
-      return { why: "the market's walker has not passed with bread lately" }
+      if (inTown.bread === 0) return { _tag: "noneInTown", need, build: ["farm", "mill", "bakery"] }
+      return { _tag: "notLately", need }
     }
     case "food": {
       if (!served.goods) return noWalker("market", rules)
-      if (inTown.fish + inTown.smoked + inTown.bread === 0) return { why: "the town has no food in store", fix: { text: "build a fishery by the water: it is the quickest", build: ["fishery"] } }
-      return { why: "the market's walker has not passed lately" }
+      if (inTown.fish + inTown.smoked + inTown.bread === 0) return { _tag: "noneInTown", need, build: ["fishery"] }
+      return { _tag: "notLately", need }
     }
     case "faith": {
       if (!served.faith) return noWalker("chapel", rules)
-      return { why: "the chapel's walker has not passed lately" }
+      return { _tag: "notLately", need }
     }
     case "furniture": {
-      if (!wantsBurgherGoods(h, street.desirability, rules)) return tooPoor("furniture", street, rules.home.tiers[3].appeal)
+      if (!wantsBurgherGoods(h, street.desirability, rules)) return { _tag: "tooPoor", need, needed: rules.home.tiers[3].appeal, desirability: street.desirability }
       if (!served.goods) return noWalker("market", rules)
-      if (inTown.furniture === 0) return { why: "the town has no furniture", fix: { text: "build a carpenter: it makes furniture from planks", build: ["sawmill", "carpenter"] } }
-      return { why: "the market's walker has not passed with furniture lately" }
+      if (inTown.furniture === 0) return { _tag: "noneInTown", need, build: ["sawmill", "carpenter"] }
+      return { _tag: "notLately", need }
     }
   }
-}
-
-/** Why a need is unmet, in one line, or `null` when it is met (see `causeOf`). */
-export const whyUnmet = (need: Need, h: Needs, street: Street, inTown: InTown, served: Served, rules: Rules = shippedRules): string | null => {
-  const c = causeOf(need, h, street, inTown, served, rules)
-  return c ? said(c) : null
 }
 
 /** The services a townhouse wants calling that are not keeping its risks down, as a cause. */
@@ -127,18 +111,22 @@ export const servicesCause = (risk: { readonly fire: number; readonly health: nu
   if (risk && keptBy(risk, rules)) return null
   const high = (["fire", "health", "order"] as const).filter((r) => !risk || risk[r] >= rules.risk.kept)
   const by = { fire: "firewatch", health: "healer", order: "watchhouse" } as const
-  return { why: `${high.join(", ")} not kept down`, fix: { text: "a fire watch, a healer, and a watch house must all call here", build: high.map((r) => by[r]) } }
-}
-
-export interface Blocker {
-  readonly what: Need | "street" | "services"
-  readonly text: string
+  return { _tag: "unkept", high, build: high.map((r) => by[r]) }
 }
 
 /**
- * Everything keeping a home from the next tier, a line each: unmet needs
- * with their causes, a street too poor, and (for a townhouse) services not
- * all calling. Empty when nothing stands in the way.
+ * Something keeping a home from the next tier: an unmet need or services
+ * not all calling, with its cause; or a street too poor (`needed`: the
+ * desirability the next tier asks).
+ */
+export type Blocker =
+  | { readonly what: Need | "services"; readonly cause: Cause }
+  | { readonly what: "street"; readonly street: Street; readonly needed: number }
+
+/**
+ * Everything keeping a home from the next tier, each with its cause: unmet
+ * needs, a street too poor, and (for a townhouse) services not all
+ * calling. Empty when nothing stands in the way.
  */
 export const blockers = (
   h: Needs,
@@ -152,11 +140,11 @@ export const blockers = (
   const next = (h.tier + 1) as Tier
   const out: Array<Blocker> = []
   for (const need of rules.home.tiers[next].needs) {
-    const why = whyUnmet(need, h, street, inTown, served, rules)
-    if (why) out.push({ what: need, text: why })
+    const cause = causeOf(need, h, street, inTown, served, rules)
+    if (cause) out.push({ what: need, cause })
   }
-  if (street.desirability < rules.home.tiers[next].appeal) out.push({ what: "street", text: `the street is ${streetShort(street, rules.home.tiers[next].appeal)} · ${streetAdvice(street)}` })
+  if (street.desirability < rules.home.tiers[next].appeal) out.push({ what: "street", street, needed: rules.home.tiers[next].appeal })
   const services = next === 3 ? servicesCause(risk, rules) : null
-  if (services) out.push({ what: "services", text: said(services) })
+  if (services) out.push({ what: "services", cause: services })
   return out
 }

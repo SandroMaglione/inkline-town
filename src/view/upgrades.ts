@@ -3,18 +3,26 @@
  * level, for the town panel; the ones it needs now, for the gold arrows; and
  * a word for the first of those while nothing is being upgraded.
  */
-import { anA, goodIds, kindOrder, kinds, nextUpgrade, ranks, risk, upgradeAt, type KindId } from "../game/content/index.ts"
-import { upgradeChanges, upgradePrice } from "../game/rules/upgrades.ts"
+import { goodIds, kindOrder, kinds, nextUpgrade, ranks, risk, type KindId } from "../game/content/index.ts"
+import { upgradeChanges } from "../game/rules/upgrades.ts"
+import { say } from "../i18n/index.ts"
 import { met, upgradeBlock } from "../game/schedule.ts"
 import type { TileLike } from "../game/world/grid.ts"
 import type { Alert } from "./contracts.ts"
 import { growingNear } from "./facts.ts"
 import type { BuildingRow, Frame, HouseRow } from "./frame.ts"
 
+/**
+ * Why a building's upgrade is needed now (see `upgradesWanted`): the next rank asks for it, its shelves are
+ * full, its rock is worked down, the mills wait on wheat, homes go without bread, homes lie beyond every food
+ * walker or beyond its priest, or homes on its streets are at high fire risk. Data: the page's language says it.
+ */
+export type WantedReason = "nextRank" | "shelvesFull" | "rockWorked" | "millsWait" | "breadShort" | "unreached" | "beyondPriest" | "fireRisk"
+
 /** Why each building's upgrade is needed now, by its id, reckoned once a second (see `upgradesWanted`). */
 export interface Wanted {
   at: number
-  why: ReadonlyMap<number, string>
+  why: ReadonlyMap<number, WantedReason>
 }
 export const noneWanted = (): Wanted => ({ at: -1, why: new Map() })
 
@@ -25,11 +33,11 @@ export const noneWanted = (): Wanted => ({ at: -1, why: new Map() })
  * while homes go without bread; a market whose walkers leave homes unreached; a chapel whose priests leave
  * homes without faith; a fire watch with homes on its streets at high fire risk.
  */
-export const upgradesWanted = (frame: Frame, wanted: Wanted): ReadonlyMap<number, string> => {
+export const upgradesWanted = (frame: Frame, wanted: Wanted): ReadonlyMap<number, WantedReason> => {
   const { grid, buildings, houses } = frame
   const tick = frame.world.time.step
   if (Math.floor(tick / 60) === wanted.at) return wanted.why
-  const why = new Map<number, string>()
+  const why = new Map<number, WantedReason>()
   const standingRows = buildings.filter((r) => r.data.site === undefined && r.data.rising === undefined && !r.data.works)
   const homes = houses.filter((r) => r.data.site === undefined && r.data.rising === undefined && r.data.closed === undefined)
   const full = (r: BuildingRow) => {
@@ -48,15 +56,15 @@ export const upgradesWanted = (frame: Frame, wanted: Wanted): ReadonlyMap<number
     const kind = kinds[r.data.building.kind], level = r.data.upgraded?.level ?? 0, status = r.data.status
     if (!nextUpgrade(kind, level)) continue
     const reach = r.data.service?.range ?? 0
-    const reason =
-      kind.id === "townhall" ? (nextHall > level ? "the next rank asks for it" : full(r) ? "its shelves are full" : null)
-      : kind.id === "warehouse" ? (full(r) ? "its shelves are full" : null)
-      : kind.id === "quarry" ? (status === "starved" && growingNear(grid, r.data.tile, kind, frame.rockAt) ? "it has worked its rock down" : null)
-      : kind.id === "farm" ? (millsWait ? "the mills wait on wheat" : null)
-      : kind.id === "bakery" ? (status === "working" && breadShort ? "homes go without bread while it works flat out" : null)
-      : kind.id === "market" ? (frame.unreachedHomes() > 0 ? "homes lie beyond every food walker" : null)
-      : kind.id === "chapel" ? (homes.some((h) => fishy(h, "faith") && !near(r, h.data.tile, reach)) ? "homes lie beyond its priest" : null)
-      : kind.id === "firewatch" ? (homes.some((h) => (h.data.risk?.fire ?? 0) >= risk.warn && near(r, h.data.tile, reach + 6)) ? "homes on its streets are at high fire risk" : null)
+    const reason: WantedReason | null =
+      kind.id === "townhall" ? (nextHall > level ? "nextRank" : full(r) ? "shelvesFull" : null)
+      : kind.id === "warehouse" ? (full(r) ? "shelvesFull" : null)
+      : kind.id === "quarry" ? (status === "starved" && growingNear(grid, r.data.tile, kind, frame.rockAt) ? "rockWorked" : null)
+      : kind.id === "farm" ? (millsWait ? "millsWait" : null)
+      : kind.id === "bakery" ? (status === "working" && breadShort ? "breadShort" : null)
+      : kind.id === "market" ? (frame.unreachedHomes() > 0 ? "unreached" : null)
+      : kind.id === "chapel" ? (homes.some((h) => fishy(h, "faith") && !near(r, h.data.tile, reach)) ? "beyondPriest" : null)
+      : kind.id === "firewatch" ? (homes.some((h) => (h.data.risk?.fire ?? 0) >= risk.warn && near(r, h.data.tile, reach + 6)) ? "fireRisk" : null)
       : null
     if (reason) why.set(r.entity.id, reason)
   }
@@ -66,8 +74,9 @@ export const upgradesWanted = (frame: Frame, wanted: Wanted): ReadonlyMap<number
 }
 
 /** Every upgrade the town could make; the buildings to arrow (`due`); and the hint for the first, if it is time for one. */
-export const upgradesOf = (frame: Frame, needed: ReadonlyMap<number, string>) => {
-  const { buildings } = frame
+export const upgradesOf = (frame: Frame, needed: ReadonlyMap<number, WantedReason>) => {
+  const { buildings, t } = frame
+  const words = t.view.upgrade
   const rank = frame.world.fate.rank
   let hint: Alert | null = null
   const upgradeRows = new Map<string, { kind: KindId; level: number; ready: number; underway: number; first: (typeof buildings)[number] | null }>()
@@ -92,10 +101,11 @@ export const upgradesOf = (frame: Frame, needed: ReadonlyMap<number, string>) =>
   }
   const upgrades = [...upgradeRows.values()].map((r) => {
     const kind = kinds[r.kind], up = nextUpgrade(kind, r.level)!
+    const blocked = upgradeBlock(up, rank)
     return {
-      kind: r.kind, level: r.level, from: (upgradeAt(kind, r.level)?.title ?? kind.title).toLowerCase(), to: up.title.toLowerCase(), blurb: up.blurb,
-      coins: up.cost.coins, materials: up.cost.materials, price: upgradePrice(up), changes: upgradeChanges(kind, r.level),
-      blocked: upgradeBlock(up, rank, { ranks }), ready: r.ready, underway: r.underway, first: r.first
+      kind: r.kind, level: r.level, from: t.kind.name(r.kind, r.level), to: t.kind.name(r.kind, r.level + 1), blurb: t.kind.blurb(r.kind, r.level + 1),
+      coins: up.cost.coins, materials: up.cost.materials, price: words.price(up.cost), changes: upgradeChanges(kind, r.level).map((c) => words.line(say(words.change, c))),
+      blocked: blocked === null ? null : t.needsRank(blocked), ready: r.ready, underway: r.underway, first: r.first
     }
   })
   // The upgrades the town needs now, where it can make them (the rank reached, the coins in hand): a gold arrow over each,
@@ -107,16 +117,15 @@ export const upgradesOf = (frame: Frame, needed: ReadonlyMap<number, string>) =>
     const row = buildings.find((b) => b.entity.id === id)
     const kind = row && kinds[row.data.building.kind]
     const up = row && kind && nextUpgrade(kind, row.data.upgraded?.level ?? 0)
-    if (!up || !kind || arrowed.has(kind.id) || upgradeBlock(up, rank, { ranks }) !== null || coinsNow < up.cost.coins) return false
+    if (!up || !kind || arrowed.has(kind.id) || upgradeBlock(up, rank) !== null || coinsNow < up.cost.coins) return false
     arrowed.add(kind.id)
     return true
   }))
   const [firstId, firstWhy] = [...due][0] ?? []
   const dueFirst = firstId === undefined ? undefined : buildings.find((b) => b.entity.id === firstId)
   if (dueFirst && !upgrades.some((u) => u.underway > 0)) {
-    const kind = kinds[dueFirst.data.building.kind], level = dueFirst.data.upgraded?.level ?? 0
-    const from = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase(), to = nextUpgrade(kind, level)!.title.toLowerCase()
-    hint = { tone: "hint", text: `${firstWhy}: the ${from} can become ${anA(to)}. {Tap|Click} it, under its gold arrow, to begin`, at: dueFirst.data.tile, size: dueFirst.data.tile.size, id: dueFirst.entity.id }
+    if (firstWhy !== undefined)
+      hint = { tone: "hint", text: words.hint({ reason: firstWhy, kind: dueFirst.data.building.kind, level: dueFirst.data.upgraded?.level ?? 0 }), at: dueFirst.data.tile, size: dueFirst.data.tile.size, id: dueFirst.entity.id }
   }
   return { upgrades: upgrades.map(({ first: _first, ...u }) => u), due, hint }
 }

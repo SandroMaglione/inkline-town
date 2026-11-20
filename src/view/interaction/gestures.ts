@@ -4,17 +4,19 @@
  * starts an upgrade, bulldozes, or selects. What changes the town goes to the
  * simulation as an edit.
  */
-import { kinds, upgradeAt } from "../../game/content/index.ts"
+import { kinds } from "../../game/content/index.ts"
 import type { Edit } from "../../game/edits.ts"
 import { lPath } from "../../game/world/grid.ts"
 import { inside } from "../../game/world/iso.ts"
 import type { Interaction } from "../contracts.ts"
 import type { Frame } from "../frame.ts"
 import { cellAt, footprintAt, rectangle } from "./geometry.ts"
-import { placeProblem } from "./placing.ts"
+import { say } from "../../i18n/index.ts"
+import { placeProblem, refuses } from "./placing.ts"
 
 export const applyGestures = (frame: Frame, ui: Interaction, send: (edit: Edit) => void, toast: (message: string) => void) => {
   const buildings = frame.buildings
+  const words = frame.t.view
   for (const gesture of ui.gestures.splice(0)) {
     const cell = cellAt(gesture.at)
     if (gesture.type === "press") {
@@ -47,8 +49,8 @@ export const applyGestures = (frame: Frame, ui: Interaction, send: (edit: Edit) 
         const kind = kinds[ui.placing]
         const at = footprintAt(gesture.at, kind.size)
         const problem = placeProblem(frame, kind, { ...at, size: kind.size })
-        if (problem?.refuse) {
-          toast(`A ${kind.title.toLowerCase()} ${problem.text}`)
+        if (problem && refuses(problem)) {
+          toast(words.place.refused(kind.id, say(words.place.problem, problem)))
           break
         }
         send({ type: "building", kind: ui.placing, cell: at, open: false })
@@ -61,12 +63,11 @@ export const applyGestures = (frame: Frame, ui: Interaction, send: (edit: Edit) 
         const row = hit !== null ? buildings.find((b) => b.entity.id === hit) : undefined
         const kind = row ? kinds[row.data.building.kind] : undefined
         if (!row || !kind || (ui.upgrading && kind.id !== ui.upgrading)) {
-          const wanted = ui.upgrading ? (upgradeAt(kinds[ui.upgrading], 0) ? kinds[ui.upgrading].title.toLowerCase() : "building") : "building"
-          toast(`Pick a ${wanted} to upgrade`)
+          toast(words.upgrade.pickOne)
           break
         }
         if (row.data.works !== undefined) {
-          toast(`The ${kind.title.toLowerCase()} is already being upgraded`)
+          toast(words.upgrade.already(kind.id))
           break
         }
         send({ type: "upgrade", cell: row.data.tile })

@@ -7,6 +7,14 @@
 import type { GroundId, KindId, PropId } from "../../game/content/index.ts"
 import type { Tool, View } from "../../view/contracts.ts"
 
+/** Asking before something that replaces the town: the question, what it means, and what its two ways on are called (to save first, or not). */
+export interface LeaveAsk {
+  readonly title: string
+  readonly text: string
+  readonly saveThen: string
+  readonly without: string
+}
+
 /** What a phone keeps folded away, one at a time: the goods, the guide, the map views, the system menu. */
 export type Fold = "goods" | "guide" | "views" | "more"
 
@@ -35,7 +43,9 @@ export interface Controls {
   readonly refreshTools: () => void
   readonly openCharter: (cancellable: boolean) => void
   readonly openShare: () => void
+  /** Opens the menu the language is chosen in, at the button that asked. */
+  readonly openLanguage: (at: HTMLElement) => void
   readonly showReckoning: (open: boolean) => void
   /** Asks before something that replaces the town: save first, go ahead, or stay. */
-  readonly confirmLeave: (title: string, text: string, go: string, run: () => void) => void
+  readonly confirmLeave: (ask: LeaveAsk, run: () => void) => void
 }

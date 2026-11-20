@@ -3,20 +3,18 @@
  * treasury, the tax rates, the people, the homes supplied, the crown, goods
  * and trade, and the chronicle.
  */
-import {
-  goodIds, goods, LEDGER_TICKS, lands, mood as moodRules, needTitle, RESERVE_MAX, sizes, step, TAX_STEPS, TRADE_LOAD, type GoodId
-} from "../../../game/content/index.ts"
+import { goodIds, LEDGER_TICKS, mood as moodRules, RESERVE_MAX, step, TAX_STEPS, TRADE_LOAD, type GoodId } from "../../../game/content/index.ts"
 import type { TradeMode } from "../../../game/edits.ts"
 import { askOf, priceOf } from "../../../game/schedule.ts"
 import type { Stats } from "../../../view/contracts.ts"
 import type { IconName } from "../../../view/icons.ts"
-import { el } from "../kit/dom.ts"
+import { el, escapeHtml } from "../kit/dom.ts"
 import { goodIcon, icon, iconEl } from "../kit/icons.ts"
 import { money, row } from "../kit/rows.ts"
 import { section } from "../kit/section.ts"
 import { slider } from "../kit/slider.ts"
 import { sparkline } from "../kit/sparkline.ts"
-import { clockText, signed } from "../kit/text.ts"
+import { clockText, compose, markup, signed } from "../kit/text.ts"
 import type { PanelParts } from "./frame.ts"
 
 /** The goods in store a minute ago, sampled by the page (see `townHistory`). */
@@ -52,27 +50,21 @@ export const townHistory = (stats: () => Stats | null): TownHistory => {
 
 export const townPanel = (parts: PanelParts, history: TownHistory) => {
   const panel = parts.element
+  const { t } = parts
+  const said = t.page.town
   const sub = el("p", "sub")
-  panel.append(parts.header("town", iconEl("town", 30), sub))
+  panel.append(parts.header(said.title, iconEl("town", 30), sub))
 
   // The town's rank, the goals that raise it to the next, and how near each one is.
-  const goals = section(
-    "goals",
-    "goal",
-    "The town rises from a hamlet to a village, a town, and a city. Meet every goal of the next rank at once and hold them for two minutes: the crown sends a reward, and the game goes on. A rank is never lost."
-  )
+  const goals = section(t, said.goals.title, "goal", said.goals.help)
   const goalRows: Array<{ line: HTMLElement; mark: HTMLElement; text: HTMLElement; value: HTMLElement }> = []
   const goalNote = el("p", "empty")
   panel.append(goals)
 
-  const mood = section(
-    "approval",
-    "approval",
-    `Homes hold more residents when approval is high and fewer when it is low. At −50 for two minutes, the town turns the mayor out.`
-  )
+  const mood = section(t, said.approval.title, "approval", said.approval.help)
   const moodLine = el("div", "row")
   const moodValue = el("span", "count total")
-  moodLine.append(el("span", "label", "now → heading for"), moodValue)
+  moodLine.append(el("span", "label", said.approval.heading), moodValue)
   const moodTrack = el("div", "meter")
   const moodFill = el("span", "fill")
   moodTrack.append(moodFill)
@@ -80,81 +72,66 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
   mood.append(moodLine, moodTrack, moodParts)
   panel.append(mood)
 
-  const treasury = section(
-    "treasury",
-    "treasury",
-    "Coins a minute. Taxes come only from homes that are fed, in proportion to the needs they have met. Administration is reckoned by the home and grows faster than the town: in a large town another cottage costs about what it pays, while a citizens' home or a townhouse holds two or three times the people for the same cost. Three minutes in debt and the town is bankrupt."
-  )
-  const taxes = row(treasury, "taxes", "taxes")
-  const supplied = row(treasury, "if every home were supplied", "homes")
+  const treasury = section(t, said.treasury.title, "treasury", said.treasury.help)
+  const taxes = row(treasury, said.treasury.taxes, "taxes")
+  const supplied = row(treasury, said.treasury.supplied, "homes")
   supplied.classList.add("dim")
   const suppliedNote = el("p", "empty")
   treasury.append(suppliedNote)
-  const traded = row(treasury, "trade", "trade")
-  const upkeep = row(treasury, "upkeep", "upkeep")
-  const admin = row(treasury, "administration", "town")
-  const net = row(treasury, "a minute", "coins")
+  const traded = row(treasury, said.treasury.trade, "trade")
+  const upkeep = row(treasury, said.treasury.upkeep, "upkeep")
+  const admin = row(treasury, said.treasury.admin, "town")
+  const net = row(treasury, said.treasury.net, "coins")
   net.classList.add("total")
   const coinLine = el("div", "spark")
   treasury.append(coinLine)
   panel.append(treasury)
 
-  const levers = section(
-    "tax rates",
-    "taxes",
-    `Lower taxes raise approval, higher ones lower it, weighed by how many of each tier there are. Above 100% some residents also move away, settlers sooner than citizens, so a higher rate does not always bring in more: under each rate is what the homes would pay at each step once they settle there. Above ${moodRules.grudge.above}% the town also keeps a grudge that outlasts the rate: cutting taxes at the end does not undo a term of squeezing.`
-  )
-  for (const tier of ["settlers", "citizens"] as const) {
+  const levers = section(t, said.taxes.title, "taxes", said.taxes.help)
+  for (const [tier, homes] of [["settlers", 1], ["citizens", 2]] as const) {
     const line = el("div", "row lever")
     const value = el("span", "rate")
     const name = el("span", "label")
     name.innerHTML = icon(tier, 16)
-    name.append(document.createTextNode(tier))
+    name.append(document.createTextNode(t.tier.people(homes)))
     line.append(name, value)
     const rate = slider(TAX_STEPS[0], TAX_STEPS.at(-1)!, 5, (to) => parts.send({ type: "tax", tier, rate: to }))
     rate.input.classList.add("tax")
-    rate.input.title = "Drag to set the rate; double-click for the usual 100%"
+    rate.input.title = said.taxes.slider
     rate.input.ondblclick = () => parts.send({ type: "tax", tier, rate: 100 })
     const effect = el("p", "effect")
     const outlook = el("p", "effect outlook")
-    outlook.title = "Taxes a minute from every home if this rate stayed there and the homes settled: residents move away above 100%, and approval follows the rate"
+    outlook.title = said.taxes.outlookTitle
     levers.append(line, rate.input, effect, outlook)
     parts.live(() => {
       const now = parts.town.stats?.policy[tier] ?? 100
       rate.sync(now)
       value.textContent = `${now}%`
       const sway = Math.round((100 - now) * moodRules.perTaxPoint)
-      const grudge = now > moodRules.grudge.above ? " · a grudge builds while it stays this high, and fades slowly" : ""
-      effect.textContent = (sway === 0 ? "the usual rate" : `${signed(sway)} approval`) + grudge
+      effect.textContent = said.taxes.effect(sway, now > moodRules.grudge.above)
       effect.className = `effect ${sway > 0 ? "up" : sway < 0 ? "down" : ""}`
       const steps = parts.town.stats?.taxOutlook[tier] ?? []
       const best = steps.reduce<{ rate: number; taxes: number } | null>((b, o) => (b === null || o.taxes > b.taxes ? o : b), null)
-      const text = steps.length === 0 || best === null
-        ? ""
-        : `taxes a minute, once settled: ${steps.map((o) => `${o.rate}% ${o.taxes}`).join(" · ")} · most at ${best.rate}%`
+      const text = steps.length === 0 || best === null ? "" : said.taxes.outlook(steps, best.rate)
       if (outlook.textContent !== text) outlook.textContent = text
       outlook.style.display = text ? "" : "none"
     })
   }
   panel.append(levers)
 
-  const town = section("people", "people")
-  const settlers = row(town, "settlers", "settlers")
-  const citizens = row(town, "citizens", "citizens")
-  const burghers = row(town, "of them, burghers", "burghers")
-  const homes = row(town, "homes", "homes")
-  const work = row(town, "jobs filled", "jobs")
+  const town = section(t, said.people.title, "people")
+  const settlers = row(town, said.people.settlers, "settlers")
+  const citizens = row(town, said.people.citizens, "citizens")
+  const burghers = row(town, said.people.burghers, "burghers")
+  const homes = row(town, said.people.homes, "homes")
+  const work = row(town, said.people.jobs, "jobs")
   const workNote = el("p", "empty")
   town.append(workNote)
   const peopleLine = el("div", "spark")
   town.append(peopleLine)
   panel.append(town)
 
-  const needs = section(
-    "homes supplied",
-    "homes",
-    "A hungry home pays no taxes. Settlers need food (fish, smoked fish, or bread) from a market, and a cottage with bread besides pays half again; a visit feeds a home a fish or a loaf for every four residents, so a citizens' home eats twice what a cottage does and a townhouse three times; citizens and burghers need bread, cloth, and faith, and burghers furniture from a carpenter besides. Cloth is only brought to streets with desirability 5 or more, furniture to streets of 12 or more. Fish rots in about three minutes and bread in five; a granary keeps them five times as long."
-  )
+  const needs = section(t, said.needs.title, "homes", said.needs.help)
   const needIcons: Readonly<Record<"food" | "bread" | "cloth" | "faith" | "furniture", IconName>> = {
     food: "fish",
     bread: "bread",
@@ -167,8 +144,8 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
     // The icon alone says which need: the name is its tooltip, so no word runs under the bar.
     const label = el("span", "label")
     label.innerHTML = icon(needIcons[n], 16)
-    label.title = needTitle[n]
-    label.setAttribute("aria-label", needTitle[n])
+    label.title = t.need(n)
+    label.setAttribute("aria-label", t.need(n))
     const track = el("span", "track")
     const fill = el("span", "fill")
     track.append(fill)
@@ -177,39 +154,31 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
     needs.append(line)
     return { n, fill, value }
   })
-  const larderLine = row(needs, "food in store", "flour")
-  const eatenLine = row(needs, "eaten · rotted last minute", "fish")
-  const troubleLine = row(needs, "sick homes · on fire", "health")
+  const larderLine = row(needs, said.needs.larder, "flour")
+  const eatenLine = row(needs, said.needs.eaten, "fish")
+  const troubleLine = row(needs, said.needs.trouble, "health")
   panel.append(needs)
 
-  const crown = section(
-    "the crown",
-    "crown",
-    `Sending what the crown asks for earns coins. A missed request is a fine, and the town remembers the snub for a while; too many missed in a row and the crown dismisses the mayor.`
-  )
-  const crownLine = row(crown, "requests met · missed", "goal")
+  const crown = section(t, said.crown.title, "crown", said.crown.help)
+  const crownLine = row(crown, said.crown.tally, "goal")
   const crownNext = el("p", "empty")
   crown.append(crownNext)
   panel.append(crown)
 
-  const store = section(
-    "goods and trade",
-    "trade",
-    "Traders call every few seconds. Drag a good's slider left to sell it beyond what the town keeps, right to buy it up to that (at half again the price), the further the more each call; the middle neither sells nor buys. Prices fall as the town sells and rise, three times as fast, as it buys; a dear price calms only slowly, so buying tops up a shortfall but a town fed on bought food pays more every minute."
-  )
+  const store = section(t, said.trade.title, "trade", said.trade.help)
   const reserveLine = el("div", "row lever")
   const reserveValue = el("span", "rate")
-  reserveLine.append(el("span", "label", "keep in store"), reserveValue)
+  reserveLine.append(el("span", "label", said.trade.keep), reserveValue)
   const reserve = slider(0, RESERVE_MAX, 5, (amount) => parts.send({ type: "reserve", amount }))
-  reserve.input.title = "How much of each good the town keeps: it sells only beyond this, and buys only up to it"
-  store.append(reserveLine, reserve.input, el("p", "effect", "of each good: sold only above this, bought only up to it"))
+  reserve.input.title = said.trade.keepTitle
+  store.append(reserveLine, reserve.input, el("p", "effect", said.trade.keepNote))
   /** Collections a minute: the traders come at every ledger. */
   const perMinute = 60 / (LEDGER_TICKS * step.dt)
   const goodRows = goodIds.map((g) => {
     const line = el("div", "trade-row")
     const name = el("span", "label")
     name.innerHTML = goodIcon(g, 16)
-    name.append(document.createTextNode(goods[g].title))
+    name.append(document.createTextNode(t.good.name(g)))
     const value = el("span", "count")
     const price = el("span", "price")
     const top = el("div", "row")
@@ -222,7 +191,7 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
       parts.send(v === 0 ? { type: "trade", good: g, mode: "none" } : { type: "trade", good: g, mode: v < 0 ? "sell" : "buy", amount: Math.abs(v) })
     )
     deal.input.classList.add("deal")
-    deal.input.title = `Drag left to sell ${goods[g].title}, right to buy it; the further, the more each time the traders call. Double-click to stop trading it.`
+    deal.input.title = said.trade.deal(g)
     deal.input.ondblclick = () => parts.send({ type: "trade", good: g, mode: "none" })
     const mode = el("span", "mode")
     const bottom = el("div", "deal-line")
@@ -233,7 +202,7 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
   })
   panel.append(store)
 
-  const chronicle = section("chronicle", "chronicle")
+  const chronicle = section(t, said.chronicle, "chronicle")
   const lines = el("div", "chronicle")
   chronicle.append(lines)
   panel.append(chronicle)
@@ -241,8 +210,8 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
   parts.live(() => {
     const s = parts.town.stats
     if (!s) return
-    sub.textContent = `${sizes[s.charter.size].title}, ${lands[s.charter.land].title} land · a ${s.fate.rankTitle} · term ${s.fate.term}, ${s.charter.term} minutes`
-    sub.title = `seed ${s.charter.seed}`
+    sub.textContent = said.sub({ size: s.charter.size, land: s.charter.land, rank: s.fate.rank, term: s.fate.term, minutes: s.charter.term })
+    sub.title = said.seed(s.charter.seed)
     // Goals.
     while (goalRows.length < s.goals.length) {
       const line = el("div", "row goal")
@@ -264,10 +233,10 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
       r.value.textContent = g.value
     })
     goalNote.textContent = s.fate.nextTitle === null
-      ? `A ${s.fate.rankTitle}, the highest rank: keep it standing, term after term.`
+      ? said.goals.top(s.fate.rank)
       : s.fate.rises !== null
-        ? `All met: hold them ${clockText(s.fate.rises)} more and the ${s.fate.rankTitle} is a ${s.fate.nextTitle}.`
-        : `A ${s.fate.rankTitle} now: these make it a ${s.fate.nextTitle}.`
+        ? said.goals.holding(s.fate.rank, clockText(s.fate.rises))
+        : said.goals.toward(s.fate.rank)
     goalNote.style.display = goalNote.textContent ? "" : "none"
     // Approval.
     moodValue.textContent = `${signed(s.mood.approval)} → ${signed(s.mood.target)}`
@@ -278,7 +247,7 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
     const moodHtml = s.mood.parts
       .map(
         (p) =>
-          `<div class="row"><span class="label">${p.label}</span><span class="count ${p.value > 0 ? "up" : p.value < 0 ? "down" : ""}">${signed(p.value)}</span></div>`
+          `<div class="row"><span class="label">${escapeHtml(p.label)}</span><span class="count ${p.value > 0 ? "up" : p.value < 0 ? "down" : ""}">${signed(p.value)}</span></div>`
       )
       .join("")
     if (moodParts.dataset.html !== moodHtml) {
@@ -288,20 +257,20 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
     money(taxes, s.taxes)
     supplied.textContent = `+${s.suppliedTaxes}`
     const gap = s.suppliedTaxes - s.taxes
-    suppliedNote.textContent = gap > Math.max(10, s.taxes * 0.1) ? `${gap} coins a minute left on the table: a hungry home pays nothing, a cottage with bread pays half again, a fine street a quarter more` : ""
+    suppliedNote.textContent = gap > Math.max(10, s.taxes * 0.1) ? said.treasury.leftOnTable(gap) : ""
     suppliedNote.style.display = suppliedNote.textContent ? "" : "none"
     money(traded, s.trade)
     money(upkeep, -s.upkeep)
     money(admin, -s.admin)
-    money(net, s.net, " coins")
+    money(net, s.net, said.treasury.netCoins(s.net))
     settlers.textContent = String(s.settlers)
     citizens.textContent = String(s.citizens)
     burghers.textContent = String(s.burghers)
     homes.textContent = String(s.homes)
-    work.textContent = `${s.employed} of ${s.jobs}`
+    work.textContent = said.people.jobsOf(s.employed, s.jobs)
     workNote.textContent = s.shortStaffed.length === 0
-      ? "every workplace has its crew"
-      : `${s.shortStaffed.length} short of workers: ${s.shortStaffed.slice(0, 4).map((w) => `${w.title} ${w.assigned}/${w.needed}${w.nobodyNear ? " (nobody within reach)" : ""}`).join(", ")}${s.shortStaffed.length > 4 ? ", …" : ""} · click the jobs counter to visit them`
+      ? said.people.staffed
+      : said.people.short(s.shortStaffed.length, s.shortStaffed.slice(0, 4), s.shortStaffed.length > 4)
     for (const b of bars) {
       // Furniture is counted against the townhouses: no other home keeps it.
       const of = b.n === "furniture" ? Math.max(s.townhouses, s.needs.furniture) : s.homes
@@ -315,26 +284,26 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
     troubleLine.textContent = `${s.sick} · ${s.burning}`
     crownLine.textContent = `${s.crown.met} · ${s.crown.missed}`
     crownNext.innerHTML = s.crown.open
-      ? `Wants <b>${s.crown.amount} ${goods[s.crown.good].title}</b> · ${clockText(s.crown.left)} left · +${s.crown.reward} coins`
-      : `Next request in ${clockText(s.crown.next)} · ${s.crown.patience} missed in a row ends the term`
+      ? compose(said.crown.wants, `<b>${escapeHtml(said.crown.what(s.crown.good, s.crown.amount))}</b>`, clockText(s.crown.left), escapeHtml(said.crown.reward(s.crown.reward)))
+      : escapeHtml(said.crown.next(clockText(s.crown.next), s.crown.patience))
     // Goods' change over the last minute of samples.
     const ago = history.minuteAgo()
     reserveValue.textContent = String(s.policy.reserve)
     reserve.sync(s.policy.reserve)
     for (const r of goodRows) {
       const change = ago ? s.stock[r.g] - ago.stock[r.g] : 0
-      r.change.textContent = change !== 0 ? `${change > 0 ? "+" : ""}${change}/min` : ""
+      r.change.textContent = change !== 0 ? `${change > 0 ? "+" : ""}${change}${t.amount.perMinute}` : ""
       r.change.className = `change ${change > 0 ? "up" : "down"}`
       r.value.textContent = String(s.stock[r.g])
       const now: TradeMode = s.policy.sells.includes(r.g) ? "sell" : s.policy.buys.includes(r.g) ? "buy" : "none"
       const load = s.policy.loads[r.g]
       r.deal.sync(now === "sell" ? -load : now === "buy" ? load : 0)
-      r.mode.textContent = now === "none" ? "no trade" : `${now} ≤${Math.round(load * perMinute)}/min`
+      r.mode.textContent = now === "none" ? said.trade.none : said.trade[now](Math.round(load * perMinute))
       r.mode.className = `mode ${now}`
       r.line.className = `trade-row ${now}`
       const price = now === "buy" ? askOf(r.g, s.prices[r.g]) : Math.round(priceOf(r.g, s.prices[r.g]) * 10) / 10
-      r.price.textContent = `${price}c${s.prices[r.g] !== 100 ? ` (${s.prices[r.g]}%)` : ""}`
-      r.price.title = now === "buy" ? "what traders ask for one" : "what traders pay for one"
+      r.price.textContent = said.trade.price(price, s.prices[r.g] !== 100 ? s.prices[r.g] : null)
+      r.price.title = now === "buy" ? said.trade.asks : said.trade.pays
     }
     const samples = s.history
     const coinsSvg = sparkline(samples.map((h) => h.coins))
@@ -350,7 +319,7 @@ export const townPanel = (parts: PanelParts, history: TownHistory) => {
     const recent = s.chronicle
       .slice(-10)
       .reverse()
-      .map((l) => `<p><b>${clockText(Math.round(l.tick / 60))}</b> ${l.text}</p>`)
+      .map((l) => `<p><b>${clockText(Math.round(l.tick / 60))}</b> ${markup(t, l.text)}</p>`)
       .join("")
     if (lines.dataset.html !== recent) {
       lines.dataset.html = recent

@@ -78,12 +78,14 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   position: fixed; bottom: calc(14px + env(safe-area-inset-bottom)); display: flex; align-items: stretch; gap: 8px; z-index: 2;
 }
 .toolbar { left: 16px; max-width: calc(100vw - 32px); overflow-x: auto; }
-/* Share, the guide, save, load, new town: icons in the bottom right. With the panel open it moves over, and up above the toolbar it would cover. */
+/* Share, the guide, save, load, new town, the language: icons in the bottom right. With the panel open it moves over, and up above the toolbar it would cover. */
 .system { right: 16px; transition: right 240ms cubic-bezier(.2,.8,.2,1), bottom 240ms cubic-bezier(.2,.8,.2,1); }
 /* With the panel open: a column of icons beside it, above the toolbar. */
 .panel-open .system { right: 376px; bottom: calc(70px + env(safe-area-inset-bottom)); flex-direction: column; }
 .panel-open .system button.labelled { font-size: 0; gap: 0; padding: 6px 9px; }
 @media (max-width: 1210px) { .system { bottom: calc(70px + env(safe-area-inset-bottom)); } }
+/* Where a language's tool bar is longer than English's (its labels are), the system bar steps up above it on a wider screen than English's does. */
+@media (max-width: 1400px) { :is(:lang(it), :lang(es), :lang(fr)) .system { bottom: calc(70px + env(safe-area-inset-bottom)); } }
 .toolbar .group, .system {
   display: flex; gap: 4px; padding: 5px; background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db;
 }
@@ -148,7 +150,10 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel header .title { flex: 1; min-width: 0; }
 .panel header .thumb { width: 64px; height: 56px; object-fit: contain; flex: none; }
 .panel header .glyph { width: 40px; height: 40px; background: #f7f8f4; border: 1px solid #d3d7ce; border-radius: 8px; }
-.panel h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: 0.01em; text-transform: capitalize; }
+.panel h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: 0.01em; }
+/* A heading begins with a capital in any language; English alone capitalises every word of one ("Citizens' Home", but "Casa dei cittadini"). */
+.panel h2::first-letter { text-transform: uppercase; }
+:lang(en) .panel h2, :lang(en) .panel .option .name { text-transform: capitalize; }
 .panel .close { background: none; border: 1px solid transparent; border-radius: 6px; padding: 5px; display: flex; align-self: flex-start; }
 .panel .close:hover { background: #e2e5de; border-color: #c9cec4; }
 .panel .sub { margin: 3px 0 0; color: #6c766f; font-size: 12px; line-height: 1.4; }
@@ -203,7 +208,7 @@ body { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 .panel .option:hover:not(:disabled) { background: #eceee8; border-color: #d3d7ce; }
 .panel .option:disabled { opacity: 0.45; cursor: default; }
 .panel .option .thumb { grid-row: span 3; width: 56px; height: 48px; object-fit: contain; }
-.panel .option .name { font-weight: 700; text-transform: capitalize; }
+.panel .option .name { font-weight: 700; }
 .panel .option .blurb { color: #77817a; font-size: 12px; line-height: 1.35; }
 .panel .option.short .blurb { color: #b04a39; }
 .panel .chips { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: #4f5a53; }
@@ -597,6 +602,8 @@ kbd.key {
   background: linear-gradient(to right, var(--rail) min(var(--at), 50%), var(--fill) min(var(--at), 50%), var(--fill) max(var(--at), 50%), var(--rail) max(var(--at), 50%));
 }
 .panel .deal-line .mode { width: 12ch; text-align: right; font-size: 11px; color: #9aa29b; white-space: nowrap; }
+/* A fixed width, so the slider beside it does not change length as its words do; wider where a language's are longer than English's ("compra ≤72/min"). */
+:is(:lang(it), :lang(es), :lang(fr), :lang(de)) .panel .deal-line .mode { width: 15ch; }
 .panel .deal-line .mode.sell { color: #4f8a3e; font-weight: 700; }
 .panel .deal-line .mode.buy { color: #3d6db5; font-weight: 700; }
 
@@ -618,6 +625,28 @@ kbd.key {
 }
 .panel-open .credit.corner { display: none; }
 .credit.line { justify-content: flex-end; margin-top: 18px; padding-top: 12px; border-top: 1px dashed #d3d7ce; }
+/* What the page puts at the start of the line (the founding screen's language button), across from the credit, and as quiet. */
+.credit.line .lead { margin-right: auto; }
+.language-button {
+  display: inline-flex; align-items: center; gap: 6px; margin: -3px -6px; padding: 3px 6px; font: inherit; color: inherit; background: none;
+  border: 0; border-radius: 4px; cursor: pointer; transition: color 140ms ease;
+}
+.language-button:hover, .language-button:focus-visible, .language-button[aria-expanded="true"] { color: #3d4943; outline: none; }
+.language-button:focus-visible { box-shadow: 0 0 0 1px #3d4943; }
+
+/* ── The language (`screens/language.ts`): a small menu at the button it was opened from, over whatever is there ── */
+.language-menu {
+  position: fixed; z-index: 12; display: none; flex-direction: column; gap: 1px; min-width: 128px; padding: 5px;
+  background: #f7f8f4; border: 1px solid #c9cec4; border-radius: 8px; box-shadow: 0 2px 0 #dfe2db;
+}
+.language-menu.open { display: flex; }
+.language-menu button {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 10px; font: inherit; font-size: 12px;
+  color: #3d4943; text-align: left; white-space: nowrap; background: transparent; border: 1px solid transparent; border-radius: 5px; cursor: pointer;
+}
+.language-menu button:hover, .language-menu button:focus-visible { background: #eceee8; outline: none; }
+.language-menu button.on { font-weight: 700; }
+.language-menu button.on::after { content: "✓"; font-weight: 400; color: #5d6861; }
 
 /* ── The sign-up for the next Typeonce game (`brand/signup.ts`): the dialog's paper in the town's ink ── */
 .signup {

@@ -10,7 +10,8 @@
  */
 import { Clock, Context, Effect, Schema } from "effect"
 
-import { goodIds, TOWN_RANK, TRADE_LOAD } from "../game/content/index.ts"
+import { goodIds, landIds, sizeIds, TOWN_RANK, TRADE_LOAD } from "../game/content/index.ts"
+import { reasons, type Reason } from "../game/said.ts"
 
 export const SAVE_FORMAT = "inkline-town/save"
 /**
@@ -19,9 +20,39 @@ export const SAVE_FORMAT = "inkline-town/save"
  * 6: how much of each good may be traded at a collection. 7: the mayor's guide. 8: terms that follow one
  * another, the town's rank, and upgraded buildings.
  * 10: fixed-step Clock values and runtime snapshot format 2. 11: runtime snapshot format 3 (Ritmo 0.13).
- * Version 4 to 10 saves are carried forward (see `carry`); older ones cannot be loaded.
+ * 12: the chronicle and the term's end as data, not prose (see `game/said.ts`), so a town reads in any language.
+ * Version 4 to 11 saves are carried forward (see `carry`); older ones cannot be loaded.
  */
-export const SAVE_VERSION = 11
+export const SAVE_VERSION = 12
+
+/**
+ * Why a term ended, from how a save before 12 said it: each reason began with its own word ("Bankrupt: …",
+ * "Term 2 is over; …"). A reason already told as data is left as it is.
+ */
+const reasonOf = (said: unknown): Reason => {
+  if (typeof said !== "string" || said === "") return "none"
+  const known = reasons.find((reason) => reason === said)
+  if (known) return known
+  for (const [word, reason] of [["Bankrupt", "bankrupt"], ["Revolt", "revolt"], ["Abandoned", "abandoned"], ["Dismissed", "dismissed"], ["Term", "over"]] as const)
+    if (said.startsWith(word)) return reason
+  return "over"
+}
+
+/**
+ * From 11, what the town said in words becomes data: the term's end by its reason, and each line of the
+ * chronicle a `legacy` event that keeps the words it was written in (they cannot be read back into what
+ * happened, so they stay in the language they were written; news from here on is in the mayor's).
+ */
+const unword = (r: Record<string, unknown>) => {
+  const fate = r["Town/Fate"]
+  if (fate && typeof fate === "object" && "reason" in fate) r["Town/Fate"] = { ...fate, reason: reasonOf(fate.reason) }
+  const chronicle = r["Town/Chronicle"] as { lines?: Array<Record<string, unknown>> } | undefined
+  if (chronicle && Array.isArray(chronicle.lines))
+    r["Town/Chronicle"] = {
+      ...chronicle,
+      lines: chronicle.lines.map(({ text, ...line }) => ("event" in line ? line : { ...line, event: { _tag: "legacy", text: typeof text === "string" ? text : "" } }))
+    }
+}
 
 /**
  * Fills in what a save from an earlier version lacks, so a town in progress
@@ -33,14 +64,24 @@ export const SAVE_VERSION = 11
  * (or governed on after) is a town, any other a hamlet that rises as its
  * goals hold. A complete town waiting on its mayor carries on playing;
  * from 8, its water as never fished, its upgrades as the first, its finer
- * homes as rebuilt already, and no furniture anywhere yet, at its first price.
+ * homes as rebuilt already, and no furniture anywhere yet, at its first price;
+ * from 11, its chronicle and the term's end as data (see `unword`).
  * Anything else is left to the world's own validation.
  */
 const carry = (version: number, world: unknown): unknown | null => {
-  if (version < 4 || version > 10 || typeof world !== "object" || world === null) return null
+  const carried = carryTo11(version, world)
+  if (carried !== null) unword(carried.resources)
+  return carried
+}
+
+/** A save from 4 to 11 as an 11 save (see `carry`), or `null` when it cannot be carried. */
+const carryTo11 = (version: number, world: unknown): { resources: Record<string, unknown> } | null => {
+  if (version < 4 || version > 11 || typeof world !== "object" || world === null) return null
   const w = world as { version?: number; scopes?: Record<string, unknown>; resources?: Record<string, unknown>; entities?: Array<{ components?: Record<string, unknown> }> }
   const r = w.resources
   if (!r || typeof r !== "object") return null
+  const carried = Object.assign(w, { resources: r })
+  if (version === 11) return carried
   // Town never used entity scopes before this format. Its old clock counted
   // the same 60 Hz steps under `tick`; preserve that count exactly.
   if (w.version === 1) { w.version = 2; w.scopes = {} }
@@ -50,7 +91,7 @@ const carry = (version: number, world: unknown): unknown | null => {
   if (typeof time === "object" && time !== null && "tick" in time && typeof time.tick === "number") {
     r["Town/Time"] = { step: time.tick, hz: 60, dt: time.tick > 0 ? 1 / 60 : 0 }
   }
-  if (version === 9 || version === 10) return w
+  if (version === 9 || version === 10) return carried
   // From 8, water that was never fished, and an upgraded building upgraded once.
   for (const e of Array.isArray(w.entities) ? w.entities : []) {
     const water = e.components?.["Town/Water"]
@@ -81,7 +122,7 @@ const carry = (version: number, world: unknown): unknown | null => {
   if (market && typeof market === "object") r["Town/Market"] = { ...market, prices: furnish(market.prices, 100) }
   const loads = (r["Town/Policy"] as { loads?: Record<string, unknown> } | undefined)?.loads
   if (loads && typeof loads === "object" && !("furniture" in loads)) loads.furniture = TRADE_LOAD
-  if (version === 8) return w
+  if (version === 8) return carried
   const fate = r["Town/Fate"] as Record<string, unknown> | undefined
   if (fate && typeof fate === "object" && !("rank" in fate)) {
     const { governing, won, ...rest } = fate
@@ -96,17 +137,17 @@ const carry = (version: number, world: unknown): unknown | null => {
       goalSince: -1
     }
   }
-  if (version === 7) return w
+  if (version === 7) return carried
   if (!("Town/Guide" in r)) r["Town/Guide"] = { done: [], off: false }
-  if (version === 6) return w
+  if (version === 6) return carried
   const policy = r["Town/Policy"]
   if (policy && typeof policy === "object" && !("loads" in policy)) r["Town/Policy"] = { ...policy, loads: Object.fromEntries(goodIds.map((g) => [g, TRADE_LOAD])) }
-  if (version === 5) return w
+  if (version === 5) return carried
   const mood = r["Town/Mood"]
   if (mood && typeof mood === "object" && !("grudge" in mood)) r["Town/Mood"] = { ...mood, grudge: 0, memory: 0 }
   const chronicle = r["Town/Chronicle"] as { lines?: Array<Record<string, unknown>> } | undefined
   if (chronicle && Array.isArray(chronicle.lines)) r["Town/Chronicle"] = { ...chronicle, lines: chronicle.lines.map((l) => ({ at: null, ...l })) }
-  return w
+  return carried
 }
 
 export type Slot = "manual" | "auto"
@@ -115,6 +156,13 @@ const keyOf = (slot: Slot) => `inkline-town/save/${slot}`
 /** Where the first charter version kept its one save: the world alone, no envelope. */
 const LEGACY_KEY = "town/save/charter"
 
+/**
+ * What a save is of, as data: the land it was founded on and how far in it is. The page says it in its own
+ * language ("medium, fair land · year 2 · 23 min in"), whichever the town was saved in.
+ */
+export const About = Schema.Struct({ size: Schema.Literals(sizeIds), land: Schema.Literals(landIds), year: Schema.Int, minutes: Schema.Int })
+export type About = typeof About.Type
+
 /** A save file. */
 export const SaveFile = Schema.Struct({
   format: Schema.Literal(SAVE_FORMAT),
@@ -122,8 +170,13 @@ export const SaveFile = Schema.Struct({
   slot: Schema.Literals(["manual", "auto"]),
   /** When it was saved, in milliseconds since the epoch. */
   savedAt: Schema.Int,
-  /** What it is, in a line: "medium, fair land · year 2 · 23 min in". */
+  /**
+   * What it is, in a line: "medium, fair land · year 2 · 23 min in", in the language it was saved in; empty for a
+   * save from before files had titles. `about` is the same as data, which the page words in the language it is
+   * read in; a save from before it had one is listed by its `title`.
+   */
   title: Schema.String,
+  about: Schema.optionalKey(About),
   world: Schema.Unknown
 })
 export type SaveFile = typeof SaveFile.Type
@@ -143,21 +196,35 @@ export class Unsaveable extends Schema.TaggedError<Unsaveable>()("Unsaveable", {
 
 export type LoadError = NothingSaved | Unreadable | WrongVersion | Rejected | StorageFailed
 
+/**
+ * What went wrong, as the mayor is told it: data, which the page's language
+ * puts into words (`page.save.trouble` in `i18n`). A `reason` is the
+ * browser's or the simulation's own, as it gave it.
+ */
+export type Trouble =
+  | { readonly _tag: "nothingSaved"; readonly auto: boolean }
+  | { readonly _tag: "unreadable" }
+  /** A save from another version of the game: an `older` one, or a newer. */
+  | { readonly _tag: "wrongVersion"; readonly older: boolean }
+  | { readonly _tag: "rejected"; readonly reason: string }
+  | { readonly _tag: "storageFailed"; readonly reason: string }
+  | { readonly _tag: "unsaveable"; readonly reason: string }
+
 /** What to tell the mayor. */
-export const describe = (error: LoadError | StorageFailed | Unsaveable): string => {
+export const describe = (error: LoadError | StorageFailed | Unsaveable): Trouble => {
   switch (error._tag) {
     case "NothingSaved":
-      return error.slot === "auto" ? "No autosave yet" : "Nothing saved yet"
+      return { _tag: "nothingSaved", auto: error.slot === "auto" }
     case "Unreadable":
-      return "The save could not be read"
+      return { _tag: "unreadable" }
     case "WrongVersion":
-      return error.version < SAVE_VERSION ? "That save is from an older version of the game" : "That save is from a newer version of the game"
+      return { _tag: "wrongVersion", older: error.version < SAVE_VERSION }
     case "Rejected":
-      return `The save does not fit this game: ${error.reason}`
+      return { _tag: "rejected", reason: error.reason }
     case "StorageFailed":
-      return `Could not save: ${error.reason}`
+      return { _tag: "storageFailed", reason: error.reason }
     case "Unsaveable":
-      return `Could not save the town: ${error.reason}`
+      return { _tag: "unsaveable", reason: error.reason }
   }
 }
 
@@ -177,6 +244,8 @@ export class World extends Context.Service<World, {
   readonly restore: (world: unknown) => string | null
   /** The town in a line, for a save's title. */
   readonly title: () => string
+  /** The same as data (see `About`), when the town has numbers to tell it by. */
+  readonly about?: () => About | null
 }>()("inkline-town/World") {}
 
 /** The browser's storage (which can throw: full, or blocked). */
@@ -202,12 +271,14 @@ export const fileOf = (slot: Slot) =>
     const world = yield* World
     const snapshot = world.snapshot()
     if (!snapshot.ok) return yield* new Unsaveable({ slot, reason: JSON.stringify(snapshot.error) })
+    const about = world.about?.() ?? null
     const file: SaveFile = {
       format: SAVE_FORMAT,
       version: SAVE_VERSION,
       slot,
       savedAt: yield* Clock.currentTimeMillis,
       title: world.title(),
+      ...(about ? { about } : {}),
       world: snapshot.value
     }
     return file
@@ -237,7 +308,7 @@ export const read = (slot: Slot) =>
     const parsed = yield* decodeFile(raw).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
     // The first charter saves were the world alone.
     if (typeof parsed === "object" && parsed !== null && "entities" in parsed && !("format" in parsed)) {
-      return { format: SAVE_FORMAT, version: SAVE_VERSION, slot, savedAt: 0, title: "an earlier save", world: carry(9, parsed) ?? parsed } satisfies SaveFile
+      return { format: SAVE_FORMAT, version: SAVE_VERSION, slot, savedAt: 0, title: "", world: carry(9, parsed) ?? parsed } satisfies SaveFile
     }
     const version = (parsed as { version?: unknown } | null)?.version
     if (typeof version === "number" && version !== SAVE_VERSION) {

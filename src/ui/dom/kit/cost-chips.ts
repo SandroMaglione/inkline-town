@@ -1,12 +1,13 @@
 /** A cost as icon chips, each marked when the town is short of it. */
-import { goods, type GoodId, type Kind } from "../../../game/content/index.ts"
+import type { GoodId, Kind } from "../../../game/content/index.ts"
+import type { Catalog } from "../../../i18n/index.ts"
 import { el } from "./dom.ts"
 import { goodIcon, icon } from "./icons.ts"
 
 /** What the town has, for the chips to compare against; `null` before the first frame. */
 export type Holdings = () => { readonly coins: number; readonly stock: Readonly<Record<GoodId, number>> } | null
 
-export const costChips = (cost: Kind["cost"], has: Holdings) => {
+export const costChips = (t: Catalog, cost: Kind["cost"], has: Holdings) => {
   const box = el("span", "chips")
   const chips: Array<{ chip: HTMLElement; short: () => boolean }> = []
   if (cost.coins > 0) {
@@ -16,7 +17,7 @@ export const costChips = (cost: Kind["cost"], has: Holdings) => {
   }
   for (const [g, n] of Object.entries(cost.materials) as Array<[GoodId, number]>) {
     const chip = el("span", "chip")
-    chip.title = goods[g].title
+    chip.title = t.good.name(g)
     chip.innerHTML = `${goodIcon(g, 14)}${n}`
     chips.push({ chip, short: () => (has()?.stock[g] ?? 0) < n })
   }

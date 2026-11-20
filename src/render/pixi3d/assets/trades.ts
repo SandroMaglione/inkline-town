@@ -4,6 +4,7 @@ import { U } from "../../../game/world/iso.ts"
 import { Drawing, palette, pale, type Side, type Vertex } from "./primitives.ts"
 import type { BuildingOptions } from "./buildings.ts"
 import { beam, block, iron, orient, post, roof, stone, wheel, wood, workshopPoint } from "./workshops.ts"
+import { en } from "../../../i18n/index.ts"
 
 export const tradeYardIds = ["warehouse", "fishery", "bakery", "weaver"] as const satisfies ReadonlyArray<KindId>
 export type TradeYardId = typeof tradeYardIds[number]
@@ -63,7 +64,7 @@ export function tradeSmokeOrigin(id: TradeYardId, doors?: BuildingOptions["doors
 }
 
 export function makeTradeYard(id: TradeYardId, options: BuildingOptions = {}) {
-  const d = new Drawing(id, kinds[id].title, tradeNotes[id]), fit = Math.max(0, Math.min(1, options.fit ?? 1))
+  const d = new Drawing(id, en.kind.title(id), tradeNotes[id]), fit = Math.max(0, Math.min(1, options.fit ?? 1))
   d.asset.category = "buildings"; d.asset.reference = { type: "building", kind: id }; d.asset.footprint = kinds[id].size
   if (options.plate !== false) d.plate(kinds[id].size)
   const half = (id === "warehouse" ? 21 : 13.5) * U
@@ -218,7 +219,7 @@ function weaver(d: Drawing, fit: number) {
 
 /** Early construction keeps the work apron open instead of filling the plot with a cube. */
 export function tradeConstruction(id: TradeYardId, build: number, share: number | null, doors: BuildingOptions["doors"]) {
-  const d = new Drawing(id, `${kinds[id].title} · construction`, "Store walls and an open work apron."), stage = buildStages(build)
+  const d = new Drawing(id, `${en.kind.title(id)} · construction`, "Store walls and an open work apron."), stage = buildStages(build)
   const half = (id === "warehouse" ? 21 : 13.5) * U, height = id === "fishery" ? 24 : id === "warehouse" ? 28 : 26
   d.asset.footprint = kinds[id].size
   if (share !== null) for (let i = 0; i < Math.ceil(share * 3); i++) d.crate(half - 2 * U - i * 3 * U, half - 2 * U, 0, 0x8f9891)

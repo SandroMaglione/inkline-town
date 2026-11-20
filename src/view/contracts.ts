@@ -7,9 +7,12 @@
  * go to the simulation as edits (`game/edits.ts`). None of it is saved.
  */
 import type { Amounts, CharterValue, GoodId, GroundId, KindId, PropId, Tier, WinterId } from "../game/content/index.ts"
+import type { Change } from "../game/rules/upgrades.ts"
 import type { Point } from "../game/world/iso.ts"
+import type { Event } from "../game/said.ts"
 import type { Status } from "../game/schema.ts"
 import type { IconName } from "./icons.ts"
+import type { WantedReason } from "./upgrades.ts"
 
 /** How a line of a panel reads: fine, worth a look, wrong, or an aside. */
 export type Tone = "ok" | "warn" | "bad" | "dim"
@@ -132,7 +135,14 @@ export type Panel =
         readonly needed: string | null
         /** Coins now, and the materials carriers bring. */
         readonly cost: { readonly coins: number; readonly materials: Partial<Record<GoodId, number>> }
+        /** What it changes, a line each ("upkeep 6 → 12 coins a minute"), amounts as tokens. */
         readonly changes: ReadonlyArray<string>
+        /**
+         * The same changes as rows, so a UI lays them out without reading the lines: which change it is (`what`, to
+         * pick an icon by, and to set the upkeep apart), what changes (`label`), from what to what (`value`: none
+         * when the label says it all), and what qualifies it (`note`).
+         */
+        readonly gains: ReadonlyArray<{ readonly what: Change["_tag"]; readonly label: string; readonly value?: string; readonly note?: string }>
         readonly blocked: string | null
         readonly short: string | null
       } | null
@@ -242,7 +252,9 @@ export interface Stats {
   }
   readonly fate: {
     readonly state: "playing" | "lost" | "over"
+    /** Why the term ended, in a line, and (`ended`) in a word for a heading ("bankrupt"); both empty while it is played. */
     readonly reason: string
+    readonly ended: string
     /** Minute (since the founding) the term ended. */
     readonly at: number
     /** Which term this is, from 1, and the minute (since the founding) it began. */
@@ -293,7 +305,8 @@ export interface Stats {
     readonly approval: number
     readonly net: number
   }>
-  readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly text: string; readonly alarm: boolean; readonly at: Point | null }>
+  /** The chronicle, in words; `what` is which event each line tells (see `game/said.ts`), for a page that treats one differently. */
+  readonly chronicle: ReadonlyArray<{ readonly tick: number; readonly what: Event["_tag"]; readonly text: string; readonly alarm: boolean; readonly at: Point | null }>
   /** What needs looking at right now, a line each: workshops waiting, workplaces no one can reach, food running out. */
   readonly alerts: ReadonlyArray<Alert>
   /**
@@ -422,8 +435,8 @@ export interface SceneView {
   overlay: { readonly key: string; readonly cells: ReadonlyArray<OverlayCell> }
   /** The view's colour for each building and home, washed over the model itself so it reads from above. */
   tints: ReadonlyMap<number, number>
-  /** The buildings whose upgrade the town needs now, with why (the gold arrow over each). */
-  wanted: ReadonlyMap<number, string>
+  /** The buildings whose upgrade the town needs now, with why, as the reason's id (the gold arrow over each). */
+  wanted: ReadonlyMap<number, WantedReason>
   /** How fast the town's people move about: the speed, or 0 while the town waits. */
   pace: number
 }

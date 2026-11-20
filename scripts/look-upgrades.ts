@@ -13,7 +13,7 @@ import assert from "node:assert/strict"
 
 const executable = process.env.BROWSER_EXECUTABLE_PATH ?? ["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(existsSync)
 const browser = await chromium.launch({ headless: true, ...(executable ? { executablePath: executable } : {}) })
-const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 })
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1, locale: "en-US" })
 const out = process.env.OUT ?? "output/upgrades"
 await mkdir(out, { recursive: true })
 const errors: Array<string> = []

@@ -10,7 +10,6 @@ export type Need = "food" | "bread" | "cloth" | "faith" | "furniture"
 
 /** A tier of homes (see `home.tiers`). */
 interface HomeTier {
-  readonly title: string
   readonly residents: number
   readonly tax: number
   readonly height: number
@@ -31,9 +30,9 @@ export const home = {
   half: 5,
   cost: { coins: 15, materials: { planks: 1 } } as Kind["cost"],
   tiers: {
-    1: { title: "settlers", residents: 4, tax: 2.5, height: 24, needs: ["food"], appeal: -100, rise: { coins: 0, materials: {} } },
-    2: { title: "citizens", residents: 8, tax: 5, height: 46, needs: ["bread", "cloth", "faith"], appeal: 5, rise: { coins: 35, materials: { planks: 4, stone: 2 } } },
-    3: { title: "burghers", residents: 12, tax: 7, height: 68, needs: ["bread", "cloth", "faith", "furniture"], appeal: 12, rise: { coins: 45, materials: { planks: 4, stone: 4, tools: 1, furniture: 2 } } }
+    1: { residents: 4, tax: 2.5, height: 24, needs: ["food"], appeal: -100, rise: { coins: 0, materials: {} } },
+    2: { residents: 8, tax: 5, height: 46, needs: ["bread", "cloth", "faith"], appeal: 5, rise: { coins: 35, materials: { planks: 4, stone: 2 } } },
+    3: { residents: 12, tax: 7, height: 68, needs: ["bread", "cloth", "faith", "furniture"], appeal: 12, rise: { coins: 45, materials: { planks: 4, stone: 4, tools: 1, furniture: 2 } } }
   } satisfies Record<Tier, HomeTier> as Readonly<Record<Tier, HomeTier>>,
   /** A resident moves in (or out) this often. */
   settle: Clock.steps(Clock.duration(step, 3)),
@@ -74,9 +73,6 @@ export const home = {
   taxFlight: { linear: 0.3, square: 0.2, citizens: 0.6 }
 }
 
-/** What a tier's homes are called, and what its residents are. */
-export const tierHome: Readonly<Record<Tier, string>> = { 1: "settlers' cottage", 2: "citizens' home", 3: "townhouse" }
-
 /** Which crew a tier's residents work in. */
 export const crewOf = (tier: Tier): Crew => (tier === 1 ? "settlers" : "citizens")
 
@@ -86,5 +82,3 @@ export const COMMUTE = 15
 export const APPRENTICE = 0.75
 /** Tools a workshop that wears them keeps on hand. */
 export const TOOL_STOCK = 1
-
-export const needTitle: Readonly<Record<Need, string>> = { food: "food", bread: "bread", cloth: "cloth", faith: "faith", furniture: "furniture" }

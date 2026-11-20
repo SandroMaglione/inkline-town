@@ -10,6 +10,7 @@ import { test } from "node:test"
 
 import { Effect } from "effect"
 
+import { en, say } from "../src/i18n/index.ts"
 import { describe, load, loadLatest, loadText, memoryStorage, read, save, SAVE_FORMAT, SAVE_VERSION, Storage, World, type LoadError } from "../src/platform/save.ts"
 import { headless, type Headless } from "../src/game/headless.ts"
 
@@ -114,7 +115,7 @@ test("a world that cannot be saved says so, and writes nothing", () => {
   assert.equal(result._tag, "Failure")
   const error = (result as { failure: Parameters<typeof describe>[0] }).failure
   assert.equal(error._tag, "Unsaveable")
-  assert.match(describe(error), /Could not save the town/)
+  assert.match(say(en.page.save.trouble, describe(error)), /Could not save the town/)
   assert.equal(storage.files.size, 0)
 })
 
@@ -134,14 +135,17 @@ const fingerprint = (world: object) => {
 }
 
 test("a save the game wrote on Ritmo 0.9 (save version 10, snapshot format 2) loads and plays on as it did", () => {
-  // Saved after 90 s of a small, fair town (seed 5); the fingerprint is that town 30 s later, played on Ritmo 0.9.
+  // Saved after 90 s of a small, fair town (seed 5); the fingerprint is that town 30 s later, played on Ritmo 0.9,
+  // but for what save version 12 tells as data: the term's `reason` ("none", not ""), and the chronicle's one line,
+  // carried as a `legacy` event with the words it was written in. Everything else is the world as 0.9 played it
+  // (its fingerprint without those two fields is the same before and after that change).
   const text = readFileSync(new URL("./fixtures/save-v10-ritmo-0.9.json", import.meta.url), "utf8")
   assert.equal(JSON.parse(text).version, 10)
   const { town } = setup()
   const loaded = Effect.runSync(Effect.result(loadText(text).pipe(Effect.provideService(World, worldOf(town)))))
   assert.equal(loaded._tag, "Success")
   town.run(30)
-  assert.equal(fingerprint(town.snapshot()), "b62c15241f26b2e4b2a5ef5bf4cd72969f966351")
+  assert.equal(fingerprint(town.snapshot()), "bd9a2f95783ad2c612e639ab228eebf4d3367bcb")
 })
 
 test("a save from before files had envelopes still loads", () => {
@@ -193,7 +197,7 @@ test("a town saved complete, before terms followed one another, loads as a town 
   assert.equal(run(load("manual"))._tag, "Success")
   const loaded = town.snapshot().resources["Town/Fate"]
   assert.equal(loaded.state, "playing")
-  assert.equal(loaded.reason, "")
+  assert.equal(loaded.reason, "none")
   assert.equal(loaded.rank, 2)
   assert.equal(loaded.term, 1)
   assert.equal(loaded.began, 0)
@@ -268,4 +272,26 @@ test("a finer home saved before homes paid to rise keeps its rebuilding", () => 
   assert.equal(run(load("manual"))._tag, "Success")
   const rebuilt = town.snapshot().entities.filter((e) => e.components["Town/House"]).map((e) => [e.components["Town/House"].tier, e.components["Town/Rebuilt"]?.tier])
   assert.deepEqual(rebuilt.sort(), [[2, 2], [3, 3]])
+})
+
+test("a town saved when the chronicle was prose keeps its lines as they were written, and its term's end as data", () => {
+  const { town, storage, run } = setup()
+  town.run(10)
+  run(save("manual"))
+  const file = JSON.parse(storage.get("inkline-town/save/manual")!)
+  // As version 11 saved it: each line of the chronicle in words, and the reason a term ended as its sentence.
+  const lines = [
+    { tick: 0, text: "Founded on medium, fair land, for a term of 60 minutes.", alarm: false, at: null },
+    { tick: 600, text: "Fire on Mill Lane!", alarm: true, at: { x: 3, y: 4 } }
+  ]
+  const ends = { "Bankrupt: the crown has taken the treasury out of the mayor's hands.": "bankrupt", "Revolt: the town has turned the mayor out.": "revolt", "Abandoned: the people have left the town.": "abandoned", "Dismissed: the crown has replaced a mayor who left 3 of its requests unanswered.": "dismissed", "Term 2 is over; the village stands.": "over", "": "none" }
+  for (const [said, reason] of Object.entries(ends)) {
+    const fate = { ...file.world.resources["Town/Fate"], state: reason === "none" ? "playing" : reason === "over" ? "over" : "lost", reason: said }
+    const world = { ...file.world, resources: { ...file.world.resources, "Town/Chronicle": { lines }, "Town/Fate": fate } }
+    storage.set("inkline-town/save/manual", JSON.stringify({ ...file, version: 11, world }))
+    assert.equal(run(load("manual"))._tag, "Success", said)
+    const loaded = town.snapshot().resources
+    assert.equal(loaded["Town/Fate"].reason, reason)
+    assert.deepEqual(loaded["Town/Chronicle"].lines, lines.map(({ text, ...line }) => ({ ...line, event: { _tag: "legacy", text } })))
+  }
 })

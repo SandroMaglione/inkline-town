@@ -11,15 +11,18 @@ import type { EditQueue } from "../src/game/edits.ts"
 import type { Interaction, Shown } from "../src/view/contracts.ts"
 import type { GameScene } from "../src/render/pixi3d/scene.ts"
 import type { Snapshot } from "../src/game/headless.ts"
+import type { Words } from "../src/i18n/index.ts"
+import { SAVE_VERSION } from "../src/platform/save.ts"
 
 declare global {
   interface Window {
-    town:{interaction:Interaction;shown:Shown;edits:EditQueue;view:GameScene;advance:(seconds:number)=>void;snapshot:()=>Snapshot}
+    town:{interaction:Interaction;shown:Shown;edits:EditQueue;view:GameScene;advance:(seconds:number)=>void;snapshot:()=>Snapshot;words:Words}
   }
 }
 const executable=process.env.BROWSER_EXECUTABLE_PATH??["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser","/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find(existsSync)
 const browser=await chromium.launch({headless:true,...(executable?{executablePath:executable}:{})})
-const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1})
+// The page opens in the browser's own language where the game speaks it: this check clicks English labels, so it asks for English.
+const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1,locale:"en-US"})
 const errors:Array<string>=[]
 page.on("pageerror",e=>errors.push(e.message))
 page.on("console",m=>{if(m.type()==="error")errors.push(m.text())})
@@ -116,7 +119,9 @@ try {
   facts.largeIsland=await page.evaluate(()=>window.town.view.stats())
   await capture("large-island")
   const fixture=process.env.GAME_SAVE_PATH??`${output}/fixture/large-rich-24757-20min.json`
-  if (!existsSync(fixture)) execFileSync(process.execPath,["scripts/balance.ts","--seeds","1","--from","3","--size","large","--land","rich","--term","45","--snapshot","20","--out",`${output}/fixture`],{stdio:"pipe"})
+  // The bot's town is kept between runs; one saved by an earlier version of the game is played again, so what is loaded is compared with a save of this version.
+  const stale=!process.env.GAME_SAVE_PATH&&existsSync(fixture)&&JSON.parse(await readFile(fixture,"utf8")).version!==SAVE_VERSION
+  if (!existsSync(fixture)||stale) execFileSync(process.execPath,["scripts/balance.ts","--seeds","1","--from","3","--size","large","--land","rich","--term","45","--snapshot","20","--out",`${output}/fixture`],{stdio:"pipe"})
   const grown=JSON.parse(await readFile(fixture,"utf8"))
   await page.evaluate(save=>{
     localStorage.removeItem("inkline-town/save/auto")
@@ -188,7 +193,7 @@ try {
   await page.setViewportSize({width:1440,height:1000})
   // A saved term that has ended still opens the existing reckoning UI.
   const ended=structuredClone(grown)
-  ended.world.resources["Town/Fate"]={...ended.world.resources["Town/Fate"],state:"over",reason:"The term has ended.",at:ended.world.resources["Town/Time"].step}
+  ended.world.resources["Town/Fate"]={...ended.world.resources["Town/Fate"],state:"over",reason:"over",at:ended.world.resources["Town/Time"].step}
   await page.evaluate(save=>localStorage.setItem("inkline-town/save/manual",JSON.stringify({...save,savedAt:Date.now()})),ended)
   await page.getByRole("button",{name:"load",exact:true}).click()
   await page.getByRole("button",{name:"Load without saving",exact:true}).click()
@@ -211,7 +216,7 @@ try {
   const picture=await fetch(unfurl.match(/property="og:image" content="([^"]+)"/)![1]!)
   assert.equal(picture.headers.get("content-type"),"image/jpeg")
   const sharedWorld=await snapshot()
-  const visitor=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,hasTouch:true,isMobile:true})
+  const visitor=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,hasTouch:true,isMobile:true,locale:"en-US"})
   visitor.on("pageerror",e=>errors.push(`visitor: ${e.message}`))
   await visitor.goto(url)
   await visitor.waitForFunction(()=>document.body.classList.contains("visiting"),undefined,{timeout:60000})

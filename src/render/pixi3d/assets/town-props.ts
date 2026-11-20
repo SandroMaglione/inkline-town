@@ -12,6 +12,7 @@ import { hash } from "./land.ts"
 import { founderStatue, parkBench, parkFountain, parkLamp, plantedBorder } from "./park-furnishings.ts"
 import { flowerPlot, gravelWalk, parkPaving, turf } from "./park-ground.ts"
 import { Drawing, square, type Vertex } from "./primitives.ts"
+import { en } from "../../../i18n/index.ts"
 
 /** Shared seating and planted borders also serve the healer and hospital. */
 export const flowerBed = plantedBorder
@@ -98,8 +99,8 @@ export function makeParkProp(prop: PropId) {
   asset.strokes.forEach((s) => { s.points = s.points.map(shift) })
   asset.fountains?.forEach(f=>{f.origin=shift(f.origin)})
   asset.id = `park-${prop}`
-  asset.title = `Park · ${props[prop].title.toLowerCase()}`
-  asset.note = prop==="statue"?"A simple stone bust with broad carved shoulders, a plain head and a stepped pedestal.":prop==="fountain"?"A moulded stone basin with jointed coping, a fluted stem, upper bowl and running water.":props[prop].blurb
+  asset.title = `Park · ${en.prop.name(prop)}`
+  asset.note = prop==="statue"?"A simple stone bust with broad carved shoulders, a plain head and a stepped pedestal.":prop==="fountain"?"A moulded stone basin with jointed coping, a fluted stem, upper bowl and running water.":en.prop.blurb(prop)
   asset.category = "land"
   asset.reference = { type: "none" }
   asset.footprint = 1

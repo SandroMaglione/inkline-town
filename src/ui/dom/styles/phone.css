@@ -133,7 +133,7 @@
   /* The camera: pinch zooms and turns it, and the menu has "recentre". */
   .camera-controls { display: none; }
 
-  /* ── The menu: share, the guide, save, load, new town, recentre ── */
+  /* ── The menu: share, the guide, the language, save, load, new town, recentre ── */
   .system, .panel-open .system { display: none; }
   .fold-more .system, .fold-more.panel-open .system {
     display: flex; flex-direction: column; top: auto; right: calc(8px + env(safe-area-inset-right)); bottom: calc(58px + env(safe-area-inset-bottom));

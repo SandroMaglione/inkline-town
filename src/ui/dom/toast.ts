@@ -3,10 +3,11 @@
  * letters a second, and a moment to look), and gone as soon as the mayor taps
  * the map again: by then they have read it, or are acting on it.
  */
-import { el, escapeHtml } from "./kit/dom.ts"
-import { iconize } from "./kit/text.ts"
+import type { Catalog } from "../../i18n/index.ts"
+import { el } from "./kit/dom.ts"
+import { markup, words } from "./kit/text.ts"
 
-export const createToast = () => {
+export const createToast = (t: Catalog) => {
   const box = el("div", "toast")
   let timer = 0
   /** When the toast showing went up: a press on the map just after does not put it away. */
@@ -14,11 +15,12 @@ export const createToast = () => {
   return {
     element: box,
     show: (message: string) => {
-      box.innerHTML = iconize(escapeHtml(message))
+      box.innerHTML = markup(t, message)
       box.classList.add("show")
       at = Date.now()
       window.clearTimeout(timer)
-      timer = window.setTimeout(() => box.classList.remove("show"), Math.min(8000, Math.max(2200, 1200 + message.length * 65)))
+      // As long as its words take to read: an amount shown as an icon is counted as the words it stands for.
+      timer = window.setTimeout(() => box.classList.remove("show"), Math.min(8000, Math.max(2200, 1200 + words(t, message).length * 65)))
     },
     /** A toast is up: what waits its turn (the sign-up's card) holds off. */
     showing: () => box.classList.contains("show"),

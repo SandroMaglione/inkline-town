@@ -60,6 +60,8 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { fingerprint } from "../tools/balance/provenance.ts"
 import { capacity, mealsOf, moreAdmin, taxOf } from "../src/game/rules/households.ts"
+import type { Event } from "../src/game/said.ts"
+import { en, plain, say } from "../src/i18n/index.ts"
 
 // ── Options ───────────────────────────────────────────────────────────────
 
@@ -758,7 +760,7 @@ interface Row {
 const run = (seed: number) => {
   roading.clear()
   resting.clear()
-  const town = headless({ size, term, land, seed }, { rules, toast: (m) => { if (process.env.DEBUG) console.log("toast:", m) } })
+  const town = headless({ size, term, land, seed }, { rules, toast: (m) => { if (process.env.DEBUG) console.log("toast:", plain(en, say(en.notice, m))) } })
   const step = town.run
 
   const rows: Array<Row> = []
@@ -846,10 +848,10 @@ const run = (seed: number) => {
       problems: problemsNow
     })
   }
-  if (process.env.CHRONICLE) for (const l of town.snapshot().resources["Town/Chronicle"].lines as Array<{ tick: number; text: string }>) console.log(`  ${(l.tick / 3600).toFixed(1)} ${l.text}`)
+  if (process.env.CHRONICLE) for (const l of town.snapshot().resources["Town/Chronicle"].lines as Array<{ tick: number; event: Event }>) console.log(`  ${(l.tick / 3600).toFixed(1)} ${plain(en, say(en.chronicle, l.event))}`)
   const lastGoals = goalsOf(w.charter, {
     settlers: w.census.settlers!, citizens: w.census.citizens!, coins: w.coins, net: net(w), approval: w.mood.approval, hall: w.hall
-  }, rules, w.fate.rank).map((g) => `${g.met ? "✓" : "✗"} ${g.text} (${g.value})`).join(" · ")
+  }, rules, w.fate.rank).map((g) => `${g.met ? "✓" : "✗"} ${en.view.goal.text[g.id](g.target)} (${en.view.goal.value[g.id](g.value, g.target)})`).join(" · ")
   const hh = Math.max(1, w.homes.length)
   console.log(`  longest continuous goal hold: ${longestGoalHold.toFixed(1)} seconds`)
   const supplied = `food ${Math.round((w.census.food! / hh) * 100)}% bread ${Math.round((w.census.bread! / hh) * 100)}% cloth ${Math.round((w.census.cloth! / hh) * 100)}% faith ${Math.round((w.census.faith! / hh) * 100)}%`
@@ -860,7 +862,7 @@ const run = (seed: number) => {
   // The ranks the town rose to, and the first minute it stood at each.
   const risen = rules.ranks.slice(1).flatMap((r, i) => {
     const row = rows.find((x) => x.rank >= i + 1)
-    return row ? [{ title: r.title, minute: row.minute }] : []
+    return row ? [{ title: en.rank(i + 1), minute: row.minute }] : []
   })
   return { seed, rows, problems, end, score: w.fate.score, built, stock: w.stock, crown: w.crown, lastGoals, supplied, lost: ruined.size, risen,
     longestGoalHoldSeconds: longestGoalHold,
@@ -900,7 +902,7 @@ const play = (which: Bot) => {
   console.log(`\n${seeds} seeds · ${size} ${land} land · ${term}-minute term · ${bot} mayor  (${Math.round((performance.now() - started) / 1000)} s)`)
   const outcomes: Record<string, Array<number>> = {}
   for (const r of results) {
-    const k = r.end.state === "lost" ? `lost (${r.end.reason.split(":")[0]!.toLowerCase()})` : r.end.state
+    const k = r.end.state === "lost" ? `lost (${r.end.reason})` : r.end.state
     ;(outcomes[k] ??= []).push(r.end.minute)
   }
   console.log(`  outcomes        ${Object.entries(outcomes).map(([k, ms]) => `${k} ×${ms.length} (around minute ${Math.round(mean(ms))})`).join(", ")}`)

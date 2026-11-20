@@ -6,20 +6,20 @@ export const goodIds = ["wood", "planks", "stone", "ore", "tools", "fish", "smok
 export type GoodId = (typeof goodIds)[number]
 
 /** Each good's crate label colour (the only colour a good has), and what traders pay for one. */
-export const goods: Readonly<Record<GoodId, { readonly title: string; readonly color: number; readonly price: number }>> = {
-  wood: { title: "wood", color: 0x8a6a45, price: 1 },
-  planks: { title: "planks", color: 0xd27a34, price: 3 },
-  stone: { title: "stone", color: 0x8f9891, price: 2 },
-  ore: { title: "ore", color: 0x5a6479, price: 3 },
-  tools: { title: "tools", color: 0x3d4943, price: 10 },
-  fish: { title: "fish", color: 0x2f8c87, price: 2 },
-  smoked: { title: "smoked fish", color: 0x9a5b3a, price: 4 },
-  wheat: { title: "wheat", color: 0xd6ae2e, price: 1 },
-  flour: { title: "flour", color: 0xc9b48a, price: 3 },
-  bread: { title: "bread", color: 0xc4523f, price: 4 },
-  wool: { title: "wool", color: 0xa7ada4, price: 2 },
-  cloth: { title: "cloth", color: 0x8a58a8, price: 6 },
-  furniture: { title: "furniture", color: 0x9a6b3f, price: 9 }
+export const goods: Readonly<Record<GoodId, { readonly color: number; readonly price: number }>> = {
+  wood: { color: 0x8a6a45, price: 1 },
+  planks: { color: 0xd27a34, price: 3 },
+  stone: { color: 0x8f9891, price: 2 },
+  ore: { color: 0x5a6479, price: 3 },
+  tools: { color: 0x3d4943, price: 10 },
+  fish: { color: 0x2f8c87, price: 2 },
+  smoked: { color: 0x9a5b3a, price: 4 },
+  wheat: { color: 0xd6ae2e, price: 1 },
+  flour: { color: 0xc9b48a, price: 3 },
+  bread: { color: 0xc4523f, price: 4 },
+  wool: { color: 0xa7ada4, price: 2 },
+  cloth: { color: 0x8a58a8, price: 6 },
+  furniture: { color: 0x9a6b3f, price: 9 }
 }
 
 /**

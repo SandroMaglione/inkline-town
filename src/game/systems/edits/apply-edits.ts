@@ -1,29 +1,29 @@
 import { buildingDraft, houseDraft, houseStart, parkDraft, roadDraft, rockDraft, RoleParts, rolesOf, StartParts, startOf, treeDraft, waterDraft } from "../../world/archetypes.ts"
 import * as Random from "@typeonce/ritmo/Random"
-import { amounts, anA, builtCost, costText, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, stepsOf, total, upgradeAt, type Amounts, type Kind, type ParkPiece, type Upgrade } from "../../content/index.ts"
+import { amounts, builtCost, goodIds, nextUpgrade, RESERVE_MAX, TAX_STEPS, stepsOf, total, type Amounts, type GoodId, type Kind, type ParkPiece, type Upgrade } from "../../content/index.ts"
 import { canPlace, cellsOf, GridBuilder, ownerAt, useAt } from "../../world/grid.ts"
 import { inside } from "../../world/iso.ts"
 import { generate } from "../../world/mapgen.ts"
 import { Road, Water, Tree } from "../../schema.ts"
 import { Appeal, Building, Tile, Census, Charter, Chronicle, Crown, Fate, Fires, Game, Guide, Rules, History, House, Inventory, Land, Ledger, Market, Mood, Pantry, Park, Paved, Paused, Policy, Rising, Rng, Rock, Service, Site, Status, Stock, Storage, Time, TownHall, Toast, Treasury, Upgraded, Works, Edits, Selection } from "../../schema.ts"
-import { salvageOf, salvageText, withWorks } from "../../rules/salvage.ts"
+import { salvageOf, withWorks } from "../../rules/salvage.ts"
 import { elapsed, rollWinters, termTicks, TileRead, useOf, write } from "../shared.ts"
+import type { Lock, Notice } from "../../said.ts"
 import type { Rules as RuleInputs } from "../../rules/config.ts"
 import { crownGap, foundedFate } from "../term/index.ts"
 
 export const unlocked = (kind: Pick<Kind, "unlock"> | ParkPiece, census: { readonly settlers: number; readonly citizens: number }) =>
   census.settlers + census.citizens >= kind.unlock.residents && census.citizens >= kind.unlock.citizens
 /** What a town still lacks before it can build `kind`, or `null` when it can. */
-export const lockReason = (kind: Pick<Kind, "unlock"> | ParkPiece, census: { readonly settlers: number; readonly citizens: number }): string | null => {
+export const lockReason = (kind: Pick<Kind, "unlock"> | ParkPiece, census: { readonly settlers: number; readonly citizens: number }): Lock | null => {
   const residents = census.settlers + census.citizens
-  if (residents < kind.unlock.residents) return `needs ${kind.unlock.residents} residents (the town has ${residents})`
-  if (census.citizens < kind.unlock.citizens) return `needs ${kind.unlock.citizens} citizens (the town has ${census.citizens})`
+  if (residents < kind.unlock.residents) return { _tag: "residents", needs: kind.unlock.residents, has: residents }
+  if (census.citizens < kind.unlock.citizens) return { _tag: "citizens", needs: kind.unlock.citizens, has: census.citizens }
   return null
 }
 
-/** What keeps a town from an upgrade now, or `null` when nothing does. */
-export const upgradeBlock = (up: Pick<Upgrade, "rank">, rank: number, rules: Pick<RuleInputs, "ranks">): string | null =>
-  rank >= up.rank ? null : `needs the town to be a ${rules.ranks[up.rank]!.title}`
+/** What keeps a town from an upgrade now: the rank it must reach first, or `null` when nothing does. */
+export const upgradeBlock = (up: Pick<Upgrade, "rank">, rank: number): number | null => (rank >= up.rank ? null : up.rank)
 
 /** Samples of history a long reign keeps in full detail before it thins the older half. */
 const HISTORY_KEPT = 1200
@@ -105,9 +105,10 @@ export const ApplyEdits = Game.System(
     // What is left to spend this step: placing several things at once draws on the same stock.
     const left: Record<string, number> = { ...resources.stock.get() }
 
-    const afford = (cost: Kind["cost"]): string | null => {
-      if (coins < cost.coins) return "Not enough coins"
-      for (const [g, n] of Object.entries(cost.materials)) if ((left[g] ?? 0) < (n ?? 0)) return `Not enough ${g}`
+    /** What the town is short of to pay `cost`: coins, or the first good it lacks; `null` when it can pay. */
+    const afford = (cost: Kind["cost"]): Notice | null => {
+      if (coins < cost.coins) return { _tag: "short", of: "coins" }
+      for (const [g, n] of Object.entries(cost.materials) as Array<[GoodId, number]>) if ((left[g] ?? 0) < (n ?? 0)) return { _tag: "short", of: g }
       return null
     }
     const pay = (cost: Kind["cost"]) => {
@@ -179,12 +180,13 @@ export const ApplyEdits = Game.System(
           const kind = kinds[edit.kind]
           const tile = { ...edit.cell, size: kind.size }
           if (!kind.buildable) break
-          if (!unlocked(kind, resources.census.get())) {
-            events.toast.emit(`${kind.title} ${lockReason(kind, resources.census.get())}`)
+          const lock = lockReason(kind, resources.census.get())
+          if (lock) {
+            events.toast.emit({ _tag: "locked", kind: kind.id, lock })
             break
           }
           if (!canPlace(grid.value(), tile)) {
-            events.toast.emit("No room there")
+            events.toast.emit({ _tag: "noRoom" })
             break
           }
           const short = afford(kind.cost)
@@ -200,7 +202,7 @@ export const ApplyEdits = Game.System(
           break
         }
         case "homes": {
-          let short: string | null = null
+          let short: Notice | null = null
           for (const cell of edit.cells) {
             const tile = { ...cell, size: 1 }
             if (!canPlace(grid.value(), tile)) continue
@@ -227,13 +229,13 @@ export const ApplyEdits = Game.System(
             const id = place(tile, "road", () => commands.spawn(roadDraft(cell)))
             queuedHere.set(id, () => commands.despawn(id))
           }
-          if (short) events.toast.emit("Not enough coins")
+          if (short) events.toast.emit({ _tag: "short", of: "coins" })
           break
         }
         case "pave": {
           // Stone comes out of storage at once, fullest first.
           const paved = new Set<number>(queries.paved.each().map((row) => row.id))
-          let short: string | null = null
+          let short: Notice | null = null
           let stone = 0
           for (const cell of edit.cells) {
             if (!inside(cell.x, cell.y) || useAt(grid.value(), cell.x, cell.y) !== "road") continue
@@ -256,7 +258,7 @@ export const ApplyEdits = Game.System(
           const piece = grounds[edit.ground]
           const { data: park } = queries.parks
           const parks = new Map(queries.parks.each().map((row) => [row.id as number, row] as const))
-          let short: string | null = null
+          let short: Notice | null = null
           const spent: Record<string, number> = {}
           for (const cell of edit.cells) {
             const tile = { ...cell, size: 1 }
@@ -279,14 +281,14 @@ export const ApplyEdits = Game.System(
         case "prop": {
           const piece = props[edit.prop]
           if (!unlocked(piece, resources.census.get())) {
-            events.toast.emit(`${piece.title} needs a bigger town`)
+            events.toast.emit({ _tag: "pieceLocked", prop: edit.prop })
             break
           }
           const row = useAt(grid.value(), edit.cell.x, edit.cell.y) === "park"
             ? queries.parks.each().find((r) => r.id === ownerAt(grid.value(), edit.cell.x, edit.cell.y))
             : undefined
           if (!row) {
-            events.toast.emit("Lay park ground first")
+            events.toast.emit({ _tag: "parkFirst" })
             break
           }
           const { data: park } = queries.parks
@@ -310,12 +312,12 @@ export const ApplyEdits = Game.System(
           if (use === "rock") {
             const rock = queries.rocks.get(owner)
             if (!rock.ok || queries.rocks.data.rock.get(rock.value).amount > 1) {
-              events.toast.emit("Quarry it down first: only a worked face can be cleared")
+              events.toast.emit({ _tag: "rockUnworked" })
               break
             }
           }
           if (halls.has(owner)) {
-            events.toast.emit("The town hall stays")
+            events.toast.emit({ _tag: "hallStays" })
             break
           }
           // A park's furnishing goes before its ground.
@@ -333,13 +335,12 @@ export const ApplyEdits = Game.System(
             const own = salvageOf(b ? builtCost(kinds[b.kind], was.upgraded.get(built.value)?.level ?? 0) : home.cost, was.site.get(built.value)?.owed ?? null, rules)
             const s = b ? withWorks(own, kinds[b.kind], was.works.get(built.value), rules) : own
             if (s.fee > 0 && coins < s.fee) {
-              events.toast.emit(`Pulling it down costs ${s.fee} coins`)
+              events.toast.emit({ _tag: "salvageFee", fee: s.fee })
               break
             }
             coins -= s.fee
             const lost = stash(s.back)
-            const said = salvageText(s)
-            if (said !== "") events.toast.emit(`${was.site.has(built.value) ? "Cancelled" : "Pulled down"} · ${said}${lost > 0 ? ` (${lost} found no room in storage)` : ""}`)
+            if (s.fee !== 0 || Object.keys(s.back).length > 0) events.toast.emit({ _tag: "pulledDown", cancelled: was.site.has(built.value), salvage: s, lost })
           }
           // A building's walkers and a farm's fields are its children, and go with it.
           const gone = queries.tiles.get(owner)
@@ -383,7 +384,7 @@ export const ApplyEdits = Game.System(
           const c = resources.crown.get()
           if (!c.open) break
           if ((left[c.good] ?? 0) < c.amount) {
-            events.toast.emit(`Not enough ${goods[c.good].title}`)
+            events.toast.emit({ _tag: "short", of: c.good })
             break
           }
           let owed = c.amount
@@ -397,8 +398,8 @@ export const ApplyEdits = Game.System(
           left[c.good] = (left[c.good] ?? 0) - c.amount
           coins += c.reward
           resources.crown.set({ ...c, open: false, met: c.met + 1, streak: 0 })
-          write(resources.chronicle, t, `Sent the crown ${c.amount} ${goods[c.good].title}, for ${c.reward} coins.`)
-          events.toast.emit(`Sent · +${c.reward} coins`)
+          write(resources.chronicle, t, { _tag: "crownSent", amount: c.amount, good: c.good, reward: c.reward })
+          events.toast.emit({ _tag: "crownSent", reward: c.reward })
           break
         }
         case "nextTerm": {
@@ -414,14 +415,14 @@ export const ApplyEdits = Game.System(
           resources.charter.set({ ...charter, winters: winters.slice(0, term * rules.yearsPerTerm) })
           // The crown starts the term afresh: an open request lapses, unfined, and its tally of requests met and missed begins again.
           resources.crown.update((c) => ({ ...c, open: false, next: began + crownGap(charter, rules), met: 0, missed: 0, streak: 0 }))
-          resources.fate.set({ ...f, state: "playing", reason: "", term, began, debtSince: -1, revoltSince: -1, goalSince: -1, score: 0 })
+          resources.fate.set({ ...f, state: "playing", reason: "none", term, began, debtSince: -1, revoltSince: -1, goalSince: -1, score: 0 })
           // A long reign keeps its history in less detail the further back it is.
           const samples = resources.history.get().samples
           if (samples.length > HISTORY_KEPT) {
             const half = Math.floor(samples.length / 2)
             resources.history.set({ samples: [...samples.slice(0, half).filter((_, i) => i % 2 === 0), ...samples.slice(half)] })
           }
-          write(resources.chronicle, t, `Term ${term}: the mayor stands for another ${charter.term} minutes.`)
+          write(resources.chronicle, t, { _tag: "nextTerm", term, minutes: charter.term })
           break
         }
         case "upgrade": {
@@ -435,22 +436,22 @@ export const ApplyEdits = Game.System(
           const level = data.upgraded.get(row.value)?.level ?? 0
           const up = nextUpgrade(kind, level)
           if (!up || data.works.has(row.value) || begun.has(row.value.id) || data.site.has(row.value) || data.rising.has(row.value)) break
-          const blocked = upgradeBlock(up, resources.fate.get().rank, rules)
-          if (blocked) {
-            events.toast.emit(`${up.title} ${blocked}`)
+          const next = (level + 1) as 1 | 2
+          const blocked = upgradeBlock(up, resources.fate.get().rank)
+          if (blocked !== null) {
+            events.toast.emit({ _tag: "upgradeBlocked", kind: kind.id, level: next, rank: blocked })
             break
           }
           if (coins < up.cost.coins) {
-            events.toast.emit("Not enough coins")
+            events.toast.emit({ _tag: "short", of: "coins" })
             break
           }
           coins -= up.cost.coins
           begun.add(row.value.id)
           const owed = amounts(up.cost.materials)
-          commands.insert(row.value, [Works, { owed, total: total(owed), done: 0, level: (level + 1) as 1 | 2 }])
-          const was = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
-          write(resources.chronicle, t, `Works begin on the ${was}: it is to be ${anA(up.title.toLowerCase())}.`)
-          events.toast.emit(`${up.title} · −${up.cost.coins} coins · carriers bring ${costText({ coins: 0, materials: up.cost.materials })}`)
+          commands.insert(row.value, [Works, { owed, total: total(owed), done: 0, level: next }])
+          write(resources.chronicle, t, { _tag: "worksBegin", kind: kind.id, level: next })
+          events.toast.emit({ _tag: "worksBegun", kind: kind.id, level: next, coins: up.cost.coins, materials: up.cost.materials })
           break
         }
         case "guide":
@@ -501,7 +502,7 @@ export const ApplyEdits = Game.System(
           resources.fate.set(foundedFate())
           resources.history.set({ samples: [] })
           resources.chronicle.set({
-            lines: [{ tick: 0, text: `Founded on ${sizes[charter.size].title}, ${richness.title} land, for a term of ${charter.term} minutes.`, alarm: false, at: null }]
+            lines: [{ tick: 0, event: { _tag: "founded", size: charter.size, land: charter.land, term: charter.term }, alarm: false, at: null }]
           })
           resources.rng.set(Random.seed(charter.seed))
           events.selection.emit({ clear: true })

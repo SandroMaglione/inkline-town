@@ -5,6 +5,7 @@
  */
 import { defaultCharter, landIds, lands, sizeIds, sizes, TERMS, YEARS_PER_TERM, type CharterValue } from "../../../game/content/index.ts"
 import type { Edit } from "../../../game/edits.ts"
+import type { Catalog } from "../../../i18n/index.ts"
 import { GRID } from "../../../game/world/iso.ts"
 import { generate } from "../../../game/world/mapgen.ts"
 import type { Interaction } from "../../../view/contracts.ts"
@@ -14,22 +15,27 @@ import { createCreditLine } from "../brand/credit.ts"
 import { el, escapeHtml, setHtml } from "../kit/dom.ts"
 import { icon } from "../kit/icons.ts"
 import { section } from "../kit/section.ts"
-import { ago } from "../kit/text.ts"
+import { ago, compose } from "../kit/text.ts"
 import type { TownHistory } from "../panels/town.ts"
 
 /**
  * `savedTown`: the newest town saved in this browser, which the first charter offers to carry on with.
  * `founded`: a town is about to be founded from the dialog (a visit to a shared town ends).
+ * `languageButton`: makes the button that opens the language's menu: a new mayor meets this screen first, and
+ * must be able to read it. It sits at the foot of the sheet, across from the maker's credit.
  */
 export const createCharter = (
+  t: Catalog,
   ui: Interaction,
   send: (edit: Edit) => void,
-  load: () => string | null,
+  load: () => { readonly loaded: boolean; readonly said: string },
   history: TownHistory,
   savedTown: { readonly title: string; readonly savedAt: number } | null,
   founded: () => void,
+  languageButton: () => HTMLElement,
   controls: Pick<Controls, "toast" | "showReckoning" | "choose" | "setSpeed">
 ) => {
+  const said = t.page.charter
   const dialog = el("div", "dialog")
   const choice: { -readonly [K in keyof CharterValue]: CharterValue[K] } = defaultCharter((Date.now() & 0x7fffffff) >>> 0)
   /** The land a charter would found, drawn small: a dot a cell. */
@@ -66,14 +72,14 @@ export const createCharter = (
     dialog.replaceChildren()
     const card = el("div", "sheet wide")
     const title = el("h2", "title", "Inkline Town ")
-    const by = el("small", "by", "by ")
+    const by = el("small", "by", `${said.by} `)
     const author = el("a", "", "Sandro Maglione") as HTMLAnchorElement
     author.href = "https://www.sandromaglione.com/"
     author.target = "_blank"
     author.rel = "noopener"
     by.append(author)
     title.append(by)
-    card.append(title, el("p", "sub", "Pick the land, then grow the town to its goal before the term runs out."))
+    card.append(title, el("p", "sub", said.sub))
     const body = el("div", "charter")
     const options = el("div", "")
     const preview = el("div", "preview")
@@ -97,9 +103,9 @@ export const createCharter = (
       get: () => T,
       set: (v: T) => void
     ) => {
-      const box = section(title, glyph)
+      const box = section(t, title, glyph)
       const row = el("div", "choices")
-      const said = el("p", "note")
+      const under = el("p", "note")
       const buttons = values.map((v) => {
         const b = el("button", "frame choice", label(v))
         b.title = tip(v)
@@ -110,47 +116,47 @@ export const createCharter = (
         row.append(b)
         return { v, b }
       })
-      box.append(row, said)
+      box.append(row, under)
       options.append(box)
       return () => {
         for (const { v, b } of buttons) b.classList.toggle("on", v === get())
-        setHtml(said, note(get()))
+        setHtml(under, note(get()))
       }
     }
     const refreshers = [
       group(
-        "land",
+        said.land.title,
         "pave",
         sizeIds,
-        (v) => sizes[v].title,
-        (v) => `a town at ${chip("people", `${sizes[v].goal.residents} residents`)}${chip("coins", `+${sizes[v].goal.income}/min`)}`,
-        (v) => `The town rank asks ${sizes[v].goal.residents} residents and an income of ${sizes[v].goal.income} coins a minute; a village less, a city more`,
+        (v) => t.size(v),
+        (v) => compose(said.land.note, chip("people", said.land.residents(sizes[v].goal.residents)), chip("coins", said.land.income(sizes[v].goal.income))),
+        (v) => said.land.tip(sizes[v].goal.residents, sizes[v].goal.income),
         () => choice.size,
         (v) => (choice.size = v)
       ),
       group(
-        "term",
+        said.term.title,
         "clock",
         TERMS,
-        (v) => `${v} min`,
-        (v) => `${chip("clock", `${YEARS_PER_TERM} years of ${Number((v / YEARS_PER_TERM).toFixed(1))} min`)}${chip("winter", `${YEARS_PER_TERM - 1} winters`)}`,
-        (v) => `${v} minutes at 1×: ${YEARS_PER_TERM} years, a winter at the end of each after the first`,
+        (v) => said.term.label(v),
+        (v) => `${chip("clock", said.term.years(YEARS_PER_TERM, Number((v / YEARS_PER_TERM).toFixed(1))))}${chip("winter", said.term.winters(YEARS_PER_TERM - 1))}`,
+        (v) => said.term.tip(v, YEARS_PER_TERM),
         () => choice.term,
         (v) => (choice.term = v)
       ),
       group(
-        "richness",
+        said.richness.title,
         "wood",
         landIds,
-        (v) => lands[v].title,
-        (v) => chip("coins", `${lands[v].coins} coins to start`),
-        (v) => lands[v].blurb,
+        (v) => t.land.name(v),
+        (v) => chip("coins", said.richness.coins(lands[v].coins)),
+        (v) => t.land.blurb(v),
         () => choice.land,
         (v) => (choice.land = v)
       )
     ]
     // The land is drawn from a seed: a fresh one on a click; the number itself only on hover, for whoever wants it.
-    const reroll = el("button", "frame reroll", "↻ other land")
+    const reroll = el("button", "frame reroll", said.reroll)
     reroll.onclick = () => {
       choice.seed = (Math.random() * 0x7fffffff) >>> 0
       refresh()
@@ -159,14 +165,14 @@ export const createCharter = (
     const refresh = () => {
       for (const r of refreshers) r()
       const land = drawLand(map)
-      reroll.title = `Draw other land (this is seed ${choice.seed})`
+      reroll.title = said.rerollTitle(choice.seed)
       const rocks = land.rocks.filter((r) => !r.ore).length
-      setHtml(cells, `${icon("pave", 13)}${land.cells} cells`)
-      setHtml(facts, chip("wood", `${land.trees.length} trees`) + chip("stone", `${rocks} stone`) + chip("ore", `${land.rocks.length - rocks} ore`))
+      setHtml(cells, `${icon("pave", 13)}${escapeHtml(said.cells(land.cells))}`)
+      setHtml(facts, chip("wood", said.trees(land.trees.length)) + chip("stone", said.stone(rocks)) + chip("ore", said.ore(land.rocks.length - rocks)))
     }
     refresh()
     const actions = el("div", "actions")
-    const found = el("button", "frame primary", "Start new")
+    const found = el("button", "frame primary", said.start)
     found.onclick = () => {
       founded()
       send({ type: "newTown", charter: { ...choice } })
@@ -182,27 +188,17 @@ export const createCharter = (
     // On the way in, a town saved in this browser: carry on with it instead.
     if (!cancellable && savedTown) {
       const saved = savedTown
-      const resume = el("button", "frame", "Continue saved")
-      resume.title = `Carry on with the town saved in this browser: ${saved.title}${saved.savedAt > 0 ? `, saved ${ago(saved.savedAt)}` : ""}`
-      resume.onclick = () => {
-        const said = load() ?? "Loaded"
-        controls.toast(said)
-        if (!said.startsWith("Loaded")) return
-        history.clear()
-        ui.selected = null
-        ui.menu = null
-        closeCharter()
-        controls.choose("select")
-        controls.setSpeed(1)
-      }
+      const resume = el("button", "frame", said.resume)
+      resume.title = said.resumeTitle(saved.title, saved.savedAt > 0 ? ago(t, saved.savedAt) : null)
+      resume.onclick = () => void carryOn()
       actions.append(resume)
     }
     if (cancellable) {
-      const cancel = el("button", "frame", "Cancel")
+      const cancel = el("button", "frame", t.page.common.cancel)
       cancel.onclick = () => closeCharter()
       actions.append(cancel)
     }
-    card.append(body, actions, createCreditLine())
+    card.append(body, actions, createCreditLine(t, languageButton()))
     dialog.append(card)
     dialog.classList.add("open")
   }
@@ -210,5 +206,18 @@ export const createCharter = (
     ui.founding = false
     dialog.classList.remove("open")
   }
-  return { element: dialog, open: openCharter, close: closeCharter }
+  /** Carries on with the town saved last instead of founding one: says how the load went, and whether there is a town to play. */
+  const carryOn = (): boolean => {
+    const result = load()
+    controls.toast(result.said)
+    if (!result.loaded) return false
+    history.clear()
+    ui.selected = null
+    ui.menu = null
+    closeCharter()
+    controls.choose("select")
+    controls.setSpeed(1)
+    return true
+  }
+  return { element: dialog, open: openCharter, close: closeCharter, carryOn }
 }

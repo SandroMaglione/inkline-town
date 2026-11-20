@@ -13,10 +13,10 @@
  * takes the keyboard by itself, and the keys typed in its field are not the
  * town's (`keys.ts` and the map's input skip an `<input>`).
  */
+import type { Catalog } from "../../../i18n/index.ts"
 import { el } from "../kit/dom.ts"
 import { createMark } from "./credit.ts"
 import {
-  OUTCOME_TEXT,
   readMemory,
   remember,
   signupAllowed,
@@ -69,20 +69,23 @@ export interface Signup {
  * (the endpoint, or on any other address than typeonce.games, a made-up
  * answer); the UI kit passes its own to show each state without sending.
  */
-export const createSignup = (placement: SignupPlacement, actions: SignupActions, send: (email: string) => Promise<Outcome> = (email) => subscribe(email, pageHost())): Signup => {
+export const createSignup = (t: Catalog, placement: SignupPlacement, actions: SignupActions, send: (email: string) => Promise<Outcome> = (email) => subscribe(email, pageHost())): Signup => {
+  const said = t.page.signup
+  /** What each outcome says: a new outcome does not compile until the catalog words it. */
+  const outcomeText: Readonly<Record<Outcome, string>> = said.outcome
   const box = el("section", `signup ${placement}`)
-  box.setAttribute("aria-label", "New games from Typeonce Games")
+  box.setAttribute("aria-label", said.label)
 
   const close = el("button", "close", "×")
   close.type = "button"
-  close.title = "Close"
-  close.setAttribute("aria-label", "Close")
+  close.title = t.page.common.close
+  close.setAttribute("aria-label", t.page.common.close)
   close.onclick = () => actions.close()
   box.append(close)
 
   if (placement === "spring") {
     const moment = el("p", "moment")
-    moment.append(el("b", "", "Spring of year 3."), document.createTextNode(" The town came through its first winter."))
+    moment.append(el("b", "", said.moment.lead), document.createTextNode(` ${said.moment.text}`))
     box.append(moment)
   }
 
@@ -92,8 +95,8 @@ export const createSignup = (placement: SignupPlacement, actions: SignupActions,
   const words = el("div", "words")
   words.append(
     studio,
-    el("p", "headline", "Play the next Typeonce game first"),
-    el("p", "body", "Inkline Town is made by Typeonce Games. Leave your email and the next free game reaches you the day it ships.")
+    el("p", "headline", said.headline),
+    el("p", "body", said.body)
   )
 
   const form = el("form", "")
@@ -101,17 +104,17 @@ export const createSignup = (placement: SignupPlacement, actions: SignupActions,
   const field = el("input", "")
   field.type = "email"
   field.name = "email"
-  field.placeholder = "you@example.com"
+  field.placeholder = said.placeholder
   field.autocomplete = "email"
   field.spellcheck = false
   field.setAttribute("autocapitalize", "off")
-  field.setAttribute("aria-label", "Email address")
+  field.setAttribute("aria-label", said.email)
   const buttons = el("div", "buttons")
-  const submit = el("button", "frame primary", "Get new games")
+  const submit = el("button", "frame primary", said.submit)
   submit.type = "submit"
   buttons.append(submit)
   // On the card the town waits under it: "Keep playing" is the way back.
-  const keep = placement === "spring" ? el("button", "frame keep", "Keep playing") : null
+  const keep = placement === "spring" ? el("button", "frame keep", said.keep) : null
   if (keep) {
     keep.type = "button"
     keep.onclick = () => actions.close()
@@ -150,7 +153,7 @@ export const createSignup = (placement: SignupPlacement, actions: SignupActions,
   const show = (outcome: Outcome) => {
     if (outcome === "ok") {
       const done = el("div", "done")
-      const thanks = el("p", "thanks", OUTCOME_TEXT.ok)
+      const thanks = el("p", "thanks", outcomeText.ok)
       thanks.setAttribute("role", "status")
       done.append(thanks)
       // The only thing left to do: keep playing, now the main button.
@@ -168,7 +171,7 @@ export const createSignup = (placement: SignupPlacement, actions: SignupActions,
     box.classList.add("error")
     if (outcome === "invalid_email") field.setAttribute("aria-invalid", "true")
     else field.removeAttribute("aria-invalid")
-    message.textContent = OUTCOME_TEXT[outcome]
+    message.textContent = outcomeText[outcome]
   }
 
   form.addEventListener("submit", (event) => {

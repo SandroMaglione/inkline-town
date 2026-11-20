@@ -34,17 +34,16 @@ export const Seasons = Game.System(
       write(
         resources.chronicle,
         t,
-        `A ${winters[w].title} winter, year ${now.year}: the fields lie still and fisheries catch ${Math.round(winters[w].fishing * 100)}%${winters[w].heating ? "; homes burn fires to keep warm" : ""}.`
+        { _tag: "winter", severity: w, year: now.year, fishing: Math.round(winters[w].fishing * 100), heating: winters[w].heating }
       )
     }
-    if (!now.winter && before.winter) write(resources.chronicle, t, `Spring of year ${now.year}.`)
+    if (!now.winter && before.winter) write(resources.chronicle, t, { _tag: "spring", year: now.year })
     if (!now.winter && now.coming !== null && now.left === WINTER_WARNING) {
-      const w = winters[now.coming]
       const eats = resources.pantry.get().eatenLast
       write(
         resources.chronicle,
         t,
-        `Winter in a minute, and the almanac says it will be ${w.title}: ${larder(resources.stock.get())} food in store; the town eats ${eats} a minute.`,
+        { _tag: "winterComing", severity: now.coming, larder: larder(resources.stock.get()), eats },
         true
       )
     }

@@ -7,6 +7,7 @@ import { isTradeYard, makeTradeYard, tradeSmokeOrigin, tradeEntrance, millHoist 
 import { chapelPorch, hayBands, isRuralDoor, lumberRack, nursery, ruralEntrance, ruralNotes, sheepTrough } from "./rural.ts"
 import { makeCarpenter } from "./carpenter.ts"
 import { human, shellDimensions } from "./dimensions.ts"
+import { en } from "../../../i18n/index.ts"
 
 const dresses: Record<KindId, { accent: number; roof?: number; glass?: number }> = {
   townhall: { accent: 0x8a58a8, glass: 0xf3dca6 },
@@ -57,7 +58,7 @@ export function makeBuilding(id: KindId, options: BuildingOptions = {}) {
   const glass = dresses[id].glass ?? palette.glass
   const d = new Drawing(
     id,
-    kind.title,
+    en.kind.title(kind.id),
     ruralNotes[id] ?? townBuildingNotes[id] ?? (id === "mill"
       ? "Upright lattice sails and a tapered roof, with braced grain-loading doors, a sack hoist and coopered flour barrels."
       : id === "market"

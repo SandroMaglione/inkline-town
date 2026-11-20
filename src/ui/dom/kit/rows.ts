@@ -17,9 +17,9 @@ export const row = (box: HTMLElement, label: string, glyph?: IconName | GoodId) 
   return value
 }
 
-/** Sets a number with its sign, coloured by it. */
-export const money = (node: HTMLElement, n: number, suffix = "") => {
-  node.textContent = `${signed(n)}${suffix}`
+/** Sets a number with its sign, coloured by it; `said`: the number in words, when it is more than the figure ("+12 coins"). */
+export const money = (node: HTMLElement, n: number, said: string = signed(n)) => {
+  node.textContent = said
   node.classList.toggle("up", n > 0)
   node.classList.toggle("down", n < 0)
 }

@@ -5,13 +5,21 @@ import { around, canPlace, doors, useAt, type TileLike } from "../../game/world/
 import type { Frame } from "../frame.ts"
 
 /**
- * What is wrong with a building where it would stand, before it is laid: no road at the middle of a side (it is
- * not laid: nobody could bring its materials or work there), or nothing in reach to gather (laid, but said).
+ * What is wrong with a building where it would stand, before it is laid: no road at the middle of a side (`noRoad`:
+ * it is not laid, as nobody could bring its materials or work there), or nothing in reach to gather (`nothingNear`:
+ * laid, but said). Data: the page's language says it (`view.place` in `i18n`).
  */
-export const placeProblem = (frame: Frame, kind: Kind, tile: TileLike): { readonly refuse: boolean; readonly text: string } | null => {
+export type PlaceProblem =
+  | { readonly _tag: "noRoad" }
+  | { readonly _tag: "nothingNear"; readonly source: "tree" | "stone" | "ore" | "water"; readonly radius: number }
+
+/** Whether a problem keeps the building from being laid at all. */
+export const refuses = (problem: PlaceProblem | null): boolean => problem?._tag === "noRoad"
+
+export const placeProblem = (frame: Frame, kind: Kind, tile: TileLike): PlaceProblem | null => {
   const grid = frame.grid
   if (!canPlace(grid, tile) || lockReason(kind, frame.world.census)) return null
-  if (doors(grid, tile).length === 0) return { refuse: true, text: "needs a road at the middle of one side" }
+  if (doors(grid, tile).length === 0) return { _tag: "noRoad" }
   const source = kind.gathers?.source
   if (!source || source === "field") return null
   const reachCells = around(tile, kind.gathers!.radius)
@@ -22,6 +30,5 @@ export const placeProblem = (frame: Frame, kind: Kind, tile: TileLike): { readon
           return data.rock.ore === (source === "ore") && reachCells.some((c) => c.x >= t.x && c.x < t.x + t.size && c.y >= t.y && c.y < t.y + t.size)
         })
       : reachCells.some((c) => useAt(grid, c.x, c.y) === source)
-  const what = { tree: "trees", stone: "pale stone rocks", ore: "dark ore rocks", water: "water" }[source]
-  return found ? null : { refuse: false, text: `no ${what} within ${kind.gathers!.radius} cells` }
+  return found ? null : { _tag: "nothingNear", source, radius: kind.gathers!.radius }
 }

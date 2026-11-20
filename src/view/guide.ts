@@ -1,6 +1,8 @@
 /**
  * The mayor's guide: the step to take now, chosen from what the town has done
- * and what it needs (see `rules/guide.ts`). Only the simulation writes the
+ * and what it needs (see `rules/guide.ts`), and put into the words of the
+ * language in use (the rules say which step, and what is under way, locked,
+ * or coming next, as data: `i18n`'s `guide` words them). Only the simulation writes the
  * guide: what the mayor says and what the town completes go to it as edits,
  * and count here until it has applied them (`pending`), so the guide moves on
  * at once.
@@ -12,6 +14,7 @@ import { met, steadyNet } from "../game/schedule.ts"
 import { appealAt } from "../game/world/appeal.ts"
 import { useAt, type TileLike } from "../game/world/grid.ts"
 import { GRID } from "../game/world/iso.ts"
+import { say } from "../i18n/index.ts"
 import type { Interaction, Stats } from "./contracts.ts"
 import type { BuildingRow, Frame } from "./frame.ts"
 import type { Numbers } from "./stats.ts"
@@ -150,18 +153,22 @@ export const guideOf = (frame: Frame, ui: Interaction, send: (edit: Edit) => voi
     return row ? { at: row.data.tile, id: row.entity.id } : { at: null, id: null }
   }
   const shown = step ? focusOf(step.focus) : null
+  const words = frame.t.guide
+  const waiting = step?.waiting?.(facts) ?? null
+  const locked = step ? lockedNote(step, facts) : null
+  const soon = upcoming(facts, put)
   return {
     step:
       step && shown
         ? {
             key: step.id,
-            chapter: step.chapter,
-            goal: step.goal,
-            text: step.action,
-            why: step.why,
-            waiting: step.waiting?.(facts) ?? null,
-            locked: lockedNote(step, facts),
-            next: upcoming(facts, put),
+            chapter: words.chapters[step.chapter],
+            goal: words.steps[step.id].goal,
+            text: words.steps[step.id].action,
+            why: words.steps[step.id].why,
+            waiting: waiting && say(words.waiting, waiting),
+            locked: locked && say(words.locked, locked),
+            next: soon && say(words.upcoming, soon),
             asks: step.asks ?? [],
             near: step.focus !== null && typeof step.focus === "object" && shown.id !== null ? step.focus.kind : null,
             count: courseCount(step),

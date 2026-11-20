@@ -2,7 +2,7 @@ import { spoilExpectation } from "../../rules/decay.ts"
 import * as Random from "@typeonce/ritmo/Random"
 import { ruinDraft } from "../../world/archetypes.ts"
 import { foods, goodIds, stepsOf } from "../../content/index.ts"
-import { counted, placeName } from "../../world/places.ts"
+import { placeName } from "../../world/places.ts"
 import { Ruin } from "../../schema.ts"
 import { Building, Burning, Charter, Chronicle, Condition, Game, Rules, House, Inventory, Pantry, Recipe, Rising, Rng, Site, Staff, Tile, Time } from "../../schema.ts"
 import { elapsed, write } from "../shared.ts"
@@ -58,7 +58,7 @@ export const Decay = Game.System(
         write(
           resources.chronicle,
           t,
-          b ? `The ${kinds[b.kind].title.toLowerCase()} on ${placeName(landmarks, tile)} fell down: nobody mended it.` : `A home on ${placeName(landmarks, tile)} fell down: nobody mended it.`,
+          { _tag: "collapsed", kind: b?.kind ?? null, place: placeName(landmarks, tile) },
           true,
           tile
         )
@@ -100,10 +100,7 @@ export const Decay = Game.System(
           const r = data.recipe.get(entity)
           if (data.staff.get(entity).assigned > 0 && (foods as ReadonlyArray<string>).includes(r.output)) made += (r.batch * 3600) / r.period
         }
-        const cause = made > p.eaten * 1.5
-          ? `the town makes about ${Math.round(made)} food a minute and eats ${p.eaten}: fewer fisheries, a smokehouse, or selling fish would stop the waste`
-          : `a granary keeps fish and bread five times as long, and smoked fish keeps`
-        write(resources.chronicle, t, `${counted(p.rotted, "fish or loaf", "fish and loaves")} rotted in store this minute: ${cause}.`, true)
+        write(resources.chronicle, t, { _tag: "rotted", rotted: p.rotted, made: made > p.eaten * 1.5 ? Math.round(made) : null, eaten: p.eaten }, true)
       }
       resources.pantry.set({ eaten: 0, rotted: 0, eatenLast: p.eaten, rottedLast: p.rotted, warned: warn ? t : p.warned })
     }

@@ -3,13 +3,16 @@
  * tools put away, until the visitor plays on from here (it becomes theirs,
  * and autosaves) or founds a town of their own.
  */
+import type { Catalog } from "../../../i18n/index.ts"
 import type { Controls } from "../controls.ts"
 import { el } from "../kit/dom.ts"
 import { iconEl } from "../kit/icons.ts"
 
 export const createVisit = (
+  t: Catalog,
   controls: Pick<Controls, "toast" | "openCharter" | "setSpeed"> & { readonly closeCharter: () => void; readonly resetPage: () => void }
 ) => {
+  const said = t.page.visit
   const visitBar = el("div", "card visit")
   let visiting = false
   const endVisit = () => {
@@ -28,15 +31,15 @@ export const createVisit = (
     const text = el("div", "cell")
     text.append(iconEl("town", 18))
     const words = el("span", "stack")
-    words.append(el("b", "", "a shared town"), el("small", "", title))
+    words.append(el("b", "", said.shared), el("small", "", title))
     text.append(words)
-    const play = el("button", "frame primary", "Play from here")
-    play.title = "Make this town yours: build, govern, and it autosaves in this browser"
+    const play = el("button", "frame primary", said.play)
+    play.title = said.playTitle
     play.onclick = () => {
       endVisit()
-      controls.toast("The town is yours: it autosaves as you play")
+      controls.toast(said.yours)
     }
-    const own = el("button", "frame", "Found your own")
+    const own = el("button", "frame", said.own)
     own.onclick = () => controls.openCharter(true)
     const buttons = el("div", "cell")
     buttons.append(play, own)

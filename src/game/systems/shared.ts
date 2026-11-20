@@ -4,6 +4,7 @@ import type { EntityProving } from "@typeonce/ritmo/Query"
 import { doors, type TileLike, type Use } from "../world/grid.ts"
 import { Field, Game, House, Park, Paved, Road, Rock, Ruin, Tile, Tree, Water, type GridValue } from "../schema.ts"
 import type { Point } from "../world/iso.ts"
+import type { Event } from "../said.ts"
 
 /** Every tile, with enough to tell what it is. */
 export const TileRead = Game.Query({
@@ -40,12 +41,12 @@ export { elapsed, termTicks, yearTicks, winterOf, rollWinters, seasonAt, type Al
 
 // ── The chronicle ─────────────────────────────────────────────────────────
 
-type Lines = ReadonlyArray<{ readonly tick: number; readonly text: string; readonly alarm: boolean; readonly at: Point | null }>
-/** A line in the chronicle; an `alarm` is also news the page announces; `at` is where it happened, when it was somewhere. */
+type Lines = ReadonlyArray<{ readonly tick: number; readonly event: Event; readonly alarm: boolean; readonly at: Point | null }>
+/** A line in the chronicle: what happened, as data (see `said.ts`); an `alarm` is also news the page announces; `at` is where it happened, when it was somewhere. */
 export const write = (
   chronicle: { update: (f: (c: { readonly lines: Lines }) => { lines: Lines }) => void },
   tick: number,
-  text: string,
+  event: Event,
   alarm = false,
   at: Point | null = null
-) => chronicle.update((c) => ({ lines: [...c.lines, { tick, text, alarm, at: at ? { x: at.x, y: at.y } : null }].slice(-200) }))
+) => chronicle.update((c) => ({ lines: [...c.lines, { tick, event, alarm, at: at ? { x: at.x, y: at.y } : null }].slice(-200) }))

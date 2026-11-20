@@ -4,7 +4,7 @@
  * It takes over from the preview's own line only where the preview has none
  * to say (the upgrade tool says what an upgrade gives instead).
  */
-import { anA, builtCost, costText, grounds, home, kinds, PAVE_COST, props, tierHome, upgradeAt } from "../game/content/index.ts"
+import { builtCost, home, kinds, PAVE_COST } from "../game/content/index.ts"
 import { lockReason } from "../game/schedule.ts"
 import { appealAt } from "../game/world/appeal.ts"
 import { canPlace } from "../game/world/grid.ts"
@@ -13,13 +13,14 @@ import type { Interaction, Preview } from "./contracts.ts"
 import { salvageFor, worksShare } from "./facts.ts"
 import type { Frame } from "./frame.ts"
 import { cellAt, footprintAt } from "./interaction/geometry.ts"
+import { say } from "../i18n/index.ts"
 import { placeProblem } from "./interaction/placing.ts"
 import { describeBuilding } from "./panels/building.ts"
-import { parkText } from "./panels/park.ts"
 
 /** Sets the preview's tooltip for what is hovered; `dropping`: a stroke is being let go off the map. */
 export const tooltipOf = (frame: Frame, ui: Interaction, preview: Preview, dropping: boolean) => {
-  const { grid, buildings, houses, ruins, parkRows, cells } = frame
+  const { grid, buildings, houses, ruins, parkRows, cells, t } = frame
+  const words = t.view.tooltip
   const pointer = ui.pointer
   const cell = pointer ? cellAt(pointer) : null
   const hovered = preview.hover
@@ -31,34 +32,33 @@ export const tooltipOf = (frame: Frame, ui: Interaction, preview: Preview, dropp
   } else if (hoveredBuilding) {
     const { kind, status, problem } = describeBuilding(frame, hoveredBuilding)
     const level = hoveredBuilding.data.upgraded?.level ?? 0, works = hoveredBuilding.data.works
-    const title = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
     preview.tooltip = ui.tool === "bulldoze"
-      ? `${title} · ${hoveredBuilding.data.hall !== undefined ? "the town hall stays" : salvageFor(builtCost(kind, level), hoveredBuilding.data.site, works && { kind, ...works })}`
-      : `${title} · ${problem ?? status}${works ? ` · becoming ${anA(upgradeAt(kind, works.level)!.title.toLowerCase())}, ${Math.round(worksShare(works)! * 100)}% built` : ""}`
+      ? words.bulldozeBuilding(kind.id, level, hoveredBuilding.data.hall !== undefined ? words.hallStays : salvageFor(t, builtCost(kind, level), hoveredBuilding.data.site, works && { kind, ...works }))
+      : words.building({ kind: kind.id, level, state: problem ?? t.view.status[status], works: works ? { level: works.level, percent: Math.round(worksShare(works)! * 100) } : null })
   } else if (hoveredHouse) {
     const h = hoveredHouse.data.house
-    const t = hoveredHouse.data.tile
+    const at = hoveredHouse.data.tile
     preview.tooltip = ui.tool === "bulldoze"
-      ? `${tierHome[h.tier]} · ${salvageFor(home.cost, hoveredHouse.data.site)}`
+      ? words.bulldozeHome(h.tier, salvageFor(t, home.cost, hoveredHouse.data.site))
       : hoveredHouse.data.closed !== undefined
-      ? `${tierHome[h.tier]} · closed`
-      : `${tierHome[h.tier]} · ${h.residents} resident${h.residents === 1 ? "" : "s"} · desirability ${appealAt(cells, t.x, t.y)}${hoveredHouse.data.burning !== undefined ? " · on fire!" : hoveredHouse.data.sick !== undefined ? " · sick" : ""}`
+      ? words.homeClosed(h.tier)
+      : words.home({ tier: h.tier, residents: h.residents, desirability: appealAt(cells, at.x, at.y), burning: hoveredHouse.data.burning !== undefined, sick: hoveredHouse.data.sick !== undefined })
   } else if (hoveredRuin) {
-    preview.tooltip = `ruin · ${hoveredRuin.data.ruin.cause} · bulldoze to clear`
+    preview.tooltip = words.ruin(hoveredRuin.data.ruin.cause)
   } else if (hovered !== null && ui.tool === "select" && parkRows.some((row) => row.entity.id === hovered)) {
     const row = parkRows.find((r) => r.entity.id === hovered)!
     const p = frame.parkOf(row.data.tile)
     const here = row.data.park
-    preview.tooltip = `park · ${here.prop !== "none" ? props[here.prop].title.toLowerCase() : grounds[here.ground].title.toLowerCase()}${p ? ` · ${p.cells.length} cells · ${parkText(p)}` : ""}`
+    preview.tooltip = words.park(here.prop !== "none" ? { prop: here.prop } : { ground: here.ground }, p ? { cells: p.cells.length, value: p.value, reach: p.reach } : null)
   } else if (ui.tool === "place" && ui.placing) {
     const kind = kinds[ui.placing]
     const lock = lockReason(kind, frame.world.census)
     const tile = pointer ? { ...footprintAt(pointer, kind.size), size: kind.size } : null
     const problem = tile ? placeProblem(frame, kind, tile) : null
-    if (lock) preview.tooltip = `${kind.title.toLowerCase()} · ${lock}`
-    else if (tile && !canPlace(grid, tile)) preview.tooltip = `${kind.title.toLowerCase()} · no room here`
-    else if (problem) preview.tooltip = `${kind.title.toLowerCase()} · ${problem.text}`
-    else preview.tooltip = `${kind.title.toLowerCase()} · ${costText(kind.cost)}`
-  } else if (ui.tool === "pave" && !dropping) preview.tooltip = `pave · ${PAVE_COST.coins} coins and a stone a cell · faster walking`
-  else if (cell && ui.view === "appeal" && inside(cell.x, cell.y)) preview.tooltip = `desirability ${appealAt(cells, cell.x, cell.y)}`
+    if (lock) preview.tooltip = words.placeLocked(kind.id, lock)
+    else if (tile && !canPlace(grid, tile)) preview.tooltip = words.placeNoRoom(kind.id)
+    else if (problem) preview.tooltip = words.placeProblem(kind.id, say(t.view.place.problem, problem))
+    else preview.tooltip = words.placeCost(kind.id, kind.cost)
+  } else if (ui.tool === "pave" && !dropping) preview.tooltip = words.pave(PAVE_COST)
+  else if (cell && ui.view === "appeal" && inside(cell.x, cell.y)) preview.tooltip = words.desirability(appealAt(cells, cell.x, cell.y))
 }

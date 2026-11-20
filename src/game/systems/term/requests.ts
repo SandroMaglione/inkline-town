@@ -47,7 +47,7 @@ export const Requests = Game.System(
       const fine = Math.round(((c.reward - crown.bonus) / crown.reward) * crown.fine) + crown.bonus
       resources.treasury.update((tr) => ({ coins: tr.coins - fine }))
       resources.crown.set({ ...c, open: false, missed: c.missed + 1, streak: c.streak + 1, snubs: [...remembered, t] })
-      write(resources.chronicle, t, `The crown's request for ${c.amount} ${goods[c.good].title} went unanswered: a fine of ${fine} coins.`, true)
+      write(resources.chronicle, t, { _tag: "crownUnanswered", amount: c.amount, good: c.good, fine }, true)
       return
     }
     if (c.open || t < c.next) return
@@ -75,6 +75,6 @@ export const Requests = Game.System(
     const gap = crownGap(charter, rules)
     const due = t + Math.round(gap * crown.window)
     resources.crown.set({ ...c, snubs: remembered, open: true, good, amount, issued: t, due, reward, next: t + gap })
-    write(resources.chronicle, t, `The crown asks for ${amount} ${goods[good].title} within ${Math.round(((due - t) / 3600) * 10) / 10} minutes, for ${reward} coins.`, true)
+    write(resources.chronicle, t, { _tag: "crownAsks", amount, good, minutes: Math.round(((due - t) / 3600) * 10) / 10, reward }, true)
   }
 )

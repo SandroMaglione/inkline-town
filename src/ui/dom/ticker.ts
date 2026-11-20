@@ -7,18 +7,20 @@
  * at. Each new alarm in the chronicle is also a toast.
  */
 import { kinds, type KindId } from "../../game/content/index.ts"
+import type { Catalog } from "../../i18n/index.ts"
 import type { Interaction, Stats } from "../../view/contracts.ts"
 import type { IconName } from "../../view/icons.ts"
 import type { Controls, Fold } from "./controls.ts"
 import { phone } from "./folds.ts"
 import { el, escapeHtml } from "./kit/dom.ts"
 import { icon, iconEl } from "./kit/icons.ts"
-import { callouts } from "./kit/text.ts"
+import { compose, markup } from "./kit/text.ts"
 
-export const createTicker = (ui: Interaction, fold: () => Fold | null, controls: Pick<Controls, "useRef" | "toast" | "setFold" | "goTo" | "place">) => {
+export const createTicker = (t: Catalog, ui: Interaction, fold: () => Fold | null, controls: Pick<Controls, "useRef" | "toast" | "setFold" | "goTo" | "place">) => {
+  const said = t.page.ticker
   const ticker = el("div", "card ticker")
   const bulb = el("button", "card")
-  bulb.title = "The guide, and what needs looking at now"
+  bulb.title = said.bulb
   const badge = el("span", "badge")
   bulb.append(iconEl("hint", 16), badge)
   bulb.onclick = () => controls.setFold(fold() === "guide" ? null : "guide")
@@ -46,7 +48,7 @@ export const createTicker = (ui: Interaction, fold: () => Fold | null, controls:
     // On a phone: tuck the step away into the bulb, or open the guide in full.
     if (target.closest("[data-tuck]")) {
       tucked = stepNow
-      if (!toldWhere) controls.toast("The guide is in the bulb at the top right")
+      if (!toldWhere) controls.toast(said.tucked)
       toldWhere = true
       return
     }
@@ -64,7 +66,7 @@ export const createTicker = (ui: Interaction, fold: () => Fold | null, controls:
     }
     if (target.closest("[data-guide-off]")) {
       ui.guide.push({ type: "off" })
-      controls.toast("Guide off · turn it back on from the bottom right")
+      controls.toast(said.guideOff)
       return
     }
     // A building the line is about: go to it.
@@ -102,40 +104,41 @@ export const createTicker = (ui: Interaction, fold: () => Fold | null, controls:
     const news = s.chronicle.filter((l) => l.alarm && minute - l.tick < 90 * 60).slice(-3).reverse()
     const ago = (tick: number) => {
       const sec = Math.max(0, Math.round((minute - tick) / 60))
-      return sec < 5 ? "just now" : sec < 60 ? `${sec} s ago` : `${Math.round(sec / 60)} min ago`
+      return sec < 5 ? said.ago.now : sec < 60 ? said.ago.seconds(sec) : said.ago.minutes(Math.round(sec / 60))
     }
     const alerts = s.alerts.filter((a) => !dismissed.has(`a:${a.text}`))
     // The crown's request has its own card while it is open, and is settled after: its news line would only repeat it.
-    const fresh = news.filter((l) => !dismissed.has(`n:${l.tick}:${l.text}`) && !l.text.startsWith("The crown asks"))
+    const fresh = news.filter((l) => !dismissed.has(`n:${l.tick}:${l.text}`) && l.what !== "crownAsks")
     const toneIcon = { hint: "hint", warn: "caution", bad: "warning" } as const
+    const locate = `<button class="act locate" title="${escapeHtml(t.page.common.showWhere)}">${icon("locate", 14)}</button>`
     const row = (kind: string, tone: string, glyph: IconName, text: string, place: boolean, key: string, data: string) =>
-      `<div class="cell ${kind} ${tone}${place ? " place" : ""}" ${data}>${icon(glyph, 16, "mark")}<span class="text">${text}</span><span class="acts">${place ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-dismiss="${escapeHtml(key)}" title="Dismiss">${icon("close", 12)}</button></span></div>`
+      `<div class="cell ${kind} ${tone}${place ? " place" : ""}" ${data}>${icon(glyph, 16, "mark")}<span class="text">${text}</span><span class="acts">${place ? locate : ""}<button class="act dismiss" data-dismiss="${escapeHtml(key)}" title="${escapeHtml(t.page.common.dismiss)}">${icon("close", 12)}</button></span></div>`
     // The guide's step first: what to do next, and why.
     const g = s.guide.step
     const guideHtml = g
       ? (() => {
           const asks = new Set(g.asks)
-          const say = (text: string) => callouts(text, new Set(g.near ? [g.near] : []), asks)
-          const count = g.count ? `step ${g.count.at} of ${g.count.of}` : ""
+          const say = (text: string) => markup(t, text, { chips: true, standing: new Set(g.near ? [g.near] : []), asks })
+          const count = g.count ? said.step(g.count.at, g.count.of) : ""
           return [
-            `<div class="head guide"><span>guide · ${escapeHtml(g.chapter)}</span><span class="progress" title="${g.count ? "The first steps of a new town" : ""}">${count}</span><button class="quiet" data-guide-off title="Turn the guide off (the guide button in the bottom right turns it back on)">hide guide</button></div>`,
+            `<div class="head guide"><span>${escapeHtml(said.guide(g.chapter))}</span><span class="progress" title="${g.count ? escapeHtml(said.firstSteps) : ""}">${escapeHtml(count)}</span><button class="quiet" data-guide-off title="${escapeHtml(said.hideTitle)}">${escapeHtml(said.hide)}</button></div>`,
             `<div class="cell alert hint guide${g.waiting ? " waiting" : g.locked ? " locked" : ""}${g.at !== null ? " place" : ""}" data-guide>${icon(g.waiting ? "clock" : g.locked ? "caution" : "hint", 16, "mark")}<span class="text">` +
               `<span class="do">${say(g.text)}</span>` +
               (g.waiting ? `<span class="why now">${say(g.waiting)}</span>` : g.locked ? `<span class="why now">${say(g.locked)}</span>` : `<span class="why">${say(g.why)}</span>`) +
-              `<span class="goal">${icon("goal", 12)}<span>done when ${say(g.goal)}</span></span>` +
+              `<span class="goal">${icon("goal", 12)}<span>${compose(said.doneWhen, say(g.goal))}</span></span>` +
               (g.next ? `<span class="goal next">${icon("clock", 12)}<span>${say(g.next)}</span></span>` : "") +
               `</span>` +
-              `<span class="acts">${g.at !== null ? `<button class="act locate" title="Show me where">${icon("locate", 14)}</button>` : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="Skip this step">${icon("close", 12)}</button></span>` +
-              `<button class="act tuck" data-tuck title="Hide: the guide stays in the bulb at the top right">${icon("close", 12)}</button></div>`
+              `<span class="acts">${g.at !== null ? locate : ""}<button class="act dismiss" data-skip="${escapeHtml(g.key)}" title="${escapeHtml(said.skip)}">${icon("close", 12)}</button></span>` +
+              `<button class="act tuck" data-tuck title="${escapeHtml(said.tuck)}">${icon("close", 12)}</button></div>`
           ]
         })()
       : []
     const tickerHtml = [
       ...guideHtml,
-      ...(alerts.length > 0 ? [`<div class="head">now</div>`] : []),
-      ...alerts.map((a) => row("alert", a.tone, toneIcon[a.tone], callouts(a.text, new Set(Object.keys(a.places ?? {}) as Array<KindId>)), a.at !== null, `a:${a.text}`, `data-alert="${s.alerts.indexOf(a)}"`)),
-      ...(fresh.length > 0 ? [`<div class="head">lately</div>`] : []),
-      ...fresh.map((l) => row("news", "", "chronicle", `${callouts(l.text)} <em data-tick="${l.tick}"></em>`, l.at !== null, `n:${l.tick}:${l.text}`, `data-news="${news.indexOf(l)}"`))
+      ...(alerts.length > 0 ? [`<div class="head">${escapeHtml(said.now)}</div>`] : []),
+      ...alerts.map((a) => row("alert", a.tone, toneIcon[a.tone], markup(t, a.text, { chips: true, standing: new Set(Object.keys(a.places ?? {}) as Array<KindId>) }), a.at !== null, `a:${a.text}`, `data-alert="${s.alerts.indexOf(a)}"`)),
+      ...(fresh.length > 0 ? [`<div class="head">${escapeHtml(said.lately)}</div>`] : []),
+      ...fresh.map((l) => row("news", "", "chronicle", `${markup(t, l.text, { chips: true })} <em data-tick="${l.tick}"></em>`, l.at !== null, `n:${l.tick}:${l.text}`, `data-news="${news.indexOf(l)}"`))
     ].join("")
     if (ticker.dataset.html !== tickerHtml) {
       ticker.dataset.html = tickerHtml
@@ -150,8 +153,8 @@ export const createTicker = (ui: Interaction, fold: () => Fold | null, controls:
     // The phone's guide button: the step it is on, or how many things need looking at.
     const bad = alerts.some((a) => a.tone === "bad")
     const things = alerts.length + (g ? 1 : 0)
-    const said = g?.count ? `${g.count.at}/${g.count.of}` : things > 0 ? String(things) : ""
-    if (badge.textContent !== said) badge.textContent = said
+    const count = g?.count ? `${g.count.at}/${g.count.of}` : things > 0 ? String(things) : ""
+    if (badge.textContent !== count) badge.textContent = count
     bulb.classList.toggle("alert", bad)
     // On a phone the step stays out above the tool bar, until tucked away; not behind the town picker or an open sheet.
     const stepKey = g ? `${g.key}${g.waiting ? ":under way" : g.locked ? ":locked" : ""}` : ""

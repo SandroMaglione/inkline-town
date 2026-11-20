@@ -3,11 +3,15 @@
  * view shows (`TownView`), writes what the player does with the map
  * (`Interaction`), and sends edits; it knows nothing of how the map is drawn,
  * only the narrow `MapPort` the app hands it. This module composes the parts
- * and wires the page's controls (`controls.ts`) to them.
+ * and wires the page's controls (`controls.ts`) to them. Every part is
+ * handed the language's catalog (`t`) as it is made: the page says nothing
+ * of its own, and a change of language reloads it, so a part may keep the
+ * catalog it was given.
  */
-import { defaultCharter, grounds, kinds, props, type GroundId, type KindId, type PropId } from "../../game/content/index.ts"
+import { defaultCharter, type GroundId, type KindId, type PropId } from "../../game/content/index.ts"
 import type { Edit } from "../../game/edits.ts"
 import type { Point } from "../../game/world/iso.ts"
+import type { Locale, Words } from "../../i18n/index.ts"
 import type { Interaction, Shown, Tool, View } from "../../view/contracts.ts"
 import { commands, refOf } from "../../view/tools.ts"
 import { createSpringCard } from "./brand/spring-card.ts"
@@ -15,14 +19,15 @@ import type { Controls } from "./controls.ts"
 import { createFolds, phone } from "./folds.ts"
 import { createHud } from "./hud.ts"
 import { bindKeys } from "./keys.ts"
-import { el, escapeHtml, setHtml } from "./kit/dom.ts"
+import { el, setHtml } from "./kit/dom.ts"
 import { iconEl } from "./kit/icons.ts"
 import type { Pictures } from "./kit/picture.ts"
-import { iconize, touchScreen } from "./kit/text.ts"
+import { markup } from "./kit/text.ts"
 import { createMapViews } from "./map-views.ts"
 import { createPanel } from "./panels/frame.ts"
 import { townHistory } from "./panels/town.ts"
 import { createCharter } from "./screens/charter.ts"
+import { createLanguage } from "./screens/language.ts"
 import { createConfirm } from "./screens/confirm.ts"
 import { createReckoning } from "./screens/reckoning.ts"
 import { createShare } from "./screens/share.ts"
@@ -33,8 +38,10 @@ import { createToast } from "./toast.ts"
 import { createToolbar } from "./toolbar.ts"
 
 export interface Persistence<Camera> {
+  /** Saves the town: what went wrong, in words, or `null` when it is saved. */
   readonly save: () => string | null
-  readonly load: () => string | null
+  /** Loads the latest save: whether it did, and what to tell the mayor either way. */
+  readonly load: () => { readonly loaded: boolean; readonly said: string }
   /** The town as a save file (as text), with where the camera stands, to share. */
   readonly shareFile: (camera: Camera) => string
 }
@@ -61,15 +68,24 @@ export interface MapPort<Camera> {
 /**
  * `shared`: the page opened on a shared town's link, so it loads that rather than asking for a charter.
  * `saved`: the newest town saved in this browser, which the first charter offers to carry on with.
+ * `carried`: the page came back from a change of language with the town in play saved: no charter is asked for,
+ * and the page carries on with that town once it can (`carryOn`).
+ * `chooseLanguage`: changes the language the page is in (it reloads), or says why it could not.
  */
 export const createDomUi = <Camera>(
-  view: { readonly interaction: Interaction; readonly shown: Shown; readonly send: (edit: Edit) => void },
+  view: { readonly interaction: Interaction; readonly shown: Shown; readonly send: (edit: Edit) => void; readonly words: Words },
   map: MapPort<Camera>,
   pictures: Pictures,
   persistence: () => Persistence<Camera>,
-  options: { readonly shared?: boolean; readonly saved?: { readonly title: string; readonly savedAt: number } | null } = {}
+  options: {
+    readonly shared?: boolean
+    readonly saved?: { readonly title: string; readonly savedAt: number } | null
+    readonly carried?: boolean
+    readonly chooseLanguage?: (locale: Locale) => string | null
+  } = {}
 ) => {
   const ui = view.interaction
+  const t = view.words.current
   const town = view.shown.town
   const send = view.send
   const stats = () => town.stats
@@ -96,22 +112,19 @@ export const createDomUi = <Camera>(
       ui.placing = kind
       ui.menu = null
       controls.choose("place")
-      const title = kinds[kind].title.toLowerCase()
-      controls.toast(touchScreen() ? `Tap a spot for the ${title}, then tap it again to build it` : `Click to place a ${title} · Esc to stop`)
+      controls.toast(t.page.map.place(kind))
     },
     layGround: (ground: GroundId) => {
       ui.ground = ground
       ui.menu = null
       controls.choose("ground")
-      const title = grounds[ground].title.toLowerCase()
-      controls.toast(touchScreen() ? `Drag a rectangle to lay ${title}, then tap Build` : `Drag a rectangle to lay ${title} · Esc to stop`)
+      controls.toast(t.page.map.layGround(ground))
     },
     furnish: (prop: PropId) => {
       ui.prop = prop
       ui.menu = null
       controls.choose("prop")
-      const title = props[prop].title.toLowerCase()
-      controls.toast(touchScreen() ? `Tap a cell of park for the ${title}, then tap it again to set it` : `Click a cell of park to set a ${title} · Esc to stop`)
+      controls.toast(t.page.map.furnish(prop))
     },
     setSpeed: (speed) => {
       if (speed > 0) lastSpeed = speed
@@ -153,26 +166,28 @@ export const createDomUi = <Camera>(
     refreshTools: () => toolbar.refresh(),
     openCharter: (cancellable) => charter.open(cancellable),
     openShare: () => void share.open(),
+    openLanguage: (at) => language.open(at),
     showReckoning: (open) => reckoning.show(open),
-    confirmLeave: (title, text, go, run) => confirm.ask(title, text, go, run)
+    confirmLeave: (ask, run) => confirm.ask(ask, run)
   }
 
-  const toast = createToast()
+  const toast = createToast(t)
   const history = townHistory(stats)
-  const ticker = createTicker(ui, () => folds.fold(), controls)
-  const hud = createHud(ticker.element, send, stats, controls)
-  const toolbar = createToolbar(ui, controls)
-  const mapViews = createMapViews(ui, controls)
-  const panel = createPanel(ui, town, send, pictures, history, controls)
-  const confirm = createConfirm(() => persistence().save(), () => ui.speed, controls)
-  const reckoning = createReckoning(ui, stats, send, controls)
-  const visit = createVisit({ ...controls, closeCharter: () => charter.close(), resetPage: () => resetPage() })
-  const charter = createCharter(ui, send, () => persistence().load(), history, options.saved ?? null, () => {
+  const ticker = createTicker(t, ui, () => folds.fold(), controls)
+  const hud = createHud(t, ticker.element, send, stats, controls)
+  const toolbar = createToolbar(t, ui, controls)
+  const mapViews = createMapViews(t, ui, controls)
+  const panel = createPanel(t, ui, town, send, pictures, history, controls)
+  const confirm = createConfirm(t, () => persistence().save(), () => ui.speed, controls)
+  const reckoning = createReckoning(t, ui, stats, send, controls)
+  const visit = createVisit(t, { ...controls, closeCharter: () => charter.close(), resetPage: () => resetPage() })
+  const language = createLanguage(t, options.chooseLanguage ?? (() => null), controls)
+  const charter = createCharter(t, ui, send, () => persistence().load(), history, options.saved ?? null, () => {
     if (visit.visiting()) visit.endVisit()
-  }, controls)
-  const share = createShare(stats, () => ui.speed, visit.visiting, map, (camera) => persistence().shareFile(camera), controls)
+  }, language.button, controls)
+  const share = createShare(t, stats, () => ui.speed, visit.visiting, map, (camera) => persistence().shareFile(camera), controls)
   // The sign-up's card at the first spring: it waits while the mayor is in the middle of something.
-  const springCard = createSpringCard({
+  const springCard = createSpringCard(t, {
     speed: () => ui.speed,
     setSpeed: controls.setSpeed,
     busy: () =>
@@ -184,7 +199,7 @@ export const createDomUi = <Camera>(
   // A phone's buttons for what stays folded away: the guide and the map views.
   const foldButtons = el("div", "fold-buttons")
   const layersButton = el("button", "card")
-  layersButton.title = "Map overlays"
+  layersButton.title = t.page.map.overlays
   layersButton.append(iconEl("layers", 16))
   layersButton.onclick = () => folds.toggleFold("views")
   foldButtons.append(ticker.bulb, layersButton)
@@ -193,10 +208,10 @@ export const createDomUi = <Camera>(
     ui.selected = null
     controls.refreshTools()
   })
-  const system = createSystemMenu(ui, persistence, map.resetCamera, folds.fold, controls)
+  const system = createSystemMenu(t, ui, persistence, map.resetCamera, folds.fold, controls)
   document.body.append(
     hud.left, hud.right, tooltip, toast.element, toolbar.element, system.element, panel.element, reckoning.result, charter.element, confirm.element,
-    reckoning.element, share.element, visit.element, mapViews.list, mapViews.legend, foldButtons
+    reckoning.element, share.element, visit.element, language.element, mapViews.list, mapViews.legend, foldButtons
   )
 
   // A tap on the map folds the HUD and puts a toast away; a pan or a pinch, to look around with the goods or the guide open, does not.
@@ -225,25 +240,26 @@ export const createDomUi = <Camera>(
     ui,
     {
       escape: () => {
-        const sheet = confirm.open() || share.isOpen() || reckoning.isOpen()
+        const sheet = confirm.open() || share.isOpen() || reckoning.isOpen() || language.isOpen()
         if (confirm.open()) confirm.dismiss()
         if (share.isOpen()) share.close()
+        if (language.isOpen()) language.close()
         // With no sheet over the map, Esc puts the sign-up's card away, and does nothing else.
         return !sheet && springCard.escape()
       },
-      blocked: () => ui.founding || reckoning.isOpen() || confirm.open() || share.isOpen() || visit.visiting()
+      blocked: () => ui.founding || reckoning.isOpen() || confirm.open() || share.isOpen() || language.isOpen() || visit.visiting()
     },
     map.cancelStroke,
     controls
   )
-  if (!options.shared) charter.open(false)
+  if (!options.shared && !options.carried) charter.open(false)
 
   // A road, a row of homes, or a patch of park let go of on a touch screen is held here until built or
   // dropped; the tooltip says what it lays and costs.
   const strokeBar = el("div", "stroke-bar")
-  const strokeBuild = el("button", "primary", "Build")
+  const strokeBuild = el("button", "primary", t.page.map.stroke.build)
   strokeBuild.onclick = () => map.confirmStroke()
-  const strokeDrop = el("button", "", "Cancel")
+  const strokeDrop = el("button", "", t.page.map.stroke.cancel)
   strokeDrop.onclick = () => map.cancelStroke()
   strokeBar.append(strokeDrop, strokeBuild)
   document.body.append(strokeBar)
@@ -277,7 +293,7 @@ export const createDomUi = <Camera>(
     strokeBar.classList.toggle("open", held)
     document.body.classList.toggle("stroke-held", held)
     if (text && screenPointer) {
-      setHtml(tooltip, iconize(escapeHtml(text)))
+      setHtml(tooltip, markup(t, text))
       tooltip.style.display = "block"
       tooltip.style.left = `${Math.min(screenPointer.x, window.innerWidth - tooltip.offsetWidth - 20)}px`
       tooltip.style.top = `${screenPointer.y}px`
@@ -291,6 +307,10 @@ export const createDomUi = <Camera>(
     visit: visit.visit,
     visitFailed: visit.visitFailed,
     visiting: visit.visiting,
+    /** Carries on with the town saved last (after a change of language); if it cannot be loaded, the charter asks for a new one. */
+    carryOn: () => {
+      if (!charter.carryOn()) charter.open(false)
+    },
     /** A dialog is open over the map: the keyboard is not the map's. */
     blocked: () => document.querySelector(".dialog.open") !== null
   }

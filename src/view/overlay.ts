@@ -8,6 +8,7 @@ import { appealAt } from "../game/world/appeal.ts"
 import { doors, key, reach, useAt, type TileLike } from "../game/world/grid.ts"
 import { GRID } from "../game/world/iso.ts"
 import type { Interaction, Legend, OverlayCell, SceneView, TownView, View } from "./contracts.ts"
+import type { Catalog } from "../i18n/index.ts"
 import type { Frame } from "./frame.ts"
 
 // Blue for fine, sand for worth a look, vermilion for wrong: a scale that still reads with
@@ -22,66 +23,35 @@ const MARK = 0x3d4943
 /** A meter 0 → `of` as a colour: blue when low, sand, vermilion past the warning line. */
 const meterColor = (value: number, of: number, warn: number) => (value >= warn ? BAD : value >= of * 0.35 ? FAIR : GOOD)
 
-const legends: Readonly<Record<Exclude<View, "none">, Legend>> = {
-  appeal: {
-    title: "desirability",
-    keys: [
-      { color: 0x1f4f8f, label: `${home.tiers[3].appeal}+: townhouses` },
-      { color: GOOD, label: `${home.tiers[2].appeal}+: citizens` },
-      { color: 0xc6d4e4, label: "0 to 4: settlers only" },
-      { color: 0xeaa26a, label: "below 0: fewer people, less tax" },
-      { color: BAD, label: `${home.squalid} or less: squalid` }
-    ],
-    note: "Every point counts: a cottage holds fewer and pays less for each point below 0, and pays more above it. Industry pushes homes away; parks (the more they hold, the further they reach), a chapel, a market, and paved streets draw them in."
-  },
-  workers: {
-    title: "workers",
-    keys: [
-      { color: GOOD, label: "fully staffed" },
-      { color: FAIR, label: "short of workers" },
-      { color: BAD, label: "no workers" },
-      { color: 0xd6b48a, label: "settlers' homes" },
-      { color: COOL, label: "citizens' homes" }
-    ],
-    note: `Residents walk at most ${COMMUTE} road cells to work. Select a workplace to see its reach and the homes inside it.`
-  },
-  fire: {
-    title: "fire",
-    keys: [
-      { color: GOOD, label: "watched" },
-      { color: FAIR, label: "rising" },
-      { color: BAD, label: "at risk, or burning" }
-    ],
-    note: "Buildings take the colour too. A fire watch's watchman resets the risk of every home and workshop along the way; vermilion means past half way, so there is still time. Wooden cottages, ovens, forges, and crowding raise it."
-  },
-  health: {
-    title: "health",
-    keys: [
-      { color: GOOD, label: "visited" },
-      { color: FAIR, label: "rising" },
-      { color: BAD, label: "at risk, or sick" }
-    ],
-    note: "A healer's physician resets the risk and cures the sick. Hunger, crowding, squalor, quarry dust, and still water raise it."
-  },
-  order: {
-    title: "order",
-    keys: [
-      { color: GOOD, label: "kept" },
-      { color: FAIR, label: "rising" },
-      { color: BAD, label: "thieves about" }
-    ],
-    note: "A watch house's constable keeps order. Low approval, squalor, and homes not full raise it; theft first, then the home is left derelict."
-  },
-  condition: {
-    title: "condition",
-    keys: [
-      { color: GOOD, label: "well kept" },
-      { color: FAIR, label: "needs mending" },
-      { color: BAD, label: "run down: half pace" }
-    ],
-    note: "A builder's yard mends what its builder passes with planks and stone. At nothing it falls down."
-  }
-}
+/**
+ * Each view's legend: its colours, in the order it lists them, each under the name the page's language
+ * says what it means by (`view.legend` in `i18n`, which must word every one).
+ */
+const palette = {
+  appeal: { townhouses: 0x1f4f8f, citizens: GOOD, settlers: 0xc6d4e4, fewer: 0xeaa26a, squalid: BAD },
+  workers: { staffed: GOOD, short: FAIR, none: BAD, settlers: 0xd6b48a, citizens: COOL },
+  fire: { good: GOOD, fair: FAIR, bad: BAD },
+  health: { good: GOOD, fair: FAIR, bad: BAD },
+  order: { good: GOOD, fair: FAIR, bad: BAD },
+  condition: { good: GOOD, fair: FAIR, bad: BAD }
+} as const satisfies Record<Exclude<View, "none">, Readonly<Record<string, number>>>
+/** What each view's legend has to say: a line for each of its colours. */
+export type LegendKeys = { readonly [V in keyof typeof palette]: keyof (typeof palette)[V] }
+
+/** A legend in the page's language: each colour, in the palette's order, with what it means; and how the reading works. */
+const legendOf = <K extends string>(colors: Readonly<Record<K, number>>, said: { readonly title: string; readonly keys: Readonly<Record<K, string>>; readonly note: string }): Legend => ({
+  title: said.title,
+  keys: (Object.keys(colors) as Array<K>).map((k) => ({ color: colors[k], label: said.keys[k] })),
+  note: said.note
+})
+const legends = (t: Catalog["view"]["legend"]): Readonly<Record<Exclude<View, "none">, Legend>> => ({
+  appeal: legendOf(palette.appeal, t.appeal),
+  workers: legendOf(palette.workers, t.workers),
+  fire: legendOf(palette.fire, t.fire),
+  health: legendOf(palette.health, t.health),
+  order: legendOf(palette.order, t.order),
+  condition: legendOf(palette.condition, t.condition)
+})
 /** A view's colour over a model: pale, so the ink still reads. */
 const TINT = { good: 0xbcd2ee, fair: 0xf3e3a8, bad: 0xf2b9a0, cool: 0xdccbe8, mark: 0xd5dad3, settlers: 0xead7bd, fine: 0xa9c4e8, plain: 0xffffff }
 
@@ -182,6 +152,6 @@ export const drawOverlay = (frame: Frame, ui: Interaction, scene: SceneView, tow
     }
     scene.overlay = { key: overlayKey, cells: out }
     scene.tints = tints
-    town.legend = legends[view]
+    town.legend = legends(frame.t.view.legend)[view]
   }
 }

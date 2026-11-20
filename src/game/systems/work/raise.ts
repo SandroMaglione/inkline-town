@@ -1,4 +1,4 @@
-import { anA, asUpgraded, goodIds, stepsOf, total, upgradeAt, worksNeeded } from "../../content/index.ts"
+import { asUpgraded, goodIds, stepsOf, total, worksNeeded } from "../../content/index.ts"
 import { Building, Carriers, Charter, Chronicle, Game, Rules, Inventory, Recipe, Rising, Service, Site, Staff, Status, Storage, Time, Upgraded, Works } from "../../schema.ts"
 import { elapsed, write } from "../shared.ts"
 
@@ -74,8 +74,7 @@ export const Raise = Game.System(
       if (shelves.ok && kind.holds) stocked.inventory.set(shelves.value, { ...stocked.inventory.get(shelves.value), cap: kind.holds.cap })
       if (carriers && kind.carriers) commands.insert(entity, [Carriers, { count: kind.carriers }])
       if (service && kind.service) commands.insert(entity, [Service, { ...service, interval: stepsOf(kind.service.seconds), range: kind.service.range }])
-      const was = (upgradeAt(base, works.level - 1)?.title ?? base.title).toLowerCase()
-      write(resources.chronicle, elapsed(resources.time.get(), resources.charter.get()), `The ${was} is now ${anA(upgradeAt(base, works.level)!.title.toLowerCase())}.`, true)
+      write(resources.chronicle, elapsed(resources.time.get(), resources.charter.get()), { _tag: "upgraded", kind: base.id, level: works.level }, true)
     }
 
     const sites = queries.sites.data

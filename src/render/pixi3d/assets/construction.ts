@@ -3,6 +3,7 @@ import { buildStages } from "../../art.ts"
 import { kinds, type KindId } from "../../../game/content/index.ts"
 import { U } from "../../../game/world/iso.ts"
 import { buildingDimensions } from "./buildings.ts"
+import { en } from "../../../i18n/index.ts"
 
 export function makeSite(share: number, size = 2) {
   const d = new Drawing(
@@ -48,7 +49,7 @@ export function makeConstruction(kindId: KindId, progress: number) {
     stage = buildStages(progress)
   const d = new Drawing(
     `build-${kindId}-${progress}`,
-    `${kind.title} · ${progress < 0.5 ? "frame" : "walls"}`,
+    `${en.kind.title(kind.id)} · ${progress < 0.5 ? "frame" : "walls"}`,
     "The same construction timing and frame/wall dimensions as the 2D drawing."
   )
   d.asset.category = "construction"

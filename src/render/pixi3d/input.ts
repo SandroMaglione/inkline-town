@@ -17,9 +17,23 @@ import type { GameScene } from "./scene.ts"
  * new one. With any pointer, letting go off the map (over the tool bar, say)
  * drops the stroke, as a button drops a click released outside it. */
 /** What the map input needs from the page around it. */
+/** What the camera bar says: the renderer draws the bar, the page's language words it. */
+export interface CameraWords {
+  /** The bar itself, read aloud. */
+  readonly label: string
+  readonly pan: { readonly label: string; readonly title: string }
+  readonly rotate: { readonly label: string; readonly title: string }
+  readonly zoomOut: string
+  /** The zoom's figure, read aloud. */
+  readonly zoom: string
+  readonly zoomIn: string
+  readonly reset: { readonly label: string; readonly title: string }
+}
+
 export interface MapHost {
-  /** Says something to the player. */
-  readonly toast: (message: string) => void
+  readonly camera: CameraWords
+  /** A first tap held a spot: tells the player a second one there commits it (removing what stands, or building). */
+  readonly tapAgain: (to: "remove" | "build") => void
   /** A dialog is open over the map: the keyboard is not the map's. */
   readonly blocked: () => boolean
 }
@@ -199,8 +213,27 @@ export class MapInput {
     )
     this.controls = document.createElement("nav")
     this.controls.className = "camera-controls"
-    this.controls.setAttribute("aria-label", "Map camera")
-    this.controls.innerHTML = `<button data-mode="pan" aria-pressed="true" title="Drag to pan; the road, pave, home, and park ground tools drag to build">Pan</button><button data-mode="rotate" aria-pressed="false" title="Drag to rotate instead of placing. Right-drag also rotates, and Q and E turn it an eighth.">Rotate</button><button data-action="out" aria-label="Zoom out">−</button><output aria-label="Camera zoom"></output><button data-action="in" aria-label="Zoom in">+</button><button data-action="reset" aria-label="Reset camera" title="Original angle and centre (Home)">⌂</button>`
+    const said = host.camera
+    this.controls.setAttribute("aria-label", said.label)
+    const button = (data: "mode" | "action", value: string, text: string, words: { readonly label?: string; readonly title?: string }) => {
+      const b = document.createElement("button")
+      b.dataset[data] = value
+      b.textContent = text
+      if (data === "mode") b.setAttribute("aria-pressed", value === "pan" ? "true" : "false")
+      if (words.label !== undefined) b.setAttribute("aria-label", words.label)
+      if (words.title !== undefined) b.title = words.title
+      return b
+    }
+    const zoom = document.createElement("output")
+    zoom.setAttribute("aria-label", said.zoom)
+    this.controls.append(
+      button("mode", "pan", said.pan.label, { title: said.pan.title }),
+      button("mode", "rotate", said.rotate.label, { title: said.rotate.title }),
+      button("action", "out", "−", { label: said.zoomOut }),
+      zoom,
+      button("action", "in", "+", { label: said.zoomIn }),
+      button("action", "reset", "⌂", said.reset)
+    )
     this.controls.querySelectorAll<HTMLButtonElement>("button").forEach(
       (button) =>
         (button.onclick = () => {
@@ -260,7 +293,7 @@ export class MapInput {
     const same = armed && armed.tool === tool && (tool === "bulldoze" && hit !== null ? armed.hit === hit : Math.hypot(armed.at.x - at.x, armed.at.y - at.y) < 1.5)
     if (same) return false
     this.armed = { tool, at, hit }
-    this.host.toast(tool === "bulldoze" ? "tap it again to remove it" : "tap it again to build it here")
+    this.host.tapAgain(tool === "bulldoze" ? "remove" : "build")
     this.updatePointer()
     return true
   }

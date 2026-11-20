@@ -86,11 +86,16 @@ export const moreAdmin = (residents: number, more = 1, rules: Rules = shippedRul
   return cost(residents + more) - cost(residents)
 }
 
-/** Whether the treasury and the store can pay `cost`, and if not, what is short ("4 planks"). */
-export const shortOf = (cost: { readonly coins: number; readonly materials: Partial<Record<GoodId, number>> }, coins: number, stock: Readonly<Record<GoodId, number>>): string | null => {
-  const short = (Object.entries(cost.materials) as Array<[GoodId, number]>).filter(([g, n]) => stock[g] < n).map(([g, n]) => `${n - stock[g]} ${g}`)
-  if (coins < cost.coins) short.unshift(`${cost.coins - Math.max(0, coins)} coins`)
-  return short.length > 0 ? short.join(", ") : null
+/** What the treasury and the store lack to pay `cost`: so many coins, so many of each good; `null` when they can pay. */
+export const shortOf = (
+  cost: { readonly coins: number; readonly materials: Partial<Record<GoodId, number>> },
+  coins: number,
+  stock: Readonly<Record<GoodId, number>>
+): { readonly coins: number; readonly materials: Partial<Record<GoodId, number>> } | null => {
+  const materials: Partial<Record<GoodId, number>> = {}
+  for (const [g, n] of Object.entries(cost.materials) as Array<[GoodId, number]>) if (stock[g] < n) materials[g] = n - stock[g]
+  const lacking = coins < cost.coins ? cost.coins - Math.max(0, coins) : 0
+  return lacking > 0 || Object.keys(materials).length > 0 ? { coins: lacking, materials } : null
 }
 
 /** What traders pay for one of a good now, and what they ask for one. */

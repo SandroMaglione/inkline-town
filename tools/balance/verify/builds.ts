@@ -1,3 +1,4 @@
+import { en, say } from "../../../src/i18n/index.ts"
 import { project } from "../model/project.ts"
 import { fromSnapshot } from "../scenario.ts"
 import { fixture, pushBuild } from "./fixture.ts"
@@ -7,7 +8,7 @@ import type { BuildAction, Inputs } from "../types.ts"
 export const verifyBuilds = (inputs: Inputs, builds: ReadonlyArray<BuildAction>, seconds = 600) => {
   const started = performance.now(), prediction = project(inputs, { seconds, builds }), messages: string[] = []
   const town = fixture(inputs.scenario, inputs.rules)
-  town.toast = (message) => messages.push(message)
+  town.toast = (notice) => messages.push(say(en.notice, notice))
   const actions = [...builds].sort((a, b) => a.at - b.at)
   const actual: Array<{ second: number; coins: number; residents: number; citizens: number; completed: number }> = []
   let firstCitizenSecond: number | null = null
