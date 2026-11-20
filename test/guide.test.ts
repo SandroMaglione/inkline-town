@@ -27,6 +27,16 @@ const catalogs: ReadonlyArray<Catalog> = await Promise.all(locales.map(load))
  * language may take a third more (Italian says the same in more letters), no further.
  */
 const limit = (t: Catalog, english: number) => (t.locale === en.locale ? english : Math.floor((english * 4) / 3))
+/**
+ * How much room a text takes, in the columns of the page's monospace: a letter one, and a character of a
+ * script set twice as wide (kana, kanji, hangul, full-width forms) two. So a limit means the same space on
+ * a phone in every script.
+ */
+const columns = (text: string): number => [...text].reduce((n, character) => n + (/[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/.test(character) ? 2 : 1), 0)
+/** Where a sentence ends: a full stop, a question or an exclamation before a space or the end; or its like in a script that sets no space after it (。！？). */
+const sentenceEnds = /[.!?](\s|$)|[。！？]/g
+/** How many times a message leaves a word to the device ({tap|click}). */
+const deviceChoices = (text: string): number => text.match(/\{[^{}|]*\|[^{}|]*\}/g)?.length ?? 0
 
 const words = en.guide
 /** A guide message as the mayor reads it: each chip by its word. */
@@ -170,9 +180,9 @@ test("every course step is one thing to do and one reason, short enough for a ph
     for (const step of courseSteps) {
       const { action, why } = t.guide.steps[step.id]
       const said = plain(t, action)
-      assert.ok(said.length <= limit(t, 110), `${t.locale} ${step.id}: the action fits a phone's peek (${said.length})`)
-      assert.equal(said.match(/[.!?](\s|$)/g)?.length, 1, `${t.locale} ${step.id}: the action is one sentence`)
-      assert.ok(plain(t, why).length <= limit(t, 180), `${t.locale} ${step.id}: the reason is short (${plain(t, why).length})`)
+      assert.ok(columns(said) <= limit(t, 110), `${t.locale} ${step.id}: the action fits a phone's peek (${columns(said)})`)
+      assert.equal(said.match(sentenceEnds)?.length, 1, `${t.locale} ${step.id}: the action is one sentence`)
+      assert.ok(columns(plain(t, why)) <= limit(t, 180), `${t.locale} ${step.id}: the reason is short (${columns(plain(t, why))})`)
     }
   }
 })
@@ -199,12 +209,15 @@ const everyMessage = (t: Catalog): Array<readonly [string, string]> => {
 }
 
 test("no step names a key: tools are chips, and words fit both a finger and a mouse, in every language", () => {
+  const english = new Map(everyMessage(en))
   for (const t of catalogs) {
     for (const [what, text] of everyMessage(t)) {
       assert.doesNotMatch(text, /\b(press|premi) [A-Z]\b|\bEsc\b/i, `${t.locale} ${what}: no keys`)
       assert.ok(parse(text).every((part) => part.type !== "key"), `${t.locale} ${what}: no keys`)
       // What a mouse does ("click", "clicca") is only ever said beside what a finger does, as {tap|click}.
       assert.doesNotMatch(text.replace(/\{[^}]*\}/g, ""), /\bclic/i, `${t.locale} ${what}: "click" only as {tap|click}`)
+      // And whatever a language calls the two, it leaves the word to the device wherever English does.
+      assert.equal(deviceChoices(text), deviceChoices(english.get(what) ?? ""), `${t.locale} ${what}: a finger's word and a mouse's, as often as English`)
     }
   }
 })
@@ -322,7 +335,7 @@ test("every step says what closes it, in every language", () => {
   for (const t of catalogs) {
     for (const step of guideSteps) {
       const goal = plain(t, t.guide.steps[step.id].goal)
-      assert.ok(goal.length > 0 && goal.length <= limit(t, 80), `${t.locale} ${step.id} (${goal.length})`)
+      assert.ok(goal.length > 0 && columns(goal) <= limit(t, 80), `${t.locale} ${step.id} (${columns(goal)})`)
     }
   }
 })
