@@ -583,7 +583,8 @@ mulino", "l'ovile", "della fattoria", "sullo scalpellino"), and `chips.ts`
 keeps an article outside its building's chip and in agreement with it.
 Where an English sentence would force an agreement Italian cannot know
 (what a fire took, what a thief stole), the Italian one is turned so none
-is needed. Its glossary is at the top of `nouns.ts`.
+is needed. How its buildings and people are named is said at the top of
+`nouns.ts`.
 
 **To add a language**: copy `src/i18n/en/` to a folder named by its tag,
 translate it (grammar first: what a noun needs in that language), end

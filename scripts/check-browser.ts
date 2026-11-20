@@ -12,6 +12,7 @@ import type { Interaction, Shown } from "../src/view/contracts.ts"
 import type { GameScene } from "../src/render/pixi3d/scene.ts"
 import type { Snapshot } from "../src/game/headless.ts"
 import type { Words } from "../src/i18n/index.ts"
+import { SAVE_VERSION } from "../src/platform/save.ts"
 
 declare global {
   interface Window {
@@ -117,7 +118,9 @@ try {
   facts.largeIsland=await page.evaluate(()=>window.town.view.stats())
   await capture("large-island")
   const fixture=process.env.GAME_SAVE_PATH??`${output}/fixture/large-rich-24757-20min.json`
-  if (!existsSync(fixture)) execFileSync(process.execPath,["scripts/balance.ts","--seeds","1","--from","3","--size","large","--land","rich","--term","45","--snapshot","20","--out",`${output}/fixture`],{stdio:"pipe"})
+  // The bot's town is kept between runs; one saved by an earlier version of the game is played again, so what is loaded is compared with a save of this version.
+  const stale=!process.env.GAME_SAVE_PATH&&existsSync(fixture)&&JSON.parse(await readFile(fixture,"utf8")).version!==SAVE_VERSION
+  if (!existsSync(fixture)||stale) execFileSync(process.execPath,["scripts/balance.ts","--seeds","1","--from","3","--size","large","--land","rich","--term","45","--snapshot","20","--out",`${output}/fixture`],{stdio:"pipe"})
   const grown=JSON.parse(await readFile(fixture,"utf8"))
   await page.evaluate(save=>{
     localStorage.removeItem("inkline-town/save/auto")
