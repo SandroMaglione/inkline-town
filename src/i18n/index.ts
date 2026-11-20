@@ -28,7 +28,8 @@ interface Language {
 
 /** Each language, by its tag (BCP 47). */
 const languages = {
-  en: { name: "English", load: () => Promise.resolve(en) }
+  en: { name: "English", load: () => Promise.resolve(en) },
+  it: { name: "Italiano", load: () => import("./it/index.ts").then((module) => module.it) }
 } satisfies Record<string, Language>
 
 export type Locale = keyof typeof languages

@@ -608,6 +608,8 @@ kbd.key {
   background: linear-gradient(to right, var(--rail) min(var(--at), 50%), var(--fill) min(var(--at), 50%), var(--fill) max(var(--at), 50%), var(--rail) max(var(--at), 50%));
 }
 .panel .deal-line .mode { width: 12ch; text-align: right; font-size: 11px; color: #9aa29b; white-space: nowrap; }
+/* A fixed width, so the slider beside it does not change length as its words do; Italian's are longer ("compra ≤72/min"). */
+:lang(it) .panel .deal-line .mode { width: 15ch; }
 .panel .deal-line .mode.sell { color: #4f8a3e; font-weight: 700; }
 .panel .deal-line .mode.buy { color: #3d6db5; font-weight: 700; }
 
