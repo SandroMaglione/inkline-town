@@ -603,7 +603,7 @@ kbd.key {
 }
 .panel .deal-line .mode { width: 12ch; text-align: right; font-size: 11px; color: #9aa29b; white-space: nowrap; }
 /* A fixed width, so the slider beside it does not change length as its words do; wider where a language's are longer than English's ("compra ≤72/min"). */
-:is(:lang(it), :lang(es), :lang(fr)) .panel .deal-line .mode { width: 15ch; }
+:is(:lang(it), :lang(es), :lang(fr), :lang(de)) .panel .deal-line .mode { width: 15ch; }
 .panel .deal-line .mode.sell { color: #4f8a3e; font-weight: 700; }
 .panel .deal-line .mode.buy { color: #3d6db5; font-weight: 700; }
 
