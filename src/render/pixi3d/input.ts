@@ -18,8 +18,8 @@ import type { GameScene } from "./scene.ts"
  * drops the stroke, as a button drops a click released outside it. */
 /** What the map input needs from the page around it. */
 export interface MapHost {
-  /** Says something to the player. */
-  readonly toast: (message: string) => void
+  /** A first tap held a spot: tells the player a second one there commits it (removing what stands, or building). */
+  readonly tapAgain: (to: "remove" | "build") => void
   /** A dialog is open over the map: the keyboard is not the map's. */
   readonly blocked: () => boolean
 }
@@ -260,7 +260,7 @@ export class MapInput {
     const same = armed && armed.tool === tool && (tool === "bulldoze" && hit !== null ? armed.hit === hit : Math.hypot(armed.at.x - at.x, armed.at.y - at.y) < 1.5)
     if (same) return false
     this.armed = { tool, at, hit }
-    this.host.toast(tool === "bulldoze" ? "tap it again to remove it" : "tap it again to build it here")
+    this.host.tapAgain(tool === "bulldoze" ? "remove" : "build")
     this.updatePointer()
     return true
   }

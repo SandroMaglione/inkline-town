@@ -7,6 +7,7 @@ import { surfaceState,type SurfaceState } from "../../render/pixi3d/surface-stat
 import { StructureEffects } from "../../render/pixi3d/structure-effects.ts"
 import { aim, frame, labViewer, toward } from "../viewer.ts"
 import "./style.css"
+import { en } from "../../i18n/index.ts"
 
 const cases: Array<{title:string;note:string;state:Partial<SurfaceState>}>=[
   {title:"Sound house",note:"The original house, without an effect.",state:{}},
@@ -70,7 +71,7 @@ function capture(t=time,focus=false){
   const canvas=document.createElement("canvas"),ctx=canvas.getContext("2d")!,width=focus?960:320,height=focus?600:300,viewHeight=focus?520:230
   canvas.width=960;canvas.height=focus?680:1000;ctx.fillStyle="#f0f2ec";ctx.fillRect(0,0,canvas.width,canvas.height)
   ctx.fillStyle="#3d4943";ctx.font="30px Georgia";ctx.fillText("Inkline Town / effects on one house",24,40)
-  ctx.font="12px monospace";ctx.fillText(`${home.tiers[tier].title} · shared mesh · ${t.toFixed(2)} s`,24,65)
+  ctx.font="12px monospace";ctx.fillText(`${en.tier.people(tier)} · shared mesh · ${t.toFixed(2)} s`,24,65)
   const indices=focus?[7]:views.map((_,i)=>i)
   indices.forEach((i,index)=>{
     place(i,width,viewHeight)

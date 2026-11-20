@@ -129,7 +129,6 @@ export const fate = {
  * nothing ends when a rank is reached.
  */
 export const ranks: ReadonlyArray<{
-  readonly title: string
   readonly residents: number
   readonly income: number
   readonly citizens: number
@@ -138,10 +137,10 @@ export const ranks: ReadonlyArray<{
   readonly hall: number
   readonly reward: number
 }> = [
-  { title: "hamlet", residents: 0, income: 0, citizens: 0, burghers: 0, approval: 0, hall: 0, reward: 0 },
-  { title: "village", residents: 0.35, income: 0.3, citizens: 0.1, burghers: 0, approval: 0, hall: 0, reward: 300 },
-  { title: "town", residents: 1, income: 1, citizens: fate.citizens, burghers: 0, approval: fate.approval, hall: 0, reward: 800 },
-  { title: "city", residents: 1.5, income: 1.5, citizens: 0.5, burghers: 0.15, approval: 25, hall: 1, reward: 1500 }
+  { residents: 0, income: 0, citizens: 0, burghers: 0, approval: 0, hall: 0, reward: 0 },
+  { residents: 0.35, income: 0.3, citizens: 0.1, burghers: 0, approval: 0, hall: 0, reward: 300 },
+  { residents: 1, income: 1, citizens: fate.citizens, burghers: 0, approval: fate.approval, hall: 0, reward: 800 },
+  { residents: 1.5, income: 1.5, citizens: 0.5, burghers: 0.15, approval: 25, hall: 1, reward: 1500 }
 ]
 /** The rank the old "complete" town is: the goals a balance run plays for. */
 export const TOWN_RANK = 2

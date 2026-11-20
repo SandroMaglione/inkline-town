@@ -4,6 +4,7 @@ import { U } from "../../../game/world/iso.ts"
 import { rockOutcrop } from "./land.ts"
 import { Drawing, palette, pale, type InkAsset, type Side, type Vertex } from "./primitives.ts"
 import type { BuildingOptions } from "./buildings.ts"
+import { en } from "../../../i18n/index.ts"
 
 export const workshopIds = ["mine", "smithy", "sawmill"] as const satisfies ReadonlyArray<KindId>
 export type WorkshopId = typeof workshopIds[number]
@@ -100,7 +101,7 @@ export function makeWorkshop(id: WorkshopId, options: BuildingOptions = {}) {
     smithy: "An open-sided forge shed: stone hearth, tapered smoke hood, horned anvil and tool bench. The 2×2 plot stays unchanged.",
     sawmill: "An open saw yard with a roofed frame saw, flywheel, log supports and separate plank stacks. The 2×2 plot stays unchanged."
   }
-  const d = new Drawing(id, kinds[id].title, notes[id]), fit = Math.max(0, Math.min(1, options.fit ?? 1))
+  const d = new Drawing(id, en.kind.title(id), notes[id]), fit = Math.max(0, Math.min(1, options.fit ?? 1))
   d.asset.category = "buildings"
   d.asset.reference = { type: "building", kind: id }
   d.asset.footprint = kinds[id].size
@@ -254,7 +255,7 @@ function sawmill(d: Drawing, fit: number) {
 
 /** The open yard is assembled as posts and a rear wall, rather than a temporary solid cube. */
 export function workshopConstruction(id: WorkshopId, build: number, share: number | null, doors: BuildingOptions["doors"]) {
-  const d = new Drawing(id, `${kinds[id].title} · construction`, "Open workshop frame and supplied materials.")
+  const d = new Drawing(id, `${en.kind.title(id)} · construction`, "Open workshop frame and supplied materials.")
   d.asset.footprint = 2
   const stage = buildStages(build)
   if (share !== null) {

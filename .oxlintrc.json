@@ -23,7 +23,7 @@
         "ritmo/no-infinity-in-simulation-data": "error",
         "ritmo/no-float-timers": "error",
         "ritmo/no-brand-cast": "error",
-        "no-restricted-imports": ["error", {"patterns": [{"regex": "^(\\.\\./)+(view|ui|render|platform|app|labs)/", "message": "The simulation imports only itself: hand the page and the renderer what they need through edits, events, and the view."}]}]
+        "no-restricted-imports": ["error", {"patterns": [{"regex": "^(\\.\\./)+(view|ui|render|platform|app|labs|i18n)/", "message": "The simulation imports only itself, and knows no language: it says what happened as data (game/said.ts), and hands the page and the renderer what they need through edits, events, and the view."}]}]
       }
     },
     {
@@ -31,6 +31,12 @@
       "rules": {
         "ritmo/keep-simulation-headless": "error",
         "no-restricted-imports": ["error", {"patterns": [{"regex": "^(\\.\\./)+(ui|render|platform|app|labs)/", "message": "The view reads the world into plain data (view/contracts.ts): any UI and any renderer read that, so the view imports neither."}]}]
+      }
+    },
+    {
+      "files": ["src/i18n/**"],
+      "rules": {
+        "no-restricted-imports": ["error", {"patterns": [{"regex": "^(\\.\\./)+(ui|render|app|labs|game/systems)/", "message": "A language names the game's content and words what the game, the view, and the platform say as data: it never reaches into the page, the renderer, or the simulation's systems."}]}]
       }
     },
     {

@@ -12,6 +12,7 @@ import { categoryColor, goodIds, kindIds, kinds } from "../../game/content/index
 import { key } from "../../game/world/grid.ts"
 import { icon, iconNames } from "../../ui/dom/kit/icons.ts"
 import { toScreen } from "../../game/world/iso.ts"
+import { en } from "../../i18n/index.ts"
 
 const app = new Application()
 await app.init({ resizeTo: window, antialias: true, background: 0xf0f2ec, resolution: Math.min(window.devicePixelRatio || 1, 2), autoDensity: true })
@@ -188,7 +189,7 @@ if (params.has("sheet")) {
     const g = new Graphics()
     plate(g, plateHalf(kinds[id].size))
     drawBuilding(g, kinds[id], 1, 0.5, 1.2, { right: true, left: true })
-    await add(buildings, g, kinds[id].title.toLowerCase(), 1.6)
+    await add(buildings, g, en.kind.name(id), 1.6)
   }
   const homes = row("homes: settlers and citizens")
   for (const tier of [1, 2] as const) {

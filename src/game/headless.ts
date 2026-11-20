@@ -12,6 +12,7 @@ import { resolveRules, type Rules as RuleInputs } from "./rules/config.ts"
 import { Edits, Game, Rules, Toast } from "./schema.ts"
 import { editQueue, type Edit } from "./edits.ts"
 import { blankResources, simulate } from "./schedule.ts"
+import type { Notice } from "./said.ts"
 
 /** A saved world, as plain data. */
 export interface Snapshot {
@@ -52,7 +53,7 @@ export const replayTarget = (playback: Replay.Playback) => {
   return { runtime: made.value, schedules: { simulate }, hostClock }
 }
 
-export const headless = (charter: CharterValue, options: { readonly toast?: (message: string) => void; readonly rules?: RuleInputs; readonly hostClock?: HostClock.HostClock } = {}) => {
+export const headless = (charter: CharterValue, options: { readonly toast?: (notice: Notice) => void; readonly rules?: RuleInputs; readonly hostClock?: HostClock.HostClock } = {}) => {
   const edits = founding(charter)
   const made = Game.Runtime.make({ services: Game.Runtime.services(Game.Runtime.service(Edits, edits), Game.Runtime.service(Rules, options.rules ?? resolveRules())), resources: blankResources(), debug: { hostClock: options.hostClock ?? HostClock.test() } })
   if (!made.ok) throw new Error(`The town could not start: ${JSON.stringify(made.error)}`)
@@ -65,8 +66,8 @@ export const headless = (charter: CharterValue, options: { readonly toast?: (mes
   const town = {
     /** The edits waiting for the next step: what `edit` pushes to. */
     edits,
-    /** Where the town's messages go ("No room there"): `options.toast`, or set it. */
-    toast: options.toast ?? ((_message: string) => {}),
+    /** Where the town's messages go (no room there), as data (see `said.ts`): `options.toast`, or set it. */
+    toast: options.toast ?? ((_notice: Notice) => {}),
     /** The runtime itself, for tools (devtools sessions, lints, replays) and type-level checks. */
     runtime,
     /** Runs the town on for `seconds` of game time. */

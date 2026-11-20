@@ -13,6 +13,7 @@
  * While that tab is in front the town's frames stop (the loop clamps a frame to
  * a quarter of a second), so the term does not run on while the mayor is away.
  */
+import type { Catalog } from "../../../i18n/index.ts"
 import { PIXEL_LETTERS, PIXEL_MARK_32, PIXEL_WORDMARK } from "./pixel-mark.ts"
 
 /** The home of the maker's games. */
@@ -70,12 +71,12 @@ const svg = (path: string, width: number, height: number, size: number, classNam
   return node
 }
 
-const link = (href: string, label: string, ...content: Array<Node>): HTMLAnchorElement => {
+const link = (t: Catalog, href: string, label: string, ...content: Array<Node>): HTMLAnchorElement => {
   const a = document.createElement("a")
   a.href = href
   a.target = "_blank"
   a.rel = "noopener"
-  a.setAttribute("aria-label", `${label} (opens in a new tab)`)
+  a.setAttribute("aria-label", t.page.credit.newTab(label))
   a.append(...content)
   // The keys belong to the town again as soon as the link has been used.
   a.addEventListener("click", () => a.blur())
@@ -89,30 +90,26 @@ const text = (className: string, value: string): HTMLSpanElement => {
   return span
 }
 
-/** The two links, `lockup` CSS pixels tall for the mark. */
-const links = (lockup: number): Array<Node> => [
-  link(
-    typeonceSite,
-    "Typeonce Games: more games by the maker of Inkline Town",
-    svg(lockupPath, lockupWidth, MARK_SIZE, lockup, "lockup")
-  ),
+/** The two links, `lockup` CSS pixels tall for the mark. The names (Typeonce, ritmo) are names: only what is said around them is the language's. */
+const links = (t: Catalog, lockup: number): Array<Node> => [
+  link(t, typeonceSite, t.page.credit.typeonce, svg(lockupPath, lockupWidth, MARK_SIZE, lockup, "lockup")),
   text("dot", "·"),
-  link(ritmoSite, "ritmo on GitHub: the ECS runtime Inkline Town is made with", text("what", "Made with"), text("name", "ritmo"), svg(arrowPath, ARROW.length, ARROW.length, 7, "arrow"))
+  link(t, ritmoSite, t.page.credit.ritmo, text("what", t.page.credit.madeWith), text("name", "ritmo"), svg(arrowPath, ARROW.length, ARROW.length, 7, "arrow"))
 ]
 
 /** The note in the bottom-right corner. */
-export const createCreditCorner = (): HTMLElement => {
+export const createCreditCorner = (t: Catalog): HTMLElement => {
   const note = document.createElement("nav")
   note.className = "credit corner"
-  note.setAttribute("aria-label", "Made by Typeonce")
-  note.append(...links(16))
+  note.setAttribute("aria-label", t.page.credit.madeBy)
+  note.append(...links(t, 16))
   return note
 }
 
 /** The footer of a dialog. */
-export const createCreditLine = (): HTMLElement => {
+export const createCreditLine = (t: Catalog): HTMLElement => {
   const line = document.createElement("footer")
   line.className = "credit line"
-  line.append(...links(16))
+  line.append(...links(t, 16))
   return line
 }

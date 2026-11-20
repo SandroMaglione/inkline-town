@@ -19,9 +19,8 @@ export {
   asUpgraded, builtCost, categoryColor, categoryOrder, homeColor, kindIds, kindOrder, kinds, nextUpgrade, serviceIds, upgradeAt, upkeepOf, WORKS_TICKS, worksNeeded,
   type Category, type Crew, type Kind, type KindId, type Level, type ServiceId, type Source, type Topper, type Upgrade
 } from "./kinds/index.ts"
-export { anA, costText } from "./text.ts"
 export { groundIds, grounds, park, propIds, props, type GroundId, type ParkPiece, type PropId } from "./parks.ts"
-export { APPRENTICE, COMMUTE, crewOf, home, needTitle, tierHome, tierIds, TOOL_STOCK, type Need, type Tier } from "./homes.ts"
+export { APPRENTICE, COMMUTE, crewOf, home, tierIds, TOOL_STOCK, type Need, type Tier } from "./homes.ts"
 export { appeal, PAVE_COST, PAVED_PACE } from "./streets.ts"
 export { condition, CONDITION_MAX, risk, RISK_MAX } from "./risks.ts"
 export {

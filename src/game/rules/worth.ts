@@ -216,7 +216,10 @@ export const crownMargin = (good: GoodId, amount: number, rules: Rules = shipped
 // ── Services ──────────────────────────────────────────────────────────────
 
 export interface ServiceWorth {
+  /** The kind, and with its upgrades the level too ("market+1"). */
   readonly id: string
+  readonly kind: KindId
+  readonly level: number
   readonly service: string
   readonly cost: number
   readonly upkeep: number
@@ -236,7 +239,7 @@ export const services = (rules: Rules = shippedRules): Array<ServiceWorth> =>
       if (level > 0 && !upgradeAt(base, level)) break
       if (level > 0) cost += costWorth(upgradeAt(base, level)!.cost, rules)
       const k = asUpgraded(base, level), reach = (k.service!.range * 60) / k.service!.seconds
-      out.push({ id: level === 0 ? id : `${id}+${upgradeAt(base, level)!.title.toLowerCase()}`, service: k.service!.service, cost, upkeep: k.upkeep, reach, perUpkeep: reach / k.upkeep })
+      out.push({ id: level === 0 ? id : `${id}+${level}`, kind: id, level, service: k.service!.service, cost, upkeep: k.upkeep, reach, perUpkeep: reach / k.upkeep })
     }
     return out
   })
@@ -245,7 +248,9 @@ export const services = (rules: Rules = shippedRules): Array<ServiceWorth> =>
 
 export interface UpgradeWorth {
   readonly id: string
-  readonly title: string
+  /** The kind upgraded, and the level it reaches. */
+  readonly kind: KindId
+  readonly level: number
   /** One-off: coins and materials. */
   readonly cost: number
   /** Coins a minute more it costs to keep. */
@@ -276,7 +281,7 @@ export const upgradeWorths = (rules: Rules = shippedRules, size: keyof Rules["si
         const goal = rules.sizes[size].goal.residents * (rules.ranks[up.rank + 1]?.residents ?? 1)
         gain = adminOf(goal, rules) * (up.admin - (upgradeAt(base, level - 1)?.admin ?? 0))
       }
-      out.push({ id: `${id}:${level}`, title: up.title, cost, upkeep, gain, payback: gain === null ? null : gain > upkeep ? cost / (gain - upkeep) : Infinity })
+      out.push({ id: `${id}:${level}`, kind: id, level, cost, upkeep, gain, payback: gain === null ? null : gain > upkeep ? cost / (gain - upkeep) : Infinity })
     }
     return out
   })

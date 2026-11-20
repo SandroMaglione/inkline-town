@@ -14,7 +14,8 @@ import { COMMUTE, home, kinds, type CharterValue } from "../src/game/content/ind
 import { appealAt } from "../src/game/world/appeal.ts"
 import { canPlace, GridBuilder, type Use } from "../src/game/world/grid.ts"
 import type { Snapshot } from "../src/game/headless.ts"
-import { blockers, streetShort, whyUnmet, type InTown, type Served, type Street } from "../src/game/rules/explain.ts"
+import { blockers, causeOf, draggedDown, type Blocker, type InTown, type Served, type Street } from "../src/game/rules/explain.ts"
+import { en, plain, say } from "../src/i18n/index.ts"
 import { capacity, streetRoom, streetTax, taxOf } from "../src/game/rules/households.ts"
 import { approvalTarget, grudgeAfter } from "../src/game/rules/approval.ts"
 import { headless } from "../src/game/headless.ts"
@@ -22,7 +23,21 @@ import { headless } from "../src/game/headless.ts"
 const settlers = { tier: 1 as const, residents: 4, food: 100, bread: 100, cloth: 0, faith: 100, furniture: 0, clock: 0 }
 const plenty: InTown = { fish: 20, smoked: 0, bread: 30, cloth: 188, furniture: 0 }
 const served: Served = { goods: true, faith: true }
-const quarryStreet: Street = { desirability: -4, parts: [{ label: "quarry", value: -6 }, { label: "chapel", value: 2 }] }
+const quarry = { _tag: "kind", kind: "quarry", level: 0 } as const, chapel = { _tag: "kind", kind: "chapel", level: 0 } as const, market = { _tag: "kind", kind: "market", level: 0 } as const
+const quarryStreet: Street = { desirability: -4, parts: [{ label: quarry, value: -6 }, { label: chapel, value: 2 }] }
+
+// The rules name each cause as data; the panel reads it out in the page's language. These are the words a player reads, in English.
+/** Why a need is unmet, in one line ("why: what to do"), or `null` when it is met. */
+const whyUnmet = (...args: Parameters<typeof causeOf>): string | null => {
+  const cause = causeOf(...args)
+  return cause ? plain(en, en.view.causeLine(say(en.view.cause, cause))) : null
+}
+const streetShort = (street: Street, needed: number) => en.view.street.short(street, needed)
+/** A blocker as the panel says it: a need's cause, or the street against what the next tier needs and what would lift it. */
+const told = (b: Blocker): string =>
+  b.what === "street"
+    ? `the street is ${streetShort(b.street, b.needed)} · ${plain(en, en.view.street.advice(draggedDown(b.street)))}`
+    : plain(en, en.view.causeLine(say(en.view.cause, b.cause)))
 
 test("cloth withheld from a poor street is told as the street, not as missing cloth", () => {
   const why = whyUnmet("cloth", settlers, quarryStreet, plenty, served)
@@ -33,12 +48,12 @@ test("cloth withheld from a poor street is told as the street, not as missing cl
   // What drags the street down, and what lifts it, is the street's own line.
   const all = blockers(settlers, quarryStreet, plenty, served, { fire: 0, health: 0, order: 0 })
   assert.deepEqual(all.map((b) => b.what), ["cloth", "street"])
-  assert.match(all[1]!.text, /quarry −6/)
-  assert.match(all[1]!.text, /move industry away|park/)
+  assert.match(told(all[1]!), /quarry −6/)
+  assert.match(told(all[1]!), /move industry away|park/)
 })
 
 test("on a street fit for citizens the reason moves to the walker or the store", () => {
-  const fine: Street = { desirability: 6, parts: [{ label: "chapel", value: 4 }, { label: "market", value: 2 }] }
+  const fine: Street = { desirability: 6, parts: [{ label: chapel, value: 4 }, { label: market, value: 2 }] }
   assert.match(whyUnmet("cloth", settlers, fine, plenty, served)!, /walker has not passed with cloth/)
   assert.match(whyUnmet("cloth", settlers, fine, { ...plenty, cloth: 0 }, served)!, /no cloth: build a weaver/)
   assert.match(whyUnmet("cloth", settlers, fine, plenty, { goods: false, faith: true })!, new RegExp(`${kinds.market.service!.range} road cells`))
@@ -111,10 +126,10 @@ test("a real town: cottages beside a quarry are told why they will not grow", { 
   const worst = cottages.map((e) => appealAt(cells, e.components["Town/Tile"].x, e.components["Town/Tile"].y)).sort((a, b) => a - b)[0]!
   assert.ok(worst < 0, `a cottage beside a quarry is on a poor street (${worst})`)
   const house = cottages[0]!.components["Town/House"]
-  const street: Street = { desirability: worst, parts: [{ label: "quarry", value: worst }] }
+  const street: Street = { desirability: worst, parts: [{ label: quarry, value: worst }] }
   const why = blockers({ ...house, bread: 1, faith: 1, cloth: 0 }, street, plenty, served, undefined)
-  assert.ok(why.some((b) => b.what === "cloth" && /street of 5/.test(b.text)), "cloth is explained by the street")
-  assert.ok(why.some((b) => b.what === "street" && /quarry/.test(b.text)), "the street names the quarry")
+  assert.ok(why.some((b) => b.what === "cloth" && /street of 5/.test(told(b))), "cloth is explained by the street")
+  assert.ok(why.some((b) => b.what === "street" && /quarry/.test(told(b))), "the street names the quarry")
   // And the rules bite at once: the street holds fewer than a plain one would.
   assert.ok(capacity(house, s.resources["Town/Mood"].approval, worst) < capacity(house, s.resources["Town/Mood"].approval, 0) || worst > -3, "a street below −2 holds fewer")
   // A workplace with nobody in reach says so in the same breath.

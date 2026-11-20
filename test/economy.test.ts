@@ -20,6 +20,7 @@ import { moreAdmin, tierFor } from "../src/game/rules/households.ts"
 import { chainWorth, crownMargin, dominates, homes, median, openingKit, producers, producerWorth, services, upgradeWorths } from "../src/game/rules/worth.ts"
 import { district } from "../tools/balance/scenario.ts"
 import { component, fixture } from "../tools/balance/verify/fixture.ts"
+import { en } from "../src/i18n/index.ts"
 
 const rules = shippedRules
 /** Fails with every offender listed, not just the first. */
@@ -147,7 +148,7 @@ const UPGRADE_PAYBACK = [2, 45] as const
 
 test("every upgrade that earns pays for itself within a term, never at once", () => {
   none(upgradeWorths(rules).filter((u) => u.payback !== null && (u.payback < UPGRADE_PAYBACK[0] || u.payback > UPGRADE_PAYBACK[1]))
-    .map((u) => `${u.title}: costs ${u.cost}, earns ${round(u.gain!)}/min for ${u.upkeep} more upkeep, pays back in ${round(u.payback!)} min`), "upgrade out of the band")
+    .map((u) => `${en.kind.title(u.kind, u.level)}: costs ${u.cost}, earns ${round(u.gain!)}/min for ${u.upkeep} more upkeep, pays back in ${round(u.payback!)} min`), "upgrade out of the band")
 })
 
 test("an upgraded producer still adds about what producers usually do for its upkeep", () => {

@@ -54,8 +54,8 @@ folds it, a pan or pinch does not. Once the town has a minute of goods
 (`body.flow-ready`), the goods chip opens the made/used table straight away,
 each good by its icon. The guide's step stays above the tool bar until tucked away
 (its ✕); tucked, the bulb pulses, and a new step (or the same one under way)
-comes out again. Guide texts in `src/game/rules/guide.ts` name tools,
-panels and map views as `[homes]`, `[town]` or `[view:fire]` and verbs as
+comes out again. Guide texts (`guide` in each language, `src/i18n/en/guide.ts`) name tools,
+panels and map views as tokens (`[homes]`, `[town]` or `[view:fire]`) and verbs as
 `{tap|click}`, never keys, so they read right on either screen;
 `test/guide.test.ts` checks it. Sheets
 open from the side on a landscape phone (`max-height: 500px`) and from the
@@ -213,6 +213,7 @@ ui/dom/     the page's UI          render/pixi3d/   the PixiJS 3D renderer
             |
           game/   the simulation: headless, replays exactly
 platform/   storage and sharing (knows game data only)      labs/   dev-only pages
+i18n/       the languages: names for the game's content, and words for what it says as data
 ```
 
 The layers talk through small typed contracts, so a new UI (a native app)
@@ -225,6 +226,10 @@ or a new renderer (Pixi) is a new folder, not a change to the others:
 - **`TownView`** and **`SceneView`** (`src/view/contracts.ts`): what the view shows, filled in once a frame.
   The UI reads the first (panel, numbers, tooltip, toasts), the renderer the second (preview, map view,
   tints, the upgrades' arrows).
+- **What the game says** (`src/game/said.ts`, and the causes the rules give): data, never prose. The
+  chronicle holds events (`{ _tag: "fire", place }`), an edit answers with a notice, a term ends with a
+  reason. The view puts them into the words of the language in use (the **`Words`** service,
+  `src/view/services.ts`); see [Languages](#languages).
 
 One frame runs three schedules: `simulate` (at the chosen speed), then `project` (the view), then `draw`
 (the renderer). While the town waits, `settle` keeps the guide's books without a step of time.
@@ -232,10 +237,13 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
 - `src/game/`: the simulation, with no page or renderer in it.
   - `schema.ts`: the ECS world: components, relations, resources, the `Edits` and `Rules` services, the events.
   - `edits.ts`: the player's edits, and the queue the page and the view push them to.
+  - `said.ts`: what the simulation says, as data: the chronicle's events, the notices an edit answers
+    with, why a term ended, and where something happened. No words: a language puts each into them.
   - `content/`: plain data, one module per closed set: `goods.ts`, `kinds/` (one file per category,
     merged in `kinds/index.ts`), `homes.ts`, `parks.ts`, `lands.ts`, `town.ts` (ranks, the crown, fate,
-    costs), and the rest. A table every kind must fill is typed `satisfies Record<KindId, …>`, so a new
-    kind fails to compile until it is in each.
+    costs), and the rest. Ids and numbers only: what each is called is the language's. A table every
+    kind must fill is typed `satisfies Record<KindId, …>`, so a new kind fails to compile until it is
+    in each (its name in every language among them).
   - `rules/`: pure calculations: production, households, taxes, approval, the guide's steps, explanations.
   - `world/`: the grid (`iso.ts`, `grid.ts`), the land (`mapgen.ts`), desirability (`appeal.ts`), street
     names (`places.ts`), and content to components (`archetypes.ts`).
@@ -251,8 +259,10 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
   - `interaction/`: the pointer's gestures as a selection, drags, and edits.
   - `preview.ts`, `tooltip.ts`, `overlay.ts` (the map views and their legends), `alerts.ts`, `upgrades.ts`,
     `guide.ts`, `stats.ts`, and `panels/` (a building, a home, a park, a ruin): each fills its part.
-  - `tools.ts`: every command, tool and map view, defined once: the tool bar, the keys, and the `[homes]`
-    chips in messages all come from it.
+  - `tools.ts`: every command, tool and map view, defined once (its id, icon, key, and what it does): the
+    tool bar, the keys, and the `[homes]` chips in messages all come from it; what each is called is the
+    language's (`commands`, `toolbar`, `mapViews`).
+  - `services.ts`: the host state the view's systems are handed, the language in use (`Words`) among it.
   - `icons.ts`: every icon name the view can use; each UI must draw them all.
 - `src/ui/dom/`: the page. `index.ts` composes it and wires its actions (`controls.ts`); it reaches the map
   only through the `MapPort` the app hands it.
@@ -285,6 +295,10 @@ One frame runs three schedules: `simulate` (at the chosen speed), then `project`
 - `src/platform/`: `save.ts` (saving and loading as [Effect](https://effect.website) programs: a versioned file
   in a slot, the mayor's own or the autosave, typed errors for each way a load can fail) and `share/` (the format
   and limits the page and the server agree on, and the page's side: uploading, fetching, the share sheet).
+- `src/i18n/`: the languages (see [Languages](#languages)): `en/` (English, the catalog every other is
+  checked against), `token.ts` (what a message names beyond words), `wording.ts` (a table of words for a
+  tagged union), `plain.ts` (a message in words alone), and `index.ts` (which languages there are, which
+  to play in, and loading one).
 - `src/server/`: the only server code: the routes behind shared towns (`handler.ts`), the Cloudflare Worker that
   runs them (`worker.ts`), and the same routes under `pnpm dev`, over a bucket in memory (`dev.ts`).
 - `src/app/`: `browser.ts` (start-up: the runtime, the scene, the map input, the page, the loop, saves),
@@ -493,6 +507,69 @@ lifecycle rule clears after a day. Either answers 429 with a line the page
 shows. Under `pnpm dev` the same routes run in Vite
 over a bucket in memory (shares last until the server stops), so sharing
 works locally and `pnpm check:browser` checks it end to end.
+
+## Languages
+
+The game is written in English and plays in any language that has a catalog
+(`src/i18n/<locale>/`). No library: a catalog is a plain TypeScript object,
+checked by the compiler against English's shape, and the browser's `Intl`
+does plurals, lists and numbers.
+
+**Words live in one place.** Nothing under `src/game` holds a word a player
+reads (`.oxlintrc.json` forbids it importing `src/i18n`). The content tables
+are ids and numbers; the simulation says what happened as tagged data
+(`src/game/said.ts`: `{ _tag: "rankReached", rank, reward }`), and so do the
+rules that explain things (a home's unmet need in `rules/explain.ts`, a
+building's problem, the guide's notes). So a save, a shared town, a replay,
+the tests and the balance bot carry no prose, and a town reads in whatever
+language its mayor picks, its past included. (A line written before save
+version 12 is kept as a `legacy` event, in the words it was written in.)
+
+**A catalog** is `export const en = { … }`, and `Catalog` is `typeof en`.
+Another language is `export const it = { … } satisfies Catalog`: a message
+it lacks, or one whose numbers it reads wrongly, does not compile. Inside,
+three kinds of entry:
+
+- **Names** (`nouns.ts`): a table for each closed set of the content,
+  `satisfies Record<KindId, …>`, so a new building is not buildable until
+  every language names it. The page reads only finished names
+  (`t.kind.title(id, level)`, `t.kind.name`, `t.good.name`, `t.rank(n)`).
+- **Wordings** (`said.ts`, and parts of `view.ts` and `guide.ts`): for each
+  tagged union the game says, a table with one function a tag,
+  `satisfies Wording<Event>`; `say(t.chronicle, event)` picks it. A new
+  event does not compile until every language words it, and its fields are
+  typed where they are used.
+- **Sentences** (`view.ts`, `page.ts`, `guide.ts`): a function for each
+  thing the view or the page says, taking ids and numbers:
+  `t.view.house.residents(n)`. Never put a sentence together outside the
+  catalog (an article, a plural `s`, a lowercased title): each language has
+  its own grammar (`grammar.ts`: its `Noun`, its articles, its `Intl`
+  formatters, made once), and only a whole sentence can be reordered.
+
+**Tokens** (`src/i18n/token.ts`). A message is one string; what it names
+beyond words is a token in square brackets, written with typed helpers
+(`token.coins(25)`, `token.amount("planks", 2)`, `token.kind("fishery",
+"fisheries")`, `token.command("homes")`), never by hand. The page's
+`markup` (`src/ui/dom/kit/text.ts`) turns the tokens into icons and chips,
+and `plain` into words where markup cannot go (a `title`, `textContent`).
+Nothing recognises a building by how its name is spelt.
+
+**How it reaches the page.** `src/app/browser.ts` picks the language (the
+one chosen before, else the browser's, else English), loads its catalog
+before the first frame, and hands it to the runtime as the `Words` service
+and to the page. Only the view's systems read the service: `Project` puts
+the catalog on the frame (`frame.t`) and words the town once a frame, and
+the page writes the result only where it changed (`setHtml`), so there is
+nothing to subscribe to. Catalog functions run every frame: keep them cheap,
+and never make an `Intl` formatter inside one.
+
+**To add a language**: copy `src/i18n/en/` to a folder named by its tag,
+translate it (grammar first: what a noun needs in that language), end
+`index.ts` with `satisfies Catalog`, and add it to `loaders` in
+`src/i18n/index.ts`. `pnpm typecheck` lists what is missing;
+`test/i18n.test.ts` then holds it to naming every upgrade, wording every
+event and notice with only tokens the game knows, and saying the same
+things as English.
 
 ## Testing
 

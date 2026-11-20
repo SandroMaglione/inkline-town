@@ -6,6 +6,7 @@
  */
 import { kinds, type KindId } from "../../../game/content/index.ts"
 import type { Edit } from "../../../game/edits.ts"
+import type { Catalog } from "../../../i18n/index.ts"
 import type { Interaction, Panel, TownView } from "../../../view/contracts.ts"
 import type { Controls } from "../controls.ts"
 import { el } from "../kit/dom.ts"
@@ -17,6 +18,8 @@ import { townPanel, type TownHistory } from "./town.ts"
 
 /** What a panel's parts are built with. */
 export interface PanelParts {
+  /** The language the panel speaks. */
+  readonly t: Catalog
   readonly town: TownView
   readonly ui: Interaction
   readonly send: (edit: Edit) => void
@@ -29,6 +32,7 @@ export interface PanelParts {
 }
 
 export const createPanel = (
+  t: Catalog,
   ui: Interaction,
   town: TownView,
   send: (edit: Edit) => void,
@@ -46,7 +50,7 @@ export const createPanel = (
     text.append(el("h2", "", title))
     if (below) text.append(below)
     const closeButton = el("button", "close")
-    closeButton.title = "Close (Esc)"
+    closeButton.title = t.page.common.closeEsc
     closeButton.append(iconEl("close", 18))
     closeButton.onclick = () => {
       ui.selected = null
@@ -56,7 +60,7 @@ export const createPanel = (
     head.append(lead, text, closeButton)
     return head
   }
-  const parts: PanelParts = { town, ui, send, pictures, live: (update) => live.push(update), header, element: panel }
+  const parts: PanelParts = { t, town, ui, send, pictures, live: (update) => live.push(update), header, element: panel }
 
   const build = (p: Panel) => {
     live = []

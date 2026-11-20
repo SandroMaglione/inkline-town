@@ -3,8 +3,8 @@
  * what would be laid, the road being dragged, outlines of what is picked and
  * what it reaches, and cells that will not take it.
  */
-import { COMMUTE, costText, grounds, home, kinds, nextUpgrade, PAVE_COST, props, ranks, ROAD_COST, upgradeAt, type Kind, type Tier } from "../game/content/index.ts"
-import { upgradeChanges, upgradePrice } from "../game/rules/upgrades.ts"
+import { COMMUTE, grounds, home, kinds, nextUpgrade, PAVE_COST, props, ROAD_COST, type Kind, type Tier } from "../game/content/index.ts"
+import { upgradeChanges } from "../game/rules/upgrades.ts"
 import { capacity, lockReason, taxOf, upgradeBlock } from "../game/schedule.ts"
 import { moreAdmin } from "../game/rules/households.ts"
 import { appealAt, type ParkCell } from "../game/world/appeal.ts"
@@ -14,8 +14,8 @@ import { emptyPreview, type Interaction } from "./contracts.ts"
 import { reachOf } from "./facts.ts"
 import type { Frame } from "./frame.ts"
 import { cellAt, footprintAt, rectangle } from "./interaction/geometry.ts"
-import { placeProblem } from "./interaction/placing.ts"
-import { counted, signed } from "./text.ts"
+import { say } from "../i18n/index.ts"
+import { placeProblem, refuses } from "./interaction/placing.ts"
 
 /**
  * What new cottages would bring in, fed, at the settlers' rate on their streets, less what they add to the
@@ -24,6 +24,7 @@ import { counted, signed } from "./text.ts"
 const homesWorth = (frame: Frame, at: ReadonlyArray<Point>) => {
   const { houses, cells, approval, rates } = frame
   if (at.length === 0) return ""
+  const words = frame.t.view.tooltip
   const standing = houses.filter((row) => row.data.closed === undefined).reduce((n, row) => n + row.data.house.residents, 0)
   const fed = { tier: 1 as Tier, food: 1, bread: 0, cloth: 0, faith: 0, furniture: 0, residents: home.tiers[1].residents }
   let people = 0
@@ -32,13 +33,13 @@ const homesWorth = (frame: Frame, at: ReadonlyArray<Point>) => {
     people += residents
     return sum + taxOf({ ...fed, residents }, rates, undefined, d)
   }, 0)
-  const worth = Math.round(pays - moreAdmin(standing, people))
-  return worth > 0 ? ` · ${signed(worth)} coins a minute once fed` : " · costs more to run than it pays: finer homes pay better"
+  return words.homesWorth(Math.round(pays - moreAdmin(standing, people)))
 }
 
 /** The preview for this frame, and whether a stroke is being let go off the map (`dropping`). */
 export const previewOf = (frame: Frame, ui: Interaction) => {
-  const { grid, buildings } = frame
+  const { grid, buildings, t } = frame
+  const words = t.view.tooltip
 
   const preview = emptyPreview()
   const pointer = ui.pointer
@@ -61,8 +62,8 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
     preview.rangeNote = note
   }
   const rangeOfKind = (tile: TileLike, kind: Kind, range = kind.service?.range) => {
-    if (kind.service && range !== undefined) rangeFrom(tile, range, `its walkers reach ${range} road cells from the door`)
-    else if (kind.workers > 0) rangeFrom(tile, COMMUTE + 1, `its workers come from homes within ${COMMUTE} road cells`)
+    if (kind.service && range !== undefined) rangeFrom(tile, range, words.walkersReach(range))
+    else if (kind.workers > 0) rangeFrom(tile, COMMUTE + 1, words.workersFrom)
   }
   // Where the page is pointing (from the ticker): outlined for a few seconds.
   if (ui.flash) {
@@ -80,7 +81,7 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
   if (dropping && cell && (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave" || ui.tool === "ground")) {
     for (const c of ui.tool === "ground" ? rectangle(ui.dragFrom!, cell) : lPath(ui.dragFrom!, cell))
       if (inside(c.x, c.y)) preview.plots.push({ ...c, size: 1, look: "blocked" })
-    preview.tooltip = "let go here to cancel"
+    preview.tooltip = words.cancel
   } else if (ui.tool === "road" || ui.tool === "home" || ui.tool === "pave") {
     const cells = cell === null ? [] : ui.dragFrom ? lPath(ui.dragFrom, cell) : [cell]
     for (const c of cells) {
@@ -97,18 +98,18 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
       else preview.plots.push({ ...c, size: 1, look: "blocked" })
     }
     if (ui.tool === "home" && cell && inside(cell.x, cell.y)) {
-      rangeFrom({ ...(ui.dragFrom ?? cell), size: 1 }, COMMUTE + 1, `residents walk to work within ${COMMUTE} road cells`)
-      preview.tooltip = `homes · ${costText(home.cost)} each${preview.rangeNote ? homesWorth(frame, preview.ghosts.map((g) => g.cell)) : " · lay them beside a road"}`
+      rangeFrom({ ...(ui.dragFrom ?? cell), size: 1 }, COMMUTE + 1, words.residentsWalk)
+      preview.tooltip = words.homes(home.cost, preview.rangeNote ? homesWorth(frame, preview.ghosts.map((g) => g.cell)) : null)
     }
-    if (ui.tool === "road" && cell) preview.tooltip = `road · ${ROAD_COST} coins a cell`
+    if (ui.tool === "road" && cell) preview.tooltip = words.road(ROAD_COST)
     if (ui.dragFrom && cell) {
       const n = ui.tool === "road" ? preview.roads.length : ui.tool === "home" ? preview.ghosts.length : preview.plots.filter((p) => p.look === "reach").length
       preview.stroke =
         ui.tool === "road"
-          ? `${counted(n, "road cell")} · ${costText({ coins: n * ROAD_COST, materials: {} })}`
+          ? words.roadStroke(n, { coins: n * ROAD_COST, materials: {} })
           : ui.tool === "home"
-            ? `${counted(n, "home")} · ${costText(times(home.cost, n))}${homesWorth(frame, preview.ghosts.map((g) => g.cell))}`
-            : `pave ${counted(n, "cell")} · ${costText({ coins: n * PAVE_COST.coins, materials: { stone: n * PAVE_COST.stone } })}`
+            ? words.homesStroke(n, times(home.cost, n), homesWorth(frame, preview.ghosts.map((g) => g.cell)))
+            : words.paveStroke(n, { coins: n * PAVE_COST.coins, materials: { stone: n * PAVE_COST.stone } })
     }
   } else if (ui.tool === "ground" && cell) {
     const laid: Array<ParkCell> = []
@@ -120,9 +121,9 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
     }
     preview.parks.push(...laid)
     const after = laid.length > 0 ? frame.parkOf(laid[0]!, laid) : undefined
-    const cost = costText(times(grounds[ui.ground].cost, laid.length))
-    if (ui.dragFrom) preview.stroke = `${grounds[ui.ground].title.toLowerCase()} · ${counted(laid.length, "cell")} · ${cost}`
-    preview.tooltip = `${grounds[ui.ground].title.toLowerCase()} · ${cost}${after ? ` · park ${signed(after.value)} desirability` : ""}`
+    const cost = times(grounds[ui.ground].cost, laid.length)
+    if (ui.dragFrom) preview.stroke = words.groundStroke(ui.ground, laid.length, cost)
+    preview.tooltip = words.ground(ui.ground, cost, after ? after.value : null)
     if (after) preview.plots.push(...frame.reachPlots(after))
   } else if (ui.tool === "prop" && cell && inside(cell.x, cell.y)) {
     const there = frame.parkAt.get(key(cell.x, cell.y))?.data.park
@@ -131,11 +132,11 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
       preview.parks.push(placed)
       const before = frame.parkOf(cell)
       const after = frame.parkOf(cell, [placed])
-      preview.tooltip = `${props[ui.prop].title.toLowerCase()} · ${costText(props[ui.prop].cost)}${after ? ` · park ${signed(after.value)} desirability${before && before.value !== after.value ? ` (now ${signed(before.value)})` : ""}` : ""}${after && after.crowded > 0 ? " · too crowded" : ""}`
+      preview.tooltip = words.prop(ui.prop, props[ui.prop].cost, after ? { value: after.value, before: before && before.value !== after.value ? before.value : null, crowded: after.crowded > 0 } : null)
       if (after) preview.plots.push(...frame.reachPlots(after))
     } else {
       preview.plots.push({ ...cell, size: 1, look: "blocked" })
-      preview.tooltip = `${props[ui.prop].title.toLowerCase()} · lay park ground first`
+      preview.tooltip = words.propNeedsPark(ui.prop)
     }
   } else if (ui.tool === "place" && ui.placing && pointer) {
     const kind = kinds[ui.placing]
@@ -148,7 +149,7 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
     else if (canPlace(grid, tile)) {
       preview.ghosts.push({ what: ui.placing, cell: at })
       // No road at a side's middle: shown red under the ghost, as it will not be laid there.
-      if (placeProblem(frame, kind, tile)?.refuse) preview.plots.push({ ...tile, look: "blocked" })
+      if (refuses(placeProblem(frame, kind, tile))) preview.plots.push({ ...tile, look: "blocked" })
     } else preview.plots.push({ ...tile, look: "blocked" })
   } else if (ui.tool === "upgrade" && ui.upgrading) {
     // Every building the upgrade can go to, outlined; the one under the pointer says what it would give and cost.
@@ -159,28 +160,28 @@ export const previewOf = (frame: Frame, ui: Interaction) => {
       const kind = kinds[ui.upgrading], level = data.upgraded?.level ?? 0, up = nextUpgrade(kind, level)
       const tile = data.tile
       if (!up) continue
-      const blocked = upgradeBlock(up, rank, { ranks })
+      const blocked = upgradeBlock(up, rank)
       const hovered = preview.hover === row.entity.id
-      preview.plots.push({ ...tile, look: data.works !== undefined || blocked ? "blocked" : hovered ? "picked" : "reach" })
+      preview.plots.push({ ...tile, look: data.works !== undefined || blocked !== null ? "blocked" : hovered ? "picked" : "reach" })
       if (!hovered) continue
-      const from = (upgradeAt(kind, level)?.title ?? kind.title).toLowerCase()
+      const said = t.view.upgrade, path = said.path(kind.id, level)
       preview.tooltip = data.works !== undefined
-        ? `${from} → ${up.title.toLowerCase()} · under way: carriers are bringing its materials`
-        : [`${from} → ${up.title.toLowerCase()}`, upgradePrice(up), ...upgradeChanges(kind, level).map((c) => `· ${c}`),
-            blocked ?? (coins < up.cost.coins ? `${up.cost.coins - coins} coins short` : "click to begin: it goes on working meanwhile")].join("\n")
+        ? `${path} · ${said.underWay}`
+        : [path, said.price(up.cost), ...upgradeChanges(kind, level).map((c) => `· ${said.line(say(said.change, c))}`),
+            blocked !== null ? t.needsRank(blocked) : coins < up.cost.coins ? said.short(up.cost.coins - coins) : said.begin].join("\n")
     }
-    if (!preview.tooltip) preview.tooltip = `upgrade: pick a ${kinds[ui.upgrading].title.toLowerCase()} · Esc to stop`
+    if (!preview.tooltip) preview.tooltip = t.view.upgrade.pick(ui.upgrading)
   } else if (ui.tool === "bulldoze") {
     preview.danger = true
     if ((preview.hover === null || useAt(grid, cell?.x ?? -1, cell?.y ?? -1) === "park") && cell && ["road", "tree", "field", "park"].includes(useAt(grid, cell.x, cell.y)))
       preview.plots.push({ ...cell, size: 1, look: "blocked" })
     const there = cell ? frame.parkAt.get(key(cell.x, cell.y))?.data.park : undefined
-    if (there) preview.tooltip = there.prop !== "none" ? `remove the ${props[there.prop].title.toLowerCase()}` : `remove the ${grounds[there.ground].title.toLowerCase()}`
+    if (there) preview.tooltip = there.prop !== "none" ? words.removeProp(there.prop) : words.removeGround(there.ground)
     const rock = cell ? frame.rockAt.get(key(cell.x, cell.y)) : undefined
     if (rock && cell) {
       const worked = rock.amount <= 1
       if (worked) preview.plots.push({ ...cell, size: 1, look: "blocked" })
-      preview.tooltip = worked ? `worked ${rock.ore ? "ore" : "stone"} face · bulldoze to clear it` : `${rock.ore ? "ore" : "stone"} · ${rock.amount} left`
+      preview.tooltip = worked ? words.workedFace(rock.ore) : words.rock(rock.ore, rock.amount)
     }
   }
   if (ui.selected !== null) {

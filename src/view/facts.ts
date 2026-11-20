@@ -1,66 +1,96 @@
 /**
  * What the view reads off a building or a home, for its panel, its tooltip,
  * and its model alike: why it is not working, how far up it is, and how its
- * risks read.
+ * risks read. Why a building is not working is data (`Problem`): the model
+ * only asks whether there is one, and the panel and the tooltip put it into
+ * the words of the language in use (`view.problem` in `i18n`).
  */
-import { BUILD_TICKS, COMMUTE, kindOrder, kinds, RESTOCK_TICKS, risk, RISK_MAX, step, total, worksNeeded, type Amounts, type GoodId, type Kind, type KindId } from "../game/content/index.ts"
-import type { Cause } from "../game/rules/explain.ts"
-import { salvageOf, salvageText, withWorks } from "../game/rules/salvage.ts"
+import { BUILD_TICKS, kindOrder, kinds, RESTOCK_TICKS, risk, RISK_MAX, step, total, worksNeeded, type Amounts, type Crew, type GoodId, type Kind, type KindId } from "../game/content/index.ts"
+import { salvageOf, withWorks } from "../game/rules/salvage.ts"
 import type { Status as StatusValue, GridValue } from "../game/schema.ts"
 import { SITE_SHARE } from "../game/schedule.ts"
 import { around, key, useAt, type TileLike } from "../game/world/grid.ts"
-import { percent } from "./text.ts"
+import type { Catalog } from "../i18n/index.ts"
 
 /** How far a kind's work reaches, if it works the land around it. */
 export const reachOf = (kind: Kind): number | null => kind.gathers?.radius ?? kind.plants?.radius ?? null
 
-const sourceTitle = { tree: "grown trees", stone: "stone", ore: "ore", field: "ripe fields", water: "water" } as const
-
 /** What a building's crew is short of, for its problem line. */
 interface Crewing {
   readonly nearby: number
-  readonly crew: "settlers" | "citizens"
+  readonly crew: Crew
 }
 
-/** Why a building is not working: in a word or two, why in a line, and what to do; `null` when it is fine. */
-export interface Problem extends Cause {
-  readonly label: string
-}
+/**
+ * Why a building is not working, with the numbers its line is told with:
+ * - `unconnected`: no road at the middle of a side;
+ * - `noWorkersNear`: no homes of its crew in reach; `workersTaken`: every one nearby has a job;
+ * - `full`: nowhere to take what it makes; `paused`;
+ * - `fishedOut`: its water rests `seconds` after a catch; `noWater`, `noTrees`, `noSource`: nothing to gather within `radius`;
+ * - `workedOut`: only worked faces of rock in reach; `growing`: its trees or fields are young yet;
+ * - `noInput`: it waits for a good (`maker`: the kind that makes it, if any);
+ * - `nothingToHandOut` (a market), `noPlanks` (a builder's yard), `waiting`; and `onFire`.
+ */
+export type Problem =
+  | { readonly _tag: "unconnected" }
+  | { readonly _tag: "workersTaken" }
+  | { readonly _tag: "full" }
+  | { readonly _tag: "paused" }
+  | { readonly _tag: "nothingToHandOut" }
+  | { readonly _tag: "noPlanks" }
+  | { readonly _tag: "waiting" }
+  | { readonly _tag: "onFire" }
+  | { readonly _tag: "noWorkersNear"; readonly crew: Crew }
+  | { readonly _tag: "fishedOut"; readonly seconds: number }
+  | { readonly _tag: "noWater"; readonly radius: number }
+  | { readonly _tag: "noTrees"; readonly radius: number }
+  | { readonly _tag: "noSource"; readonly source: "stone" | "ore" | "field"; readonly radius: number }
+  | { readonly _tag: "workedOut"; readonly source: "stone" | "ore" }
+  | { readonly _tag: "growing"; readonly source: "tree" | "field" }
+  | { readonly _tag: "noInput"; readonly good: GoodId; readonly maker: KindId | null }
 
 /** The kind that makes a good, for a fix that builds it. */
 const makerOf = (good: GoodId): KindId | undefined => kindOrder.find((id) => kinds[id].recipe?.output === good)
 
+/** What a problem would have the town build, first link first (the panel offers the first one the town lacks); none: nothing to build. */
+export const problemBuild = (p: Problem): ReadonlyArray<KindId> | undefined => {
+  switch (p._tag) {
+    case "full":
+      return ["warehouse"]
+    case "noTrees":
+      return ["forester"]
+    case "noInput":
+      return p.maker ? [p.maker] : undefined
+    case "noPlanks":
+      return ["lumberjack", "sawmill"]
+    case "onFire":
+      return ["firewatch"]
+    default:
+      return undefined
+  }
+}
+
+/** Why a building is not working, or `null` when it is fine. */
 export const problemOf = (kind: Kind, status: StatusValue, growing = false, crewing?: Crewing): Problem | null => {
   switch (status) {
     case "unconnected":
-      return { label: "no road", why: "it needs a road at the middle of one of its sides", fix: { text: "lay a road along one of its sides" } }
+      return { _tag: "unconnected" }
     case "unstaffed":
-      if (crewing && crewing.nearby === 0)
-        return { label: "no workers", why: `no ${crewing.crew === "citizens" ? "citizens' (or settlers') homes" : "settlers' cottages"} within ${COMMUTE} road cells`, fix: { text: "lay homes nearer, or a road to homes nearby" } }
-      return { label: "no workers", why: "every one nearby already has a job", fix: { text: `lay more homes within ${COMMUTE} road cells` } }
+      return crewing && crewing.nearby === 0 ? { _tag: "noWorkersNear", crew: crewing.crew } : { _tag: "workersTaken" }
     case "blocked":
-      return { label: "full", why: "nowhere to take what it makes", fix: { text: "build a warehouse nearby, or sell the surplus in the [town] panel", build: ["warehouse"] } }
+      return { _tag: "full" }
     case "paused":
-      return { label: "paused", why: "no workers, a quarter of its upkeep", fix: { text: "resume work below" } }
-    case "starved":
-      if (kind.gathers?.source === "water")
-        return growing
-          ? { label: "no fish", why: `the water in reach is fished out: each stretch rests ${Math.round(RESTOCK_TICKS * step.dt)} s after a catch`, fix: { text: "give it a longer shore of its own, or fewer fisheries on this water" } }
-          : { label: "no water", why: `no water within ${kind.gathers.radius} cells`, fix: { text: "rebuild it by the shore" } }
-      if (kind.gathers && growing && (kind.gathers.source === "stone" || kind.gathers.source === "ore"))
-        return { label: "worked out", why: `the worked faces in reach give a little ${kind.gathers.source} now and then`, fix: { text: `build it by fresh rock, or buy ${kind.gathers.source} in the [town] panel` } }
-      if (kind.gathers && growing) return { label: "waiting", why: `the ${kind.gathers.source === "tree" ? "trees" : "fields"} in reach are still growing` }
-      if (kind.gathers)
-        return kind.gathers.source === "tree"
-          ? { label: "no trees", why: `no grown trees within ${kind.gathers.radius} cells`, fix: { text: "build a forester nearby: it replants", build: ["forester"] } }
-          : { label: `no ${sourceTitle[kind.gathers.source]}`, why: `no ${sourceTitle[kind.gathers.source]} within ${kind.gathers.radius} cells`, fix: { text: "rebuild it nearer" } }
-      if (kind.recipe?.input) {
-        const maker = makerOf(kind.recipe.input)
-        return { label: `no ${kind.recipe.input}`, why: `waiting for ${kind.recipe.input}`, fix: maker ? { text: `build a ${kinds[maker].title.toLowerCase()}, or buy ${kind.recipe.input} in the [town] panel`, build: [maker] } : { text: `buy ${kind.recipe.input} in the [town] panel` } }
-      }
-      if (kind.service?.service === "goods") return { label: "nothing to hand out", why: "no fish, bread, or cloth here", fix: { text: "fill the store: it takes from storage" } }
-      if (kind.service?.service === "repair") return { label: "no planks", why: "nothing to mend with", fix: { text: "build a sawmill", build: ["lumberjack", "sawmill"] } }
-      return { label: "waiting", why: "waiting" }
+      return { _tag: "paused" }
+    case "starved": {
+      const g = kind.gathers
+      if (g?.source === "water") return growing ? { _tag: "fishedOut", seconds: Math.round(RESTOCK_TICKS * step.dt) } : { _tag: "noWater", radius: g.radius }
+      if (g && growing) return g.source === "stone" || g.source === "ore" ? { _tag: "workedOut", source: g.source } : { _tag: "growing", source: g.source }
+      if (g) return g.source === "tree" ? { _tag: "noTrees", radius: g.radius } : { _tag: "noSource", source: g.source, radius: g.radius }
+      if (kind.recipe?.input) return { _tag: "noInput", good: kind.recipe.input, maker: makerOf(kind.recipe.input) ?? null }
+      if (kind.service?.service === "goods") return { _tag: "nothingToHandOut" }
+      if (kind.service?.service === "repair") return { _tag: "noPlanks" }
+      return { _tag: "waiting" }
+    }
     default:
       return null
   }
@@ -98,12 +128,11 @@ const PLATE_SHARE = 0.12
 const delivered = (site: { readonly owed: Parameters<typeof total>[0]; readonly total: number }) =>
   1 - total(site.owed) / Math.max(1, site.total)
 
-/** How a risk reads: "low", "40%", or "high: 85%". */
-export const riskText = (value: number) => (value < RISK_MAX * 0.35 ? "ok" : value >= risk.warn ? `high, ${percent(value, RISK_MAX)}` : percent(value, RISK_MAX))
+/** How a risk reads: "ok", "40%", or "high, 85%". */
+export const riskText = (t: Catalog, value: number) => (value < RISK_MAX * 0.35 ? t.view.risk.ok : value >= risk.warn ? t.view.risk.high(share(value, RISK_MAX)) : t.view.risk.some(share(value, RISK_MAX)))
+/** A value as a whole share of its most, in percent. */
+export const share = (n: number, of: number) => Math.round((n / of) * 100)
 
-/** What pulling a building or home down would cost and give back, for the bulldozer and the panel. */
-export const salvageFor = (cost: Kind["cost"], site: { readonly owed: Amounts } | undefined, works?: { readonly kind: Kind; readonly owed: Amounts; readonly level: number }) => {
-  const s = withWorks(salvageOf(cost, site?.owed ?? null), works?.kind ?? {}, works)
-  const said = salvageText(s)
-  return `${site ? "cancel" : "pull down"}${said ? `: ${said}` : ""}`
-}
+/** What pulling a building or home down would cost and give back, for the bulldozer and the panel: amounts as tokens (see `i18n/token.ts`). */
+export const salvageFor = (t: Catalog, cost: Kind["cost"], site: { readonly owed: Amounts } | undefined, works?: { readonly kind: Kind; readonly owed: Amounts; readonly level: number }) =>
+  t.view.salvage({ cancelled: site !== undefined, salvage: withWorks(salvageOf(cost, site?.owed ?? null), works?.kind ?? {}, works) })

@@ -8,6 +8,8 @@ import { approvalTarget } from "../game/rules/approval.ts"
 import { suppliedTaxOf, taxOutlook, type TaxedHome } from "../game/rules/households.ts"
 import { elapsed, goalsOf, larder, seasonAt, steadyNet, termTicks, winterOf } from "../game/schedule.ts"
 import { appealAt } from "../game/world/appeal.ts"
+import type { Event, Reason } from "../game/said.ts"
+import { say } from "../i18n/index.ts"
 import type { Alert, Stats } from "./contracts.ts"
 import type { BuildingRow, Frame } from "./frame.ts"
 
@@ -59,8 +61,23 @@ interface Said {
   readonly hallRow: BuildingRow | undefined
 }
 
+/** How a term ended, as the event the chronicle told it with (`null`: it is still being played). */
+const endOf = (reason: Reason, f: { readonly term: number; readonly rank: number }): Event | null => {
+  switch (reason) {
+    case "none":
+      return null
+    case "dismissed":
+      return { _tag: "dismissed", patience: crownRules.patience }
+    case "over":
+      return { _tag: "termOver", term: f.term, rank: f.rank }
+    default:
+      return { _tag: reason }
+  }
+}
+
 export const statsOf = (frame: Frame, numbers: Numbers, { alerts, shortStaffed, upgrades, guide, hallRow }: Said): Stats => {
-  const { houses, rates } = frame
+  const { houses, rates, t: words } = frame
+  const end = endOf(frame.world.fate.reason, frame.world.fate)
   const census = frame.world.census
   const stock = frame.world.stock
   const { ledger, charter, t, suppliedTaxes, coins, net, mood, crown, f, pantry, season, outlookOf, seconds, danger, comingYear } = numbers
@@ -100,15 +117,7 @@ export const statsOf = (frame: Frame, numbers: Numbers, { alerts, shortStaffed, 
     mood: {
       approval: mood.approval,
       target: mood.target,
-      parts: [
-        { label: "mood of the town", value: mood.base },
-        { label: "needs met", value: mood.needs },
-        { label: "taxes now", value: mood.taxes },
-        { label: "a grudge over taxes past", value: mood.grudge },
-        { label: "unpaid wages", value: mood.debt },
-        { label: "the crown's displeasure", value: mood.crown },
-        { label: "a hungry winter", value: mood.winter }
-      ].filter((p) => p.value !== 0)
+      parts: (["base", "needs", "taxes", "grudge", "debt", "crown", "winter"] as const).map((part) => ({ label: words.view.mood[part], value: mood[part] })).filter((p) => p.value !== 0)
     },
     crown: {
       open: crown.open,
@@ -124,13 +133,14 @@ export const statsOf = (frame: Frame, numbers: Numbers, { alerts, shortStaffed, 
     },
     fate: {
       state: f.state,
-      reason: f.reason,
+      reason: end ? say(words.chronicle, end) : "",
+      ended: f.reason === "none" ? "" : words.ended[f.reason],
       at: f.at / 3600,
       term: f.term,
       began: f.began / 3600,
       rank: f.rank,
-      rankTitle: ranks[f.rank]?.title ?? "",
-      nextTitle: f.rank + 1 < ranks.length ? ranks[f.rank + 1]!.title : null,
+      rankTitle: f.rank < ranks.length ? words.rank(f.rank) : "",
+      nextTitle: f.rank + 1 < ranks.length ? words.rank(f.rank + 1) : null,
       score: f.score,
       bankrupt: danger(f.debtSince, fate.debt),
       revolt: danger(f.revoltSince, fate.revolt),
@@ -143,7 +153,7 @@ export const statsOf = (frame: Frame, numbers: Numbers, { alerts, shortStaffed, 
         hall: hallRow ? hallRow.data.upgraded?.level ?? 0 : 0 },
       undefined,
       f.rank
-    ),
+    ).map((g) => ({ id: g.id, target: g.target, text: words.view.goal.text[g.id](g.target), value: words.view.goal.value[g.id](g.value, g.target), met: g.met })),
     larder: larder(stock),
     flow: flowNow === null ? null : { ...flowNow, elsewhere: amounts(Object.fromEntries(goodIds.map((g) => [g, Math.max(0, flowHeld[g] - stock[g])]))) },
     eaten: pantry.eatenLast,
@@ -151,7 +161,7 @@ export const statsOf = (frame: Frame, numbers: Numbers, { alerts, shortStaffed, 
     sick: census.sick,
     burning: census.burning,
     history: frame.world.history.samples,
-    chronicle: frame.world.chronicle.lines,
+    chronicle: frame.world.chronicle.lines.map((l) => ({ tick: l.tick, what: l.event._tag, text: say(words.chronicle, l.event), alarm: l.alarm, at: l.at })),
     alerts,
     upgrades,
     guide

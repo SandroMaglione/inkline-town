@@ -3,31 +3,35 @@
  * panel first and larger, then the tools, the clock, and (on a phone) the
  * menu the bottom-right buttons fold into.
  */
+import type { Catalog } from "../../i18n/index.ts"
 import type { Interaction } from "../../view/contracts.ts"
 import { commands, toolbar as tools, type Command } from "../../view/tools.ts"
 import type { Controls } from "./controls.ts"
 import { el } from "./kit/dom.ts"
 import { iconEl } from "./kit/icons.ts"
+import { words } from "./kit/text.ts"
 
-export const createToolbar = (ui: Interaction, controls: Pick<Controls, "toggleMenu" | "choose" | "setSpeed" | "togglePause" | "cycleSpeed" | "toggleFold">) => {
+export const createToolbar = (t: Catalog, ui: Interaction, controls: Pick<Controls, "toggleMenu" | "choose" | "setSpeed" | "togglePause" | "cycleSpeed" | "toggleFold">) => {
+  const said = t.page.toolbar
   const bar = el("div", "toolbar")
   // The town's panel is opened most: it has a button of its own, first and larger.
   const townButton = el("button", "town-button")
-  townButton.title = "The town's goals, numbers, taxes, and trade (T)"
-  townButton.append(iconEl("town", 22), el("span", "", "town"), el("kbd", "", "T"))
+  townButton.title = said.town.title
+  townButton.append(iconEl("town", 22), el("span", "", said.town.label), el("kbd", "", commands.town.key))
   townButton.onclick = () => controls.toggleMenu("town")
   // Everything the bottom-right buttons do, folded into one menu on a phone.
   const moreButton = el("button", "more")
-  moreButton.title = "Share, the guide, save, load, new town"
+  moreButton.title = said.more
   moreButton.append(iconEl("more"))
   moreButton.onclick = () => controls.toggleFold("more")
   const toolGroup = el("div", "group")
   bar.append(townButton, toolGroup)
-  const buttons = tools.map(({ id, tip }) => {
+  const buttons = tools.map((id) => {
     const command: Command = commands[id]
     const button = el("button", "")
-    button.title = tip
-    button.append(iconEl(command.icon), document.createTextNode(command.label), el("kbd", "", command.key ?? ""))
+    // A tip names its costs as amounts: a `title` says them in words.
+    button.title = words(t, t.toolbar[id])
+    button.append(iconEl(command.icon), document.createTextNode(t.commands[id].label), el("kbd", "", command.key ?? ""))
     const action = command.action
     button.onclick = () => ("menu" in action ? controls.toggleMenu(action.menu) : "tool" in action ? controls.choose(action.tool) : undefined)
     toolGroup.append(button)
@@ -43,7 +47,7 @@ export const createToolbar = (ui: Interaction, controls: Pick<Controls, "toggleM
   ].map(({ speed, label, key }) => {
     const button = el("button", speed === 0 ? "pause" : "", label)
     if (speed === 0) button.append(iconEl("pause", 14))
-    button.title = speed === 0 ? "Pause the town, or run it again (space)" : `Run the town at ${label} (${key})`
+    button.title = speed === 0 ? said.pause : said.runAt(label, key)
     // Pause is a switch: pressed again it runs the town at its last speed.
     button.onclick = () => (speed === 0 ? controls.togglePause() : controls.setSpeed(speed))
     speedGroup.append(button)
@@ -51,7 +55,7 @@ export const createToolbar = (ui: Interaction, controls: Pick<Controls, "toggleM
   })
   // A phone has room for one speed button: it runs a paused town, else goes on to the next speed.
   const cycle = el("button", "cycle")
-  cycle.title = "Change speed: 1×, 2×, 4×"
+  cycle.title = said.cycle
   cycle.onclick = () => controls.cycleSpeed()
   speedGroup.append(cycle)
   bar.append(moreButton)
@@ -75,9 +79,9 @@ export const createToolbar = (ui: Interaction, controls: Pick<Controls, "toggleM
       // Paused, the pause button shows play.
       const pause = speeds[0]!.button
       pause.replaceChildren(iconEl(speed === 0 ? "play" : "pause", 14))
-      pause.setAttribute("aria-label", speed === 0 ? "Run the town" : "Pause the town")
+      pause.setAttribute("aria-label", speed === 0 ? said.run : said.pauseNow)
       cycle.textContent = `${speed === 0 ? last : speed}×`
-      cycle.title = speed === 0 ? `Run the town at ${last}×` : "Change speed: 1×, 2×, 4×"
+      cycle.title = speed === 0 ? said.runAtLast(last) : said.cycle
     }
   }
 }

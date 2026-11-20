@@ -11,7 +11,6 @@ import type { Query, QueryData, QueryEntity } from "@typeonce/ritmo/Query"
 
 import { buildingSource, homeSource, landSource, parkSources, parksOf, type AppealSource, type ParkCell, type ParkValue } from "../game/world/appeal.ts"
 import { condition as wear, CONDITION_MAX, type KindId } from "../game/content/index.ts"
-import type { Fix } from "../game/rules/explain.ts"
 import {
   Appeal, Building, Burning, Census, Charter, Chronicle, Condition, Crown, Fate, Flow, Game, Grid, Guide, Handed, History, House, Inventory, Ledger, Market, Mood,
   Pantry, Park, Paused, Paved, Policy, Rebuilt, Recipe, Rising, Risk, Road, Rock, Ruin, Service, Sick, Site, Staff, Status, Stock, Tile, Time, TownHall, Treasury, Tree,
@@ -19,6 +18,7 @@ import {
 } from "../game/schema.ts"
 import { doors, isRoad, key, nearest, reach, type TileLike } from "../game/world/grid.ts"
 import type { Point } from "../game/world/iso.ts"
+import type { Catalog } from "../i18n/index.ts"
 import type { Line } from "./contracts.ts"
 
 export const BuildingRead = Game.Query({
@@ -147,7 +147,8 @@ type Raised = { readonly data: { readonly site: unknown; readonly rising: unknow
  */
 export const frameOf = (
   queries: { readonly [K in keyof FrameQueries]: FrameQuery<FrameQueries[K]> },
-  resources: { readonly [K in keyof World]: { get(): World[K] } }
+  resources: { readonly [K in keyof World]: { get(): World[K] } },
+  t: Catalog
 ) => {
   const world: World = {
     grid: resources.grid.get(), census: resources.census.get(), treasury: resources.treasury.get(), ledger: resources.ledger.get(), stock: resources.stock.get(),
@@ -179,6 +180,8 @@ export const frameOf = (
   let unreached: number | null = null
   let sources: Array<AppealSource> | null = null
   const frame = {
+    /** The language the frame is put into words in. */
+    t,
     world,
     grid,
     rates: world.policy,
@@ -221,7 +224,9 @@ export const frameOf = (
     tileOf: (id: number) => [...buildings, ...houses, ...ruins, ...parkRows].find((row) => row.entity.id === id)?.data.tile,
     standing,
     finished,
-    fixOf: (f: Fix | undefined): Line["fix"] => f && { text: f.text, build: f.build?.find((k) => !standing.has(k)) ?? f.build?.at(-1) },
+    /** What to do about something, as a row's fix: the words (none: nothing to do), and of the chain that would make it, the first link the town lacks. */
+    fixOf: (text: string | undefined, build?: ReadonlyArray<KindId>): Line["fix"] =>
+      text === undefined ? undefined : { text, build: build?.find((k) => !standing.has(k)) ?? build?.at(-1) },
     /** Built homes no food walker reaches: a walk from each walker's door, so reckoned once a frame, when asked. */
     unreachedHomes: () => {
       if (unreached !== null) return unreached

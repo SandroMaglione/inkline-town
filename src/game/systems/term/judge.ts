@@ -1,12 +1,13 @@
 import { crown, stepsOf } from "../../content/index.ts"
 import { Census, Charter, Chronicle, Crown, Fate, Game, Rules, History, Ledger, Mood, Time, Treasury, TownHall, Upgraded } from "../../schema.ts"
 import { elapsed, termTicks, write } from "../shared.ts"
+import type { Event, Reason } from "../../said.ts"
 import { goalsOf, nextRank, scoreOf, steadyNet } from "../../rules/goals.ts"
 
 /** The fate of a town just founded: its first term, a hamlet. */
 export const foundedFate = () => ({
   state: "playing" as const,
-  reason: "",
+  reason: "none" as Reason,
   at: 0,
   term: 1,
   began: 0,
@@ -64,32 +65,32 @@ export const Judge = Game.System(
     const crownNow = resources.crown.get()
     const residents = census.settlers + census.citizens
     const net = steadyNet(resources.history.get().samples, ledger.taxes + ledger.trade - ledger.upkeep - ledger.admin)
-    const note = (text: string, alarm = false) => write(resources.chronicle, t, text, alarm)
+    const note = (event: Event, alarm = false) => write(resources.chronicle, t, event, alarm)
     const minutes = (n: number) => stepsOf(n * 60)
 
     const next = { ...f, peak: Math.max(f.peak, residents) }
-    for (const mark of [50, 100, 250, 500, 1000]) if (f.peak < mark && residents >= mark) note(`${mark} residents.`)
+    for (const mark of [50, 100, 250, 500, 1000]) if (f.peak < mark && residents >= mark) note({ _tag: "residents", mark })
 
     // Dangers.
     if (coins < 0) {
-      if (f.debtSince < 0) note("The treasury is empty: wages go unpaid.", true)
+      if (f.debtSince < 0) note({ _tag: "treasuryEmpty" }, true)
       next.debtSince = f.debtSince < 0 ? t : f.debtSince
     } else next.debtSince = -1
     if (approval <= fate.revoltAt) {
-      if (f.revoltSince < 0) note("The town is in uproar.", true)
+      if (f.revoltSince < 0) note({ _tag: "uproar" }, true)
       next.revoltSince = f.revoltSince < 0 ? t : f.revoltSince
     } else next.revoltSince = -1
 
-    const end = (state: "lost" | "over", reason: string) => {
-      note(reason)
+    const end = (state: "lost" | "over", reason: Exclude<Reason, "none">, event: Event) => {
+      note(event)
       resources.fate.set({ ...next, state, reason, at: t, score: scoreOf({ ...census, net, approval, met: crownNow.met, missed: crownNow.missed, hall }, next.rank) })
     }
-    if (next.debtSince >= 0 && t - next.debtSince >= minutes(fate.debt)) return end("lost", "Bankrupt: the crown has taken the treasury out of the mayor's hands.")
-    if (next.revoltSince >= 0 && t - next.revoltSince >= minutes(fate.revolt)) return end("lost", "Revolt: the town has turned the mayor out.")
-    if (next.peak >= fate.peak && residents < next.peak * fate.abandon) return end("lost", "Abandoned: the people have left the town.")
-    if (crownNow.streak >= crown.patience) return end("lost", `Dismissed: the crown has replaced a mayor who left ${crown.patience} of its requests unanswered.`)
+    if (next.debtSince >= 0 && t - next.debtSince >= minutes(fate.debt)) return end("lost", "bankrupt", { _tag: "bankrupt" })
+    if (next.revoltSince >= 0 && t - next.revoltSince >= minutes(fate.revolt)) return end("lost", "revolt", { _tag: "revolt" })
+    if (next.peak >= fate.peak && residents < next.peak * fate.abandon) return end("lost", "abandoned", { _tag: "abandoned" })
+    if (crownNow.streak >= crown.patience) return end("lost", "dismissed", { _tag: "dismissed", patience: crown.patience })
     if (t - f.began >= termTicks(charter, rules)) {
-      return end("over", `Term ${f.term} is over; the ${ranks[f.rank]!.title} stands.`)
+      return end("over", "over", { _tag: "termOver", term: f.term, rank: f.rank })
     }
 
     // The next rank.
@@ -97,13 +98,13 @@ export const Judge = Game.System(
       const goals = goalsOf(charter, { ...census, coins, net, approval, hall }, rules, f.rank)
       if (goals.every((g) => g.met)) {
         const to = ranks[f.rank + 1]!
-        if (f.goalSince < 0) note(`Every goal of a ${to.title} is met: the town needs only to hold them.`)
+        if (f.goalSince < 0) note({ _tag: "goalsMet", rank: f.rank + 1 })
         next.goalSince = f.goalSince < 0 ? t : f.goalSince
         if (t - next.goalSince >= minutes(fate.hold)) {
           next.rank = f.rank + 1
           next.goalSince = -1
           resources.treasury.update((tr) => ({ coins: tr.coins + to.reward }))
-          note(`The town is now a ${to.title}: the crown sends ${to.reward} coins.`, true)
+          note({ _tag: "rankReached", rank: f.rank + 1, reward: to.reward }, true)
         }
       } else next.goalSince = -1
     }

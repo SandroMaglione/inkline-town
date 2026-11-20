@@ -115,9 +115,7 @@ export const Work = Game.System(
             write(
               resources.chronicle,
               t,
-              r.ore
-                ? "The last of the open ore is dug: the worked faces still give a little, slowly. Traders sell ore and tools."
-                : "The last of the open stone is quarried: the worked faces still give a little, slowly. Traders sell stone.",
+              { _tag: "lastRock", ore: r.ore },
               true,
               c
             )

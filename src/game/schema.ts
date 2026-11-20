@@ -20,6 +20,7 @@ import { step } from "./content/index.ts"
 import { goodIds, groundIds, kindIds, landIds, propIds, serviceIds, sizeIds, type Amounts, type GoodId } from "./content/index.ts"
 import type { Rules as RuleInputs } from "./rules/config.ts"
 import type { Edit } from "./edits.ts"
+import { Event, reasons, type Notice } from "./said.ts"
 
 export const Root = Schema.defineRoot("Town")
 
@@ -293,7 +294,7 @@ export const fateStates = ["playing", "lost", "over"] as const
  */
 export const Fate = Descriptor.ConstructedResource(codec(S.Struct({
   state: S.Literals(fateStates),
-  reason: S.String,
+  reason: S.Literals(reasons),
   at: integer,
   term: integer,
   began: integer,
@@ -309,9 +310,12 @@ export const Fate = Descriptor.ConstructedResource(codec(S.Struct({
 export const History = Descriptor.ConstructedResource(codec(S.Struct({
   samples: S.Array(S.Struct({ tick: integer, coins: integer, residents: integer, citizens: integer, approval: integer, net: integer }))
 })))("Town/History")
-/** What happened, in a line each; an `alarm` is news the page announces (a fire, a theft, winter coming); `at` is where, when it was somewhere. */
+/**
+ * What happened, an event each (see `said.ts`: data, put into words by the page's language); an `alarm`
+ * is news the page announces (a fire, a theft, winter coming); `at` is where, when it was somewhere.
+ */
 export const Chronicle = Descriptor.ConstructedResource(codec(S.Struct({
-  lines: S.Array(S.Struct({ tick: integer, text: S.String, alarm: S.Boolean, at: S.NullOr(cell) }))
+  lines: S.Array(S.Struct({ tick: integer, event: Event, alarm: S.Boolean, at: S.NullOr(cell) }))
 })))("Town/Chronicle")
 
 /**
@@ -425,8 +429,8 @@ export const Edits = Descriptor.Service<{ readonly snapshot: () => ReadonlyArray
 
 // ── What the simulation tells the player ──────────────────────────────────
 
-/** A message for the player (an edit refused: "No room there"). */
-export const Toast = Descriptor.Event<string>()("Town/Toast")
+/** A message for the player (an edit refused: no room there), as data (see `said.ts`). */
+export const Toast = Descriptor.Event<Notice>()("Town/Toast")
 /** The panel's selection, changed by an edit: open a new building, or let go of one that is gone. */
 export const Selection = Descriptor.Event<{ readonly select: number } | { readonly clear: true } | { readonly clearIf: number }>()("Town/Selection")
 

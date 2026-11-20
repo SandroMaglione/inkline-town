@@ -15,6 +15,30 @@ import { upgradeAt, type GroundId, type KindId, type PropId } from "../content/i
 import { cellOf, DIRS, key } from "./grid.ts"
 import { GRID, inside, type Point } from "./iso.ts"
 
+/**
+ * What a source is, for the readout: a building of a kind at its level of
+ * upgrades, the fine homes beside a home, water, woods, a paved street, a
+ * ruin, a run-down home, or a park. Data, not a word: the page's language
+ * names it ("park", "smithy", "water"), and `labelKey` is what sources of
+ * one sort add up under.
+ */
+export type AppealLabel =
+  | { readonly _tag: "kind"; readonly kind: KindId; readonly level: number }
+  | { readonly _tag: "homes" }
+  | { readonly _tag: "water" }
+  | { readonly _tag: "woods" }
+  | { readonly _tag: "paved" }
+  | { readonly _tag: "ruin" }
+  | { readonly _tag: "worn" }
+  | { readonly _tag: "park" }
+/** Sources with the same key are one line of a readout: every quarry together, a masonry apart from them. */
+export const labelKey = (label: AppealLabel): string => (label._tag === "kind" ? `kind:${label.kind}:${label.level}` : label._tag)
+/** A line of a street's readout: what, and what it does there. */
+export interface AppealPart {
+  readonly label: AppealLabel
+  readonly value: number
+}
+
 /** Something that makes the cells around it nicer or worse to live on. */
 export interface AppealSource {
   readonly x: number
@@ -24,8 +48,8 @@ export interface AppealSource {
   readonly reach: number
   /** Rings it gives its whole value out to before it starts to fade (1 when not given). */
   readonly full?: number
-  /** What it is, for the readout: "park", "smithy", "water". */
-  readonly label: string
+  /** What it is, for the readout (see `AppealLabel`). */
+  readonly label: AppealLabel
   /**
    * `sum`: adds up with others; `nature` and `paved`: only the strongest of
    * their kind counts; `homes`: adds up, to `appeal.homesMost` at most, and
@@ -72,20 +96,19 @@ export const buildingSource = (
 ): AppealSource | null => {
   const up = upgradeAt(rules.kinds[kind], level)
   const a = up?.appeal ?? rules.kinds[kind].appeal
-  const title = up?.title ?? rules.kinds[kind].title
-  return a ? { ...tile, value: a.value, reach: a.reach, ...(a.full ? { full: a.full } : {}), label: title.toLowerCase(), mode: "sum" } : null
+  return a ? { ...tile, value: a.value, reach: a.reach, ...(a.full ? { full: a.full } : {}), label: { _tag: "kind", kind, level: up ? level : 0 }, mode: "sum" } : null
 }
 
 /** A citizens' home or a townhouse lifts the homes beside it; a settlers' cottage does nothing. */
 export const homeSource = (tier: 1 | 2 | 3, tile: { readonly x: number; readonly y: number; readonly size?: number }, rules: Rules = shippedRules): AppealSource | null =>
-  tier === 1 ? null : { x: tile.x, y: tile.y, size: tile.size ?? 1, ...(tier === 2 ? rules.appeal.citizens : rules.appeal.burghers), label: "fine homes beside it", mode: "homes" }
+  tier === 1 ? null : { x: tile.x, y: tile.y, size: tile.size ?? 1, ...(tier === 2 ? rules.appeal.citizens : rules.appeal.burghers), label: { _tag: "homes" }, mode: "homes" }
 
 export const landSource = (what: "water" | "forest" | "paved" | "ruin" | "worn", cell: { readonly x: number; readonly y: number; readonly size?: number }, rules: Rules = shippedRules): AppealSource => ({
   x: cell.x,
   y: cell.y,
   size: cell.size ?? 1,
   ...rules.appeal[what],
-  label: what === "forest" ? "woods" : what === "paved" ? "paved street" : what === "worn" ? "a run-down home" : what,
+  label: what === "forest" ? { _tag: "woods" } : { _tag: what },
   mode: what === "water" || what === "forest" ? "nature" : what === "paved" ? "paved" : "sum"
 })
 
@@ -124,26 +147,30 @@ export const appealGrid = (sources: ReadonlyArray<AppealSource>, rules: Rules = 
   return Array.from({ length: GRID * GRID }, (_, k) => clamp(sum[k]! + nature[k]! + paved[k]! + Math.min(rules.appeal.homesMost, homes[k]!) + parks(k), rules))
 }
 
-/** One cell's desirability and what makes it, strongest first: "park +6", "bakery −4". */
-export const appealParts = (sources: ReadonlyArray<AppealSource>, cell: { readonly x: number; readonly y: number }, rules: Rules = shippedRules) => {
-  const parts = new Map<string, number>()
-  const best = { nature: { label: "", value: 0 }, paved: { label: "", value: 0 } }
-  let homes = { label: "", value: 0 }
+/** One cell's desirability and what makes it, strongest first: a park +6, a bakery −4. */
+export const appealParts = (sources: ReadonlyArray<AppealSource>, cell: { readonly x: number; readonly y: number }, rules: Rules = shippedRules): { readonly value: number; readonly parts: ReadonlyArray<AppealPart> } => {
+  const parts = new Map<string, AppealPart>()
+  const add = (label: AppealLabel, value: number) => parts.set(labelKey(label), { label, value: (parts.get(labelKey(label))?.value ?? 0) + value })
+  // The strongest of its kind so far (water or woods; a paved street), and the fine homes beside it together: nothing yet.
+  const best: Record<"nature" | "paved", { label: AppealLabel | null; value: number }> = { nature: { label: null, value: 0 }, paved: { label: null, value: 0 } }
+  const homes: { label: AppealLabel | null; value: number } = { label: null, value: 0 }
   const parks: Array<number> = []
   for (const s of sources) {
     const e = effectOf(s, ringTo(s, cell.x, cell.y))
     if (e === 0) continue
     if (s.mode === "park") parks.push(e)
-    else if (s.mode === "sum") parts.set(s.label, (parts.get(s.label) ?? 0) + e)
-    else if (s.mode === "homes") homes = { label: s.label, value: Math.min(rules.appeal.homesMost, homes.value + e) }
-    else if (Math.abs(e) > Math.abs(best[s.mode].value)) best[s.mode] = { label: s.label, value: e }
+    else if (s.mode === "sum") add(s.label, e)
+    else if (s.mode === "homes") {
+      homes.label = s.label
+      homes.value = Math.min(rules.appeal.homesMost, homes.value + e)
+    } else if (Math.abs(e) > Math.abs(best[s.mode].value)) best[s.mode] = { label: s.label, value: e }
   }
-  for (const b of [best.nature, best.paved, homes]) if (b.value !== 0) parts.set(b.label, (parts.get(b.label) ?? 0) + b.value)
+  for (const b of [best.nature, best.paved, homes]) if (b.label && b.value !== 0) add(b.label, b.value)
   if (parks.length > 0) {
     const finest = Math.max(...parks), all = parks.reduce((n, e) => n + e, 0)
-    parts.set("park", (parts.get("park") ?? 0) + finest + Math.trunc((all - finest) * rules.park.others))
+    add({ _tag: "park" }, finest + Math.trunc((all - finest) * rules.park.others))
   }
-  const list = [...parts].map(([label, value]) => ({ label, value })).filter((p) => p.value !== 0)
+  const list = [...parts.values()].filter((p) => p.value !== 0)
   list.sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
   return { value: clamp(list.reduce((n, p) => n + p.value, 0), rules), parts: list }
 }
@@ -161,11 +188,20 @@ export interface ParkCell {
   readonly prop: PropId | "none"
 }
 
+/**
+ * What a park's beauty is made of, a line each: its ground (`capped`: it has more than counts), its ways in
+ * from the street (`count`: how many count), and its furnishings by kind. Data: the page's language names each.
+ */
+export type ParkLabel =
+  | { readonly _tag: "ground"; readonly capped: boolean }
+  | { readonly _tag: "ways"; readonly count: number }
+  | { readonly _tag: "prop"; readonly prop: PropId }
+
 /** A whole park: its cells, its beauty and what makes it, and what it does to the streets around it. */
 export interface ParkValue {
   readonly cells: ReadonlyArray<ParkCell>
   readonly beauty: number
-  readonly parts: ReadonlyArray<{ readonly label: string; readonly value: number }>
+  readonly parts: ReadonlyArray<{ readonly label: ParkLabel; readonly value: number }>
   /** Furnishings past what its size holds, which add nothing. */
   readonly crowded: number
   /** Walks and squares beside a road: its ways in from the street. */
@@ -202,15 +238,15 @@ export const parkValue = (cells: ReadonlyArray<ParkCell>, road: (x: number, y: n
     })
     .sort((a, b) => b.worth - a.worth)
   const counted = worths.slice(0, room)
-  const byKind = new Map<string, number>()
-  for (const w of counted) byKind.set(props[w.prop].title.toLowerCase(), (byKind.get(props[w.prop].title.toLowerCase()) ?? 0) + w.worth)
+  const byKind = new Map<PropId, number>()
+  for (const w of counted) byKind.set(w.prop, (byKind.get(w.prop) ?? 0) + w.worth)
   const entrances = cells.filter((c) => (c.ground === "path" || c.ground === "square") && DIRS.some((d) => road(c.x + d.x, c.y + d.y))).length
   const welcome = Math.min(entrances, park.entrances) * park.entrance
   const beauty = ground + welcome + counted.reduce((n, w) => n + w.worth, 0)
-  const parts = [
-    { label: groundRaw > ground ? "ground (all it counts for)" : "ground", value: tenth(ground) },
-    { label: `way${Math.min(entrances, park.entrances) === 1 ? "" : "s"} in from the street`, value: welcome },
-    ...[...byKind].map(([label, value]) => ({ label, value: tenth(value) }))
+  const parts: Array<{ readonly label: ParkLabel; readonly value: number }> = [
+    { label: { _tag: "ground" as const, capped: groundRaw > ground }, value: tenth(ground) },
+    { label: { _tag: "ways" as const, count: Math.min(entrances, park.entrances) }, value: welcome },
+    ...[...byKind].map(([prop, value]) => ({ label: { _tag: "prop" as const, prop }, value: tenth(value) }))
   ].filter((p) => p.value > 0)
   return {
     cells,
@@ -262,7 +298,7 @@ export const parkSources = (cells: ReadonlyArray<ParkCell>, road?: (x: number, y
       const y = Math.min(...ys)
       const size = Math.max(Math.max(...xs) - x, Math.max(...ys) - y) + 1
       // A bigger park gives its whole worth further out: half its reach, rounded down.
-      return { x, y, size, value: p.value, reach: p.reach, full: Math.max(1, Math.floor(p.reach / 2)), label: "park", mode: "park", cells: p.cells }
+      return { x, y, size, value: p.value, reach: p.reach, full: Math.max(1, Math.floor(p.reach / 2)), label: { _tag: "park" }, mode: "park", cells: p.cells }
     })
 
 /** Per-minute upkeep paid for a park cell, including its furnishing. */

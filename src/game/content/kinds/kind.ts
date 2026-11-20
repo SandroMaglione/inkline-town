@@ -38,8 +38,6 @@ export type KindId = (typeof kindIds)[number]
 
 export interface Kind {
   readonly id: KindId
-  readonly title: string
-  readonly blurb: string
   readonly category: Category
   /** Cells a side. */
   readonly size: 1 | 2 | 3
@@ -104,8 +102,6 @@ export type Kinds = { readonly [Id in KindId]?: Kind & { readonly id: Id } }
 
 /** A building upgraded where it stands (see `Kind.upgrade`): every field but the first five is what changes. */
 export interface Upgrade {
-  readonly title: string
-  readonly blurb: string
   readonly rank: number
   readonly cost: { readonly coins: number; readonly materials: Partial<Record<GoodId, number>> }
   readonly upkeep: number

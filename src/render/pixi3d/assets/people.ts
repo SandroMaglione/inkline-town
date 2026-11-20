@@ -3,6 +3,7 @@ import { goods, type GoodId } from "../../../game/content/index.ts"
 import { Drawing, palette, type Vertex } from "./primitives.ts"
 import { U } from "../../../game/world/iso.ts"
 import { chair, chest } from "./furniture.ts"
+import { en } from "../../../i18n/index.ts"
 
 const R = 45.2548
 export type ServiceRole = "watchman" | "firefighter" | "physician" | "constable" | "builder"
@@ -358,14 +359,14 @@ export function makeCarrier(good: GoodId | null, barrow = false, count = 4) {
   const load: Load = good ? { kind: "cart", good, count } : { kind: "none" }
   return makePerson(
     id,
-    `${barrow ? "Barrow" : "Handcart"} · ${good ? `${goods[good].title}, ${count === 1 ? "small" : "full"} load` : "empty"}`,
+    `${barrow ? "Barrow" : "Handcart"} · ${good ? `${en.good.name(good)}, ${count === 1 ? "small" : "full"} load` : "empty"}`,
     carrierDress(barrow ? 0.2 : 0.4),
     load,
     look
   )
 }
 export function makeGoods(good: GoodId) {
-  const d = new Drawing(`goods-${good}`, goods[good].title, "Distinct cargo geometry, not a colour-swapped box.")
+  const d = new Drawing(`goods-${good}`, en.good.name(good), "Distinct cargo geometry, not a colour-swapped box.")
   d.asset.category = "cargo"
   d.asset.reference = { type: "cargo", good, count: 4 }
   d.asset.footprint = 1
@@ -373,7 +374,7 @@ export function makeGoods(good: GoodId) {
   return d.asset
 }
 export function makeCrate(good: GoodId) {
-  const d = new Drawing(`crate-${good}`, `${goods[good].title} crate`, "Cardboard crate with its original coloured label and strap.")
+  const d = new Drawing(`crate-${good}`, `${en.good.name(good)} crate`, "Cardboard crate with its original coloured label and strap.")
   d.asset.category = "cargo"
   d.asset.reference = { type: "crate", good }
   d.asset.footprint = 1

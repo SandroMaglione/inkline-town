@@ -3,7 +3,8 @@
  * strip of paper along the bottom saying what it is and how it stands (its
  * verdict once the term is over), drawn in the page's ink and type.
  */
-import { lands, sizes } from "../../../game/content/index.ts"
+import { sizes } from "../../../game/content/index.ts"
+import type { Catalog } from "../../../i18n/index.ts"
 import { icon, type IconName } from "../kit/icons.ts"
 import type { Stats } from "../../../view/contracts.ts"
 import { PICTURE_HEIGHT, PICTURE_WIDTH, type ShareMeta } from "../../../platform/share/format.ts"
@@ -14,12 +15,14 @@ const INK = "#3d4943",
   RULE = "#c9cec4",
   FONT = `ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace`
 
-/** What became of a town whose term ran out. */
-export const verdictOf = (s: Stats): string => {
+/** What became of a town whose term ran out: which of the verdicts the language words (`page.reckoning.verdict`). */
+export type Verdict = keyof Catalog["page"]["reckoning"]["verdict"]
+
+export const verdictOf = (s: Stats): Verdict => {
   const residents = s.settlers + s.citizens
-  if (s.fate.peak < 40) return "the town never took root"
+  if (s.fate.peak < 40) return "unrooted"
   if (residents >= sizes[s.charter.size].goal.residents * 0.75) return "flourishing"
-  if (residents >= s.fate.peak * 0.7) return "holding on"
+  if (residents >= s.fate.peak * 0.7) return "holding"
   return "declining"
 }
 
@@ -30,29 +33,29 @@ export interface CardFacts {
   readonly numbers: ReadonlyArray<{ readonly icon: IconName; readonly value: string; readonly label: string }>
 }
 
-const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)}`
 
-export const cardFacts = (s: Stats): CardFacts => {
+export const cardFacts = (t: Catalog, s: Stats): CardFacts => {
+  const said = t.page.card
   const headline =
     s.fate.state === "lost"
-      ? capital(s.fate.reason.split(":")[0]!.toLowerCase())
+      ? said.lost(s.fate.ended)
       : s.fate.state === "over"
-        ? `A ${s.fate.rankTitle}: term ${s.fate.term} is over, ${verdictOf(s)}`
-        : `A ${s.fate.rankTitle} · year ${s.season.year} · term ${s.fate.term}`
+        ? said.over(s.fate.rank, s.fate.term, t.page.reckoning.verdict[verdictOf(s)])
+        : said.playing(s.fate.rank, s.season.year, s.fate.term)
   return {
     headline,
-    land: `${capital(sizes[s.charter.size].title)}, ${lands[s.charter.land].title} land · ${s.charter.term}-minute term`,
+    land: said.land(s.charter.size, s.charter.land, s.charter.term),
     numbers: [
-      { icon: "people", value: `${s.settlers + s.citizens}`, label: "residents" },
-      { icon: "citizens", value: `${s.citizens}`, label: "citizens" },
-      { icon: "coins", value: `${s.coins}`, label: "coins" },
-      { icon: "approval", value: signed(s.mood.approval), label: "approval" }
+      { icon: "people", value: `${s.settlers + s.citizens}`, label: said.residents },
+      { icon: "citizens", value: `${s.citizens}`, label: said.citizens },
+      { icon: "coins", value: `${s.coins}`, label: said.coins },
+      { icon: "approval", value: signed(s.mood.approval), label: said.approval }
     ]
   }
 }
 
-/** A card's lines for a link preview. */
+/** A card's lines for a link preview. The game's name is its name in every language. */
 export const metaOf = (facts: CardFacts): ShareMeta => ({
   title: `Inkline Town · ${facts.headline}`,
   description: `${facts.land} · ${facts.numbers.map((n) => `${n.value} ${n.label}`).join(" · ")}`
@@ -157,7 +160,7 @@ export const drawCard = async (picture: HTMLCanvasElement, facts: CardFacts, sit
 }
 
 export const blobOf = (canvas: HTMLCanvasElement, type: string, quality?: number) =>
-  new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("The picture could not be made"))), type, quality))
+  new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("no picture"))), type, quality))
 
 /** A smaller copy of a canvas, for the picture a link previews. */
 export const scaled = (canvas: HTMLCanvasElement, width: number, height: number) => {

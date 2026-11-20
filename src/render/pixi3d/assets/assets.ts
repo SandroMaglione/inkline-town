@@ -15,6 +15,7 @@ import { makeParkProp, makeRuin, makeSamplePark } from "./town-props.ts"
 import { upgradeCatalogue } from "./upgrade-catalogue.ts"
 
 import { Drawing, mix, pale, square, sides, palette, type InkAsset, type Vertex } from "./primitives.ts"
+import { en } from "../../../i18n/index.ts"
 export * from "./primitives.ts"
 
 export { house } from "./homes.ts"
@@ -131,7 +132,7 @@ for (const tier of [1, 2, 3] as const) for (const appearance of ["fine", "poor",
 for (const id of ["granary", "smokehouse", "firewatch", "healer", "hospital", "watchhouse", "builder"] as const) for (const appearance of ["winter", "worn"] as const) {
   const kind = kinds[id], base = makeBuilding(id), dimensions = buildingDimensions(id)
   const model = withAppearance(base, dimensions.half, dimensions.height, { winter: appearance === "winter", worn: appearance === "worn" })
-  model.id = `${id}-${appearance}`; model.title = `${kind.title} · ${appearance}`; model.appearance = appearance
+  model.id = `${id}-${appearance}`; model.title = `${en.kind.title(kind.id)} · ${appearance}`; model.appearance = appearance
   additional.push(model)
 }
 for (const type of ["fir", "broadleaf", "poplar"] as const)

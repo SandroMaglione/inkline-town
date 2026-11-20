@@ -4,7 +4,8 @@ import { appealAt } from "../../world/appeal.ts"
 import { ruinDraft } from "../../world/archetypes.ts"
 import { goodIds, risk, upgradeAt, type GoodId } from "../../content/index.ts"
 import { doors, nearest, pathTo, reach, useAt } from "../../world/grid.ts"
-import { counted, placeName, type Landmark } from "../../world/places.ts"
+import { placeName, type Landmark } from "../../world/places.ts"
+import type { Event } from "../../said.ts"
 import type { Point } from "../../world/iso.ts"
 import { Appeal, Building, Burning, Charter, Chronicle, Condition, Figure, Fires, Game, Rules, Grid, House, Inventory, Mood, Paused, Rescue, Rising, Risk, Rng, Route, Ruin, Service, Sick, Site, Staff, Storage, Tile, Time, Treasury, Upgraded, WalkerOf } from "../../schema.ts"
 import { elapsed, seasonAt, write } from "../shared.ts"
@@ -73,7 +74,7 @@ export const Hazards = Game.System(
     const season = seasonAt(t, charter, rules)
     const heating = season.severity !== null && winters[season.severity].heating
     const random = Random.draw(resources.rng)
-    const news = (text: string, at: Point | null = null) => write(resources.chronicle, t, text, true, at)
+    const news = (event: Event, at: Point | null = null) => write(resources.chronicle, t, event, true, at)
     const landmarks: Array<Landmark> = queries.landmarks.each().map((entity) => ({ kind: queries.landmarks.data.building.get(entity).kind, ...queries.landmarks.data.tile.get(entity) }))
     const where = (cell: Point) => placeName(landmarks, cell)
     const fires = { ...resources.fires.get(), fires: resources.fires.get().fires.map((f) => ({ ...f })) }
@@ -128,12 +129,12 @@ export const Hazards = Game.System(
         commands.insert(row, [Burning, { left: risk.fire.burns, fire: id }])
         ignited.set(row.id, id)
         r.fire = 0
-        news(`Fire on ${where(tile)}!`, tile)
+        news({ _tag: "fire", place: where(tile) }, tile)
       }
       if (h && r.health >= RISK_MAX && !cared.sick.has(row)) {
         commands.insert(row, [Sick, { left: risk.health.lasts }])
         r.health = 0
-        if (sickNow === 0) news(`Sickness on ${where(tile)}: a physician can cure it.`, tile)
+        if (sickNow === 0) news({ _tag: "sickness", place: where(tile) }, tile)
       }
       if (h && r.order >= RISK_MAX) {
         if (r.thefts === 0) {
@@ -142,7 +143,7 @@ export const Hazards = Game.System(
           const take = Math.min(risk.order.most, Math.max(0, coins), risk.order.coins + Math.floor(Math.max(0, coins) * risk.order.share))
           if (take > 0) {
             resources.treasury.set({ coins: coins - take })
-            news(`Thieves on ${where(tile)} made off with ${take} coins.`, tile)
+            news({ _tag: "theftCoins", place: where(tile), coins: take }, tile)
           } else {
             const stores = queries.stores.each()
             const { data: store } = queries.stores
@@ -156,12 +157,12 @@ export const Hazards = Game.System(
               store.inventory.set(s, { ...inv, stock: { ...inv.stock, [good]: inv.stock[good] - n } })
               owed -= n
             }
-            if (held(good) > 0) news(`Thieves on ${where(tile)} made off with ${goods[good].title}.`, tile)
+            if (held(good) > 0) news({ _tag: "theftGoods", place: where(tile), good }, tile)
           }
           r.thefts += 1
           r.order = risk.order.after
         } else {
-          news(`A home on ${where(tile)} stood empty after its thefts, and is left derelict.`, tile)
+          news({ _tag: "derelict", place: where(tile) }, tile)
           ruin(row, "derelict")
           lost.add(row.id)
           continue
@@ -264,8 +265,7 @@ export const Hazards = Game.System(
     for (const f of ignited.values()) stillBurning.add(f)
     const over = fires.fires.filter((f) => !stillBurning.has(f.id))
     for (const f of over) {
-      const took = [f.homes > 0 ? counted(f.homes, "home") : "", f.buildings > 0 ? counted(f.buildings, "building") : ""].filter((s) => s !== "")
-      news(`Fire on ${where(f)}: ${took.length > 0 ? `${took.join(" and ")} lost` : "put out"}.`, { x: f.x, y: f.y })
+      news({ _tag: "fireOver", place: where(f), homes: f.homes, buildings: f.buildings }, { x: f.x, y: f.y })
     }
     resources.fires.set({ fires: fires.fires.filter((f) => stillBurning.has(f.id)), next: fires.next })
   }

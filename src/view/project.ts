@@ -14,7 +14,7 @@ import { applyGestures } from "./interaction/gestures.ts"
 import { drawOverlay } from "./overlay.ts"
 import { panelOf } from "./panels/index.ts"
 import { previewOf } from "./preview.ts"
-import { Interaction, Outbox, Shown } from "./services.ts"
+import { Interaction, Outbox, Shown, Words } from "./services.ts"
 import { numbersOf, statsOf } from "./stats.ts"
 import { tooltipOf } from "./tooltip.ts"
 import { noneWanted, upgradesOf, upgradesWanted } from "./upgrades.ts"
@@ -24,7 +24,7 @@ export const Project = Game.System(
   {
     queries: frameAccess.queries,
     resources: frameAccess.resources,
-    services: { interaction: Game.System.service(Interaction), shown: Game.System.service(Shown), outbox: Game.System.service(Outbox) },
+    services: { interaction: Game.System.service(Interaction), shown: Game.System.service(Shown), outbox: Game.System.service(Outbox), words: Game.System.service(Words) },
     /** The view's own state, not saved (rebuilt after a load): the guide's, the alerts' patience, and the upgrades the town needs. */
     local: () => ({ guide: freshGuide(), patience: freshPatience(), wanted: noneWanted() })
   },
@@ -33,7 +33,7 @@ export const Project = Game.System(
     const { town, scene } = services.shown
     const send = services.outbox.push
     const toast = (message: string) => town.toasts.push(message)
-    const frame = frameOf(queries, resources)
+    const frame = frameOf(queries, resources, services.words.current)
 
     applyGestures(frame, ui, send, toast)
     const { preview, dropping } = previewOf(frame, ui)

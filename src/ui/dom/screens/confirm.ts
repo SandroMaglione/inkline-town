@@ -1,34 +1,36 @@
 /** Asks before something that replaces the town: save first, go ahead, or stay. The town waits while it asks. */
-import type { Controls } from "../controls.ts"
+import type { Catalog } from "../../../i18n/index.ts"
+import type { Controls, LeaveAsk } from "../controls.ts"
 import { el } from "../kit/dom.ts"
 
 export const createConfirm = (
+  t: Catalog,
   save: () => string | null,
   speed: () => number,
   controls: Pick<Controls, "setSpeed" | "toast">
 ) => {
   const box = el("div", "dialog")
-  const ask = (title: string, text: string, go: string, run: () => void) => {
+  const ask = (asked: LeaveAsk, run: () => void) => {
     const wasSpeed = speed()
     controls.setSpeed(0)
     box.replaceChildren()
     const card = el("div", "sheet narrow")
-    card.append(el("h2", "", title), el("p", "sub", text))
+    card.append(el("h2", "", asked.title), el("p", "sub", asked.text))
     const actions = el("div", "actions")
     const close = (resume: boolean) => {
       box.classList.remove("open")
       if (resume) controls.setSpeed(wasSpeed)
     }
-    const stay = el("button", "frame primary", "Keep playing")
+    const stay = el("button", "frame primary", t.page.system.leave.stay)
     stay.onclick = () => close(true)
-    const saveFirst = el("button", "frame", `Save, then ${go.toLowerCase()}`)
+    const saveFirst = el("button", "frame", asked.saveThen)
     saveFirst.onclick = () => {
       const failed = save()
       if (failed) return controls.toast(failed)
       close(true)
       run()
     }
-    const leave = el("button", "frame danger", `${go} without saving`)
+    const leave = el("button", "frame danger", asked.without)
     leave.onclick = () => {
       close(true)
       run()

@@ -3,6 +3,7 @@
  * right (folded into one menu on a phone). Founding or loading replaces the
  * town, so each asks first.
  */
+import type { Catalog } from "../../i18n/index.ts"
 import type { Interaction, Stats } from "../../view/contracts.ts"
 import type { IconName } from "../../view/icons.ts"
 import type { Controls, Fold } from "./controls.ts"
@@ -11,42 +12,38 @@ import { el } from "./kit/dom.ts"
 import { iconEl } from "./kit/icons.ts"
 
 export const createSystemMenu = (
+  t: Catalog,
   ui: Interaction,
-  persistence: () => { readonly save: () => string | null; readonly load: () => string | null },
+  persistence: () => { readonly save: () => string | null; readonly load: () => { readonly said: string } },
   resetCamera: () => void,
   fold: () => Fold | null,
   controls: Pick<Controls, "toast" | "confirmLeave" | "openCharter" | "openShare" | "setFold">
 ) => {
+  const said = t.page.system
   const system = el("div", "system")
-  const action = (name: IconName, label: string, tip: string, run: () => void) => {
+  const action = (name: IconName, words: { readonly label: string; readonly tip: string }, run: () => void) => {
     const button = el("button", name === "share" ? "labelled" : "")
-    button.title = tip
-    button.append(iconEl(name), document.createTextNode(label))
+    button.title = words.tip
+    button.append(iconEl(name), document.createTextNode(words.label))
     button.onclick = run
     system.append(button)
   }
-  action("share", "share", "Share a picture of the town, or a link anyone can open to watch it and play on", () => controls.openShare())
+  action("share", said.share, () => controls.openShare())
   // The guide, on or off (it is on for a new mayor).
   const guideButton = el("button", "guide-toggle")
-  guideButton.title = "Turn the guide on or off: it tells a new mayor what to do next, and why"
-  guideButton.append(iconEl("hint"), document.createTextNode("guide"))
+  guideButton.title = said.guide.tip
+  guideButton.append(iconEl("hint"), document.createTextNode(said.guide.label))
   let guideOff = false
   guideButton.onclick = () => ui.guide.push({ type: guideOff ? "on" : "off" })
   system.append(guideButton)
-  action("save", "save", "Save the town in this browser (it also autosaves every two minutes)", () => controls.toast(persistence().save() ?? "Saved"))
-  action("load", "load", "Load the latest save: yours or the autosave, whichever is newer", () =>
-    controls.confirmLeave("load the latest save?", "The town as it is now is replaced by the latest save (yours or the autosave).", "Load", () =>
-      controls.toast(persistence().load() ?? "Loaded")
-    )
-  )
-  action("newTown", "new town", "Found a new town on new land", () =>
-    controls.confirmLeave("found a new town?", "This town is left behind for good unless it is saved first.", "Choose new land", () => controls.openCharter(true))
-  )
+  action("save", said.save, () => controls.toast(persistence().save() ?? t.page.save.saved))
+  action("load", said.load, () => controls.confirmLeave(said.leave.load, () => controls.toast(persistence().load().said)))
+  action("newTown", said.newTown, () => controls.confirmLeave(said.leave.newTown, () => controls.openCharter(true)))
   // A phone has no camera bar: this puts the camera back.
-  action("view", "recentre", "Back to the original angle and centre", resetCamera)
+  action("view", said.recentre, resetCamera)
   system.lastElementChild!.classList.add("phone-only")
   // The maker's credit rides just above the bar, wherever the bar goes.
-  system.append(createCreditCorner())
+  system.append(createCreditCorner(t))
   // A choice from the menu folds it.
   system.addEventListener("click", () => {
     if (fold() === "more") controls.setFold(null)
@@ -56,7 +53,7 @@ export const createSystemMenu = (
     update: (s: Stats) => {
       guideOff = s.guide.off
       guideButton.classList.toggle("on", !s.guide.off)
-      guideButton.title = s.guide.off ? "Turn the guide back on: a next step to take, and why, at the top of the ticker" : "Turn the guide off"
+      guideButton.title = s.guide.off ? said.guide.turnOn : said.guide.turnOff
     }
   }
 }

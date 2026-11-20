@@ -9,6 +9,7 @@
 import { resolveRules, type RulePatch } from "../src/game/rules/config.ts"
 import { chainWorth, crownMargin, homes, median, openingKit, producers, services } from "../src/game/rules/worth.ts"
 import type { GoodId } from "../src/game/content/index.ts"
+import { en } from "../src/i18n/index.ts"
 
 const patches: Array<RulePatch> = []
 for (let i = 2; i < process.argv.length; i++)
@@ -37,7 +38,7 @@ console.log(`The first citizens' kit: ${kit.kinds.join(", ")} and 10 homes: ${ki
 console.table(Object.entries(rules.lands).map(([land, l]) => ({ land, coins: l.coins, "share of kit": `${Math.round((l.coins / kit.cost) * 100)}%` })))
 
 console.log("Services")
-console.table(services(rules).map((s) => ({ building: s.id, service: s.service, cost: s.cost, upkeep: s.upkeep, "cells walked/min": r(s.reach), "per upkeep": r(s.perUpkeep) })))
+console.table(services(rules).map((s) => ({ building: s.level === 0 ? s.kind : `${s.kind}+${en.kind.name(s.kind, s.level)}`, service: s.service, cost: s.cost, upkeep: s.upkeep, "cells walked/min": r(s.reach), "per upkeep": r(s.perUpkeep) })))
 
 console.log("The crown, answered with bought goods")
 console.table((["planks", "stone", "tools", "cloth"] as Array<GoodId>).flatMap((g) => [10, 30, 60].map((n) => crownMargin(g, n, rules))))

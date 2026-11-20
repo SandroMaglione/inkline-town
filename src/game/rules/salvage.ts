@@ -1,7 +1,7 @@
 import { upgradeAt, type GoodId, type Kind } from "../content/index.ts"
 import { shippedRules, type Rules } from "./config.ts"
 
-/** What pulling something down costs, and what comes back into storage. */
+/** What pulling something down costs, and what comes back into storage. Numbers: the page's language says them (`salvage` in `i18n`). */
 export interface Salvage {
   /** Coins it costs (negative: coins back, for a cancelled site). */
   readonly fee: number
@@ -34,11 +34,4 @@ export const withWorks = (s: Salvage, kind: Pick<Kind, "upgrade">, works: { read
   const w = salvageOf(up.cost, works.owed, rules), back = { ...s.back }
   for (const [g, n] of Object.entries(w.back) as Array<[GoodId, number]>) back[g] = (back[g] ?? 0) + n
   return { fee: s.fee + w.fee, back }
-}
-
-/** "−25 coins · 2 planks, 3 stone back", for the bulldozer's tooltip and the toast. */
-export const salvageText = (s: Salvage): string => {
-  const goods = Object.entries(s.back).map(([g, n]) => `${n} ${g}`).join(", ")
-  const coins = s.fee > 0 ? `−${s.fee} coins` : s.fee < 0 ? `+${-s.fee} coins` : ""
-  return [coins, goods ? `${goods} back` : ""].filter((p) => p !== "").join(" · ")
 }

@@ -188,7 +188,7 @@ try {
   await page.setViewportSize({width:1440,height:1000})
   // A saved term that has ended still opens the existing reckoning UI.
   const ended=structuredClone(grown)
-  ended.world.resources["Town/Fate"]={...ended.world.resources["Town/Fate"],state:"over",reason:"The term has ended.",at:ended.world.resources["Town/Time"].step}
+  ended.world.resources["Town/Fate"]={...ended.world.resources["Town/Fate"],state:"over",reason:"over",at:ended.world.resources["Town/Time"].step}
   await page.evaluate(save=>localStorage.setItem("inkline-town/save/manual",JSON.stringify({...save,savedAt:Date.now()})),ended)
   await page.getByRole("button",{name:"load",exact:true}).click()
   await page.getByRole("button",{name:"Load without saving",exact:true}).click()
