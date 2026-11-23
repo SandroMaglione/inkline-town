@@ -315,20 +315,23 @@ export const read = (slot: Slot) =>
       const carried = carry(version, (parsed as { world?: unknown }).world)
       if (carried === null) return yield* new WrongVersion({ slot, version })
       const file = yield* decodeEnvelope({ ...(parsed as object), version: SAVE_VERSION, world: carried }).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
-      return file
+      return { ...file, slot }
     }
-    return yield* decodeEnvelope(parsed).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
+    const file = yield* decodeEnvelope(parsed).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
+    // An imported file may have been written to a different slot.
+    return { ...file, slot }
+  })
+
+const restore = (file: SaveFile) =>
+  Effect.gen(function* () {
+    const world = yield* World
+    const refused = world.restore(file.world)
+    if (refused !== null) return yield* new Rejected({ slot: file.slot, reason: refused })
+    return file
   })
 
 /** Loads a slot into the world. */
-export const load = (slot: Slot) =>
-  Effect.gen(function* () {
-    const file = yield* read(slot)
-    const world = yield* World
-    const refused = world.restore(file.world)
-    if (refused !== null) return yield* new Rejected({ slot, reason: refused })
-    return file
-  })
+export const load = (slot: Slot) => read(slot).pipe(Effect.flatMap(restore))
 
 /** The slot saved last that can still be read (the mayor's own save, or the autosave), without loading it; `null` when there is none. */
 export const latest = Effect.gen(function* () {
@@ -339,7 +342,7 @@ export const latest = Effect.gen(function* () {
 /** Loads whichever slot was saved last: the mayor's own save, or the autosave. */
 export const loadLatest = Effect.gen(function* () {
   const newest = yield* latest
-  return yield* load(newest?.slot ?? "manual")
+  return yield* (newest === null ? load("manual") : restore(newest))
 })
 
 /**
