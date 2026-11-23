@@ -40,6 +40,8 @@ import { createToolbar } from "./toolbar.ts"
 export interface Persistence<Camera> {
   /** Saves the town: what went wrong, in words, or `null` when it is saved. */
   readonly save: () => string | null
+  /** Keeps the shared town as an autosave before leaving its visit. */
+  readonly adopt: () => string | null
   /** Loads the latest save: whether it did, and what to tell the mayor either way. */
   readonly load: () => { readonly loaded: boolean; readonly said: string }
   /** The town as a save file (as text), with where the camera stands, to share. */
@@ -180,7 +182,7 @@ export const createDomUi = <Camera>(
   const panel = createPanel(t, ui, town, send, pictures, history, controls)
   const confirm = createConfirm(t, () => persistence().save(), () => ui.speed, controls)
   const reckoning = createReckoning(t, ui, stats, send, controls)
-  const visit = createVisit(t, { ...controls, closeCharter: () => charter.close(), resetPage: () => resetPage() })
+  const visit = createVisit(t, { ...controls, adopt: () => persistence().adopt(), closeCharter: () => charter.close(), resetPage: () => resetPage() })
   const language = createLanguage(t, options.chooseLanguage ?? (() => null), controls)
   const charter = createCharter(t, ui, send, () => persistence().load(), history, options.saved ?? null, () => {
     if (visit.visiting()) visit.endVisit()
