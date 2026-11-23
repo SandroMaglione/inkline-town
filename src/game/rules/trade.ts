@@ -6,7 +6,7 @@ import { shippedRules, type Rules } from "./config.ts"
 export interface TradePolicy { readonly sells: ReadonlyArray<GoodId>; readonly buys: ReadonlyArray<GoodId>; readonly reserve: number; readonly loads?: Partial<Amounts> }
 export interface Shelf { readonly stock: Amounts; readonly accepts: ReadonlyArray<GoodId>; readonly cap: number }
 
-/** Exact collection trade, including price drift and refunds. Shelves keep runtime insertion order. */
+/** Exact collection trade, including price drift and shelf-limited purchases. Shelves keep runtime insertion order. */
 export const tradeCollection = (initial: ReadonlyArray<Shelf>, policy: TradePolicy, initialPrices: Amounts, startingCoins: number, rules: Rules = shippedRules) => {
   const stores = initial.map((s) => ({ ...s, stock: { ...s.stock } })), prices = { ...initialPrices }
   let coins = startingCoins, traded = 0
@@ -26,17 +26,18 @@ export const tradeCollection = (initial: ReadonlyArray<Shelf>, policy: TradePoli
       }
     } else if (policy.buys.includes(good)) {
       const ask = askOf(good, prices[good], rules)
-      let wanted = Math.min(load, policy.reserve - held, Math.floor(coins / ask))
-      if (wanted > 0) {
-        coins -= wanted * ask; traded -= wanted * ask
-        prices[good] = Math.min(rules.market.ceiling, prices[good] + wanted * rules.market.perBought)
+      const order = Math.min(load, policy.reserve - held, Math.floor(coins / ask))
+      if (order > 0) {
+        let wanted = order
         for (const inv of [...stores].sort((a, b) => a.stock[good] - b.stock[good])) {
           if (wanted <= 0) break
           const put = inv.accepts.includes(good) ? Math.min(wanted, inv.cap - inv.stock[good]) : 0
           if (put <= 0) continue
           inv.stock[good] += put; wanted -= put
         }
-        if (wanted > 0) { coins += wanted * ask; traded += wanted * ask }
+        const bought = order - wanted
+        coins -= bought * ask; traded -= bought * ask
+        prices[good] = Math.min(rules.market.ceiling, prices[good] + bought * rules.market.perBought)
       }
     }
     // A cheap price recovers by a tenth of the gap; a dear one calms more slowly.
