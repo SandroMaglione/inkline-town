@@ -27,7 +27,7 @@ export const applyGestures = (frame: Frame, ui: Interaction, send: (edit: Edit) 
       case "road":
       case "pave":
       case "home": {
-        if (ui.dragFrom) {
+        if (!gesture.panned && ui.dragFrom) {
           const cells = lPath(ui.dragFrom, cell).filter((c) => inside(c.x, c.y))
           send(ui.tool === "road" ? { type: "roads", cells } : ui.tool === "pave" ? { type: "pave", cells } : { type: "homes", cells })
         }
@@ -35,7 +35,7 @@ export const applyGestures = (frame: Frame, ui: Interaction, send: (edit: Edit) 
         break
       }
       case "ground": {
-        if (ui.dragFrom) send({ type: "ground", ground: ui.ground, cells: rectangle(ui.dragFrom, cell).filter((c) => inside(c.x, c.y)) })
+        if (!gesture.panned && ui.dragFrom) send({ type: "ground", ground: ui.ground, cells: rectangle(ui.dragFrom, cell).filter((c) => inside(c.x, c.y)) })
         ui.dragFrom = null
         break
       }
