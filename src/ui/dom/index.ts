@@ -240,12 +240,19 @@ export const createDomUi = <Camera>(
     ui,
     {
       escape: () => {
-        const sheet = confirm.open() || share.isOpen() || reckoning.isOpen() || language.isOpen()
-        if (confirm.open()) confirm.dismiss()
-        if (share.isOpen()) share.close()
-        if (language.isOpen()) language.close()
-        // With no sheet over the map, Esc puts the sign-up's card away, and does nothing else.
-        return !sheet && springCard.escape()
+        if (language.isOpen()) {
+          language.close()
+          return true
+        }
+        if (confirm.open()) {
+          confirm.dismiss()
+          return true
+        }
+        if (share.isOpen()) {
+          share.close()
+          return true
+        }
+        return reckoning.isOpen() || springCard.escape()
       },
       blocked: () => ui.founding || reckoning.isOpen() || confirm.open() || share.isOpen() || language.isOpen() || visit.visiting()
     },
