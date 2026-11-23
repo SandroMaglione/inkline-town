@@ -28,6 +28,7 @@ export const bindKeys = (
     letters.set(mapViews[view].key.toLowerCase(), () => controls.setView(ui.view === view ? "none" : view))
 
   window.addEventListener("keydown", (event) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.isComposing || event.repeat) return
     if (event.target instanceof HTMLElement && event.target.closest("input,select,textarea,[contenteditable=true]")) return
     if (event.key === " " && event.target instanceof HTMLButtonElement) return
     if (event.key === "Escape" && sheet.escape() === true) return
