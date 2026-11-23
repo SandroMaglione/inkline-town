@@ -10,7 +10,7 @@ import { iconEl } from "../kit/icons.ts"
 
 export const createVisit = (
   t: Catalog,
-  controls: Pick<Controls, "toast" | "openCharter" | "setSpeed"> & { readonly closeCharter: () => void; readonly resetPage: () => void }
+  controls: Pick<Controls, "toast" | "openCharter" | "setSpeed"> & { readonly adopt: () => string | null; readonly closeCharter: () => void; readonly resetPage: () => void }
 ) => {
   const said = t.page.visit
   const visitBar = el("div", "card visit")
@@ -36,6 +36,8 @@ export const createVisit = (
     const play = el("button", "frame primary", said.play)
     play.title = said.playTitle
     play.onclick = () => {
+      const problem = controls.adopt()
+      if (problem !== null) return controls.toast(problem)
       endVisit()
       controls.toast(said.yours)
     }

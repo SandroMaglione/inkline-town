@@ -16,7 +16,7 @@ import { bookkeeping, editQueue } from "../game/edits.ts"
 import { resolveRules } from "../game/rules/config.ts"
 import { blankResources, settle, simulate } from "../game/schedule.ts"
 import { Edits, Game, Rules } from "../game/schema.ts"
-import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World, type About } from "../platform/save.ts"
+import { browserStorage, describe, fileOf, latest, loadLatest, loadText, save, Storage, World, type About, type Slot } from "../platform/save.ts"
 import { download, ShareError, sharedId } from "../platform/share/client.ts"
 import { MapInput } from "../render/pixi3d/input.ts"
 import { GameScene, type CameraView } from "../render/pixi3d/scene.ts"
@@ -56,7 +56,7 @@ const start = async () => {
   const t = words.current
   // The loading card is in the page's own HTML, in English: from here on it is in the language chosen.
   document.querySelector("#loading span")?.replaceChildren(t.page.loading)
-  let persistence: Persistence<CameraView> = { save: () => t.page.save.notReady, load: () => ({ loaded: false, said: t.page.save.notReady }), shareFile: () => "" }
+  let persistence: Persistence<CameraView> = { save: () => t.page.save.notReady, adopt: () => t.page.save.notReady, load: () => ({ loaded: false, said: t.page.save.notReady }), shareFile: () => "" }
   // A shared town's link (`/t/<id>`): fetch it while the page starts, and load it once the town is up.
   const shared = sharedId(location.pathname)
   let arriving: string | null = null
@@ -199,11 +199,13 @@ const start = async () => {
     Effect.runSync(
       Effect.result(program.pipe(Effect.provideService(Storage, browserStorage(localStorage)), Effect.provideService(World, world)))
     )
+  const keep = (slot: Slot) => {
+    const saved = run(save(slot))
+    return saved._tag === "Success" ? null : say(t.page.save.trouble, describe(saved.failure))
+  }
   persistence = {
-    save: () => {
-      const saved = run(save("manual"))
-      return saved._tag === "Success" ? null : say(t.page.save.trouble, describe(saved.failure))
-    },
+    save: () => keep("manual"),
+    adopt: () => keep("auto"),
     load: () => {
       const loaded = run(loadLatest)
       if (loaded._tag === "Failure") return { loaded: false, said: say(t.page.save.trouble, describe(loaded.failure)) }
