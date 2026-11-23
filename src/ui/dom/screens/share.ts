@@ -30,8 +30,11 @@ export const createShare = <Camera>(
   const said = t.page.share
   const shareBox = el("div", "dialog share")
   let shareSpeed = 1
+  let opening: symbol | null = null
+  const isOpen = () => opening !== null || shareBox.classList.contains("open")
   const closeShare = () => {
-    if (!shareBox.classList.contains("open")) return
+    if (!isOpen()) return
+    opening = null
     shareBox.classList.remove("open")
     for (const img of shareBox.querySelectorAll("img")) URL.revokeObjectURL(img.src)
     if (!visiting()) controls.setSpeed(shareSpeed)
@@ -41,7 +44,9 @@ export const createShare = <Camera>(
   }
   const openShare = async () => {
     const s = stats()
-    if (!s || shareBox.classList.contains("open")) return
+    if (!s || isOpen()) return
+    const preparation = Symbol()
+    opening = preparation
     shareSpeed = speed()
     controls.setSpeed(0)
     const facts = cardFacts(t, s)
@@ -50,9 +55,12 @@ export const createShare = <Camera>(
       card = await drawCard(map.picture(PICTURE_WIDTH, PICTURE_HEIGHT, 2), facts, location.host)
       png = await blobOf(card, "image/png")
     } catch {
-      controls.setSpeed(shareSpeed)
+      if (opening !== preparation) return
+      closeShare()
       return controls.toast(said.noPicture)
     }
+    if (opening !== preparation) return
+    opening = null
     const name = `inkline-town-${s.fate.state === "playing" ? `year-${s.season.year}` : `term-${s.fate.term}`}.png`
     const caption = `${metaOf(facts).title} · ${metaOf(facts).description}`
     shareBox.replaceChildren()
@@ -106,5 +114,5 @@ export const createShare = <Camera>(
     shareBox.classList.add("open")
     picture.focus()
   }
-  return { element: shareBox, open: openShare, close: closeShare, isOpen: () => shareBox.classList.contains("open") }
+  return { element: shareBox, open: openShare, close: closeShare, isOpen }
 }
