@@ -175,6 +175,23 @@ test("loading takes the newer of the mayor's save and the autosave", () => {
   assert.equal(run(read("auto"))._tag, "Success")
 })
 
+test("loading uses the newest stored file even when it came from another slot", () => {
+  const { town, storage, run } = setup()
+  run(save("auto"))
+  const older = JSON.parse(storage.get("inkline-town/save/auto")!)
+  town.run(20)
+  run(save("auto"))
+  const imported = JSON.parse(storage.get("inkline-town/save/auto")!)
+  const before = playing(town)
+  storage.set("inkline-town/save/auto", JSON.stringify({ ...older, savedAt: 1000 }))
+  storage.set("inkline-town/save/manual", JSON.stringify({ ...imported, savedAt: 2000 }))
+  town.run(20)
+  const loaded = run(loadLatest)
+  assert.equal(loaded._tag, "Success")
+  assert.equal(playing(town), before)
+  if (loaded._tag === "Success") assert.equal(loaded.success.slot, "manual")
+})
+
 test("a town saved before the guide loads, with the guide from its start", () => {
   const { town, storage, run } = setup()
   town.run(10)
