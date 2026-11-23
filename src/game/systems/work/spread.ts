@@ -1,8 +1,9 @@
 import { every } from "../../content/index.ts"
 import { wildTreeSpots, canSeedTree } from "../../rules/land.ts"
 import * as Random from "@typeonce/ritmo/Random"
+import { key } from "../../world/grid.ts"
 import { treeDraft } from "../../world/archetypes.ts"
-import { Game, Rules, Grid, Rng, Tile, Time, Tree } from "../../schema.ts"
+import { Game, Rules, Grid, Rng, Sown, Tile, Time, Tree } from "../../schema.ts"
 
 /**
  * Wild forests regrow: now and then a grown tree seeds an empty cell beside
@@ -14,7 +15,7 @@ export const Spread = Game.System(
   "Town/Spread",
   {
     queries: { trees: Game.Query({ selection: { tile: Game.Query.read(Tile), tree: Game.Query.read(Tree) } }) },
-    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) },
+    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time), sown: Game.System.thisTick(Game.System.readResource(Sown)) },
     services: { rules: Game.System.service(Rules) },
     commands: Game.System.commands(Game.System.spawns(Tree))
   },
@@ -31,7 +32,7 @@ export const Spread = Game.System(
     if (parent) {
       const t = data.tile.get(parent)
       const spot = random.pick(wildTreeSpots(grid, t))
-      if (spot && canSeedTree(grid, spot)) commands.spawn(treeDraft(spot, 0))
+      if (spot && !resources.sown.get().has(key(spot.x, spot.y)) && canSeedTree(grid, spot)) commands.spawn(treeDraft(spot, 0))
     }
   }
 )

@@ -1,7 +1,7 @@
 import * as Random from "@typeonce/ritmo/Random"
 import { fieldDraft, treeDraft } from "../../world/archetypes.ts"
 import { around, key, useAt } from "../../world/grid.ts"
-import { Field, FieldOf, Game, Rules, Grid, Paused, Planter, Recipe, Rising, Rng, Site, Staff, Status, Tile, Time, Tree, type Status as StatusValue } from "../../schema.ts"
+import { Field, FieldOf, Game, Rules, Grid, Paused, Planter, Recipe, Rising, Rng, Site, Sown, Staff, Status, Tile, Time, Tree, type Status as StatusValue } from "../../schema.ts"
 import { connected } from "../shared.ts"
 
 /** A forester plants trees and a farm sows fields on free ground within reach, one at a time. */
@@ -21,7 +21,7 @@ export const Plant = Game.System(
         without: [Site, Rising]
       })
     },
-    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time) },
+    resources: { grid: Game.System.readResource(Grid), rng: Game.System.writeResource(Rng), time: Game.System.readResource(Time), sown: Game.System.writeResource(Sown) },
     services: { rules: Game.System.service(Rules) },
     commands: Game.System.commands(Game.System.spawns(Tree, Field), Game.System.relates(FieldOf))
   },
@@ -63,5 +63,6 @@ export const Plant = Game.System(
       else commands.spawn(Game.Command.relate(fieldDraft(spot), FieldOf, entity.id))
       data.planter.set(entity, { ...planter, cooldown: planter.interval })
     }
+    resources.sown.set(sown)
   }
 )

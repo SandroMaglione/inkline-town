@@ -354,6 +354,8 @@ export interface GridValue {
   readonly paved?: ReadonlySet<number>
 }
 export const Grid = Descriptor.TransientResource<GridValue>()("Town/Grid")
+/** Cells claimed by a forester or farm in this step, before their spawns become visible. */
+export const Sown = Descriptor.TransientResource<ReadonlySet<number>>()("Town/Sown")
 /** Goods in the town's storage, summed every step. */
 export const Stock = Descriptor.TransientResource<Amounts>()("Town/Stock")
 /** Ten seconds of goods: what the town held as it began, what was made, and what was traded. */
@@ -442,7 +444,7 @@ export const Game = Schema.bind(
     },
     resources: {
       Time, Rng, Treasury, Ledger, Census, Policy, Charter, Land, Market, Mood, Crown, Fate, History, Chronicle, Guide, Appeal, Pantry, Fires,
-      Grid, Stock, Flow, Handed
+      Grid, Sown, Stock, Flow, Handed
     },
     events: { Toast, Selection },
     relations: { WalkerOf, FieldOf },
