@@ -29,22 +29,25 @@ export async function backend(): Promise<"webgpu" | "webgl"> {
  */
 async function drawsFrame(adapter: GPUAdapter): Promise<boolean> {
   let device: GPUDevice | null = null
+  let timeout: ReturnType<typeof setTimeout> | undefined
   try {
     device = await adapter.requestDevice()
-    let lost = false
-    void device.lost.then(() => { lost = true })
     const context = document.createElement("canvas").getContext("webgpu")
     if (!context) return false
     context.configure({ device, format: navigator.gpu.getPreferredCanvasFormat(), alphaMode: "premultiplied" })
     const encoder = device.createCommandEncoder()
     encoder.beginRenderPass({ colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: "clear", storeOp: "store" }] }).end()
     device.queue.submit([encoder.finish()])
-    // A frame that never finishes isn't taken as a failure: the check only rules out what fails outright.
-    await Promise.race([device.queue.onSubmittedWorkDone(), new Promise((done) => setTimeout(done, 1000))])
-    return !lost
+    // Only use WebGPU if the submitted frame actually finishes within the probe's budget.
+    return await Promise.race([
+      device.queue.onSubmittedWorkDone().then(() => true),
+      device.lost.then(() => false),
+      new Promise<boolean>((done) => { timeout = setTimeout(() => done(false), 1000) })
+    ])
   } catch {
     return false
   } finally {
+    clearTimeout(timeout)
     device?.destroy()
   }
 }
