@@ -346,8 +346,8 @@ export interface GridValue {
   /** Entity id on each cell (by `key`), or 0. */
   readonly owner: ReadonlyArray<number>
   readonly use: ReadonlyArray<Use>
-  /** A fingerprint of where the roads are, when known: paths are cached against it. */
-  readonly roads?: number
+  /** The exact road-cell key, when known: paths are cached against it. */
+  readonly roads?: string
   /** The entities standing on it, when known: the grid only changes when one of them goes. */
   readonly tiles?: ReadonlySet<number>
   /** Paved road cells (by `key`), when known: walkers and carriers move faster along them. */
