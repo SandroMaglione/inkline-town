@@ -282,3 +282,11 @@ test("a change of language carries the town over the reload once, with where the
   assert.equal(carryOver(storage(true), "{}"), false, "a tab that keeps nothing says so, and the page does not reload")
   assert.equal(carriedOver(storage(true)), null)
 })
+
+test("a stored name outside the locale catalog falls back to the browser's language", async () => {
+  for (const invalid of ["constructor", "__proto__", "toString", "no-such-language"]) {
+    const locale = pick(invalid, ["de-DE", "en"])
+    assert.equal(locale, "de")
+    assert.equal(localeOf(await load(locale)), "de")
+  }
+})

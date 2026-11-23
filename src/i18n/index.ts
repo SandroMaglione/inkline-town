@@ -41,7 +41,7 @@ export type Locale = keyof typeof languages
 export const locales = Object.keys(languages) as ReadonlyArray<Locale>
 export const DEFAULT_LOCALE: Locale = "en"
 
-const isLocale = (tag: string): tag is Locale => tag in languages
+const isLocale = (tag: string): tag is Locale => Object.hasOwn(languages, tag)
 
 /** What a language calls itself: "English", "Italiano". Never translated: a reader looks for their own language's name. */
 export const languageName = (locale: Locale): string => languages[locale].name
