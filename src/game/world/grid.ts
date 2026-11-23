@@ -118,23 +118,22 @@ export interface Reach {
   readonly previous: Int32Array
 }
 
-/** A fingerprint of where the roads are: paths found on one road network hold until it changes. */
-export const roadPrint = (grid: GridValue): number => {
-  let h = 0x811c9dc5
+/** An exact key for the road cells, allowing cached paths to survive unrelated tile edits. */
+export const roadPrint = (grid: GridValue): string => {
+  const roads: Array<number> = []
   for (let k = 0; k < grid.use.length; k++) {
-    if (grid.use[k] !== "road") continue
-    h = Math.imul(h ^ k, 0x01000193) >>> 0
+    if (grid.use[k] === "road") roads.push(k)
   }
-  return h
+  return roads.join(",")
 }
 
 /** Reaches found on the current road network, by where they start. */
 const reaches = new Map<string, Reach>()
-let reachesFor: number | undefined
+let reachesFor: string | undefined
 
 /**
  * Distances along the road from a set of road cells. On a grid with a road
- * fingerprint the answer is kept until the roads change: every carrier
+ * cache key the answer is kept until the roads change: every carrier
  * leaving the same door would otherwise search the whole network again.
  */
 export const reach = (grid: GridValue, from: ReadonlyArray<Point>): Reach => {
