@@ -33,7 +33,7 @@ export const createLanguage = (t: Catalog, choose: (locale: Locale) => string | 
     opener.setAttribute("aria-expanded", "false")
     opener = null
   }
-  for (const locale of locales) {
+  const items = locales.map((locale) => {
     const name = languageName(locale)
     const item = el("button", locale === current ? "on" : "", name)
     item.type = "button"
@@ -47,10 +47,37 @@ export const createLanguage = (t: Catalog, choose: (locale: Locale) => string | 
       close()
       if (locale === current) return from?.focus()
       const failed = choose(locale)
-      if (failed !== null) controls.toast(failed)
+      if (failed !== null) {
+        controls.toast(failed)
+        from?.focus()
+      }
     }
     menu.append(item)
-  }
+    return item
+  })
+  menu.addEventListener("keydown", (event) => {
+    if (!opener) return
+    const index = items.indexOf(document.activeElement as HTMLButtonElement)
+    let next: number
+    switch (event.key) {
+      case "ArrowDown": next = (index + 1) % items.length; break
+      case "ArrowUp": next = (Math.max(index, 0) + items.length - 1) % items.length; break
+      case "Home": next = 0; break
+      case "End": next = items.length - 1; break
+      case "Escape": {
+        const from = opener
+        close()
+        from.focus()
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+      default: return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    items[next]?.focus()
+  })
   /** Opens the menu at a button: above it where there is room (both buttons sit at the bottom of what they are on), else below, and within the screen. */
   const open = (at: HTMLElement) => {
     if (opener === at) return close()
