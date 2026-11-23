@@ -99,6 +99,8 @@ export const ApplyEdits = Game.System(
       entities.set(entity.id, entity.id)
     }
     const halls = new Set<number>(queries.halls.each().map((row) => row.id))
+    // Deferred Paved components must still count for the rest of this batch of edits.
+    const paved = new Set<number>(queries.paved.each().map((row) => row.id))
     let coins = resources.treasury.get().coins
     // Works begun in this step: they are in the world only once it ends, so a second click on the same building is refused here.
     const begun = new Set<number>()
@@ -234,7 +236,6 @@ export const ApplyEdits = Game.System(
         }
         case "pave": {
           // Stone comes out of storage at once, fullest first.
-          const paved = new Set<number>(queries.paved.each().map((row) => row.id))
           let short: Notice | null = null
           let stone = 0
           for (const cell of edit.cells) {
