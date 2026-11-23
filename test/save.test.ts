@@ -75,6 +75,18 @@ test("a file that is not a save is unreadable", () => {
   assert.equal(failure(run(load("manual")))._tag, "Unreadable")
 })
 
+test("a damaged legacy chronicle is unreadable without blocking the other slot", () => {
+  const { storage, run } = setup()
+  run(save("auto"))
+  const file = JSON.parse(storage.get("inkline-town/save/auto")!)
+  file.world.resources["Town/Chronicle"].lines = [null]
+  storage.set("inkline-town/save/manual", JSON.stringify({ ...file, version: 11, slot: "manual" }))
+  assert.equal(failure(run(read("manual")))._tag, "Unreadable")
+  const loaded = run(loadLatest)
+  assert.equal(loaded._tag, "Success")
+  if (loaded._tag === "Success") assert.equal(loaded.success.slot, "auto")
+})
+
 test("a save from another version is refused by name", () => {
   const { storage, run } = setup()
   storage.set("inkline-town/save/manual", JSON.stringify({ format: SAVE_FORMAT, version: 1, slot: "manual", savedAt: 0, title: "", world: {} }))

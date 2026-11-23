@@ -296,6 +296,12 @@ export const save = (slot: Slot) =>
     return file
   })
 
+const carrySave = (slot: Slot, version: number, snapshot: unknown) =>
+  Effect.try({
+    try: () => carry(version, snapshot),
+    catch: (cause) => new Unreadable({ slot, reason: cause instanceof Error ? cause.message : String(cause) })
+  })
+
 /** Reads a slot's file, checked, without loading it. A save from before files had envelopes reads as the manual slot. */
 export const read = (slot: Slot) =>
   Effect.gen(function* () {
@@ -308,11 +314,12 @@ export const read = (slot: Slot) =>
     const parsed = yield* decodeFile(raw).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
     // The first charter saves were the world alone.
     if (typeof parsed === "object" && parsed !== null && "entities" in parsed && !("format" in parsed)) {
-      return { format: SAVE_FORMAT, version: SAVE_VERSION, slot, savedAt: 0, title: "", world: carry(9, parsed) ?? parsed } satisfies SaveFile
+      const carried = yield* carrySave(slot, 9, parsed)
+      return { format: SAVE_FORMAT, version: SAVE_VERSION, slot, savedAt: 0, title: "", world: carried ?? parsed } satisfies SaveFile
     }
     const version = (parsed as { version?: unknown } | null)?.version
     if (typeof version === "number" && version !== SAVE_VERSION) {
-      const carried = carry(version, (parsed as { world?: unknown }).world)
+      const carried = yield* carrySave(slot, version, (parsed as { world?: unknown }).world)
       if (carried === null) return yield* new WrongVersion({ slot, version })
       const file = yield* decodeEnvelope({ ...(parsed as object), version: SAVE_VERSION, world: carried }).pipe(Effect.mapError((e) => new Unreadable({ slot, reason: e.message })))
       return file
