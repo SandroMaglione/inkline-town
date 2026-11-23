@@ -38,8 +38,15 @@ export interface MapHost {
   readonly blocked: () => boolean
 }
 
+type MapScene = Pick<GameScene, "groundAt" | "inputAt" | "zoomAt" | "zoomBy" | "rotate" | "pan" | "resetCamera"> & {
+  readonly camera: Pick<GameScene["camera"], "zoom">
+  readonly canvas: Pick<HTMLCanvasElement, "focus" | "setPointerCapture" | "addEventListener" | "getBoundingClientRect"> & {
+    readonly style: Pick<CSSStyleDeclaration, "cursor" | "touchAction">
+  }
+}
+
 export class MapInput {
-  private scene: GameScene
+  private scene: MapScene
   private ui: Interaction
   private shown: Shown
   private host: MapHost
@@ -57,7 +64,7 @@ export class MapInput {
   private touch = false
   readonly controls: HTMLElement
   private abort = new AbortController()
-  constructor(scene: GameScene, ui: Interaction, shown: Shown, host: MapHost) {
+  constructor(scene: MapScene, ui: Interaction, shown: Shown, host: MapHost) {
     this.scene = scene
     this.ui = ui
     this.shown = shown
@@ -127,7 +134,8 @@ export class MapInput {
           if (press.mode === "pan" && press.moved) scene.pan(p.x - press.last.x, p.y - press.last.y)
           // Dragging from a held stroke draws a new one: the held one is dropped.
           if (press.deferred && press.moved) {
-            this.cancelStroke()
+            this.held = null
+            ui.dragFrom = null
             press.deferred = false
             ui.gestures.push({ type: "press", at: scene.groundAt(press.start.x, press.start.y) })
           }
@@ -302,7 +310,7 @@ export class MapInput {
     const canvas = this.scene.canvas
     const box = canvas.getBoundingClientRect()
     if (p.x < box.left || p.y < box.top || p.x > box.right || p.y > box.bottom) return true
-    return document.elementFromPoint(p.x, p.y) !== canvas
+    return !Object.is(document.elementFromPoint(p.x, p.y), canvas)
   }
   /** Lays the held stroke. */
   confirmStroke() {
